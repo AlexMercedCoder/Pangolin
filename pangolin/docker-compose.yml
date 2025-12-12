@@ -27,5 +27,25 @@ services:
     depends_on:
       - minio
 
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: pangolin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pangolin
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
 volumes:
   minio_data:
+  postgres_data:
+  mongo_data:

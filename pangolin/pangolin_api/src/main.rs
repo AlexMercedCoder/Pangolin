@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use pangolin_store::memory::MemoryStore;
-use pangolin_store::CatalogStore;
+use std::env;
+use pangolin_store::{CatalogStore, MemoryStore, S3Store, PostgresStore, MongoStore};
 use pangolin_api::app;
 
 #[tokio::main]
@@ -12,13 +12,25 @@ async fn main() {
     // Initialize store based on env
     let storage_type = std::env::var("PANGOLIN_STORAGE_TYPE").unwrap_or_else(|_| "memory".to_string());
     
-    let store: Arc<dyn CatalogStore + Send + Sync> = if storage_type == "s3" {
-        tracing::info!("Using S3 Storage");
-        let s3_store = pangolin_store::S3Store::new().expect("Failed to initialize S3 store");
-        Arc::new(s3_store)
-    } else {
-        tracing::info!("Using Memory Storage");
-        Arc::new(MemoryStore::new())
+    let store: Arc<dyn CatalogStore> = match storage_type.as_str() {
+        "s3" => {
+            tracing::info!("Using S3 Storage");
+            Arc::new(S3Store::new().expect("Failed to create S3Store"))
+        }
+        "postgres" => {
+            tracing::info!("Using Postgres Storage");
+            let connection_string = env::var("DATABASE_URL").expect("DATABASE_URL must be set for postgres storage");
+            Arc::new(PostgresStore::new(&connection_string).await.expect("Failed to create PostgresStore"))
+        }
+        "mongo" => {
+            tracing::info!("Using Mongo Storage");
+            let connection_string = env::var("DATABASE_URL").expect("DATABASE_URL must be set for mongo storage");
+            Arc::new(MongoStore::new(&connection_string).await.expect("Failed to create MongoStore"))
+        }
+        _ => {
+            tracing::info!("Using Memory Storage");
+            Arc::new(MemoryStore::new())
+        }
     };
 
     // Build our application with a route

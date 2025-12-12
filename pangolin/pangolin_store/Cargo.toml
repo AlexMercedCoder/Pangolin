@@ -20,4 +20,7 @@ tracing = { workspace = true }
 aws-sdk-s3 = { version = "1.0", features = ["behavior-version-latest"] }
 aws-config = { version = "1.0", features = ["behavior-version-latest"] }
 aws-credential-types = "1.0"
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+mongodb = "3.4.1"
+bson = { version = "2.14", features = ["uuid-1", "chrono-0_4"] }
 
