@@ -14,6 +14,13 @@ Pangolin is built with the following key Rust crates:
 ## Storage
 - **[Object Store](https://github.com/apache/arrow-rs/tree/master/object_store)**: A unified interface for object storage (S3, GCS, Azure, Local).
 - **[DashMap](https://github.com/xacrimon/dashmap)**: Concurrent associative array for high-performance in-memory storage.
+- **[SQLx](https://github.com/launchbadge/sqlx)**: Async SQL toolkit for PostgreSQL.
+- **[MongoDB](https://github.com/mongodb/mongo-rust-driver)**: Official MongoDB driver for Rust.
+
+## Security & Authentication
+- **[JSON Web Token](https://github.com/Keats/jsonwebtoken)**: JWT creation and validation.
+- **[AWS SDK for S3](https://github.com/awslabs/aws-sdk-rust)**: Official AWS SDK for S3 operations (used for signing).
+- **[AWS Config](https://github.com/awslabs/aws-sdk-rust)**: AWS configuration loading.
 
 ## Utilities
 - **[Uuid](https://github.com/uuid-rs/uuid)**: UUID generation.

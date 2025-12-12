@@ -48,3 +48,19 @@ Additional endpoints for features not covered by the Iceberg spec.
 - `POST /api/v1/branches`: Create a new branch.
 - `GET /api/v1/branches/:name`: Get branch details.
 - `POST /api/v1/branches/merge`: Merge a source branch into a target branch.
+
+### Tag Management
+- `GET /api/v1/tags`: List tags.
+- `POST /api/v1/tags`: Create a new tag.
+- `DELETE /api/v1/tags/:name`: Delete a tag.
+
+### Maintenance
+- `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/maintenance`: Trigger maintenance tasks (expire snapshots, remove orphan files).
+
+### Audit Logs
+- `GET /api/v1/audit`: Retrieve audit logs for the tenant.
+
+### Authentication & Users
+- `POST /api/v1/login`: Authenticate and receive a JWT.
+- `POST /api/v1/users`: Create a new user (Admin only).
+- `GET /api/v1/users`: List users (Admin only).

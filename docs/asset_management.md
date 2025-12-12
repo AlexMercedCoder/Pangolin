@@ -15,6 +15,7 @@ Beyond standard Iceberg tables, Pangolin supports managing other asset types lik
 `POST /v1/{prefix}/namespaces/{namespace}/views`
 
 **Headers:**
+- `Authorization`: `Bearer <token>`
 - `X-Pangolin-Tenant`: `<Tenant-ID>`
 
 **Body:**
@@ -32,6 +33,7 @@ Beyond standard Iceberg tables, Pangolin supports managing other asset types lik
 `GET /v1/{prefix}/namespaces/{namespace}/views/{view}`
 
 **Headers:**
+- `Authorization`: `Bearer <token>`
 - `X-Pangolin-Tenant`: `<Tenant-ID>`
 
 **Response:**

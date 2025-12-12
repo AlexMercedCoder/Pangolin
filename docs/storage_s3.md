@@ -10,12 +10,13 @@ To enable S3 storage, set the `PANGOLIN_STORAGE_TYPE` environment variable to `s
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PANGOLIN_STORAGE_TYPE` | Storage backend (`memory` or `s3`) | `memory` |
+| `PANGOLIN_STORAGE_TYPE` | Storage backend (`memory`, `s3`, `postgres`, `mongo`) | `memory` |
 | `AWS_REGION` | AWS Region | `us-east-1` |
-| `AWS_BUCKET` | S3 Bucket Name | `pangolin-catalog` |
+| `PANGOLIN_S3_BUCKET` | S3 Bucket Name | `pangolin` |
+| `PANGOLIN_S3_PREFIX` | S3 Prefix for data | `data` |
 | `AWS_ACCESS_KEY_ID` | AWS Access Key | - |
 | `AWS_SECRET_ACCESS_KEY` | AWS Secret Key | - |
-| `AWS_ENDPOINT` | Custom S3 Endpoint (for MinIO) | - |
+| `AWS_ENDPOINT_URL` | Custom S3 Endpoint (for MinIO) | - |
 | `AWS_ALLOW_HTTP` | Allow HTTP (for local MinIO) | `false` |
 
 ## Directory Structure

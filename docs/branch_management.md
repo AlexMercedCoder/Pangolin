@@ -21,7 +21,10 @@ Unlike Git, where a branch copies the entire repository, Pangolin supports **Par
 **Full Branch (Copy Everything)**
 *Currently, full catalog branching copies all asset pointers.*
 ```bash
-curl -X POST /api/v1/branches -d '{
+curl -X POST /api/v1/branches \
+  -H "Authorization: Bearer <token>" \
+  -H "X-Pangolin-Tenant: <Tenant-ID>" \
+  -d '{
   "name": "audit-audit",
   "from_branch": "main"
 }'
@@ -29,7 +32,10 @@ curl -X POST /api/v1/branches -d '{
 
 **Partial Branch (Specific Assets)**
 ```bash
-curl -X POST /api/v1/branches -d '{
+curl -X POST /api/v1/branches \
+  -H "Authorization: Bearer <token>" \
+  -H "X-Pangolin-Tenant: <Tenant-ID>" \
+  -d '{
   "name": "dev",
   "from_branch": "main",
   "assets": ["data_team.users", "sales.orders"]

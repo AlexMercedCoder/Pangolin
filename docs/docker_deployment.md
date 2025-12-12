@@ -15,7 +15,7 @@ Key variables for Docker:
 
 ## Running with Docker Compose
 
-A `docker-compose.yml` is provided to run Pangolin alongside MinIO (S3 compatible storage).
+A `docker-compose.yml` is provided to run Pangolin alongside MinIO, Postgres, and MongoDB.
 
 ```bash
 docker-compose up --build

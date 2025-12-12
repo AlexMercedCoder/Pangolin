@@ -6,17 +6,26 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 
 ## Documentation Index
 - [Getting Started](docs/getting_started.md): Setup and basic usage guide.
-- [Warehouse Management](docs/warehouse_management.md)
-- [Asset Management](docs/asset_management.md)
-- [Storage (S3)](docs/storage_s3.md)
-- [Deployment](docs/deployment.md): How to build and deploy Pangolin.
-- [Configuration](docs/configuration.md): Runtime configuration options.
-- [Environment Variables](docs/env_vars.md): List of supported env vars.
+- **Storage Backends**:
+  - [S3 Storage](docs/storage_s3.md)
+  - [Postgres Storage](docs/storage_postgres.md)
+  - [MongoDB Storage](docs/storage_mongo.md)
+- **Features**:
+  - [Branch Management](docs/branch_management.md)
+  - [Tag Management](docs/tag_management.md)
+  - [Time Travel](docs/time_travel.md)
+  - [Audit Logs](docs/audit_logs.md)
+  - [Table Maintenance](docs/maintenance.md)
+  - [Security & Vending](docs/security_vending.md)
+  - [Authentication](docs/authentication.md)
+  - [RBAC & UI](docs/rbac_ui.md)
+- **Deployment**:
+  - [Docker Deployment](docs/docker_deployment.md)
+  - [Configuration](docs/configuration.md): Runtime configuration options.
+  - [Environment Variables](docs/env_vars.md): List of supported env vars.
 - [Dependencies](docs/dependencies.md): Overview of Rust crates used.
 - [Entities & Models](docs/entities.md): Explanation of core data models (Tenant, Branch, Asset).
-- [S3 Storage Configuration](docs/storage_s3.md)
 - [API Overview](docs/api_overview.md): Details on Iceberg and Extended APIs.
-- [Branch Management](docs/branch_management.md): Guide to branching and merging.
 - [Architecture](architecture.md): System design and component overview.
 - [Management UI](pangolin_ui/README.md): Guide for the SvelteKit UI.
 

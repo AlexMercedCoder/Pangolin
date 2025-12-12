@@ -12,6 +12,7 @@ Pangolin supports managing multiple warehouses within a tenant. A warehouse repr
 `GET /api/v1/warehouses`
 
 **Headers:**
+- `Authorization`: `Bearer <token>`
 - `X-Pangolin-Tenant`: `<Tenant-ID>`
 
 **Response:**
@@ -34,6 +35,7 @@ Pangolin supports managing multiple warehouses within a tenant. A warehouse repr
 `POST /api/v1/warehouses`
 
 **Headers:**
+- `Authorization`: `Bearer <token>`
 - `X-Pangolin-Tenant`: `<Tenant-ID>`
 
 **Body:**
@@ -52,4 +54,5 @@ Pangolin supports managing multiple warehouses within a tenant. A warehouse repr
 `GET /api/v1/warehouses/{name}`
 
 **Headers:**
+- `Authorization`: `Bearer <token>`
 - `X-Pangolin-Tenant`: `<Tenant-ID>`

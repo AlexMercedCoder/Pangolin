@@ -13,6 +13,10 @@ A `Tag` consists of:
 ### Create Tag
 `POST /api/v1/tags`
 
+**Headers:**
+- `Authorization`: `Bearer <token>`
+- `X-Pangolin-Tenant`: `<Tenant-ID>`
+
 **Request Body:**
 ```json
 {

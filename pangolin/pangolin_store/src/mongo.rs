@@ -643,10 +643,3 @@ fn to_bson_uuid(id: Uuid) -> Bson {
         bytes: id.as_bytes().to_vec(),
     })
 }
-
-fn to_bson_uuid(id: Uuid) -> Bson {
-    Bson::Binary(Binary {
-        subtype: BinarySubtype::Generic,
-        bytes: id.as_bytes().to_vec(),
-    })
-}

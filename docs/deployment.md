@@ -19,7 +19,7 @@ docker build -t pangolin:latest .
 ```
 
 ### Run with Docker Compose
-A `docker-compose.yml` is provided to run Pangolin with a MinIO instance for S3-compatible storage.
+A `docker-compose.yml` is provided to run Pangolin with MinIO, Postgres, and MongoDB.
 
 ```bash
 docker-compose up -d

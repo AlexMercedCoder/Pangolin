@@ -10,6 +10,13 @@ Represents an isolated customer or organization.
 - **Name**: String
 - **Properties**: Key-Value map
 
+### Warehouse
+Represents a physical storage location for data.
+- **ID**: UUID
+- **Name**: String
+- **Storage Config**: Configuration for S3, Azure, GCS, etc.
+- **Tenant ID**: UUID of the owning tenant
+
 ### Catalog
 A collection of namespaces.
 - **Name**: String (e.g., `warehouse`, `lake`)

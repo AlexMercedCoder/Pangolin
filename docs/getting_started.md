@@ -5,7 +5,7 @@ This guide will walk you through setting up Pangolin and performing an end-to-en
 ## Prerequisites
 
 - **Rust**: Version 1.92 or later ([Install Rust](https://www.rust-lang.org/tools/install))
-- **Docker** (Optional): For running dependencies like MinIO (S3 compatible storage) if you want to test S3 integration.
+- **Docker** (Optional): For running dependencies like MinIO, Postgres, or MongoDB.
 - **curl**: For making API requests.
 
 ## Installation & Setup

@@ -21,6 +21,14 @@ To use S3-compatible storage, set `PANGOLIN_STORAGE_TYPE=s3` and configure the f
 ### Memory
 Set `PANGOLIN_STORAGE_TYPE=memory` for an ephemeral in-memory store (default). No further configuration is required.
 
+### Postgres
+Set `PANGOLIN_STORAGE_TYPE=postgres` and configure:
+- `DATABASE_URL`: Connection string (e.g., `postgres://user:password@localhost:5432/pangolin`).
+
+### MongoDB
+Set `PANGOLIN_STORAGE_TYPE=mongo` and configure:
+- `DATABASE_URL`: Connection string (e.g., `mongodb://localhost:27017`).
+
 ## Iceberg Client Configuration
 Clients connecting to Pangolin should use the `/v1/config` endpoint to discover defaults and overrides.
 

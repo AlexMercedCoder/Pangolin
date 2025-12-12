@@ -37,3 +37,5 @@ An `AuditLogEntry` contains:
 
 - **MemoryStore**: Logs are printed to stdout/tracing logs.
 - **S3Store**: Logs are persisted as JSON files in `s3://bucket/tenants/{tenant_id}/audit/`.
+- **PostgresStore**: Logs are stored in the `audit_logs` table.
+- **MongoStore**: Logs are stored in the `audit_logs` collection.
