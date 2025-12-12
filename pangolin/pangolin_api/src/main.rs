@@ -10,6 +10,7 @@ use pangolin_store::CatalogStore;
 mod iceberg_handlers;
 mod pangolin_handlers;
 
+mod tenant_handlers;
 mod auth;
 
 #[tokio::main]
@@ -38,6 +39,9 @@ async fn main() {
         // Pangolin Extended APIs
         .route("/api/v1/branches", get(pangolin_handlers::list_branches).post(pangolin_handlers::create_branch))
         .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
+        // Tenant Management
+        .route("/api/v1/tenants", get(tenant_handlers::list_tenants).post(tenant_handlers::create_tenant))
+        .route("/api/v1/tenants/:id", get(tenant_handlers::get_tenant))
         .layer(axum::middleware::from_fn(auth::auth_middleware))
         .with_state(store);
 
