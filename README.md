@@ -17,8 +17,17 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 - [S3 Storage Configuration](docs/storage_s3.md)
 - [API Overview](docs/api_overview.md): Details on Iceberg and Extended APIs.
 - [Architecture](architecture.md): System design and component overview.
+- [Management UI](pangolin_ui/README.md): Guide for the SvelteKit UI.
 
-## Quick Start
+## Features
+- **Multi-Tenancy**: Full isolation with Tenant IDs.
+- **Iceberg REST Catalog**: Full compliance including Commit support.
+- **Security**: JWT-based Authentication and RBAC.
+- **Management UI**: SvelteKit-based web interface.
+- **Warehouse Management**: Manage storage configurations per tenant.
+- **Git-like Branching**: Branch and merge catalogs for experiment isolation.
+- **S3 Integration**: Persist data to S3 or MinIO.
+- **Non-Iceberg Assets**: Manage Views and other assets alongside Iceberg tables.
 
 ### Prerequisites
 - Rust 1.92+

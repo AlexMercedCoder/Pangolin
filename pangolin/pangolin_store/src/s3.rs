@@ -351,12 +351,12 @@ impl CatalogStore for S3Store {
         }
     }
 
-    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, location: String) -> Result<()> {
+    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
         // We need to read the asset, update property, and write it back.
         // This is not atomic in S3 without a lock or conditional write.
         // For MVP, we just overwrite.
         if let Some(mut asset) = self.get_asset(tenant_id, catalog_name, branch.clone(), namespace.clone(), table.clone()).await? {
-            asset.properties.insert("metadata_location".to_string(), location);
+            asset.properties.insert("metadata_location".to_string(), new_location);
             self.create_asset(tenant_id, catalog_name, branch, namespace, asset).await?;
             Ok(())
         } else {

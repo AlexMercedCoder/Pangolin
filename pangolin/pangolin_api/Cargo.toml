@@ -18,3 +18,4 @@ tower-http = { workspace = true }
 anyhow = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto", "use_pem"], default-features = false }

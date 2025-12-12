@@ -49,7 +49,7 @@ pub trait CatalogStore: Send + Sync {
 
     // Metadata IO
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>>;
-    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, location: String) -> Result<()>;
+    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()>;
     
     // Generic File IO (for metadata files)
     async fn read_file(&self, location: &str) -> Result<Vec<u8>>;

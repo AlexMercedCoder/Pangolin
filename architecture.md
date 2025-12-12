@@ -32,12 +32,14 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
     - **Metadata IO**: Handles reading and writing of Iceberg metadata files (`metadata.json`).
 
 ### 3. API Layer (`pangolin_api`)
-- **Framework**: Axum
-- **Responsibility**: Handles HTTP requests, routing, and serialization.
-- **Modules**:
-    - `iceberg_handlers`: Implements standard Iceberg REST endpoints.
-    - `pangolin_handlers`: Implements extended Pangolin endpoints (Branching, Tenant Mgmt).
-    - `middleware`: Handles authentication and tenant resolution.
+- **Axum**: High-performance async web framework.
+- **Iceberg REST**: Standard endpoints for Catalog/Namespace/Table operations.
+- **Pangolin Extended**: Custom endpoints for Branching/Tenants/Assets.
+- **Security**: JWT Authentication and RBAC Middleware.
+
+### 4. Management UI (`pangolin_ui`)
+- **SvelteKit**: Modern frontend framework.
+- **Features**: Tenant management, Warehouse configuration, Asset exploration.
 
 ## Data Model
 
