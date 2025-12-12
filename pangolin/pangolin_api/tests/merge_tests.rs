@@ -83,7 +83,7 @@ async fn test_merge_branch_flow() {
         }).to_string()))
         .unwrap();
     let resp = app.clone().oneshot(create_branch_req).await.unwrap();
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::CREATED);
 
     // 5. Update Asset on 'dev' (Simulate change)
     // We'll just overwrite it with new property

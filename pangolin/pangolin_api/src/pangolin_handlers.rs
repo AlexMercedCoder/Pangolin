@@ -132,12 +132,31 @@ pub async fn create_branch(
     let branch = Branch {
         name: payload.name.clone(),
         head_commit_id: None,
-        branch_type: b_type,
+        branch_type: b_type.clone(),
         assets: branch_assets,
     };
 
-    match store.create_branch(tenant_id, catalog_name, branch.clone()).await {
-        Ok(_) => (StatusCode::OK, Json(BranchResponse::from(branch))).into_response(),
+    match store.create_branch(tenant_id, catalog_name, branch).await {
+        Ok(_) => {
+            // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+                tenant_id,
+                "system".to_string(), // TODO: Get user from auth context
+                "create_branch".to_string(),
+                format!("{}/{}", catalog_name, payload.name),
+                None
+            )).await;
+            
+            (StatusCode::CREATED, Json(BranchResponse {
+                name: payload.name,
+                head_commit_id: None,
+                branch_type: match b_type {
+                    BranchType::Ingest => "ingest".to_string(),
+                    BranchType::Experimental => "experimental".to_string(),
+                },
+                assets: vec![], // Assets are not returned in this simplified response
+            })).into_response()
+        },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
@@ -165,9 +184,26 @@ pub async fn merge_branch(
     let tenant_id = tenant.0;
     let catalog_name = payload.catalog.as_deref().unwrap_or("default");
 
-    match store.merge_branch(tenant_id, catalog_name, payload.source_branch, payload.target_branch).await {
-        Ok(_) => (StatusCode::OK, "Branch merged successfully").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Merge failed: {}", e)).into_response(),
+    match store.merge_branch(tenant_id, catalog_name, payload.source_branch.clone(), payload.target_branch.clone()).await {
+        Ok(_) => {
+             // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+                tenant_id,
+                "system".to_string(),
+                "merge_branch".to_string(),
+                format!("{}/{}->{}", catalog_name, payload.source_branch, payload.target_branch),
+                None
+            )).await;
+            
+            (StatusCode::OK, Json(serde_json::json!({"status": "merged"}))).into_response()
+        },
+        Err(e) => {
+            if e.to_string().contains("Conflict detected") {
+                (StatusCode::CONFLICT, Json(serde_json::json!({"error": e.to_string()}))).into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response()
+            }
+        }
     }
 }
 
@@ -201,4 +237,85 @@ pub async fn list_commits(
     }
 
     (StatusCode::OK, Json(commits)).into_response()
+}
+
+#[derive(Deserialize)]
+pub struct CreateTagRequest {
+    name: String,
+    commit_id: Uuid,
+}
+
+#[derive(Serialize)]
+pub struct TagResponse {
+    name: String,
+    commit_id: Uuid,
+}
+
+impl From<pangolin_core::model::Tag> for TagResponse {
+    fn from(t: pangolin_core::model::Tag) -> Self {
+        Self {
+            name: t.name,
+            commit_id: t.commit_id,
+        }
+    }
+}
+
+pub async fn list_tags(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = "default"; // TODO: Support catalog in path
+
+    match store.list_tags(tenant_id, catalog_name).await {
+        Ok(tags) => {
+            let resp: Vec<TagResponse> = tags.into_iter().map(|t| t.into()).collect();
+            (StatusCode::OK, Json(resp)).into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn create_tag(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Json(payload): Json<CreateTagRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = "default";
+
+    let tag = pangolin_core::model::Tag {
+        name: payload.name.clone(),
+        commit_id: payload.commit_id,
+    };
+
+    match store.create_tag(tenant_id, catalog_name, tag.clone()).await {
+        Ok(_) => (StatusCode::OK, Json(TagResponse::from(tag))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn delete_tag(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = "default";
+
+    match store.delete_tag(tenant_id, catalog_name, name).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn list_audit_events(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    match store.list_audit_events(tenant_id).await {
+        Ok(events) => (StatusCode::OK, Json(events)).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
 }

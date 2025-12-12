@@ -2,7 +2,7 @@ use crate::CatalogStore;
 use crate::signer::{Signer, Credentials};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use pangolin_core::model::{Asset, Branch, Namespace, BranchType, Tenant, Catalog, Warehouse, Commit};
+use pangolin_core::model::{Asset, Branch, Namespace, BranchType, Tenant, Catalog, Warehouse, Commit, Tag};
 use uuid::Uuid;
 use anyhow::Result;
 use std::sync::Arc;
@@ -17,6 +17,7 @@ pub struct MemoryStore {
     // Key: (TenantId, CatalogName, BranchName, NamespaceString, AssetName)
     assets: Arc<DashMap<(Uuid, String, String, String, String), Asset>>, 
     branches: Arc<DashMap<(Uuid, String, String), Branch>>, // Key: (TenantId, CatalogName, BranchName)
+    tags: Arc<DashMap<(Uuid, String, String), Tag>>, // Key: (TenantId, CatalogName, TagName)
     commits: Arc<DashMap<(Uuid, Uuid), Commit>>, // Key: (TenantId, CommitId)
     files: Arc<DashMap<String, Vec<u8>>>, // Key: Location
 }
@@ -30,6 +31,7 @@ impl MemoryStore {
             namespaces: Arc::new(DashMap::new()),
             assets: Arc::new(DashMap::new()),
             branches: Arc::new(DashMap::new()),
+            tags: Arc::new(DashMap::new()),
             commits: Arc::new(DashMap::new()),
             files: Arc::new(DashMap::new()),
         }
@@ -329,6 +331,39 @@ impl CatalogStore for MemoryStore {
         Ok(())
     }
 
+    // Tag Operations
+    async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()> {
+        let key = (tenant_id, catalog_name.to_string(), tag.name.clone());
+        self.tags.insert(key, tag);
+        Ok(())
+    }
+
+    async fn get_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Tag>> {
+        let key = (tenant_id, catalog_name.to_string(), name);
+        if let Some(tag) = self.tags.get(&key) {
+            Ok(Some(tag.value().clone()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Tag>> {
+        let mut tags = Vec::new();
+        for r in self.tags.iter() {
+            let (tid, cname, _) = r.key();
+            if *tid == tenant_id && cname == catalog_name {
+                tags.push(r.value().clone());
+            }
+        }
+        Ok(tags)
+    }
+
+    async fn delete_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
+        let key = (tenant_id, catalog_name.to_string(), name);
+        self.tags.remove(&key);
+        Ok(())
+    }
+
     async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()> {
         let key = (tenant_id, commit.id);
         self.commits.insert(key, commit);
@@ -407,6 +442,18 @@ impl CatalogStore for MemoryStore {
     async fn remove_orphan_files(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _older_than_ms: i64) -> Result<()> {
         tracing::info!("MemoryStore: Removing orphan files (placeholder)");
         Ok(())
+    }
+
+    // Audit Operations
+    async fn log_audit_event(&self, _tenant_id: Uuid, event: pangolin_core::audit::AuditLogEntry) -> Result<()> {
+        // For MemoryStore, we can just log it to stdout/tracing for now, or store in a list if we want to test retrieval.
+        // Let's just log it.
+        tracing::info!("AUDIT: {:?}", event);
+        Ok(())
+    }
+
+    async fn list_audit_events(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::audit::AuditLogEntry>> {
+        Ok(vec![])
     }
 }
 

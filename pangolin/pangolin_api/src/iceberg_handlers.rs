@@ -240,7 +240,11 @@ pub async fn create_table(
         name: tbl_name.clone(),
         kind: AssetType::IcebergTable,
         location: location.clone(),
-        properties,
+        properties: {
+            let mut p = properties.clone();
+            p.insert("metadata_location".to_string(), metadata_location.clone());
+            p
+        },
     };
 
     match store.create_asset(tenant_id, &catalog_name, branch, ns_vec, asset.clone()).await {
@@ -251,6 +255,15 @@ pub async fn create_table(
                  // Should we rollback asset creation? For now, just log error.
                  return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write metadata").into_response();
             }
+
+            // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+                tenant_id,
+                "system".to_string(),
+                "create_table".to_string(),
+                format!("{}/{}/{}", catalog_name, namespace, tbl_name),
+                Some(location.clone())
+            )).await;
 
             (StatusCode::OK, Json(TableResponse {
                 name: asset.name,
@@ -266,6 +279,7 @@ pub async fn load_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Path((prefix, namespace, table)): Path<(String, String, String)>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
@@ -276,14 +290,61 @@ pub async fn load_table(
     
     let ns_vec = vec![ns_name];
 
-    match store.get_asset(tenant_id, &catalog_name, branch, ns_vec, tbl_name).await {
-        Ok(Some(asset)) => (StatusCode::OK, Json(TableResponse {
+    // 1. Get current asset to find current metadata location
+    let asset = match store.get_asset(tenant_id, &catalog_name, branch.clone(), ns_vec.clone(), tbl_name.clone()).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+
+    let current_metadata_location = asset.properties.get("metadata_location").cloned();
+
+    if let Some(location) = current_metadata_location {
+        // 2. Read current metadata
+        let metadata_bytes = match store.read_file(&location).await {
+            Ok(bytes) => bytes,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read metadata file").into_response(),
+        };
+        
+        let metadata: TableMetadata = match serde_json::from_slice(&metadata_bytes) {
+            Ok(m) => m,
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
+        };
+
+        // 3. Handle Time Travel
+        // If snapshot-id or as-of-timestamp is provided, we need to find the correct metadata.
+        // For Iceberg REST, the client expects the *metadata* that corresponds to that snapshot.
+        // However, the `loadTable` response usually returns the *current* metadata, and the client uses the snapshot-id to read the correct snapshot from it.
+        // BUT, if the snapshot is not in the current metadata (e.g. expired), we might need to go back in history.
+        // For MVP, let's assume we just return the current metadata, but we verify the snapshot exists if requested.
+        
+        if let Some(snapshot_id_str) = params.get("snapshot-id") {
+             if let Ok(snapshot_id) = snapshot_id_str.parse::<i64>() {
+                 let found = metadata.snapshots.as_ref().map(|s| s.iter().any(|snap| snap.snapshot_id == snapshot_id)).unwrap_or(false);
+                 if !found {
+                     // In a full implementation, we would search metadata_log to find the metadata file that contained this snapshot.
+                     // For MVP, we just return Not Found if not in current metadata.
+                     return (StatusCode::NOT_FOUND, "Snapshot not found in current metadata").into_response();
+                 }
+             }
+        } else if let Some(timestamp_str) = params.get("as-of-timestamp") {
+             if let Ok(timestamp) = timestamp_str.parse::<i64>() {
+                 // Find the snapshot active at that timestamp
+                 // This logic is complex (finding the last snapshot before timestamp).
+                 // For MVP, we just check if any snapshot matches or is older.
+                 // Actually, Iceberg spec says `loadTable` just returns metadata. The *client* does the time travel logic usually?
+                 // Wait, the REST spec says: "The server may return a version of the metadata that contains the snapshot."
+                 // So returning current metadata is usually fine unless history is truncated.
+             }
+        }
+
+        (StatusCode::OK, Json(TableResponse {
             name: asset.name,
             location: asset.location,
             properties: asset.properties,
-        })).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        })).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, "Metadata location not found").into_response()
     }
 }
 
@@ -419,8 +480,19 @@ pub async fn delete_table(
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
 
     match store.delete_asset(tenant_id, &catalog_name, branch, namespace_parts, table_name).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
-        Err(_) => (StatusCode::NOT_FOUND, "Table not found").into_response(),
+        Ok(_) => {
+             // Audit Log
+             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+                tenant_id,
+                "system".to_string(),
+                "delete_table".to_string(),
+                format!("{}/{}/{}", catalog_name, namespace, table),
+                None
+            )).await;
+            
+            StatusCode::NO_CONTENT.into_response()
+        },
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
 

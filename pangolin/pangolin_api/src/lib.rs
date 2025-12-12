@@ -28,6 +28,11 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/branches/merge", post(pangolin_handlers::merge_branch))
         .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
         .route("/api/v1/branches/:name/commits", get(pangolin_handlers::list_commits))
+        // Tag Management
+        .route("/api/v1/tags", get(pangolin_handlers::list_tags).post(pangolin_handlers::create_tag))
+        .route("/api/v1/tags/:name", delete(pangolin_handlers::delete_tag))
+        // Audit Logs
+        .route("/api/v1/audit", get(pangolin_handlers::list_audit_events))
         // Tenant Management
         .route("/api/v1/tenants", get(tenant_handlers::list_tenants).post(tenant_handlers::create_tenant))
         .route("/api/v1/tenants/:id", get(tenant_handlers::get_tenant))

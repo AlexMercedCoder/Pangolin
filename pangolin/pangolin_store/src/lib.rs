@@ -42,11 +42,19 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()>;
     async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()>;
 
-    // Branch & Commit Operations
+    // Branch Operations
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()>;
     async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>>;
     async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>>;
     async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()>;
+
+    // Tag Operations
+    async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()>;
+    async fn get_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Tag>>;
+    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Tag>>;
+    async fn delete_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()>;
+
+    // Commit Operations
     async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()>;
     async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>>;
 
@@ -61,4 +69,8 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Maintenance Operations
     async fn expire_snapshots(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, retention_ms: i64) -> Result<()>;
     async fn remove_orphan_files(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, older_than_ms: i64) -> Result<()>;
+
+    // Audit Operations
+    async fn log_audit_event(&self, tenant_id: Uuid, event: pangolin_core::audit::AuditLogEntry) -> Result<()>;
+    async fn list_audit_events(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::audit::AuditLogEntry>>;
 }
