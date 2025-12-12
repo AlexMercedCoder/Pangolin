@@ -1,6 +1,6 @@
 use crate::CatalogStore;
 use async_trait::async_trait;
-use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tenant, Catalog};
+use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tenant, Catalog, Warehouse};
 use uuid::Uuid;
 use anyhow::{Result, anyhow};
 use object_store::{ObjectStore, path::Path};
@@ -47,6 +47,10 @@ impl S3Store {
     
     fn tenant_path(&self, tenant_id: Uuid) -> Path {
         Path::from(format!("tenants/{}/tenant.json", tenant_id))
+    }
+
+    fn warehouse_path(&self, tenant_id: Uuid, name: &str) -> Path {
+        Path::from(format!("tenants/{}/warehouses/{}/warehouse.json", tenant_id, name))
     }
 
     fn catalog_path(&self, tenant_id: Uuid, name: &str) -> Path {
@@ -173,6 +177,16 @@ impl CatalogStore for S3Store {
         Ok(())
     }
 
+    async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()> {
+        if let Some(mut ns) = self.get_namespace(tenant_id, catalog_name, namespace.clone()).await? {
+            ns.properties.extend(properties);
+            self.create_namespace(tenant_id, catalog_name, ns).await?;
+            Ok(())
+        } else {
+             Err(anyhow!("Namespace not found"))
+        }
+    }
+
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let path = self.asset_path(tenant_id, catalog_name, &branch_name, &namespace, &asset.name);
@@ -219,6 +233,25 @@ impl CatalogStore for S3Store {
         Ok(())
     }
 
+    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        
+        // Read source
+        if let Some(mut asset) = self.get_asset(tenant_id, catalog_name, Some(branch_name.clone()), source_namespace.clone(), source_name.clone()).await? {
+            // Update name
+            asset.name = dest_name.clone();
+            
+            // Write to dest
+            self.create_asset(tenant_id, catalog_name, Some(branch_name.clone()), dest_namespace.clone(), asset).await?;
+            
+            // Delete source
+            self.delete_asset(tenant_id, catalog_name, Some(branch_name), source_namespace, source_name).await?;
+            Ok(())
+        } else {
+            Err(anyhow!("Asset not found"))
+        }
+    }
+
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> {
         let path = self.branch_path(tenant_id, catalog_name, &branch.name);
         let data = serde_json::to_vec(&branch)?;
@@ -258,6 +291,50 @@ impl CatalogStore for S3Store {
     async fn create_commit(&self, _tenant_id: Uuid, _commit: Commit) -> Result<()> {
         // TODO: Implement commit storage
         Ok(())
+    }
+
+
+    async fn list_tenants(&self) -> Result<Vec<Tenant>> {
+        // Listing tenants in S3 would require listing the `tenants/` prefix
+        // and reading each `tenant.json`.
+        // For MVP, returning empty or TODO.
+        Ok(vec![])
+    }
+
+    async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
+        let path = self.warehouse_path(tenant_id, &warehouse.name);
+        let data = serde_json::to_vec(&warehouse)?;
+        self.store.put(&path, data.into()).await?;
+        Ok(())
+    }
+
+    async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>> {
+        let path = self.warehouse_path(tenant_id, &name);
+        match self.store.get(&path).await {
+            Ok(result) => {
+                let bytes = result.bytes().await?;
+                let warehouse: Warehouse = serde_json::from_slice(&bytes)?;
+                Ok(Some(warehouse))
+            },
+            Err(object_store::Error::NotFound { .. }) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>> {
+        let prefix = format!("tenants/{}/warehouses/", tenant_id);
+        let path = Path::from(prefix);
+        let mut stream = self.store.list(Some(&path));
+        
+        let mut warehouses = Vec::new();
+        while let Some(meta) = stream.try_next().await? {
+            if meta.location.as_ref().ends_with("warehouse.json") {
+                 let bytes = self.store.get(&meta.location).await?.bytes().await?;
+                 let warehouse: Warehouse = serde_json::from_slice(&bytes)?;
+                 warehouses.push(warehouse);
+            }
+        }
+        Ok(warehouses)
     }
 
     async fn get_commit(&self, _tenant_id: Uuid, _commit_id: Uuid) -> Result<Option<Commit>> {

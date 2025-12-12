@@ -1,7 +1,7 @@
 use crate::CatalogStore;
 use async_trait::async_trait;
 use dashmap::DashMap;
-use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tenant, Catalog};
+use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tenant, Catalog, Warehouse};
 use uuid::Uuid;
 use anyhow::Result;
 use std::sync::Arc;
@@ -9,6 +9,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct MemoryStore {
     tenants: Arc<DashMap<Uuid, Tenant>>,
+    warehouses: Arc<DashMap<(Uuid, String), Warehouse>>, // Key: (TenantId, WarehouseName)
     catalogs: Arc<DashMap<(Uuid, String), Catalog>>, // Key: (TenantId, CatalogName)
     namespaces: Arc<DashMap<(Uuid, String, String), Namespace>>, // Key: (TenantId, CatalogName, NamespaceString)
     // Key: (TenantId, CatalogName, BranchName, NamespaceString, AssetName)
@@ -22,6 +23,7 @@ impl MemoryStore {
     pub fn new() -> Self {
         Self {
             tenants: Arc::new(DashMap::new()),
+            warehouses: Arc::new(DashMap::new()),
             catalogs: Arc::new(DashMap::new()),
             namespaces: Arc::new(DashMap::new()),
             assets: Arc::new(DashMap::new()),
@@ -45,6 +47,34 @@ impl CatalogStore for MemoryStore {
         } else {
             Ok(None)
         }
+    }
+
+    async fn list_tenants(&self) -> Result<Vec<Tenant>> {
+        let tenants = self.tenants.iter().map(|t| t.value().clone()).collect();
+        Ok(tenants)
+    }
+
+    async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
+        let key = (tenant_id, warehouse.name.clone());
+        self.warehouses.insert(key, warehouse);
+        Ok(())
+    }
+
+    async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>> {
+        let key = (tenant_id, name);
+        if let Some(w) = self.warehouses.get(&key) {
+            Ok(Some(w.value().clone()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>> {
+        let warehouses = self.warehouses.iter()
+            .filter(|r| r.key().0 == tenant_id)
+            .map(|r| r.value().clone())
+            .collect();
+        Ok(warehouses)
     }
 
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()> {
@@ -101,21 +131,34 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()> {
-        let key = (tenant_id, catalog_name.to_string(), namespace.join("."));
+        let ns_str = namespace.join("\x1F");
+        let key = (tenant_id, catalog_name.to_string(), ns_str);
         self.namespaces.remove(&key);
         Ok(())
     }
 
+    async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()> {
+        let ns_str = namespace.join("\x1F");
+        let key = (tenant_id, catalog_name.to_string(), ns_str);
+        
+        if let Some(mut ns) = self.namespaces.get_mut(&key) {
+            ns.properties.extend(properties);
+            Ok(())
+        } else {
+             Err(anyhow::anyhow!("Namespace not found"))
+        }
+    }
+
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("."), asset.name.clone());
+        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("\x1F"), asset.name.clone());
         self.assets.insert(key, asset);
         Ok(())
     }
 
     async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("."), name);
+        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("\x1F"), name);
         if let Some(a) = self.assets.get(&key) {
             Ok(Some(a.value().clone()))
         } else {
@@ -125,7 +168,7 @@ impl CatalogStore for MemoryStore {
 
     async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let ns_str = namespace.join(".");
+        let ns_str = namespace.join("\x1F");
         let mut assets = Vec::new();
         for entry in self.assets.iter() {
             let (tid, cat, b_name, ns, _) = entry.key();
@@ -138,9 +181,26 @@ impl CatalogStore for MemoryStore {
 
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("."), name);
+        let ns_str = namespace.join("\x1F");
+        let key = (tenant_id, catalog_name.to_string(), branch_name, ns_str, name);
         self.assets.remove(&key);
         Ok(())
+    }
+
+    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let src_ns_str = source_namespace.join("\x1F");
+        let src_key = (tenant_id, catalog_name.to_string(), branch_name.clone(), src_ns_str, source_name);
+
+        if let Some((_, mut asset)) = self.assets.remove(&src_key) {
+            asset.name = dest_name.clone();
+            let dest_ns_str = dest_namespace.join("\x1F");
+            let dest_key = (tenant_id, catalog_name.to_string(), branch_name, dest_ns_str, dest_name);
+            self.assets.insert(dest_key, asset);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Asset not found"))
+        }
     }
 
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> {

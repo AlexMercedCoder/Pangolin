@@ -5,7 +5,7 @@ pub use memory::MemoryStore;
 pub use s3::S3Store;
 
 use async_trait::async_trait;
-use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalog};
+use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalog, Warehouse};
 use uuid::Uuid;
 use anyhow::Result;
 
@@ -14,6 +14,12 @@ pub trait CatalogStore: Send + Sync {
     // Tenant Operations
     async fn create_tenant(&self, tenant: Tenant) -> Result<()>;
     async fn get_tenant(&self, tenant_id: Uuid) -> Result<Option<Tenant>>;
+    async fn list_tenants(&self) -> Result<Vec<Tenant>>;
+
+    // Warehouse Operations
+    async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()>;
+    async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>>;
+    async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>>;
 
     // Catalog Operations
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()>;
@@ -25,12 +31,14 @@ pub trait CatalogStore: Send + Sync {
     async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>) -> Result<Vec<Namespace>>;
     async fn get_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<Option<Namespace>>;
     async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()>;
+    async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()>;
 
     // Asset Operations
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()>;
     async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>>;
     async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>>;
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()>;
+    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()>;
 
     // Branch & Commit Operations
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()>;

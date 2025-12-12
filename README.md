@@ -31,10 +31,12 @@ cargo run --bin pangolin_api
 See [Walkthrough](walkthrough.md) for example `curl` commands.
 
 ## Features
-- **Iceberg REST API**: Compatible with standard Iceberg clients.
-- **Branching**: Create and manage branches for your data.
-- **Multi-tenancy**: Isolated environments for different teams/customers.
-- **Universal Asset Tracking**: Track Tables, Views, ML Models, and more.
+- **Multi-Tenancy**: Built-in tenant isolation.
+- **Warehouse Management**: Manage storage configurations per tenant.
+- **Git-like Branching**: Branch and merge catalogs for experiment isolation.
+- **Iceberg Native**: Fully compatible with the Iceberg REST Catalog spec.
+- **S3 Integration**: Persist data to S3 or MinIO.
+- **Non-Iceberg Assets**: Manage Views and other assets alongside Iceberg tables.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -10,6 +10,14 @@ pub struct Tenant {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Warehouse {
+    pub id: Uuid,
+    pub name: String,
+    pub tenant_id: Uuid,
+    pub storage_config: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
     pub name: String,
     pub properties: HashMap<String, String>,

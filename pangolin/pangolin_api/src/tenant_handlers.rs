@@ -41,7 +41,7 @@ pub async fn list_tenants(
 ) -> impl IntoResponse {
     match store.list_tenants().await {
         Ok(tenants) => {
-            let response: Vec<TenantResponse> = tenants.into_iter().map(|t| TenantResponse::from(t)).collect();
+            let response: Vec<TenantResponse> = tenants.into_iter().map(|t: Tenant| TenantResponse::from(t)).collect();
             (StatusCode::OK, Json(response)).into_response()
         },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
