@@ -87,6 +87,10 @@ impl S3Store {
     fn branch_path(&self, tenant_id: Uuid, catalog_name: &str, name: &str) -> Path {
         Path::from(format!("tenants/{}/catalogs/{}/branches/{}/branch.json", tenant_id, catalog_name, name))
     }
+
+    fn commit_path(&self, tenant_id: Uuid, commit_id: Uuid) -> Path {
+        Path::from(format!("tenants/{}/commits/{}.json", tenant_id, commit_id))
+    }
 }
 
 #[async_trait]
@@ -342,17 +346,32 @@ impl CatalogStore for S3Store {
         Ok(())
     }
 
-    async fn create_commit(&self, _tenant_id: Uuid, _commit: Commit) -> Result<()> {
-        // TODO: Implement commit storage
+    async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()> {
+        let path = self.commit_path(tenant_id, commit.id);
+        let data = serde_json::to_vec(&commit)?;
+        self.store.put(&path, data.into()).await?;
         Ok(())
     }
 
-
     async fn list_tenants(&self) -> Result<Vec<Tenant>> {
-        // Listing tenants in S3 would require listing the `tenants/` prefix
-        // and reading each `tenant.json`.
-        // For MVP, returning empty or TODO.
-        Ok(vec![])
+        // List all objects under "tenants/"
+        // We expect structure tenants/{uuid}/tenant.json
+        // So we list recursively or just iterate.
+        // Since object_store listing is flat or recursive, we can list "tenants/" recursively
+        // and filter for "tenant.json".
+        
+        let prefix = Path::from("tenants/");
+        let mut stream = self.store.list(Some(&prefix));
+        
+        let mut tenants = Vec::new();
+        while let Some(meta) = stream.try_next().await? {
+            if meta.location.as_ref().ends_with("tenant.json") {
+                 let bytes = self.store.get(&meta.location).await?.bytes().await?;
+                 let tenant: Tenant = serde_json::from_slice(&bytes)?;
+                 tenants.push(tenant);
+            }
+        }
+        Ok(tenants)
     }
 
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
@@ -391,9 +410,17 @@ impl CatalogStore for S3Store {
         Ok(warehouses)
     }
 
-    async fn get_commit(&self, _tenant_id: Uuid, _commit_id: Uuid) -> Result<Option<Commit>> {
-        // TODO: Implement commit retrieval
-        Ok(None)
+    async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>> {
+        let path = self.commit_path(tenant_id, commit_id);
+        match self.store.get(&path).await {
+            Ok(result) => {
+                let bytes = result.bytes().await?;
+                let commit: Commit = serde_json::from_slice(&bytes)?;
+                Ok(Some(commit))
+            },
+            Err(object_store::Error::NotFound { .. }) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>> {
@@ -457,6 +484,16 @@ impl CatalogStore for S3Store {
 
         let path = Path::from(path_str);
         self.store.put(&path, content.into()).await?;
+        Ok(())
+    }
+
+    async fn expire_snapshots(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _retention_ms: i64) -> Result<()> {
+        tracing::info!("S3Store: Expiring snapshots (placeholder)");
+        Ok(())
+    }
+
+    async fn remove_orphan_files(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _older_than_ms: i64) -> Result<()> {
+        tracing::info!("S3Store: Removing orphan files (placeholder)");
         Ok(())
     }
 }

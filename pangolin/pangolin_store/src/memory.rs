@@ -398,6 +398,16 @@ impl CatalogStore for MemoryStore {
         self.files.insert(location.to_string(), content);
         Ok(())
     }
+
+    async fn expire_snapshots(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _retention_ms: i64) -> Result<()> {
+        tracing::info!("MemoryStore: Expiring snapshots (placeholder)");
+        Ok(())
+    }
+
+    async fn remove_orphan_files(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _older_than_ms: i64) -> Result<()> {
+        tracing::info!("MemoryStore: Removing orphan files (placeholder)");
+        Ok(())
+    }
 }
 
 #[async_trait]

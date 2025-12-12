@@ -170,3 +170,35 @@ pub async fn merge_branch(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Merge failed: {}", e)).into_response(),
     }
 }
+
+pub async fn list_commits(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(branch_name): Path<String>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = "default"; // TODO: Support catalog in path
+
+    // Get branch to find head commit
+    let branch = match store.get_branch(tenant_id, catalog_name, branch_name.clone()).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Branch not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get branch").into_response(),
+    };
+
+    let mut commits = Vec::new();
+    let mut current_commit_id = branch.head_commit_id;
+
+    while let Some(commit_id) = current_commit_id {
+        match store.get_commit(tenant_id, commit_id).await {
+            Ok(Some(commit)) => {
+                current_commit_id = commit.parent_id;
+                commits.push(commit);
+            },
+            Ok(None) => break, // Should not happen if consistency is maintained
+            Err(_) => break,
+        }
+    }
+
+    (StatusCode::OK, Json(commits)).into_response()
+}

@@ -19,13 +19,15 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/namespaces/:namespace", delete(iceberg_handlers::delete_namespace))
         .route("/v1/:prefix/namespaces/:namespace/properties", post(iceberg_handlers::update_namespace_properties))
         .route("/v1/:prefix/namespaces/:namespace/tables", get(iceberg_handlers::list_tables).post(iceberg_handlers::create_table))
-        .route("/v1/:prefix/namespaces/:namespace/tables/:table", get(iceberg_handlers::load_table).post(iceberg_handlers::update_table).delete(iceberg_handlers::delete_table))
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table", get(iceberg_handlers::load_table).post(iceberg_handlers::update_table).delete(iceberg_handlers::delete_table).head(iceberg_handlers::table_exists))
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table/maintenance", post(iceberg_handlers::perform_maintenance))
         .route("/v1/:prefix/namespaces/:namespace/tables/:table/metrics", post(iceberg_handlers::report_metrics))
         .route("/v1/:prefix/tables/rename", post(iceberg_handlers::rename_table))
         // Pangolin Extended APIs
         .route("/api/v1/branches", get(pangolin_handlers::list_branches).post(pangolin_handlers::create_branch))
         .route("/api/v1/branches/merge", post(pangolin_handlers::merge_branch))
         .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
+        .route("/api/v1/branches/:name/commits", get(pangolin_handlers::list_commits))
         // Tenant Management
         .route("/api/v1/tenants", get(tenant_handlers::list_tenants).post(tenant_handlers::create_tenant))
         .route("/api/v1/tenants/:id", get(tenant_handlers::get_tenant))

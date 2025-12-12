@@ -57,4 +57,8 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Generic File IO (for metadata files)
     async fn read_file(&self, location: &str) -> Result<Vec<u8>>;
     async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()>;
+
+    // Maintenance Operations
+    async fn expire_snapshots(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, retention_ms: i64) -> Result<()>;
+    async fn remove_orphan_files(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, older_than_ms: i64) -> Result<()>;
 }

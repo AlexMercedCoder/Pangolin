@@ -358,7 +358,7 @@ pub async fn update_table(
             Ok(_) => {
                 // Success!
                 return (StatusCode::OK, Json(TableResponse {
-                    name: metadata.properties.as_ref().and_then(|p| p.get("name").cloned()).unwrap_or_default(),
+                    name: metadata.properties.as_ref().and_then(|p: &std::collections::HashMap<String, String>| p.get("name").cloned()).unwrap_or_default(),
                     location: metadata.location,
                     properties: metadata.properties.unwrap_or_default(),
                 })).into_response();
@@ -486,4 +486,68 @@ pub async fn report_metrics(
     // Just log and return success
     tracing::info!("Received metrics report");
     StatusCode::NO_CONTENT
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MaintenanceRequest {
+    pub job_type: String, // "expire_snapshots" or "remove_orphan_files"
+    pub retention_ms: Option<i64>,
+    pub older_than_ms: Option<i64>,
+}
+
+pub async fn perform_maintenance(
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(tenant_id): Extension<TenantId>,
+    Path((_prefix, namespace, table)): Path<(String, String, String)>,
+    Json(payload): Json<MaintenanceRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    // Parse table@branch
+    let (table_name, branch_name) = if let Some((t, b)) = table.split_once('@') {
+        (t.to_string(), Some(b.to_string()))
+    } else {
+        (table.to_string(), None)
+    };
+
+    match payload.job_type.as_str() {
+        "expire_snapshots" => {
+            let retention = payload.retention_ms.unwrap_or(86400000); // Default 1 day
+            store.expire_snapshots(tenant_id.0, "default", branch_name, namespace_parts, table_name, retention).await
+                .map_err(|e| {
+                    tracing::error!("Maintenance failed: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+        },
+        "remove_orphan_files" => {
+             let older_than = payload.older_than_ms.unwrap_or(86400000); // Default 1 day
+             store.remove_orphan_files(tenant_id.0, "default", branch_name, namespace_parts, table_name, older_than).await
+                .map_err(|e| {
+                    tracing::error!("Maintenance failed: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+        },
+        _ => return Err(StatusCode::BAD_REQUEST),
+    }
+
+    Ok(Json(serde_json::json!({ "status": "accepted" })))
+}
+
+pub async fn table_exists(
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(tenant_id): Extension<TenantId>,
+    Path((prefix, namespace, table)): Path<(String, String, String)>,
+) -> impl IntoResponse {
+    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    // Parse table@branch
+    let (table_name, branch_name) = if let Some((t, b)) = table.split_once('@') {
+        (t.to_string(), Some(b.to_string()))
+    } else {
+        (table.to_string(), None)
+    };
+
+    match store.get_asset(tenant_id.0, &prefix, branch_name, namespace_parts, table_name).await {
+        Ok(Some(_)) => StatusCode::OK,
+        Ok(None) => StatusCode::NOT_FOUND,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
 }
