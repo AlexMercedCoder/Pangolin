@@ -1,0 +1,18 @@
+[package]
+name = "pangolin_store"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pangolin_core = { path = "../pangolin_core" }
+object_store = { workspace = true }
+async-trait = { workspace = true }
+dashmap = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+bytes = { workspace = true }

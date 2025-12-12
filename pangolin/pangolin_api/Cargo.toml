@@ -1,0 +1,20 @@
+[package]
+name = "pangolin_api"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pangolin_core = { path = "../pangolin_core" }
+pangolin_store = { path = "../pangolin_store" }
+axum = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dotenvy = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }

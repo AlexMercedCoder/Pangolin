@@ -1,0 +1,365 @@
+use axum::{
+    extract::{Path, State, Query, Extension},
+    Json,
+    response::IntoResponse,
+    http::StatusCode,
+};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use pangolin_store::CatalogStore;
+use pangolin_store::memory::MemoryStore;
+use pangolin_core::model::{Namespace, Asset, AssetType};
+use pangolin_core::iceberg_metadata::{TableMetadata, Schema, PartitionSpec, SortOrder, Snapshot};
+use uuid::Uuid;
+use std::collections::HashMap;
+use chrono::Utc;
+use crate::auth::TenantId;
+
+// Placeholder for AppState
+pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
+
+#[derive(Deserialize)]
+pub struct ListNamespaceParams {
+    parent: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ListNamespacesResponse {
+    namespaces: Vec<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateNamespaceRequest {
+    namespace: Vec<String>,
+    properties: Option<HashMap<String, String>>,
+}
+
+#[derive(Serialize)]
+pub struct CreateNamespaceResponse {
+    namespace: Vec<String>,
+    properties: HashMap<String, String>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateTableRequest {
+    name: String,
+    location: Option<String>,
+    properties: Option<HashMap<String, String>>,
+}
+
+#[derive(Serialize)]
+pub struct TableResponse {
+    name: String,
+    location: String,
+    properties: HashMap<String, String>,
+}
+
+#[derive(Serialize)]
+pub struct ListTablesResponse {
+    identifiers: Vec<TableIdentifier>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct TableIdentifier {
+    namespace: Vec<String>,
+    name: String,
+}
+
+#[derive(Deserialize)]
+pub struct CommitTableRequest {
+    identifier: Option<TableIdentifier>,
+    requirements: Vec<CommitRequirement>,
+    updates: Vec<CommitUpdate>,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+pub enum CommitRequirement {
+    #[serde(rename = "assert-create")]
+    AssertCreate,
+    #[serde(rename = "assert-table-uuid")]
+    AssertTableUuid { uuid: Uuid },
+    // Add others as needed
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "action")]
+pub enum CommitUpdate {
+    #[serde(rename = "assign-uuid")]
+    AssignUuid { uuid: Uuid },
+    #[serde(rename = "upgrade-format-version")]
+    UpgradeFormatVersion { format_version: i32 },
+    #[serde(rename = "add-schema")]
+    AddSchema { schema: Schema },
+    #[serde(rename = "set-current-schema")]
+    SetCurrentSchema { schema_id: i32 },
+    #[serde(rename = "add-snapshot")]
+    AddSnapshot { snapshot: Snapshot },
+    // Add others as needed
+}
+
+// Helper to parse "table@branch"
+fn parse_table_identifier(raw_name: &str) -> (String, Option<String>) {
+    if let Some((name, branch)) = raw_name.split_once('@') {
+        (name.to_string(), Some(branch.to_string()))
+    } else {
+        (raw_name.to_string(), None)
+    }
+}
+
+pub async fn list_namespaces(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(prefix): Path<String>,
+    Query(params): Query<ListNamespaceParams>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    
+    match store.list_namespaces(tenant_id, &catalog_name, params.parent).await {
+        Ok(namespaces) => {
+            let ns_list: Vec<Vec<String>> = namespaces.into_iter().map(|n| n.name).collect();
+            (StatusCode::OK, Json(ListNamespacesResponse { namespaces: ns_list })).into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn create_namespace(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(prefix): Path<String>,
+    Json(payload): Json<CreateNamespaceRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    let ns = Namespace {
+        name: payload.namespace.clone(),
+        properties: payload.properties.unwrap_or_default(),
+    };
+
+    match store.create_namespace(tenant_id, &catalog_name, ns.clone()).await {
+        Ok(_) => (StatusCode::OK, Json(CreateNamespaceResponse {
+            namespace: ns.name,
+            properties: ns.properties,
+        })).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn list_tables(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path((prefix, namespace)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    
+    let (ns_name, branch) = parse_table_identifier(&namespace);
+    let ns_vec = vec![ns_name];
+
+    match store.list_assets(tenant_id, &catalog_name, branch, ns_vec.clone()).await {
+        Ok(assets) => {
+            let identifiers: Vec<TableIdentifier> = assets.into_iter().map(|a| TableIdentifier {
+                namespace: ns_vec.clone(),
+                name: a.name,
+            }).collect();
+            (StatusCode::OK, Json(ListTablesResponse { identifiers })).into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn create_table(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path((prefix, namespace)): Path<(String, String)>,
+    Json(payload): Json<CreateTableRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    
+    let (tbl_name, branch_from_name) = parse_table_identifier(&payload.name);
+    let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
+    let branch = branch_from_name.or(branch_from_ns);
+    
+    let ns_vec = vec![ns_name];
+
+    let table_uuid = Uuid::new_v4();
+    let location = payload.location.unwrap_or_else(|| format!("s3://warehouse/{}/{}/{}", catalog_name, ns_vec.join("/"), tbl_name));
+    
+    // Create initial TableMetadata
+    let metadata = TableMetadata {
+        format_version: 2,
+        table_uuid,
+        location: location.clone(),
+        last_sequence_number: 0,
+        last_updated_ms: Utc::now().timestamp_millis(),
+        last_column_id: 0, // Should be calculated from schema
+        current_schema_id: 0,
+        schemas: vec![], // TODO: Parse schema from payload if provided
+        current_partition_spec_id: 0,
+        partition_specs: vec![PartitionSpec { spec_id: 0, fields: vec![] }],
+        default_sort_order_id: 0,
+        sort_orders: vec![SortOrder { order_id: 0, fields: vec![] }],
+        properties: payload.properties.clone(),
+        current_snapshot_id: None,
+        snapshots: Some(vec![]),
+        snapshot_log: Some(vec![]),
+        metadata_log: Some(vec![]),
+    };
+
+    // Serialize metadata
+    let metadata_json = serde_json::to_string(&metadata).unwrap();
+    
+    // In a real implementation, we would write this JSON to S3 at `location/metadata/v1.metadata.json`
+    // But our Store trait doesn't expose generic "write file" yet, only "create_asset".
+    // We need to extend Store or use S3 client directly? 
+    // Actually, `create_asset` stores the Asset pointer.
+    // We should probably add a method to Store to write arbitrary bytes or metadata?
+    // Or we assume the "Asset" creation IS the metadata creation?
+    // The "Asset" in our model is the catalog pointer. The "TableMetadata" is the Iceberg file.
+    
+    // For now, let's just store the pointer and assume the metadata file "exists" conceptually or we skip writing it for this step 
+    // until we add `write_file` to CatalogStore.
+    // Wait, the plan said "Implement Metadata Writer/Reader in pangolin_store".
+    // I added `get_metadata_location` and `update_metadata_location` but not `write_metadata_file`.
+    
+    // Let's add `write_metadata_file` to CatalogStore or just use `S3Store`'s internal client if we could?
+    // No, we should keep it abstract.
+    
+    // Let's update `Asset` to include the metadata location property.
+    let metadata_location = format!("{}/metadata/00000-{}.metadata.json", location, Uuid::new_v4());
+    
+    let mut properties = payload.properties.unwrap_or_default();
+    properties.insert("metadata_location".to_string(), metadata_location.clone());
+
+    let asset = Asset {
+        name: tbl_name.clone(),
+        kind: AssetType::IcebergTable,
+        location: location.clone(),
+        properties,
+    };
+
+    match store.create_asset(tenant_id, &catalog_name, branch, ns_vec, asset.clone()).await {
+        Ok(_) => {
+            // Write metadata file
+            if let Err(e) = store.write_file(&metadata_location, metadata_json.into_bytes()).await {
+                 tracing::error!("Failed to write metadata file: {}", e);
+                 // Should we rollback asset creation? For now, just log error.
+                 return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write metadata").into_response();
+            }
+
+            (StatusCode::OK, Json(TableResponse {
+                name: asset.name,
+                location: asset.location,
+                properties: asset.properties,
+            })).into_response()
+        },
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn load_table(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path((prefix, namespace, table)): Path<(String, String, String)>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    
+    let (tbl_name, branch_from_name) = parse_table_identifier(&table);
+    let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
+    let branch = branch_from_name.or(branch_from_ns);
+    
+    let ns_vec = vec![ns_name];
+
+    match store.get_asset(tenant_id, &catalog_name, branch, ns_vec, tbl_name).await {
+        Ok(Some(asset)) => (StatusCode::OK, Json(TableResponse {
+            name: asset.name,
+            location: asset.location,
+            properties: asset.properties,
+        })).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, "Table not found").into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn update_table(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path((prefix, namespace, table)): Path<(String, String, String)>,
+    Json(payload): Json<CommitTableRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    
+    let (tbl_name, branch_from_name) = parse_table_identifier(&table);
+    let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
+    let branch = branch_from_name.or(branch_from_ns);
+    
+    let ns_vec = vec![ns_name];
+
+    // 1. Get current metadata location
+    let current_location_opt = match store.get_metadata_location(tenant_id, &catalog_name, branch.clone(), ns_vec.clone(), tbl_name.clone()).await {
+        Ok(loc) => loc,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get metadata location").into_response(),
+    };
+
+    let mut metadata = if let Some(loc) = current_location_opt {
+        // 2. Read current metadata
+        match store.read_file(&loc).await {
+            Ok(bytes) => {
+                match serde_json::from_slice::<TableMetadata>(&bytes) {
+                    Ok(m) => m,
+                    Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
+                }
+            },
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read metadata file").into_response(),
+        }
+    } else {
+        return (StatusCode::NOT_FOUND, "Table metadata not found").into_response();
+    };
+
+    // 3. Apply updates (Simplified)
+    for update in payload.updates {
+        match update {
+            CommitUpdate::AddSnapshot { snapshot } => {
+                if let Some(snapshots) = &mut metadata.snapshots {
+                    snapshots.push(snapshot.clone());
+                } else {
+                    metadata.snapshots = Some(vec![snapshot.clone()]);
+                }
+                metadata.current_snapshot_id = Some(snapshot.snapshot_id);
+                metadata.last_updated_ms = Utc::now().timestamp_millis();
+            },
+            CommitUpdate::AddSchema { schema } => {
+                metadata.schemas.push(schema);
+            },
+            CommitUpdate::SetCurrentSchema { schema_id } => {
+                metadata.current_schema_id = schema_id;
+            },
+            _ => {} // Ignore others for MVP
+        }
+    }
+
+    // 4. Write new metadata
+    let new_metadata_location = format!("{}/metadata/00000-{}.metadata.json", metadata.location, Uuid::new_v4());
+    let metadata_json = serde_json::to_string(&metadata).unwrap();
+
+    if let Err(e) = store.write_file(&new_metadata_location, metadata_json.into_bytes()).await {
+         tracing::error!("Failed to write new metadata file: {}", e);
+         return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write new metadata").into_response();
+    }
+
+    // 5. Update catalog pointer
+    if let Err(_) = store.update_metadata_location(tenant_id, &catalog_name, branch, ns_vec, tbl_name, new_metadata_location).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to update catalog pointer").into_response();
+    }
+
+    (StatusCode::OK, Json(TableResponse {
+        name: metadata.properties.as_ref().and_then(|p| p.get("name").cloned()).unwrap_or_default(), // Name might not be in props
+        location: metadata.location,
+        properties: metadata.properties.unwrap_or_default(),
+    })).into_response()
+}

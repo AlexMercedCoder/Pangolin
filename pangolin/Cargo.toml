@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "pangolin_core",
+    "pangolin_store",
+    "pangolin_api",
+]
+
+[workspace.dependencies]
+axum = "0.7"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+object_store = { version = "0.11", features = ["aws"] }
+thiserror = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dotenvy = "0.15"
+async-trait = "0.1"
+dashmap = "6.0"
+futures = "0.3"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+reqwest = { version = "0.11", features = ["json"] }
+url = "2.5"
+bytes = "1.5"
