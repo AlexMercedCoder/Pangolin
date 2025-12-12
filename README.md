@@ -6,6 +6,9 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 
 ## Documentation Index
 - [Getting Started](docs/getting_started.md): Setup and basic usage guide.
+- [Warehouse Management](docs/warehouse_management.md)
+- [Asset Management](docs/asset_management.md)
+- [Storage (S3)](docs/storage_s3.md)
 - [Deployment](docs/deployment.md): How to build and deploy Pangolin.
 - [Configuration](docs/configuration.md): Runtime configuration options.
 - [Environment Variables](docs/env_vars.md): List of supported env vars.

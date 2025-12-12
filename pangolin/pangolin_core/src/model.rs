@@ -98,3 +98,34 @@ pub struct Tag {
     pub name: String,
     pub commit_id: Uuid,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_asset_serialization() {
+        let asset = Asset {
+            name: "test_view".to_string(),
+            kind: AssetType::View,
+            location: "s3://bucket/path".to_string(),
+            properties: HashMap::new(),
+        };
+        let json = serde_json::to_string(&asset).unwrap();
+        let deserialized: Asset = serde_json::from_str(&json).unwrap();
+        assert_eq!(asset.name, deserialized.name);
+        assert!(matches!(deserialized.kind, AssetType::View));
+    }
+
+    #[test]
+    fn test_tenant_serialization() {
+        let tenant = Tenant {
+            id: Uuid::new_v4(),
+            name: "acme".to_string(),
+            properties: HashMap::new(),
+        };
+        let json = serde_json::to_string(&tenant).unwrap();
+        let deserialized: Tenant = serde_json::from_str(&json).unwrap();
+        assert_eq!(tenant.name, deserialized.name);
+    }
+}

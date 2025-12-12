@@ -281,3 +281,80 @@ impl CatalogStore for MemoryStore {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pangolin_core::model::{Tenant, Warehouse, AssetType};
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_tenant_operations() {
+        let store = MemoryStore::new();
+        let tenant_id = Uuid::new_v4();
+        let tenant = Tenant {
+            id: tenant_id,
+            name: "test_tenant".to_string(),
+            properties: HashMap::new(),
+        };
+
+        store.create_tenant(tenant.clone()).await.unwrap();
+        let fetched = store.get_tenant(tenant_id).await.unwrap();
+        assert!(fetched.is_some());
+        assert_eq!(fetched.unwrap().name, "test_tenant");
+
+        let list = store.list_tenants().await.unwrap();
+        assert_eq!(list.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_warehouse_operations() {
+        let store = MemoryStore::new();
+        let tenant_id = Uuid::new_v4();
+        let warehouse = Warehouse {
+            id: Uuid::new_v4(),
+            name: "main_warehouse".to_string(),
+            tenant_id,
+            storage_config: HashMap::new(),
+        };
+
+        store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
+        let fetched = store.get_warehouse(tenant_id, "main_warehouse".to_string()).await.unwrap();
+        assert!(fetched.is_some());
+        
+        let list = store.list_warehouses(tenant_id).await.unwrap();
+        assert_eq!(list.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_asset_operations() {
+        let store = MemoryStore::new();
+        let tenant_id = Uuid::new_v4();
+        let catalog = "default";
+        let namespace = vec!["ns1".to_string()];
+        
+        let asset = Asset {
+            name: "tbl1".to_string(),
+            kind: AssetType::IcebergTable,
+            location: "s3://loc".to_string(),
+            properties: HashMap::new(),
+        };
+
+        store.create_asset(tenant_id, catalog, None, namespace.clone(), asset.clone()).await.unwrap();
+        
+        let fetched = store.get_asset(tenant_id, catalog, None, namespace.clone(), "tbl1".to_string()).await.unwrap();
+        assert!(fetched.is_some());
+
+        // Rename
+        store.rename_asset(tenant_id, catalog, None, namespace.clone(), "tbl1".to_string(), namespace.clone(), "tbl2".to_string()).await.unwrap();
+        let old = store.get_asset(tenant_id, catalog, None, namespace.clone(), "tbl1".to_string()).await.unwrap();
+        assert!(old.is_none());
+        let new = store.get_asset(tenant_id, catalog, None, namespace.clone(), "tbl2".to_string()).await.unwrap();
+        assert!(new.is_some());
+
+        // Delete
+        store.delete_asset(tenant_id, catalog, None, namespace.clone(), "tbl2".to_string()).await.unwrap();
+        let deleted = store.get_asset(tenant_id, catalog, None, namespace.clone(), "tbl2".to_string()).await.unwrap();
+        assert!(deleted.is_none());
+    }
+}

@@ -57,3 +57,8 @@ To support branching in standard Iceberg clients, we use a `table@branch` syntax
 3. **Handler**: Parses `mytable@dev` to extract table name `mytable` and branch `dev`.
 4. **Store**: Queries the `CatalogStore` for the asset on the specified branch.
 5. **Response**: Returns metadata or error.
+
+## Testing Strategy
+- **Unit Tests**: Cover core logic in `pangolin_core` (serialization) and `pangolin_store` (CRUD operations).
+- **Integration Tests**: End-to-end API tests in `pangolin_api` using `axum::test` and `tower::ServiceExt`.
+- **Manual Verification**: `curl` based verification for new features.
