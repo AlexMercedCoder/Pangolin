@@ -9,7 +9,7 @@ use std::sync::Arc;
 use pangolin_store::CatalogStore;
 use pangolin_core::model::Tenant;
 use uuid::Uuid;
-use crate::auth::TenantId;
+use crate::auth::{TenantId, RootUser};
 use crate::iceberg_handlers::AppState;
 
 #[derive(Deserialize)]
@@ -37,7 +37,7 @@ impl From<Tenant> for TenantResponse {
 
 pub async fn list_tenants(
     State(store): State<AppState>,
-    Extension(_tenant): Extension<TenantId>, // Admin check? For now open.
+    Extension(_root): Extension<RootUser>,
 ) -> impl IntoResponse {
     match store.list_tenants().await {
         Ok(tenants) => {
@@ -50,7 +50,7 @@ pub async fn list_tenants(
 
 pub async fn create_tenant(
     State(store): State<AppState>,
-    Extension(_tenant): Extension<TenantId>, // Admin check?
+    Extension(_root): Extension<RootUser>,
     Json(payload): Json<CreateTenantRequest>,
 ) -> impl IntoResponse {
     let tenant = Tenant {

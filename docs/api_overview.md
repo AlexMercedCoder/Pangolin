@@ -47,3 +47,4 @@ Additional endpoints for features not covered by the Iceberg spec.
 - `GET /api/v1/branches`: List branches for a catalog.
 - `POST /api/v1/branches`: Create a new branch.
 - `GET /api/v1/branches/:name`: Get branch details.
+- `POST /api/v1/branches/merge`: Merge a source branch into a target branch.

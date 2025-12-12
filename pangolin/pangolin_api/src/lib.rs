@@ -10,6 +10,7 @@ pub mod tenant_handlers;
 pub mod warehouse_handlers;
 pub mod asset_handlers;
 pub mod auth;
+pub mod signing_handlers;
 
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
     Router::new()
@@ -23,6 +24,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/tables/rename", post(iceberg_handlers::rename_table))
         // Pangolin Extended APIs
         .route("/api/v1/branches", get(pangolin_handlers::list_branches).post(pangolin_handlers::create_branch))
+        .route("/api/v1/branches/merge", post(pangolin_handlers::merge_branch))
         .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
         // Tenant Management
         .route("/api/v1/tenants", get(tenant_handlers::list_tenants).post(tenant_handlers::create_tenant))
@@ -33,6 +35,9 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Asset Management (Views)
         .route("/v1/:prefix/namespaces/:namespace/views", post(asset_handlers::create_view))
         .route("/v1/:prefix/namespaces/:namespace/views/:view", get(asset_handlers::get_view))
+        // Signing APIs
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table/credentials", post(signing_handlers::get_table_credentials))
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table/presign", get(signing_handlers::get_presigned_url))
         .layer(axum::middleware::from_fn(auth::auth_middleware))
         .with_state(store)
 }

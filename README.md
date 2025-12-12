@@ -16,6 +16,7 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 - [Entities & Models](docs/entities.md): Explanation of core data models (Tenant, Branch, Asset).
 - [S3 Storage Configuration](docs/storage_s3.md)
 - [API Overview](docs/api_overview.md): Details on Iceberg and Extended APIs.
+- [Branch Management](docs/branch_management.md): Guide to branching and merging.
 - [Architecture](architecture.md): System design and component overview.
 - [Management UI](pangolin_ui/README.md): Guide for the SvelteKit UI.
 

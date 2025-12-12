@@ -174,6 +174,7 @@ pub async fn create_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Path((prefix, namespace)): Path<(String, String)>,
+    Query(params): Query<HashMap<String, String>>,
     Json(payload): Json<CreateTableRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
@@ -181,7 +182,8 @@ pub async fn create_table(
     
     let (tbl_name, branch_from_name) = parse_table_identifier(&payload.name);
     let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
-    let branch = branch_from_name.or(branch_from_ns);
+    let branch_from_query = params.get("branch").cloned();
+    let branch = branch_from_name.or(branch_from_ns).or(branch_from_query);
     
     let ns_vec = vec![ns_name];
 

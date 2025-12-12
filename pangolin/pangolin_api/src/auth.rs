@@ -8,45 +8,74 @@ use uuid::Uuid;
 use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
 use serde::{Deserialize, Serialize};
 
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+
 #[derive(Clone, Copy, Debug)]
 pub struct TenantId(pub Uuid);
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String, // Subject (User ID)
-    exp: usize,
-    // Custom claims
-    tenant_id: Option<String>,
-    roles: Option<Vec<String>>,
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum Role {
+    Root,
+    Admin,
+    User,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Claims {
+    pub sub: String,
+    pub exp: usize,
+    pub tenant_id: Option<String>,
+    pub roles: Vec<Role>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RootUser;
 
 pub async fn auth_middleware(
     headers: HeaderMap,
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // 0. Check for Root User (Basic Auth)
+    if let Some(auth_header) = headers.get("Authorization") {
+        if let Ok(auth_str) = auth_header.to_str() {
+            if auth_str.starts_with("Basic ") {
+                let token = &auth_str[6..];
+                if let Ok(decoded) = STANDARD.decode(token) {
+                    if let Ok(cred_str) = String::from_utf8(decoded) {
+                        if let Some((username, password)) = cred_str.split_once(':') {
+                            let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_default();
+                            let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_default();
+                            
+                            if !root_user.is_empty() && username == root_user && password == root_pass {
+                                request.extensions_mut().insert(RootUser);
+                                request.extensions_mut().insert(vec![Role::Root]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // 1. Check for Authorization Header (Bearer Token)
     if let Some(auth_header) = headers.get("Authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
             if auth_str.starts_with("Bearer ") {
                 let token = &auth_str[7..];
                 
-                // For MVP, we use a hardcoded secret or env var.
-                // In production, this should be loaded from config/KMS.
                 let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
-                
                 let mut validation = Validation::new(Algorithm::HS256);
-                // Disable exp check for dev if needed, but better to keep it.
                 
                 match decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation) {
                     Ok(token_data) => {
-                        // If token has tenant_id, use it.
                         if let Some(tid_str) = token_data.claims.tenant_id {
                             if let Ok(tid) = Uuid::parse_str(&tid_str) {
                                 request.extensions_mut().insert(TenantId(tid));
-                                return Ok(next.run(request).await);
                             }
                         }
+                        request.extensions_mut().insert(token_data.claims.roles);
+                        return Ok(next.run(request).await);
                     },
                     Err(_) => {
                         return Err(StatusCode::UNAUTHORIZED);
@@ -67,7 +96,11 @@ pub async fn auth_middleware(
     }
     
     // 3. Fallback: Nil Tenant (Dev only, warn)
-    tracing::warn!("No Auth or Tenant header found, using nil tenant.");
-    request.extensions_mut().insert(TenantId(Uuid::nil()));
+    // Only use nil tenant if NOT a root user. If root user, they might not need a tenant for global ops.
+    if request.extensions().get::<RootUser>().is_none() && request.extensions().get::<TenantId>().is_none() {
+        tracing::warn!("No Auth or Tenant header found, using nil tenant.");
+        request.extensions_mut().insert(TenantId(Uuid::nil()));
+    }
+
     Ok(next.run(request).await)
 }

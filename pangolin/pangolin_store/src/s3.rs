@@ -8,37 +8,56 @@ use object_store::aws::AmazonS3Builder;
 use std::sync::Arc;
 use futures::TryStreamExt;
 use bytes::Bytes;
+use crate::signer::{Signer, Credentials};
+use aws_config::BehaviorVersion;
+use aws_sdk_s3::presigning::PresigningConfig;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct S3Store {
     store: Arc<dyn ObjectStore>,
     bucket: String,
+    prefix: String,
+    s3_client: aws_sdk_s3::Client,
 }
 
 impl S3Store {
     pub fn new() -> Result<Self> {
-        let region = std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string());
-        let bucket = std::env::var("AWS_BUCKET").unwrap_or_else(|_| "pangolin-catalog".to_string());
-        let endpoint = std::env::var("AWS_ENDPOINT").ok();
-        let allow_http = std::env::var("AWS_ALLOW_HTTP").unwrap_or_else(|_| "false".to_string()) == "true";
-
-        let mut builder = AmazonS3Builder::from_env()
-            .with_region(region)
-            .with_bucket_name(&bucket);
-
-        if let Some(ep) = endpoint {
-            builder = builder.with_endpoint(ep);
+        let bucket = std::env::var("PANGOLIN_S3_BUCKET").unwrap_or_else(|_| "pangolin".to_string());
+        let prefix = std::env::var("PANGOLIN_S3_PREFIX").unwrap_or_else(|_| "data".to_string());
+        
+        let mut builder = AmazonS3Builder::from_env().with_bucket_name(&bucket);
+        
+        if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
+            builder = builder.with_endpoint(endpoint);
         }
         
-        if allow_http {
-            builder = builder.with_allow_http(true);
+        if let Ok(allow_http) = std::env::var("AWS_ALLOW_HTTP") {
+             if allow_http == "true" {
+                builder = builder.with_allow_http(true);
+             }
         }
 
-        let store = builder.build()?;
+        let store = Arc::new(builder.build()?);
+
+        // Initialize AWS SDK Client
+        let config = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let mut loader = aws_config::defaults(BehaviorVersion::latest());
+                if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
+                     loader = loader.endpoint_url(endpoint);
+                }
+                loader.load().await
+            })
+        });
         
+        let s3_client = aws_sdk_s3::Client::new(&config);
+
         Ok(Self {
-            store: Arc::new(store),
+            store,
             bucket,
+            prefix,
+            s3_client,
         })
     }
 
@@ -288,6 +307,41 @@ impl CatalogStore for S3Store {
         Ok(branches)
     }
 
+    async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch_name: String, target_branch_name: String) -> Result<()> {
+        // 1. Get Source Branch
+        let source_branch = self.get_branch(tenant_id, catalog_name, source_branch_name.clone()).await?
+            .ok_or_else(|| anyhow::anyhow!("Source branch not found"))?;
+
+        // 2. Get Target Branch
+        let mut target_branch = self.get_branch(tenant_id, catalog_name, target_branch_name.clone()).await?
+            .ok_or_else(|| anyhow::anyhow!("Target branch not found"))?;
+
+        // 3. Iterate assets tracked by source branch
+        for asset_str in &source_branch.assets {
+            let parts: Vec<&str> = asset_str.split('.').collect();
+            if parts.len() < 2 { continue; }
+            
+            let asset_name = parts.last().unwrap().to_string();
+            let namespace_parts: Vec<String> = parts[0..parts.len()-1].iter().map(|s| s.to_string()).collect();
+
+            // Get asset from source
+            if let Some(asset) = self.get_asset(tenant_id, catalog_name, Some(source_branch_name.clone()), namespace_parts.clone(), asset_name).await? {
+                // Write to target
+                self.create_asset(tenant_id, catalog_name, Some(target_branch_name.clone()), namespace_parts, asset).await?;
+            }
+        }
+
+        // 4. Update target branch asset list
+        for asset_name in source_branch.assets {
+             if !target_branch.assets.contains(&asset_name) {
+                 target_branch.assets.push(asset_name);
+             }
+        }
+        self.create_branch(tenant_id, catalog_name, target_branch).await?;
+
+        Ok(())
+    }
+
     async fn create_commit(&self, _tenant_id: Uuid, _commit: Commit) -> Result<()> {
         // TODO: Implement commit storage
         Ok(())
@@ -351,7 +405,7 @@ impl CatalogStore for S3Store {
         }
     }
 
-    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
+    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, _expected_location: Option<String>, new_location: String) -> Result<()> {
         // We need to read the asset, update property, and write it back.
         // This is not atomic in S3 without a lock or conditional write.
         // For MVP, we just overwrite.
@@ -404,5 +458,45 @@ impl CatalogStore for S3Store {
         let path = Path::from(path_str);
         self.store.put(&path, content.into()).await?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl Signer for S3Store {
+    async fn get_table_credentials(&self, _location: &str) -> Result<Credentials> {
+        // For MVP, return the static credentials from env if available.
+        let access_key = std::env::var("AWS_ACCESS_KEY_ID").unwrap_or_default();
+        let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY").unwrap_or_default();
+        let session_token = std::env::var("AWS_SESSION_TOKEN").ok();
+        
+        Ok(Credentials {
+            access_key_id: access_key,
+            secret_access_key: secret_key,
+            session_token,
+            expiration: None,
+        })
+    }
+
+    async fn presign_get(&self, location: &str) -> Result<String> {
+        let key = if location.starts_with("s3://") {
+            let without_scheme = &location[5..];
+            if let Some((_bucket, key)) = without_scheme.split_once('/') {
+                key
+            } else {
+                location
+            }
+        } else {
+            location
+        };
+
+        let presigning_config = PresigningConfig::expires_in(Duration::from_secs(3600))?;
+        let presigned_request = self.s3_client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .presigned(presigning_config)
+            .await?;
+
+        Ok(presigned_request.uri().to_string())
     }
 }

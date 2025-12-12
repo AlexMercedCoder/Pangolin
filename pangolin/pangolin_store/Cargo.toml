@@ -16,3 +16,8 @@ anyhow = { workspace = true }
 futures = { workspace = true }
 uuid = { workspace = true }
 bytes = { workspace = true }
+tracing = { workspace = true }
+aws-sdk-s3 = { version = "1.0", features = ["behavior-version-latest"] }
+aws-config = { version = "1.0", features = ["behavior-version-latest"] }
+aws-credential-types = "1.0"
+

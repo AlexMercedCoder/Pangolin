@@ -9,3 +9,5 @@
 | `AWS_REGION` | S3 Region | `us-east-1` |
 | `AWS_ENDPOINT` | S3 Endpoint URL (for MinIO) | - |
 | `AWS_ALLOW_HTTP` | Allow HTTP for S3 (true/false) | `false` |
+| `PANGOLIN_ROOT_USER` | Username for Root operations (e.g., creating tenants) | - |
+| `PANGOLIN_ROOT_PASSWORD` | Password for Root operations | - |

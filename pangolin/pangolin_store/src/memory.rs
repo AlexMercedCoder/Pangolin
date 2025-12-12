@@ -1,10 +1,12 @@
 use crate::CatalogStore;
+use crate::signer::{Signer, Credentials};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tenant, Catalog, Warehouse};
+use pangolin_core::model::{Asset, Branch, Namespace, BranchType, Tenant, Catalog, Warehouse, Commit};
 use uuid::Uuid;
 use anyhow::Result;
 use std::sync::Arc;
+use tracing;
 
 #[derive(Clone)]
 pub struct MemoryStore {
@@ -151,8 +153,28 @@ impl CatalogStore for MemoryStore {
 
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("\x1F"), asset.name.clone());
+        
+        // 1. Insert Asset
+        let asset_full_name = format!("{}.{}", namespace.join("."), asset.name);
+        let key = (tenant_id, catalog_name.to_string(), branch_name.clone(), namespace.join("\x1F"), asset.name.clone());
         self.assets.insert(key, asset);
+
+        // 2. Ensure Branch Exists and Update Asset List
+        let mut branch_obj = self.get_branch(tenant_id, catalog_name, branch_name.clone()).await?
+            .unwrap_or_else(|| {
+                Branch {
+                    name: branch_name.clone(),
+                    head_commit_id: None,
+                    branch_type: BranchType::Experimental,
+                    assets: vec![],
+                }
+            });
+
+        if !branch_obj.assets.contains(&asset_full_name) {
+            branch_obj.assets.push(asset_full_name);
+            self.create_branch(tenant_id, catalog_name, branch_obj).await?;
+        }
+
         Ok(())
     }
 
@@ -229,6 +251,84 @@ impl CatalogStore for MemoryStore {
         Ok(branches)
     }
 
+    async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch_name: String, target_branch_name: String) -> Result<()> {
+        // 1. Get Source Branch
+        let source_branch = self.get_branch(tenant_id, catalog_name, source_branch_name.clone()).await?
+            .ok_or_else(|| anyhow::anyhow!("Source branch not found"))?;
+
+        // 2. Get Target Branch
+        let mut target_branch = self.get_branch(tenant_id, catalog_name, target_branch_name.clone()).await?
+            .ok_or_else(|| anyhow::anyhow!("Target branch not found"))?;
+
+        // 3. Iterate assets tracked by source branch
+        for asset_str in &source_branch.assets {
+            let parts: Vec<&str> = asset_str.split('.').collect();
+            if parts.len() < 2 { continue; }
+            
+            let asset_name = parts.last().unwrap().to_string();
+            let namespace_parts: Vec<String> = parts[0..parts.len()-1].iter().map(|s| s.to_string()).collect();
+
+            // Get asset from source
+            if let Some(asset) = self.get_asset(tenant_id, catalog_name, Some(source_branch_name.clone()), namespace_parts.clone(), asset_name).await? {
+                // Write to target
+                self.create_asset(tenant_id, catalog_name, Some(target_branch_name.clone()), namespace_parts.clone(), asset).await?;
+                
+                // Ensure branch exists
+                let mut branch = self.get_branch(tenant_id, catalog_name, target_branch_name.clone()).await?
+                    .unwrap_or_else(|| {
+                        tracing::info!("MemoryStore: Branch {} not found, creating new struct", target_branch_name);
+                        Branch {
+                        name: target_branch_name.clone(),
+                        head_commit_id: None,
+                        branch_type: BranchType::Experimental,
+                        assets: vec![],
+                    }});
+                
+                let full_asset_name = asset_str.to_string();
+                if !branch.assets.contains(&full_asset_name) {
+                    tracing::info!("MemoryStore: Adding asset {} to branch {}", full_asset_name, target_branch_name);
+                    branch.assets.push(full_asset_name.clone());
+                    self.create_branch(tenant_id, catalog_name, branch).await?;
+                } else {
+                    tracing::info!("MemoryStore: Asset {} already in branch {}", full_asset_name, target_branch_name);
+                }
+            }
+        }
+
+        // 4. Update Target Branch asset list
+        // This block is now redundant because assets are added to the target branch within the loop.
+        // Keeping it commented out or removing it depends on desired behavior.
+        // For now, let's assume the in-loop update is sufficient.
+        // for asset_name in source_branch.assets {
+        //      if !target_branch.assets.contains(&asset_name) {
+        //          target_branch.assets.push(asset_name);
+        //      }
+        // }
+        
+        // The target_branch variable might not be fully up-to-date if `create_branch` was called inside the loop.
+        // Re-fetch or ensure `create_branch` updates the existing one.
+        // Given `create_branch` inserts, it effectively overwrites if key exists.
+        // So, the loop's `create_branch` calls would update the branch.
+        // This final `create_branch` call might be redundant or intended to ensure the final state.
+        // Let's remove the redundant update of target_branch.assets and the final create_branch call
+        // if the loop already handles it.
+        // Based on the instruction, the new code is inserted *inside* the `if let Some(asset) = ...` block.
+        // The original `// 4. Update Target Branch asset list` and `self.create_branch(tenant_id, catalog_name, target_branch).await?;`
+        // are still present in the original code. The instruction does not remove them.
+        // So, I will keep them as is, even if they might be logically redundant after the change.
+
+        // 4. Update Target Branch asset list
+        for asset_name in source_branch.assets {
+             if !target_branch.assets.contains(&asset_name) {
+                 target_branch.assets.push(asset_name);
+             }
+        }
+        
+        self.create_branch(tenant_id, catalog_name, target_branch).await?;
+
+        Ok(())
+    }
+
     async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()> {
         let key = (tenant_id, commit.id);
         self.commits.insert(key, commit);
@@ -297,6 +397,17 @@ impl CatalogStore for MemoryStore {
     async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()> {
         self.files.insert(location.to_string(), content);
         Ok(())
+    }
+}
+
+#[async_trait]
+impl Signer for MemoryStore {
+    async fn get_table_credentials(&self, _location: &str) -> Result<Credentials> {
+        Err(anyhow::anyhow!("MemoryStore does not support credential vending"))
+    }
+
+    async fn presign_get(&self, _location: &str) -> Result<String> {
+        Err(anyhow::anyhow!("MemoryStore does not support presigning"))
     }
 }
 

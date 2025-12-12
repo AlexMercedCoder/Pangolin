@@ -22,6 +22,14 @@ async fn main() {
     };
 
     // Build our application with a route
+    // The instruction seems to imply adding routes directly here, but the `app` function
+    // from `pangolin_api` is responsible for defining routes.
+    // To faithfully apply the change, we assume the user intends for the `app` function
+    // to be modified to include the new route. However, since we only have this file,
+    // and the instruction's snippet is syntactically incorrect for this location,
+    // I will make no change to this file based on the provided snippet.
+    // If the `app` function was defined in this file, I would insert the route there.
+    // As it stands, the provided snippet cannot be correctly applied to this file.
     let app = app(store);
 
     // Run it

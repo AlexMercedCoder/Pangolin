@@ -10,6 +10,8 @@ use serde_json::{json, Value};
 
 #[tokio::test]
 async fn test_create_tenant() {
+    std::env::set_var("PANGOLIN_ROOT_USER", "admin");
+    std::env::set_var("PANGOLIN_ROOT_PASSWORD", "password");
     let store = Arc::new(MemoryStore::new());
     let app = app(store);
 
@@ -19,6 +21,7 @@ async fn test_create_tenant() {
                 .method("POST")
                 .uri("/api/v1/tenants")
                 .header("Content-Type", "application/json")
+                .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=") // admin:password
                 .body(Body::from(json!({
                     "name": "integration_test_tenant",
                     "properties": {}
@@ -37,6 +40,8 @@ async fn test_create_tenant() {
 
 #[tokio::test]
 async fn test_full_flow() {
+    std::env::set_var("PANGOLIN_ROOT_USER", "admin");
+    std::env::set_var("PANGOLIN_ROOT_PASSWORD", "password");
     let store = Arc::new(MemoryStore::new());
     let app = app(store);
 
@@ -45,6 +50,7 @@ async fn test_full_flow() {
         .method("POST")
         .uri("/api/v1/tenants")
         .header("Content-Type", "application/json")
+        .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=") // admin:password
         .body(Body::from(json!({
             "name": "flow_tenant",
             "properties": {}

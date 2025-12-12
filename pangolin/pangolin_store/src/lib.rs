@@ -1,7 +1,7 @@
 pub mod memory;
 pub mod s3;
+pub mod signer;
 
-pub use memory::MemoryStore;
 pub use s3::S3Store;
 
 use async_trait::async_trait;
@@ -9,8 +9,10 @@ use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalo
 use uuid::Uuid;
 use anyhow::Result;
 
+use crate::signer::Signer;
+
 #[async_trait]
-pub trait CatalogStore: Send + Sync {
+pub trait CatalogStore: Send + Sync + Signer {
     // Tenant Operations
     async fn create_tenant(&self, tenant: Tenant) -> Result<()>;
     async fn get_tenant(&self, tenant_id: Uuid) -> Result<Option<Tenant>>;
@@ -44,6 +46,7 @@ pub trait CatalogStore: Send + Sync {
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()>;
     async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>>;
     async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>>;
+    async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()>;
     async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()>;
     async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>>;
 

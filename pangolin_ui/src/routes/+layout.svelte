@@ -1,5 +1,17 @@
 <script>
     import '../app.css';
+    import { onMount } from 'svelte';
+    import { user } from '$lib/auth';
+    import { goto } from '$app/navigation';
+    import { page } from '$app/stores';
+
+    onMount(() => {
+        user.subscribe(u => {
+            if (!u && $page.url.pathname !== '/login') {
+                goto('/login');
+            }
+        });
+    });
 </script>
 
 <nav>

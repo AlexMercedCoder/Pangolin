@@ -20,7 +20,20 @@ pub struct CreateBranchRequest {
     branch_type: Option<String>, // "ingest" or "experimental", defaults to experimental
     catalog: Option<String>, // Optional catalog name, defaults to "default"
     from_branch: Option<String>, // Defaults to "main"
-    assets: Option<Vec<String>>, // List of asset names to include. If None, include all? Or empty? User said "only to specified tables".
+    assets: Option<Vec<String>>, // List of asset names to include.
+}
+
+#[derive(Deserialize)]
+pub struct ListBranchParams {
+    name: Option<String>,
+    catalog: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct MergeBranchRequest {
+    pub source_branch: String,
+    pub target_branch: String,
+    pub catalog: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -48,7 +61,7 @@ impl From<Branch> for BranchResponse {
 pub async fn list_branches(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
-    Query(params): Query<CreateBranchRequest>, // Reuse struct for query params? No, let's make a new one or just use default
+    Query(params): Query<ListBranchParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     // For now assume "default" catalog if not specified in query (which we haven't implemented yet)
@@ -141,5 +154,19 @@ pub async fn get_branch(
         Ok(Some(branch)) => (StatusCode::OK, Json(BranchResponse::from(branch))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Branch not found").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn merge_branch(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Json(payload): Json<MergeBranchRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = payload.catalog.as_deref().unwrap_or("default");
+
+    match store.merge_branch(tenant_id, catalog_name, payload.source_branch, payload.target_branch).await {
+        Ok(_) => (StatusCode::OK, "Branch merged successfully").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Merge failed: {}", e)).into_response(),
     }
 }
