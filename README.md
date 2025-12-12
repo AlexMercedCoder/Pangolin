@@ -22,6 +22,7 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 - **Deployment**:
   - [Docker Deployment](docs/docker_deployment.md)
   - [Configuration](docs/configuration.md): Runtime configuration options.
+  - [Client Configuration](docs/client_configuration.md): PyIceberg, PySpark, Trino, Dremio setup.
   - [Environment Variables](docs/env_vars.md): List of supported env vars.
 - [Dependencies](docs/dependencies.md): Overview of Rust crates used.
 - [Entities & Models](docs/entities.md): Explanation of core data models (Tenant, Branch, Asset).
