@@ -74,6 +74,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Business Metadata
         .route("/api/v1/assets/:id/metadata", post(business_metadata_handlers::add_business_metadata).get(business_metadata_handlers::get_business_metadata).delete(business_metadata_handlers::delete_business_metadata))
         .route("/api/v1/assets/search", get(business_metadata_handlers::search_assets))
+        .route("/api/v1/assets/:id", get(business_metadata_handlers::get_asset_details))
         .route("/api/v1/assets/:id/request-access", post(business_metadata_handlers::request_access))
         .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
         .route("/api/v1/access-requests/:id", put(business_metadata_handlers::update_access_request))

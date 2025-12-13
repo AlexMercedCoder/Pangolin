@@ -182,3 +182,47 @@ pub async fn update_access_request(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal error: {}", e)).into_response(),
     }
 }
+
+pub async fn get_asset_details(
+    State(store): State<AppState>,
+    Extension(session): Extension<UserSession>,
+    Path(asset_id): Path<Uuid>,
+) -> impl IntoResponse {
+    let tenant_id = session.tenant_id.unwrap_or_default();
+    
+    // Scan all assets to find the one with this ID
+    // TODO: Optimize this with an index in CatalogStore or direct lookup if supported
+    
+    let catalogs = match store.list_catalogs(tenant_id).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list catalogs: {}", e)).into_response(),
+    };
+
+    for catalog in catalogs {
+        let namespaces = match store.list_namespaces(tenant_id, &catalog.name, None).await {
+             Ok(n) => n,
+             Err(_) => continue,
+        };
+        
+        for ns in namespaces {
+            let ns_parts = vec![ns.name.clone()]; 
+            if let Ok(assets) = store.list_assets(tenant_id, &catalog.name, None, ns_parts).await {
+                for asset in assets {
+                    if asset.id == asset_id {
+                        // Found it!
+                        let metadata = store.get_business_metadata(asset_id).await.unwrap_or(None);
+                        
+                        return (StatusCode::OK, Json(serde_json::json!({
+                            "asset": asset,
+                            "metadata": metadata,
+                            "catalog": catalog.name,
+                            "namespace": ns.name
+                        }))).into_response();
+                    }
+                }
+            }
+        }
+    }
+    
+    (StatusCode::NOT_FOUND, "Asset not found").into_response()
+}
