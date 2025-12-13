@@ -1,24 +1,35 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use axum::{
         body::Body,
+        body::to_bytes,
         http::{Request, StatusCode},
     };
     use tower::ServiceExt;
     use pangolin_store::memory::MemoryStore;
     use std::sync::Arc;
+    use serial_test::serial;
+    use pangolin_api::tests_common::EnvGuard;
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
 
     #[tokio::test]
+    #[serial]
     async fn test_token_generation_valid() {
+        let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
+        let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
+        let _jwt_guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
+
         // Setup
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = pangolin_api::app(store);
+
+        let credentials = STANDARD.encode("admin:password");
 
         // Create request
         let request = Request::builder()
             .method("POST")
             .uri("/api/v1/tokens")
+            .header("Authorization", format!("Basic {}", credentials))
             .header("content-type", "application/json")
             .body(Body::from(
                 r#"{
@@ -36,7 +47,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // Parse response
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
         assert!(json["token"].is_string());
@@ -45,13 +56,20 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_token_generation_invalid_tenant_id() {
+        let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
+        let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
+
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = pangolin_api::app(store);
+
+        let credentials = STANDARD.encode("admin:password");
 
         let request = Request::builder()
             .method("POST")
             .uri("/api/v1/tokens")
+            .header("Authorization", format!("Basic {}", credentials))
             .header("content-type", "application/json")
             .body(Body::from(
                 r#"{
@@ -66,16 +84,24 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_token_contains_tenant_id() {
         use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
-        use crate::auth::Claims;
+        use pangolin_api::auth::Claims;
+
+        let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
+        let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
+        let _jwt_guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
 
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = pangolin_api::app(store);
+
+        let credentials = STANDARD.encode("admin:password");
 
         let request = Request::builder()
             .method("POST")
             .uri("/api/v1/tokens")
+            .header("Authorization", format!("Basic {}", credentials))
             .header("content-type", "application/json")
             .body(Body::from(
                 r#"{
@@ -86,11 +112,11 @@ mod tests {
             .unwrap();
 
         let response = app.oneshot(request).await.unwrap();
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
         let token = json["token"].as_str().unwrap();
-        let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+        let secret = "secret";
 
         // Decode token
         let mut validation = Validation::new(Algorithm::HS256);
@@ -110,13 +136,21 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_token_custom_expiration() {
+        let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
+        let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
+        let _jwt_guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
+
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = pangolin_api::app(store);
+
+        let credentials = STANDARD.encode("admin:password");
 
         let request = Request::builder()
             .method("POST")
             .uri("/api/v1/tokens")
+            .header("Authorization", format!("Basic {}", credentials))
             .header("content-type", "application/json")
             .body(Body::from(
                 r#"{
@@ -130,7 +164,7 @@ mod tests {
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
         // Verify expiration is set (we can't easily verify the exact time without decoding)

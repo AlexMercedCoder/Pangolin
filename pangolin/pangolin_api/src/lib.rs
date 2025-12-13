@@ -17,6 +17,7 @@ pub mod oauth_handlers;
 pub mod auth_middleware;
 pub mod authz;
 pub mod business_metadata_handlers;
+pub mod tests_common;
 
 #[cfg(test)]
 pub mod auth_test;

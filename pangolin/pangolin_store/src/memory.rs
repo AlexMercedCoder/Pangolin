@@ -161,8 +161,11 @@ impl CatalogStore for MemoryStore {
     async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()> {
         let ns_str = namespace.join("\x1F");
         let key = (tenant_id, catalog_name.to_string(), ns_str);
-        self.namespaces.remove(&key);
-        Ok(())
+        if self.namespaces.remove(&key).is_some() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Namespace not found"))
+        }
     }
 
     async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()> {

@@ -23,3 +23,8 @@ base64 = "0.22.1"
 bcrypt = "0.15"
 reqwest = { version = "0.12", features = ["json"] }
 urlencoding = "2.1"
+
+[dev-dependencies]
+hyper = { version = "1.0", features = ["full"] }
+pangolin_store = { path = "../pangolin_store" }
+serial_test = "2.0"

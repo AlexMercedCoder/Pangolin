@@ -12,8 +12,11 @@ use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use crate::user_handlers::{create_user, login, get_current_user, CreateUserRequest, LoginRequest};
 use crate::auth_middleware::hash_password;
+use serial_test::serial;
+use crate::tests_common::EnvGuard;
 
 #[tokio::test]
+#[serial]
 async fn test_auth_flow() {
     // 1. Setup Store
     let store_impl = MemoryStore::new();
@@ -97,7 +100,8 @@ async fn test_auth_flow() {
         .with_state(store.clone());
         
     // Set JWT secret for test
-    std::env::set_var("JWT_SECRET", "default_secret_for_dev");
+    // Set JWT secret for test
+    let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "default_secret_for_dev");
 
     let req = Request::builder()
         .method("GET")

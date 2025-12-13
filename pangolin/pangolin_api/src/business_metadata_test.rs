@@ -19,8 +19,11 @@ use crate::business_metadata_handlers::{
 use crate::auth_middleware::{auth_middleware, hash_password};
 use crate::auth::TenantId;
 use pangolin_core::business_metadata::RequestStatus;
+use serial_test::serial;
+use crate::tests_common::EnvGuard;
 
 #[tokio::test]
+#[serial]
 async fn test_business_metadata_flow() {
     // 1. Setup Store
     let store_impl = MemoryStore::new();
@@ -70,7 +73,7 @@ async fn test_business_metadata_flow() {
     // 5. Generate Token
     // We can use the logic from login handler or manually create JWT
     let secret = "secret"; 
-    std::env::set_var("JWT_SECRET", secret);
+    let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", secret);
     
     // Create session for token generation
     let session = pangolin_core::user::UserSession {

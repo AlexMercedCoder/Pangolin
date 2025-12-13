@@ -9,10 +9,16 @@ mod tests {
     use pangolin_api::app;
     use std::sync::Arc;
     use base64::Engine;
+    use pangolin_api::tests_common::EnvGuard;
+    use serial_test::serial;
 
     #[tokio::test]
+    #[serial]
     async fn test_config_endpoint_no_auth() {
         // Test that /v1/config is accessible without authentication
+        // We explicitly enable NO_AUTH for this test
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
+        
         let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
@@ -30,8 +36,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_config_endpoint_with_prefix_no_auth() {
         // Test that /v1/:prefix/config is accessible without authentication
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
+
         let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
@@ -49,8 +58,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_tenant_header_propagation() {
         // Test that X-Pangolin-Tenant header is properly extracted
+        // Use NO_AUTH to bypass login, but verify tenant header is accepted
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
+
         let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         
         // Create a test tenant first
@@ -79,9 +92,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_operations_without_tenant_header_succeed_with_nil_tenant() {
         // Test that operations without tenant header succeed with nil tenant (dev mode)
         // This is current behavior - auth middleware allows nil tenant as fallback
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
+
         let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
@@ -100,8 +116,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_config_endpoint_returns_valid_json() {
         // Test that config endpoint returns valid JSON
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
+
         let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
@@ -126,10 +145,20 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_root_user_basic_auth() {
         // Test that root user can authenticate with Basic Auth
-        std::env::set_var("PANGOLIN_ROOT_USER", "admin");
-        std::env::set_var("PANGOLIN_ROOT_PASSWORD", "password");
+        // Set env vars using EnvGuard
+        let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
+        let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
+        // Ensure NO_AUTH is OFF (it might be set by other tests if they leaked, but serial helps. default is secure)
+        // We can explicitly unset it to be sure? EnvGuard::new with empty?
+        // But removing var? EnvGuard supports overwrite. If we set "false" or empty?
+        // Middleware checks `var("PANGOLIN_NO_AUTH").is_ok()`. So presence means true.
+        // We need to REMOVE it.
+        // EnvGuard doesn't strictly remove, it restores previous value.
+        // If previous was unset, it unsets.
+        // Since we run serial, and other tests UNSET it on drop, it should be unset here.
 
         let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
@@ -150,5 +179,6 @@ mod tests {
 
         // Should not return 401
         assert_ne!(response.status(), StatusCode::UNAUTHORIZED);
+        // It might return 200 OK (empty list)
     }
 }

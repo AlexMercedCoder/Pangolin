@@ -1,20 +1,43 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hyper::{Body, Request, StatusCode};
+    use axum::{
+        http::{Request, StatusCode},
+    };
+    use axum::body::Body;
     use tower::ServiceExt;
     use pangolin_api::app;
     use pangolin_store::CatalogStore;
+    use pangolin_api::auth_middleware::Claims;
+    use pangolin_core::user::UserRole; // Use Core UserRole
     use pangolin_store::memory::MemoryStore;
     use std::sync::Arc;
+    use serial_test::serial;
+    use pangolin_api::tests_common::EnvGuard;
 
     #[tokio::test]
+    #[serial]
     async fn test_no_auth_mode_bypasses_authentication() {
         // Set NO_AUTH environment variable
-        std::env::set_var("PANGOLIN_NO_AUTH", "1");
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "1");
 
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        // Create default tenant and analytics catalog
+        let default_tenant_id = uuid::Uuid::nil();
+        store.create_tenant(pangolin_core::model::Tenant {
+            id: default_tenant_id,
+            name: "default".to_string(),
+            properties: std::collections::HashMap::new(),
+        }).await.unwrap();
+        store.create_catalog(default_tenant_id, pangolin_core::model::Catalog {
+            id: uuid::Uuid::new_v4(),
+            name: "analytics".to_string(),
+            warehouse_name: None,
+            storage_location: None,
+            properties: std::collections::HashMap::new(),
+        }).await.unwrap();
+
+        let app = pangolin_api::app(store);
 
         // Request without any authentication headers
         let request = Request::builder()
@@ -27,15 +50,12 @@ mod tests {
 
         // Should succeed with default tenant
         assert_eq!(response.status(), StatusCode::OK);
-
-        // Cleanup
-        std::env::remove_var("PANGOLIN_NO_AUTH");
     }
 
     #[tokio::test]
     async fn test_config_endpoint_no_auth_required() {
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = pangolin_api::app(store);
 
         let request = Request::builder()
             .method("GET")
@@ -48,21 +68,42 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_bearer_token_authentication() {
         use jsonwebtoken::{encode, EncodingKey, Header};
-        use crate::auth::Claims;
+        use pangolin_api::auth_middleware::Claims; // Use proper Claims
         use chrono::Utc;
 
+        let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
+
         let store = Arc::new(MemoryStore::new());
-        let app = app(store);
+        
+        // Setup Tenant and Catalog
+        let tenant_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        store.create_tenant(pangolin_core::model::Tenant {
+            id: tenant_id,
+            name: "test_tenant".to_string(),
+            properties: std::collections::HashMap::new(),
+        }).await.unwrap();
+        store.create_catalog(tenant_id, pangolin_core::model::Catalog {
+            id: uuid::Uuid::new_v4(),
+            name: "analytics".to_string(),
+            warehouse_name: None,
+            storage_location: None,
+            properties: std::collections::HashMap::new(),
+        }).await.unwrap();
+
+        let app = pangolin_api::app(store);
 
         // Generate valid token
-        let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+        let secret = "secret";
         let claims = Claims {
-            sub: "test-user".to_string(),
-            tenant_id: Some("00000000-0000-0000-0000-000000000001".to_string()),
-            roles: vec!["User".to_string()],
-            exp: (Utc::now().timestamp() + 3600) as usize,
+            sub: uuid::Uuid::new_v4().to_string(), // must be valid UUID
+            username: "test_user".to_string(),
+            tenant_id: Some(tenant_id.to_string()),
+            role: UserRole::TenantAdmin,
+            exp: (Utc::now().timestamp() + 3600),
+            iat: Utc::now().timestamp(),
         };
 
         let token = encode(
@@ -84,9 +125,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_invalid_bearer_token_rejected() {
+        let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
         let store = Arc::new(MemoryStore::new());
-        let app = app(store);
+        let app = pangolin_api::app(store);
 
         let request = Request::builder()
             .method("GET")
@@ -100,21 +143,25 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_expired_token_rejected() {
         use jsonwebtoken::{encode, EncodingKey, Header};
-        use crate::auth::Claims;
+        use pangolin_api::auth_middleware::Claims;
         use chrono::Utc;
 
+        let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
         let store = Arc::new(MemoryStore::new());
-        let app = app(store);
+        let app = pangolin_api::app(store);
 
         // Generate expired token
-        let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+        let secret = "secret";
         let claims = Claims {
-            sub: "test-user".to_string(),
+            sub: uuid::Uuid::new_v4().to_string(),
+            username: "test_user".to_string(),
             tenant_id: Some("00000000-0000-0000-0000-000000000001".to_string()),
-            roles: vec!["User".to_string()],
-            exp: (Utc::now().timestamp() - 3600) as usize, // Expired 1 hour ago
+            role: UserRole::TenantUser,
+            exp: (Utc::now().timestamp() - 3600), // Expired
+            iat: (Utc::now().timestamp() - 7200),
         };
 
         let token = encode(
@@ -136,20 +183,28 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_no_auth_uses_default_tenant() {
-        std::env::set_var("PANGOLIN_NO_AUTH", "1");
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "1");
 
         let store = Arc::new(MemoryStore::new());
         
-        // Create default tenant
-        let default_tenant = pangolin_core::model::Tenant {
-            id: uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap(),
+        // Create default tenant and analytics catalog
+        let default_tenant_id = uuid::Uuid::nil();
+        store.create_tenant(pangolin_core::model::Tenant {
+            id: default_tenant_id,
             name: "default".to_string(),
             properties: std::collections::HashMap::new(),
-        };
-        store.create_tenant(default_tenant).await.unwrap();
+        }).await.unwrap();
+        store.create_catalog(default_tenant_id, pangolin_core::model::Catalog {
+            id: uuid::Uuid::new_v4(),
+            name: "analytics".to_string(),
+            warehouse_name: None,
+            storage_location: None,
+            properties: std::collections::HashMap::new(),
+        }).await.unwrap();
 
-        let app = app(store);
+        let app = pangolin_api::app(store);
 
         let request = Request::builder()
             .method("GET")
@@ -159,19 +214,18 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        std::env::remove_var("PANGOLIN_NO_AUTH");
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_basic_auth_for_root_user() {
         use base64::{Engine as _, engine::general_purpose::STANDARD};
 
-        std::env::set_var("PANGOLIN_ROOT_USER", "admin");
-        std::env::set_var("PANGOLIN_ROOT_PASSWORD", "password");
+        let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
+        let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
 
         let store = Arc::new(MemoryStore::new());
-        let app = app(store);
+        let app = pangolin_api::app(store);
 
         let credentials = STANDARD.encode("admin:password");
 
@@ -184,20 +238,18 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        std::env::remove_var("PANGOLIN_ROOT_USER");
-        std::env::remove_var("PANGOLIN_ROOT_PASSWORD");
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_wrong_basic_auth_rejected() {
         use base64::{Engine as _, engine::general_purpose::STANDARD};
 
-        std::env::set_var("PANGOLIN_ROOT_USER", "admin");
-        std::env::set_var("PANGOLIN_ROOT_PASSWORD", "password");
+        let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
+        let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
 
         let store = Arc::new(MemoryStore::new());
-        let app = app(store);
+        let app = pangolin_api::app(store);
 
         let credentials = STANDARD.encode("admin:wrongpassword");
 
@@ -210,8 +262,5 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-
-        std::env::remove_var("PANGOLIN_ROOT_USER");
-        std::env::remove_var("PANGOLIN_ROOT_PASSWORD");
     }
 }
