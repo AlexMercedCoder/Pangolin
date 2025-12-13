@@ -72,23 +72,34 @@ impl TableResponse {
         // Add credential vending config to tell PyIceberg to request credentials
         let mut config = HashMap::new();
         
-        // Add S3 endpoint - PyIceberg needs this to know it should request credentials for S3
-        if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
-            config.insert("s3.endpoint".to_string(), endpoint);
-        } else if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
-            config.insert("s3.endpoint".to_string(), endpoint);
-        } else {
-            // Default to MinIO for development
-            config.insert("s3.endpoint".to_string(), "http://localhost:9000".to_string());
-        }
+        // Add S3 endpoint and region (defaults for S3)
+        config.insert("s3.endpoint".to_string(), std::env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string()));
+        config.insert("s3.region".to_string(), std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
         
-        // Add region
-        config.insert("s3.region".to_string(), "us-east-1".to_string());
-        
-        // Add vended credentials if provided
-        if let Some((access_key, secret_key)) = credentials {
-            config.insert("s3.access-key-id".to_string(), access_key);
-            config.insert("s3.secret-access-key".to_string(), secret_key);
+        // Add credentials if provided
+        if let Some((key, value)) = credentials {
+            // Determine storage type based on key format
+            if key.contains("account") || key.contains("azure") {
+                // Azure credentials
+                config.insert("adls.account-name".to_string(), key);
+                config.insert("adls.account-key".to_string(), value);
+                // Add Azure endpoint if configured
+                if let Ok(endpoint) = std::env::var("AZURE_ENDPOINT") {
+                    config.insert("adls.endpoint".to_string(), endpoint);
+                }
+            } else if key.contains("project") || key.contains("gcs") {
+                // GCS credentials - key is project_id, value is service account key
+                config.insert("gcs.project-id".to_string(), key);
+                config.insert("gcs.service-account-key".to_string(), value);
+                // Add GCS endpoint if configured (for emulator)
+                if let Ok(endpoint) = std::env::var("GCS_ENDPOINT") {
+                    config.insert("gcs.endpoint".to_string(), endpoint);
+                }
+            } else {
+                // S3 credentials (default)
+                config.insert("s3.access-key-id".to_string(), key);
+                config.insert("s3.secret-access-key".to_string(), value);
+            }
         }
         
         Self {

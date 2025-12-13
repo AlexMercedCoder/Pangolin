@@ -1,0 +1,54 @@
+# Documentation
+
+Welcome to the Pangolin documentation!
+
+## 📖 Documentation Structure
+
+### [Getting Started](getting-started/)
+Setup, configuration, and deployment guides.
+
+### [Storage](storage/)
+Multi-cloud storage configuration (S3, Azure, GCS).
+
+### [API](api/)
+REST API reference and authentication.
+
+### [Features](features/)
+Advanced features like branching, time travel, and credential vending.
+
+### [Research](research/)
+Implementation plans and research notes.
+
+## Quick Navigation
+
+**New to Pangolin?** Start with the [Getting Started Guide](getting-started/getting_started.md)
+
+**Setting up storage?** Check the [Storage Documentation](storage/)
+
+**Using PyIceberg?** See [PyIceberg Integration](features/pyiceberg_testing.md)
+
+**API Reference?** Browse the [API Documentation](api/)
+
+## Documentation Categories
+
+| Category | Description | Key Documents |
+|----------|-------------|---------------|
+| **Getting Started** | Setup and deployment | [Quick Start](getting-started/getting_started.md), [Deployment](getting-started/deployment.md) |
+| **Storage** | Cloud storage configuration | [S3](storage/storage_s3.md), [Azure](storage/storage_azure.md), [GCS](storage/storage_gcs.md) |
+| **API** | REST API reference | [API Overview](api/api_overview.md), [Authentication](api/authentication.md) |
+| **Features** | Advanced capabilities | [Branching](features/branch_management.md), [Time Travel](features/time_travel.md), [PyIceberg](features/pyiceberg_testing.md) |
+
+## Feature Highlights
+
+- ✅ **Multi-Cloud Storage** - S3, Azure Blob Storage, Google Cloud Storage
+- ✅ **Git-Like Branching** - Isolated development environments
+- ✅ **Time Travel** - Query historical data via snapshots
+- ✅ **Credential Vending** - Automatic credential management
+- ✅ **PyIceberg Compatible** - Full Apache Iceberg REST Catalog spec
+- ✅ **Multi-Tenant** - Isolated tenants with separate data
+
+## See Also
+
+- [Main README](../README.md) - Project overview
+- [Architecture](../architecture.md) - System architecture
+- [Test Results](../tests/pyiceberg/TEST_RESULTS.md) - PyIceberg test results

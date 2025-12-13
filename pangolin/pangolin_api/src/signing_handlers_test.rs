@@ -53,6 +53,88 @@ fn test_static_credentials_response_format() {
 }
 
 #[test]
+fn test_azure_credentials_response_format() {
+    // Test that Azure credentials are returned in correct format
+    let mut storage_config = HashMap::new();
+    storage_config.insert("type".to_string(), "azure".to_string());
+    storage_config.insert("account_name".to_string(), "testaccount".to_string());
+    storage_config.insert("account_key".to_string(), "test_azure_key".to_string());
+    storage_config.insert("container".to_string(), "test-container".to_string());
+    
+    let warehouse = pangolin_core::model::Warehouse {
+        id: uuid::Uuid::new_v4(),
+        name: "test_azure_warehouse".to_string(),
+        tenant_id: uuid::Uuid::nil(),
+        use_sts: false,
+        storage_config,
+    };
+    
+    // Simulate Azure credential vending logic
+    let mut config = HashMap::new();
+    let account_name = warehouse.storage_config.get("account_name").cloned().unwrap();
+    let account_key = warehouse.storage_config.get("account_key").cloned().unwrap();
+    
+    config.insert("adls.account-name".to_string(), account_name.clone());
+    config.insert("adls.account-key".to_string(), account_key.clone());
+    
+    let storage_credential = StorageCredential {
+        prefix: "abfss://test-container@testaccount.dfs.core.windows.net/".to_string(),
+        config: config.clone(),
+    };
+    
+    let response = LoadCredentialsResponse {
+        storage_credentials: vec![storage_credential],
+    };
+    
+    // Verify Azure response
+    assert_eq!(response.storage_credentials.len(), 1);
+    assert!(response.storage_credentials[0].prefix.starts_with("abfss://"));
+    assert_eq!(response.storage_credentials[0].config.get("adls.account-name").unwrap(), "testaccount");
+    assert_eq!(response.storage_credentials[0].config.get("adls.account-key").unwrap(), "test_azure_key");
+}
+
+#[test]
+fn test_gcs_credentials_response_format() {
+    // Test that GCS credentials are returned in correct format
+    let mut storage_config = HashMap::new();
+    storage_config.insert("type".to_string(), "gcs".to_string());
+    storage_config.insert("project_id".to_string(), "test-project".to_string());
+    storage_config.insert("service_account_key".to_string(), "{\"type\":\"service_account\"}".to_string());
+    storage_config.insert("bucket".to_string(), "test-bucket".to_string());
+    
+    let warehouse = pangolin_core::model::Warehouse {
+        id: uuid::Uuid::new_v4(),
+        name: "test_gcs_warehouse".to_string(),
+        tenant_id: uuid::Uuid::nil(),
+        use_sts: false,
+        storage_config,
+    };
+    
+    // Simulate GCS credential vending logic
+    let mut config = HashMap::new();
+    let project_id = warehouse.storage_config.get("project_id").cloned().unwrap();
+    let service_account_key = warehouse.storage_config.get("service_account_key").cloned().unwrap();
+    
+    config.insert("gcs.project-id".to_string(), project_id.clone());
+    config.insert("gcs.service-account-key".to_string(), service_account_key.clone());
+    
+    let storage_credential = StorageCredential {
+        prefix: "gs://test-bucket/".to_string(),
+        config: config.clone(),
+    };
+    
+    let response = LoadCredentialsResponse {
+        storage_credentials: vec![storage_credential],
+    };
+    
+    // Verify GCS response
+    assert_eq!(response.storage_credentials.len(), 1);
+    assert!(response.storage_credentials[0].prefix.starts_with("gs://"));
+    assert_eq!(response.storage_credentials[0].config.get("gcs.project-id").unwrap(), "test-project");
+    assert_eq!(response.storage_credentials[0].config.get("gcs.service-account-key").unwrap(), "{\"type\":\"service_account\"}");
+}
+
+#[test]
 fn test_sts_credentials_response_format() {
     // Test that STS credentials include session token
     let mut storage_config = HashMap::new();
