@@ -38,6 +38,8 @@ pub async fn get_table_credentials(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
+    tracing::info!("🔑 Credential vending requested for catalog: {}", catalog_name);
+    
     // 1. Get catalog to find associated warehouse
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(cat)) => cat,

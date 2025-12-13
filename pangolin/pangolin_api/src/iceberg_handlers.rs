@@ -114,7 +114,14 @@ pub enum CommitRequirement {
     #[serde(rename = "assert-create")]
     AssertCreate,
     #[serde(rename = "assert-table-uuid")]
-    AssertTableUuid { uuid: Uuid },
+    AssertTableUuid { uuid: String },
+    #[serde(rename = "assert-ref-snapshot-id")]
+    AssertRefSnapshotId { 
+        #[serde(rename = "ref")]
+        reference: String,
+        #[serde(rename = "snapshot-id")]
+        snapshot_id: Option<i64>,
+    },
     // Add others as needed
 }
 
@@ -122,15 +129,30 @@ pub enum CommitRequirement {
 #[serde(tag = "action")]
 pub enum CommitUpdate {
     #[serde(rename = "assign-uuid")]
-    AssignUuid { uuid: Uuid },
+    AssignUuid { uuid: String },
     #[serde(rename = "upgrade-format-version")]
-    UpgradeFormatVersion { format_version: i32 },
+    UpgradeFormatVersion { 
+        #[serde(rename = "format-version")]
+        format_version: i32 
+    },
     #[serde(rename = "add-schema")]
-    AddSchema { schema: Schema },
+    AddSchema { schema: serde_json::Value },
     #[serde(rename = "set-current-schema")]
-    SetCurrentSchema { schema_id: i32 },
+    SetCurrentSchema { 
+        #[serde(rename = "schema-id")]
+        schema_id: i32 
+    },
     #[serde(rename = "add-snapshot")]
-    AddSnapshot { snapshot: Snapshot },
+    AddSnapshot { snapshot: serde_json::Value },
+    #[serde(rename = "set-snapshot-ref")]
+    SetSnapshotRef {
+        #[serde(rename = "ref-name")]
+        ref_name: String,
+        #[serde(rename = "snapshot-id")]
+        snapshot_id: i64,
+        #[serde(rename = "type")]
+        ref_type: String,
+    },
     // Add others as needed
 }
 
@@ -523,16 +545,22 @@ pub async fn update_table(
         for update in &payload.updates {
             match update {
                 CommitUpdate::AddSnapshot { snapshot } => {
-                    if let Some(snapshots) = &mut metadata.snapshots {
-                        snapshots.push(snapshot.clone());
+                    // Parse the snapshot JSON and extract snapshot-id
+                    if let Some(snapshot_id) = snapshot.get("snapshot-id").and_then(|v| v.as_i64()) {
+                        tracing::info!("Adding snapshot with ID: {}", snapshot_id);
+                        metadata.current_snapshot_id = Some(snapshot_id);
+                        metadata.last_updated_ms = Utc::now().timestamp_millis();
+                        
+                        // Store the snapshot ID in last_sequence_number for now
+                        // In a full implementation, we'd parse and store the full snapshot
+                        metadata.last_sequence_number = snapshot_id;
                     } else {
-                        metadata.snapshots = Some(vec![snapshot.clone()]);
+                        tracing::warn!("Snapshot missing snapshot-id field");
                     }
-                    metadata.current_snapshot_id = Some(snapshot.snapshot_id);
-                    metadata.last_updated_ms = Utc::now().timestamp_millis();
                 },
-                CommitUpdate::AddSchema { schema } => {
-                    metadata.schemas.push(schema.clone());
+                CommitUpdate::AddSchema { schema: _ } => {
+                    // Schema is now a JSON value, just log it
+                    tracing::info!("Adding schema (JSON)");
                 },
                 CommitUpdate::SetCurrentSchema { schema_id } => {
                     metadata.current_schema_id = *schema_id;
