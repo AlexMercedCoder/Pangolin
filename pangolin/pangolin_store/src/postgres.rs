@@ -307,6 +307,7 @@ impl CatalogStore for PostgresStore {
             };
 
             Ok(Some(Asset {
+                id: Uuid::new_v4(), // Placeholder until schema update
                 name: row.get("name"),
                 kind,
                 location: row.get("location"),
@@ -336,6 +337,7 @@ impl CatalogStore for PostgresStore {
             };
 
             assets.push(Asset {
+                id: Uuid::new_v4(), // Placeholder until schema update
                 name: row.get("name"),
                 kind,
                 location: row.get("location"),

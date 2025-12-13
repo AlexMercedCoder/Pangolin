@@ -1,4 +1,4 @@
-# Pangolin
+# Pangolin (Status:Alpha)
 
 **A Rust-Based, Multi-Tenant, Iceberg-Compatible Lakehouse Catalog**
 
@@ -39,11 +39,12 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 - [Architecture Overview](architecture.md)
 - [Repository Organization](ORGANIZATION.md)
 - [Test Results](tests/pyiceberg/TEST_RESULTS.md): Runtime configuration options.
-  - [Client Configuration](docs/client_configuration.md): PyIceberg, PySpark, Trino, Dremio setup.
-  - [Environment Variables](docs/env_vars.md): List of supported env vars.
-- [Dependencies](docs/dependencies.md): Overview of Rust crates used.
-- [Entities & Models](docs/entities.md): Explanation of core data models (Tenant, Branch, Asset).
-- [API Overview](docs/api_overview.md): Details on Iceberg and Extended APIs.
+  - [Client Configuration](docs/getting-started/client_configuration.md): PyIceberg, PySpark, Trino, Dremio setup.
+  - [Environment Variables](docs/getting-started/env_vars.md): List of supported env vars.
+- [Dependencies](docs/getting-started/dependencies.md): Overview of Rust crates used.
+- [Entities & Models](docs/features/entities.md): Explanation of core data models (Tenant, Branch, Asset).
+- [API Overview](docs/api/api_overview.md): Details on Iceberg and Extended APIs.
+- [Authentication Setup](docs/setup/authentication.md): JWT and OAuth configuration guide.
 - [Management UI](pangolin_ui/README.md): Guide for the SvelteKit UI.
 
 ## Features

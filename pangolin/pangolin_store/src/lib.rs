@@ -78,4 +78,81 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Audit Operations
     async fn log_audit_event(&self, tenant_id: Uuid, event: pangolin_core::audit::AuditLogEntry) -> Result<()>;
     async fn list_audit_events(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::audit::AuditLogEntry>>;
+
+    // User Operations
+    async fn create_user(&self, _user: pangolin_core::user::User) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_user(&self, _user_id: Uuid) -> Result<Option<pangolin_core::user::User>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_user_by_username(&self, _username: &str) -> Result<Option<pangolin_core::user::User>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_users(&self, _tenant_id: Option<Uuid>) -> Result<Vec<pangolin_core::user::User>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    // Role Operations
+    async fn create_role(&self, _role: pangolin_core::permission::Role) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_role(&self, _role_id: Uuid) -> Result<Option<pangolin_core::permission::Role>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_roles(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Role>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn assign_role(&self, _user_role: pangolin_core::permission::UserRole) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn revoke_role(&self, _user_id: Uuid, _role_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_user_roles(&self, _user_id: Uuid) -> Result<Vec<pangolin_core::permission::UserRole>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn delete_role(&self, _role_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_role(&self, _role: pangolin_core::permission::Role) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Direct Permission Operations
+    async fn create_permission(&self, _permission: pangolin_core::permission::Permission) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn revoke_permission(&self, _permission_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_user_permissions(&self, _user_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Business Metadata Operations
+    async fn upsert_business_metadata(&self, _metadata: pangolin_core::business_metadata::BusinessMetadata) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_business_metadata(&self, _asset_id: Uuid) -> Result<Option<pangolin_core::business_metadata::BusinessMetadata>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn delete_business_metadata(&self, _asset_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Access Request Operations
+    async fn create_access_request(&self, _request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_access_request(&self, _id: Uuid) -> Result<Option<pangolin_core::business_metadata::AccessRequest>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_access_requests(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_access_request(&self, _request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 }

@@ -59,6 +59,7 @@ pub async fn create_view(
     properties.insert("dialect".to_string(), payload.dialect.unwrap_or_else(|| "ansi".to_string()));
 
     let asset = Asset {
+        id: Uuid::new_v4(),
         name: view_name.clone(),
         kind: AssetType::View,
         location: "".to_string(), // Views might not have a physical location, or we store the SQL path?

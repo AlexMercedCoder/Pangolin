@@ -7,7 +7,9 @@ mod tests {
     };
     use tower::ServiceExt;
     use pangolin_store::memory::MemoryStore;
+    use pangolin_store::CatalogStore;
     use std::sync::Arc;
+    use tokio::sync::RwLock;
     use jsonwebtoken::{encode, EncodingKey, Header};
     use crate::auth::Claims;
     use chrono::Utc;

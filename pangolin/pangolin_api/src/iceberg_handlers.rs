@@ -402,6 +402,7 @@ pub async fn create_table(
     properties.insert("metadata_location".to_string(), metadata_location.clone());
 
     let asset = Asset {
+        id: table_uuid,
         name: tbl_name.clone(),
         kind: AssetType::IcebergTable,
         location: location.clone(),

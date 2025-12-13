@@ -60,6 +60,7 @@ pub enum AssetType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
+    pub id: Uuid,
     pub name: String,
     pub kind: AssetType,
     pub location: String,
@@ -109,6 +110,7 @@ mod tests {
     #[test]
     fn test_asset_serialization() {
         let asset = Asset {
+            id: Uuid::new_v4(),
             name: "test_view".to_string(),
             kind: AssetType::View,
             location: "s3://bucket/path".to_string(),

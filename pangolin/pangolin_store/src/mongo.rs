@@ -276,6 +276,7 @@ impl CatalogStore for MongoStore {
             let properties: HashMap<String, String> = mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;
 
             Ok(Some(Asset {
+                id: Uuid::new_v4(), // Placeholder until schema update
                 name: d.get_str("name")?.to_string(),
                 kind,
                 location: d.get_str("location")?.to_string(),
@@ -307,6 +308,7 @@ impl CatalogStore for MongoStore {
             let properties: HashMap<String, String> = mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;
 
             assets.push(Asset {
+                id: Uuid::new_v4(), // Placeholder until schema update
                 name: d.get_str("name")?.to_string(),
                 kind,
                 location: d.get_str("location")?.to_string(),

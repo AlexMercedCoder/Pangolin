@@ -6,40 +6,44 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 ## Core Components
 
 ### 1. API Layer (`pangolin_api`)
-- **Framework**: Axum
-- **Responsibility**: Handles HTTP requests, routing, and serialization.
-- **Modules**:
-    - `iceberg_handlers`: Implements standard Iceberg REST endpoints.
-    - `pangolin_handlers`: Implements extended Pangolin endpoints (Branching, Tenant Mgmt).
-    - `middleware`: Handles authentication and tenant resolution.
+- **Framework**: Axum (Async Rust).
+- **Responsibility**: Handles HTTP requests, routing, serialization, and auth.
+- **Key Modules**:
+    - `iceberg_handlers`: Standard Iceberg REST specification implementation.
+    - `pangolin_handlers`: Extended capabilities (branching, commits).
+    - `business_metadata_handlers`: Business catalog features (metadata, access requests).
+    - `user_handlers`, `permission_handlers`: RBAC and user management.
+    - `middleware`: JWT authentication and tenant context resolution.
 
 ### 2. Core Domain (`pangolin_core`)
-- **Responsibility**: Defines the data models and business logic.
+- **Responsibility**: Defines shared data models, traits, and business logic.
 - **Key Models**:
-    - `Tenant`: Represents a customer or organization.
-    - `Catalog`: A collection of namespaces (e.g., `warehouse`).
-    - `Namespace`: Logical grouping of assets.
-    - `Asset`: Represents a table, view, or model.
-    - `Branch`: A named reference to a commit history.
-    - `Commit`: A record of changes to assets.
+    - `Tenant`: Multi-tenancy root entity.
+    - `Asset`: Unified representation of Tables, Views, and other resources.
+    - `BusinessMetadata`: Descriptive metadata, tags, and properties.
+    - `User`, `Role`, `Permission`: RBAC entities.
+    - `Branch`: Git-like commit history reference.
 
-### 2. Storage Layer (`pangolin_store`)
-- **Responsibility**: Abstraction over physical storage.
-- **Components**:
-    - `CatalogStore` Trait: Defines operations for managing tenants, namespaces, assets, and branches.
-    - `MemoryStore`: In-memory implementation for testing and development.
-    - `S3Store`: S3-backed implementation using `object_store`.
-    - **Metadata IO**: Handles reading and writing of Iceberg metadata files (`metadata.json`).
+### 3. Storage Layer (`pangolin_store`)
+- **Responsibility**: Abstract persistence layer via `CatalogStore` trait.
+- **Implementations**:
+    - `MemoryStore`: High-performance, concurrent in-memory store (using `DashMap`) for testing/dev.
+    - `PostgresStore` (Alpha): Persistent relational storage.
+    - `MongoStore` (Alpha): NoSQL document storage.
+    - `S3/GCS/Azure`: Object storage for data files (via `object_store` crate).
 
-### 3. API Layer (`pangolin_api`)
-- **Axum**: High-performance async web framework.
-- **Iceberg REST**: Standard endpoints for Catalog/Namespace/Table operations.
-- **Pangolin Extended**: Custom endpoints for Branching/Tenants/Assets.
-- **Security**: JWT Authentication and RBAC Middleware.
+### 4. Security & Authentication
+- **Modes**:
+    - **No Auth**: Open access for development (`PANGOLIN_NO_AUTH=true`).
+    - **JWT**: Bearer token authentication with `bcrypt` password hashing.
+    - **OAuth 2.0**: OIDC integration with Google, Microsoft, GitHub, Okta.
+- **Authorization**:
+    - **RBAC**: 3-tier role system (Root, TenantAdmin, TenantUser).
+    - **Granular Logic**: Scope-based permissions (Catalog, Namespace, Asset, Tag).
 
-### 4. Management UI (`pangolin_ui`)
-- **SvelteKit**: Modern frontend framework.
-- **Features**: Tenant management, Warehouse configuration, Asset exploration.
+### 5. Management UI (`pangolin_ui`)
+- **Framework**: SvelteKit + TailwindCSS (planned).
+- **Goal**: Provide a modern visual interface for catalog management, RBAC, and data discovery.
 
 ## Data Model
 

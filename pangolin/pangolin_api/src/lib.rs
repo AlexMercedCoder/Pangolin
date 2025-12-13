@@ -2,7 +2,7 @@ use axum::Router;
 use std::sync::Arc;
 use pangolin_store::CatalogStore;
 use pangolin_store::memory::MemoryStore;
-use axum::routing::{get, post, delete};
+use axum::routing::{get, post, delete, put};
 
 pub mod iceberg_handlers;
 pub mod pangolin_handlers;
@@ -12,6 +12,19 @@ pub mod asset_handlers;
 pub mod auth;
 pub mod signing_handlers;
 pub mod token_handlers;
+pub mod user_handlers;
+pub mod oauth_handlers;
+pub mod auth_middleware;
+pub mod authz;
+pub mod business_metadata_handlers;
+
+#[cfg(test)]
+pub mod auth_test;
+
+#[cfg(test)]
+pub mod business_metadata_test;
+
+pub mod permission_handlers; // Registered new module
 
 #[cfg(test)]
 #[path = "iceberg_handlers_test.rs"]
@@ -58,8 +71,33 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Signing APIs
         .route("/v1/:prefix/namespaces/:namespace/tables/:table/credentials", get(signing_handlers::get_table_credentials))
         .route("/v1/:prefix/namespaces/:namespace/tables/:table/presign", get(signing_handlers::get_presigned_url))
+        // Business Metadata
+        .route("/api/v1/assets/:id/metadata", post(business_metadata_handlers::add_business_metadata).get(business_metadata_handlers::get_business_metadata).delete(business_metadata_handlers::delete_business_metadata))
+        .route("/api/v1/assets/search", get(business_metadata_handlers::search_assets))
+        .route("/api/v1/assets/:id/request-access", post(business_metadata_handlers::request_access))
+        .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
+        .route("/api/v1/access-requests/:id", put(business_metadata_handlers::update_access_request))
+        // User Management
+        .route("/api/v1/users", post(user_handlers::create_user).get(user_handlers::list_users))
+        .route("/api/v1/users/:id", get(user_handlers::get_user).put(user_handlers::update_user).delete(user_handlers::delete_user))
+        .route("/api/v1/users/login", post(user_handlers::login))
+        .route("/api/v1/users/me", get(user_handlers::get_current_user))
+        .route("/api/v1/users/logout", post(user_handlers::logout))
+        // Role Management
+        .route("/api/v1/roles", post(permission_handlers::create_role).get(permission_handlers::list_roles))
+        .route("/api/v1/roles/:id", get(permission_handlers::get_role).put(permission_handlers::update_role).delete(permission_handlers::delete_role))
+        // Permission Management
+        .route("/api/v1/permissions", post(permission_handlers::grant_permission))
+        .route("/api/v1/permissions/:id", delete(permission_handlers::revoke_permission))
+        .route("/api/v1/permissions/user/:id", get(permission_handlers::get_user_permissions))
+        // Role Assignment
+        .route("/api/v1/users/:id/roles", post(permission_handlers::assign_role))
+        .route("/api/v1/users/:id/roles/:role_id", delete(permission_handlers::revoke_role))
         // Token Generation
         .route("/api/v1/tokens", post(token_handlers::generate_token))
-        .layer(axum::middleware::from_fn(auth::auth_middleware))
+        // OAuth
+        .route("/oauth/authorize/:provider", get(oauth_handlers::oauth_authorize))
+        .route("/oauth/callback/:provider", get(oauth_handlers::oauth_callback))
+        .layer(axum::middleware::from_fn(auth_middleware::auth_middleware))
         .with_state(store)
 }

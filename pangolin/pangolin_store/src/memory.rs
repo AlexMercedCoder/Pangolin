@@ -3,10 +3,16 @@ use crate::signer::{Signer, Credentials};
 use async_trait::async_trait;
 use dashmap::DashMap;
 use pangolin_core::model::{Asset, Branch, Namespace, BranchType, Tenant, Catalog, Warehouse, Commit, Tag};
+use pangolin_core::user::User;
+use pangolin_core::permission::{Role, UserRole, Permission};
+use pangolin_core::audit::AuditLogEntry;
 use uuid::Uuid;
 use anyhow::Result;
 use std::sync::Arc;
+use tokio::sync::RwLock;
+use std::collections::HashMap;
 use tracing;
+
 
 #[derive(Clone)]
 pub struct MemoryStore {
@@ -20,6 +26,15 @@ pub struct MemoryStore {
     tags: Arc<DashMap<(Uuid, String, String), Tag>>, // Key: (TenantId, CatalogName, TagName)
     commits: Arc<DashMap<(Uuid, Uuid), Commit>>, // Key: (TenantId, CommitId)
     files: Arc<DashMap<String, Vec<u8>>>, // Key: Location
+    audit_events: Arc<DashMap<Uuid, Vec<AuditLogEntry>>>, // Changed to DashMap for consistency, key tenant_id
+    // New fields
+    users: Arc<DashMap<Uuid, User>>,
+    roles: Arc<DashMap<Uuid, Role>>,
+    signer: crate::signer::SignerImpl,
+    user_roles: Arc<DashMap<(Uuid, Uuid), UserRole>>,
+    permissions: Arc<DashMap<Uuid, Permission>>,
+    business_metadata: Arc<DashMap<Uuid, pangolin_core::business_metadata::BusinessMetadata>>,
+    access_requests: Arc<DashMap<Uuid, pangolin_core::business_metadata::AccessRequest>>,
 }
 
 impl MemoryStore {
@@ -34,9 +49,18 @@ impl MemoryStore {
             tags: Arc::new(DashMap::new()),
             commits: Arc::new(DashMap::new()),
             files: Arc::new(DashMap::new()),
+            audit_events: Arc::new(DashMap::new()),
+            users: Arc::new(DashMap::new()),
+            roles: Arc::new(DashMap::new()),
+            signer: crate::signer::SignerImpl::new("memory_key".to_string()),
+            user_roles: Arc::new(DashMap::new()),
+            permissions: Arc::new(DashMap::new()),
+            business_metadata: Arc::new(DashMap::new()),
+            access_requests: Arc::new(DashMap::new()),
         }
     }
 }
+
 
 #[async_trait]
 impl CatalogStore for MemoryStore {
@@ -445,15 +469,161 @@ impl CatalogStore for MemoryStore {
     }
 
     // Audit Operations
-    async fn log_audit_event(&self, _tenant_id: Uuid, event: pangolin_core::audit::AuditLogEntry) -> Result<()> {
-        // For MemoryStore, we can just log it to stdout/tracing for now, or store in a list if we want to test retrieval.
-        // Let's just log it.
+    async fn log_audit_event(&self, tenant_id: Uuid, event: pangolin_core::audit::AuditLogEntry) -> Result<()> {
+        // Log to tracing
         tracing::info!("AUDIT: {:?}", event);
+        // Store in map
+        self.audit_events.entry(tenant_id).or_insert_with(Vec::new).push(event);
         Ok(())
     }
 
-    async fn list_audit_events(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::audit::AuditLogEntry>> {
-        Ok(vec![])
+    async fn list_audit_events(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::audit::AuditLogEntry>> {
+        // Just return all for now or filter by tenant if we keyed by implementation detail
+        if let Some(events) = self.audit_events.get(&tenant_id) {
+            Ok(events.clone())
+        } else {
+             Ok(vec![])
+        }
+    }
+
+    // User Operations
+    async fn create_user(&self, user: pangolin_core::user::User) -> Result<()> {
+        self.users.insert(user.id, user);
+        Ok(())
+    }
+
+    async fn get_user(&self, user_id: Uuid) -> Result<Option<pangolin_core::user::User>> {
+        Ok(self.users.get(&user_id).map(|u| u.value().clone()))
+    }
+
+    async fn get_user_by_username(&self, username: &str) -> Result<Option<pangolin_core::user::User>> {
+        Ok(self.users.iter()
+            .find(|u| u.value().username == username)
+            .map(|u| u.value().clone()))
+    }
+
+    async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<pangolin_core::user::User>> {
+        Ok(self.users.iter()
+            .filter(|u| tenant_id.is_none() || u.value().tenant_id == tenant_id)
+            .map(|u| u.value().clone())
+            .collect())
+    }
+
+    // Role Operations
+    async fn create_role(&self, role: pangolin_core::permission::Role) -> Result<()> {
+        self.roles.insert(role.id, role);
+        Ok(())
+    }
+
+    async fn get_role(&self, role_id: Uuid) -> Result<Option<pangolin_core::permission::Role>> {
+         Ok(self.roles.get(&role_id).map(|r| r.value().clone()))
+    }
+
+    async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Role>> {
+        Ok(self.roles.iter()
+            .filter(|r| r.value().tenant_id == tenant_id)
+            .map(|r| r.value().clone())
+            .collect())
+    }
+
+    async fn assign_role(&self, user_role: UserRole) -> Result<()> {
+        let key = (user_role.user_id, user_role.role_id);
+        self.user_roles.insert(key, user_role);
+        Ok(())
+    }
+
+    async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()> {
+        let key = (user_id, role_id);
+        self.user_roles.remove(&key);
+        Ok(())
+    }
+
+    async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<UserRole>> {
+        Ok(self.user_roles.iter()
+            .filter(|r| r.key().0 == user_id)
+            .map(|r| r.value().clone())
+            .collect())
+    }
+
+    async fn delete_role(&self, role_id: Uuid) -> Result<()> {
+        self.roles.remove(&role_id);
+        Ok(())
+    }
+
+    async fn update_role(&self, role: Role) -> Result<()> {
+        // Just overwrite
+        self.roles.insert(role.id, role);
+        Ok(())
+    }
+
+    async fn create_permission(&self, permission: Permission) -> Result<()> {
+        self.permissions.insert(permission.id, permission);
+        Ok(())
+    }
+
+    async fn revoke_permission(&self, permission_id: Uuid) -> Result<()> {
+        self.permissions.remove(&permission_id);
+        Ok(())
+    }
+
+    async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+        Ok(self.permissions.iter()
+            .filter(|p| p.value().user_id == user_id)
+            .map(|p| p.value().clone())
+            .collect())
+    }
+
+    async fn upsert_business_metadata(&self, metadata: pangolin_core::business_metadata::BusinessMetadata) -> Result<()> {
+        self.business_metadata.insert(metadata.asset_id, metadata);
+        Ok(())
+    }
+
+    async fn get_business_metadata(&self, asset_id: Uuid) -> Result<Option<pangolin_core::business_metadata::BusinessMetadata>> {
+        Ok(self.business_metadata.get(&asset_id).map(|m| m.value().clone()))
+    }
+
+    async fn delete_business_metadata(&self, asset_id: Uuid) -> Result<()> {
+        self.business_metadata.remove(&asset_id);
+        Ok(())
+    }
+
+    async fn create_access_request(&self, request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+        self.access_requests.insert(request.id, request);
+        Ok(())
+    }
+
+    async fn get_access_request(&self, id: Uuid) -> Result<Option<pangolin_core::business_metadata::AccessRequest>> {
+        Ok(self.access_requests.get(&id).map(|r| r.value().clone()))
+    }
+
+    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
+        let mut requests = Vec::new();
+        // Inefficient scan to filter by tenant via asset ownership
+        // Ideally AccessRequest should have tenant_id or we should look up differently
+        for req in self.access_requests.iter() {
+            let asset_id = req.value().asset_id;
+            let mut belongs_to_tenant = false;
+            // Scan assets to find the one this request is for
+            for asset_entry in self.assets.iter() {
+                if asset_entry.value().id == asset_id {
+                    let (tid, _, _, _, _) = asset_entry.key();
+                    if *tid == tenant_id {
+                        belongs_to_tenant = true;
+                    }
+                    break;
+                }
+            }
+            
+            if belongs_to_tenant {
+                requests.push(req.value().clone());
+            }
+        }
+        Ok(requests)
+    }
+
+    async fn update_access_request(&self, request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+        self.access_requests.insert(request.id, request);
+        Ok(())
     }
 }
 
@@ -467,6 +637,7 @@ impl Signer for MemoryStore {
         Err(anyhow::anyhow!("MemoryStore does not support presigning"))
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -521,6 +692,7 @@ mod tests {
         let namespace = vec!["ns1".to_string()];
         
         let asset = Asset {
+            id: Uuid::new_v4(),
             name: "tbl1".to_string(),
             kind: AssetType::IcebergTable,
             location: "s3://loc".to_string(),

@@ -1,6 +1,10 @@
-pub mod model;
-pub mod iceberg_metadata;
-pub mod manifest;
-pub mod snapshot;
-pub mod maintenance;
 pub mod audit;
+pub mod iceberg_metadata;
+pub mod maintenance;
+pub mod manifest;
+pub mod model;
+pub mod snapshot;
+pub mod user;
+pub mod permission;
+pub mod business_metadata;
+pub mod auth;
