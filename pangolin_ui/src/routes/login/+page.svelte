@@ -27,12 +27,20 @@
                 user.set(data.user);
                 token.set(data.token);
                 goto('/');
+            } else if (response.status === 401) {
+                error = 'Invalid username or password';
+            } else if (response.status === 404) {
+                 error = 'Login endpoint not found (backend might be down)';
             } else {
-                const err = await response.json();
-                error = err.error || 'Login failed';
+                try {
+                    const err = await response.json();
+                    error = err.error || `Login failed (${response.status})`;
+                } catch {
+                     error = `Login failed (${response.status})`;
+                }
             }
         } catch (e) {
-            error = 'Network error occurred';
+            error = 'Network error: Unable to reach server';
             console.error(e);
         } finally {
             loading = false;

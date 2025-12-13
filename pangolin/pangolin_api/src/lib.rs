@@ -46,6 +46,8 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/namespaces/:namespace/tables/:table/maintenance", post(iceberg_handlers::perform_maintenance))
         .route("/v1/:prefix/namespaces/:namespace/tables/:table/metrics", post(iceberg_handlers::report_metrics))
         .route("/v1/:prefix/tables/rename", post(iceberg_handlers::rename_table))
+        // PyIceberg compatibility: it might append v1/config to a path that already includes v1/prefix
+        .route("/v1/:prefix/v1/config", get(iceberg_handlers::config))
         // Pangolin Extended APIs
         .route("/api/v1/branches", get(pangolin_handlers::list_branches).post(pangolin_handlers::create_branch))
         .route("/api/v1/branches/merge", post(pangolin_handlers::merge_branch))
@@ -82,6 +84,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/users", post(user_handlers::create_user).get(user_handlers::list_users))
         .route("/api/v1/users/:id", get(user_handlers::get_user).put(user_handlers::update_user).delete(user_handlers::delete_user))
         .route("/api/v1/users/login", post(user_handlers::login))
+        .route("/api/v1/app-config", get(user_handlers::get_app_config))
         .route("/api/v1/users/me", get(user_handlers::get_current_user))
         .route("/api/v1/users/logout", post(user_handlers::logout))
         // Role Management

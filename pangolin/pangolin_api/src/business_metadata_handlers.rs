@@ -205,7 +205,7 @@ pub async fn get_asset_details(
         };
         
         for ns in namespaces {
-            let ns_parts = vec![ns.name.clone()]; 
+            let ns_parts = ns.name.clone(); 
             if let Ok(assets) = store.list_assets(tenant_id, &catalog.name, None, ns_parts).await {
                 for asset in assets {
                     if asset.id == asset_id {

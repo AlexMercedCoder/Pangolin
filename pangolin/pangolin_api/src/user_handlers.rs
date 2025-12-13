@@ -3,10 +3,11 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
+    Extension,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use pangolin_core::user::{User, UserRole, OAuthProvider};
+use pangolin_core::user::{User, UserRole, OAuthProvider, UserSession};
 use pangolin_store::CatalogStore;
 use std::sync::Arc;
 
@@ -72,9 +73,15 @@ impl From<User> for UserInfo {
     }
 }
 
+/// App configuration (public)
+#[derive(Serialize)]
+pub struct AppConfig {
+    pub auth_enabled: bool,
+}
+
 /// Create a new user
 pub async fn create_user(
-    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Json(req): Json<CreateUserRequest>,
 ) -> Response {
     // TODO: Check permissions - only root or tenant admin can create users
@@ -118,7 +125,7 @@ pub async fn create_user(
 
 /// List all users (filtered by permissions)
 pub async fn list_users(
-    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
 ) -> Response {
     // TODO: Implement user listing with permission filtering
     // Root can see all, tenant admin can see their tenant users
@@ -130,8 +137,8 @@ pub async fn list_users(
 
 /// Get user by ID
 pub async fn get_user(
-    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    Path(user_id): Path<Uuid>,
+    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Path(_user_id): Path<Uuid>,
 ) -> Response {
     // TODO: Check permissions and fetch user
     
@@ -140,9 +147,9 @@ pub async fn get_user(
 
 /// Update user
 pub async fn update_user(
-    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    Path(user_id): Path<Uuid>,
-    Json(req): Json<UpdateUserRequest>,
+    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Path(_user_id): Path<Uuid>,
+    Json(_req): Json<UpdateUserRequest>,
 ) -> Response {
     // TODO: Check permissions and update user
     
@@ -151,8 +158,8 @@ pub async fn update_user(
 
 /// Delete user
 pub async fn delete_user(
-    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    Path(user_id): Path<Uuid>,
+    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Path(_user_id): Path<Uuid>,
 ) -> Response {
     // TODO: Check permissions and delete user
     
@@ -207,19 +214,31 @@ pub async fn login(
 
 /// Get current user
 pub async fn get_current_user(
-    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    // TODO: Extract user from JWT token
+    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
 ) -> Response {
-    // TODO: Return current user info from token
+    let user_info = UserInfo {
+        id: session.user_id,
+        username: session.username,
+        email: "".to_string(), 
+        tenant_id: session.tenant_id,
+        role: session.role,
+        oauth_provider: None,
+    };
     
-    (StatusCode::NOT_IMPLEMENTED, "Not implemented yet").into_response()
+    (StatusCode::OK, Json(user_info)).into_response()
 }
 
 /// Logout (invalidate token)
 pub async fn logout(
-    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
 ) -> Response {
     // TODO: Implement token invalidation if using token blacklist
     
     (StatusCode::NO_CONTENT).into_response()
+}
+
+pub async fn get_app_config() -> Response {
+    let auth_enabled = std::env::var("PANGOLIN_NO_AUTH").unwrap_or_else(|_| "false".to_string()) != "true";
+    (StatusCode::OK, Json(AppConfig { auth_enabled })).into_response()
 }
