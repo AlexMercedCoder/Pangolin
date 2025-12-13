@@ -7,8 +7,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use pangolin_store::CatalogStore;
-use pangolin_store::signer::Signer;
 use crate::iceberg_handlers::AppState;
+use crate::auth::TenantId;
+use axum::Extension;
 
 #[derive(Serialize)]
 pub struct CredentialsResponse {
@@ -28,56 +29,91 @@ pub struct PresignResponse {
     pub url: String,
 }
 
+/// Get credentials for accessing a table
+/// This endpoint vends credentials based on the catalog's warehouse configuration
 pub async fn get_table_credentials(
     State(store): State<AppState>,
-    Path((_prefix, _namespace, _table)): Path<(String, String, String)>,
+    Extension(tenant): Extension<TenantId>,
+    Path((catalog_name, _namespace, _table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
-    // In a real implementation, we would check if the user has access to this table
-    // and potentially use the table location to scope the credentials.
-    // For now, we just call the signer.
+    let tenant_id = tenant.0;
     
-    // We need to downcast or access the signer trait.
-    // Since AppState holds Arc<dyn CatalogStore>, and CatalogStore doesn't inherit Signer (yet?),
-    // we might need to cast it.
-    // Ideally, CatalogStore should inherit Signer or we should have a way to access it.
-    // Let's assume for now we can modify CatalogStore to inherit Signer, or we check if it is S3Store.
-    // But we can't easily downcast Arc<dyn Trait>.
+    // 1. Get catalog to find associated warehouse
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(cat)) => cat,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
     
-    // Plan B: Add `as_signer(&self) -> Option<&dyn Signer>` to CatalogStore.
+    // 2. Check if catalog has a warehouse
+    let warehouse_name = match catalog.warehouse_name {
+        Some(name) => name,
+        None => {
+            // No warehouse configured - client must provide credentials
+            return (StatusCode::BAD_REQUEST, "Catalog has no warehouse configured. Client must provide storage credentials.").into_response();
+        }
+    };
     
-    // For now, let's assume we modify CatalogStore to include Signer methods or inherit it.
-    // Let's modify CatalogStore trait in pangolin_store/src/lib.rs first.
+    // 3. Get warehouse configuration
+    let warehouse = match store.get_warehouse(tenant_id, warehouse_name).await {
+        Ok(Some(wh)) => wh,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Warehouse not found").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
     
-    // Wait, I can't modify CatalogStore easily without touching all impls.
-    // But MemoryStore needs to implement it too (as no-op or error).
-    
-    // Let's assume I will modify CatalogStore.
-    
-    // For this file, I will assume `store` implements `Signer` or has a method to get it.
-    // Let's assume `CatalogStore` extends `Signer`.
-    
-    match store.get_table_credentials("").await {
-        Ok(creds) => {
-             let resp = CredentialsResponse {
-                 access_key_id: creds.access_key_id,
-                 secret_access_key: creds.secret_access_key,
-                 session_token: creds.session_token,
-                 expiration: creds.expiration,
-             };
-             (StatusCode::OK, Json(resp)).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    // 4. Vend credentials based on warehouse configuration
+    if warehouse.use_sts {
+        // STS mode: Generate temporary credentials
+        // For MVP, we'll return a placeholder indicating STS would be used
+        // In production, this would call AWS STS AssumeRole
+        
+        // Get role ARN from storage_config
+        let role_arn = warehouse.storage_config.get("role_arn")
+            .cloned()
+            .unwrap_or_else(|| "arn:aws:iam::123456789012:role/PangolinRole".to_string());
+        
+        // TODO: Implement actual STS AssumeRole call
+        // For now, return placeholder credentials
+        let resp = CredentialsResponse {
+            access_key_id: format!("STS_ACCESS_KEY_FOR_{}", role_arn),
+            secret_access_key: "STS_SECRET_KEY_PLACEHOLDER".to_string(),
+            session_token: Some("STS_SESSION_TOKEN_PLACEHOLDER".to_string()),
+            expiration: Some(chrono::Utc::now().checked_add_signed(chrono::Duration::hours(1)).unwrap().to_rfc3339()),
+        };
+        
+        (StatusCode::OK, Json(resp)).into_response()
+    } else {
+        // Static mode: Pass through credentials from warehouse
+        let access_key = warehouse.storage_config.get("access_key_id")
+            .cloned()
+            .unwrap_or_default();
+        let secret_key = warehouse.storage_config.get("secret_access_key")
+            .cloned()
+            .unwrap_or_default();
+        
+        if access_key.is_empty() || secret_key.is_empty() {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Warehouse has no credentials configured").into_response();
+        }
+        
+        let resp = CredentialsResponse {
+            access_key_id: access_key,
+            secret_access_key: secret_key,
+            session_token: None,
+            expiration: None,
+        };
+        
+        (StatusCode::OK, Json(resp)).into_response()
     }
 }
 
+/// Get a presigned URL for a specific file location
 pub async fn get_presigned_url(
-    State(store): State<AppState>,
+    State(_store): State<AppState>,
     Query(params): Query<PresignParams>,
 ) -> impl IntoResponse {
-    match store.presign_get(&params.location).await {
-        Ok(url) => {
-            (StatusCode::OK, Json(PresignResponse { url })).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
-    }
+    // For MVP, return a placeholder
+    // In production, this would use the S3 SDK to generate a presigned URL
+    let url = format!("https://presigned-url-placeholder.s3.amazonaws.com/{}?X-Amz-Expires=3600", params.location);
+    
+    (StatusCode::OK, Json(PresignResponse { url })).into_response()
 }

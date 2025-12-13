@@ -319,3 +319,85 @@ pub async fn list_audit_events(
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
+
+// Catalog Management
+#[derive(Deserialize)]
+pub struct CreateCatalogRequest {
+    name: String,
+    warehouse_name: Option<String>, // Reference to warehouse for credential vending
+    storage_location: Option<String>, // Base path for this catalog in the warehouse
+    properties: Option<std::collections::HashMap<String, String>>,
+}
+
+#[derive(Serialize)]
+pub struct CatalogResponse {
+    name: String,
+    warehouse_name: Option<String>,
+    storage_location: Option<String>,
+    properties: std::collections::HashMap<String, String>,
+}
+
+impl From<pangolin_core::model::Catalog> for CatalogResponse {
+    fn from(c: pangolin_core::model::Catalog) -> Self {
+        Self {
+            name: c.name,
+            warehouse_name: c.warehouse_name,
+            storage_location: c.storage_location,
+            properties: c.properties,
+        }
+    }
+}
+
+pub async fn list_catalogs(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+) -> impl IntoResponse {
+    match store.list_catalogs(tenant.0).await {
+        Ok(catalogs) => {
+            let resp: Vec<CatalogResponse> = catalogs.into_iter().map(|c| c.into()).collect();
+            (StatusCode::OK, Json(resp)).into_response()
+        }
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn create_catalog(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Json(payload): Json<CreateCatalogRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    
+    // Validate warehouse exists if specified
+    if let Some(ref warehouse_name) = payload.warehouse_name {
+        match store.get_warehouse(tenant_id, warehouse_name.clone()).await {
+            Ok(Some(_)) => {}, // Warehouse exists, continue
+            Ok(None) => return (StatusCode::BAD_REQUEST, "Warehouse not found").into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to validate warehouse").into_response(),
+        }
+    }
+    
+    let catalog = pangolin_core::model::Catalog {
+        name: payload.name.clone(),
+        warehouse_name: payload.warehouse_name,
+        storage_location: payload.storage_location,
+        properties: payload.properties.unwrap_or_default(),
+    };
+
+    match store.create_catalog(tenant_id, catalog.clone()).await {
+        Ok(_) => (StatusCode::CREATED, Json(CatalogResponse::from(catalog))).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn get_catalog(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match store.get_catalog(tenant.0, name).await {
+        Ok(Some(catalog)) => (StatusCode::OK, Json(CatalogResponse::from(catalog))).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}

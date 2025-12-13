@@ -32,17 +32,30 @@ pub struct Claims {
 pub struct RootUser;
 
 pub async fn auth_middleware(
-    headers: HeaderMap,
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    // Whitelist: Allow public access to config endpoints (Iceberg REST spec requirement)
     let path = request.uri().path().to_string();
+    
+    // Check if running in no-auth mode
+    if std::env::var("PANGOLIN_NO_AUTH").is_ok() {
+        // No-auth mode: bypass all authentication and use default tenant
+        let default_tenant_id = Uuid::parse_str("00000000-0000-0000-0000-000000000000")
+            .expect("Failed to parse default tenant UUID");
+        tracing::debug!("Running in NO_AUTH mode, using default tenant: {}", default_tenant_id);
+        request.extensions_mut().insert(TenantId(default_tenant_id));
+        return Ok(next.run(request).await);
+    }
+
+    let headers = request.headers();
+    
+    // Whitelist: Allow /v1/config and /v1/:prefix/config without auth
     if path == "/v1/config" || path.ends_with("/config") {
+        tracing::debug!("Allowing unauthenticated access to config endpoint: {}", path);
         return Ok(next.run(request).await);
     }
     
-    // 0. Check for Root User (Basic Auth)
+    // 1. Check for Basic Auth (root user)
     if let Some(auth_header) = headers.get("Authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
             if auth_str.starts_with("Basic ") {
@@ -56,6 +69,7 @@ pub async fn auth_middleware(
                             if !root_user.is_empty() && username == root_user && password == root_pass {
                                 request.extensions_mut().insert(RootUser);
                                 request.extensions_mut().insert(vec![Role::Root]);
+                                return Ok(next.run(request).await);
                             }
                         }
                     }
@@ -93,6 +107,8 @@ pub async fn auth_middleware(
 
     // 2. Fallback: Check for X-Pangolin-Tenant header (Dev/Legacy)
     tracing::debug!("Checking X-Pangolin-Tenant header for path: {}", path);
+    tracing::debug!("All headers: {:?}", headers);
+    
     if let Some(tenant_header) = headers.get("X-Pangolin-Tenant") {
         tracing::debug!("Found X-Pangolin-Tenant header: {:?}", tenant_header);
         if let Ok(tenant_str) = tenant_header.to_str() {
@@ -111,11 +127,14 @@ pub async fn auth_middleware(
         tracing::debug!("No X-Pangolin-Tenant header found. Available headers: {:?}", headers.keys().collect::<Vec<_>>());
     }
     
-    // 3. Fallback: Nil Tenant (Dev only, warn)
-    // Only use nil tenant if NOT a root user. If root user, they might not need a tenant for global ops.
+    // 3. Fallback: Default Tenant (Testing/Development)
+    // Use default tenant (all zeros) when no authentication is provided
+    // This allows testing without authentication while maintaining tenant isolation in production
     if request.extensions().get::<RootUser>().is_none() && request.extensions().get::<TenantId>().is_none() {
-        tracing::warn!("No Auth or Tenant header found, using nil tenant.");
-        request.extensions_mut().insert(TenantId(Uuid::nil()));
+        let default_tenant_id = Uuid::parse_str("00000000-0000-0000-0000-000000000000")
+            .expect("Failed to parse default tenant UUID");
+        tracing::info!("No authentication provided, using default tenant: {}", default_tenant_id);
+        request.extensions_mut().insert(TenantId(default_tenant_id));
     }
 
     Ok(next.run(request).await)

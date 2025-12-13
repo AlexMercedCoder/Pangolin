@@ -15,11 +15,14 @@ pub struct Warehouse {
     pub name: String,
     pub tenant_id: Uuid,
     pub storage_config: std::collections::HashMap<String, String>,
+    pub use_sts: bool, // If true, vend STS credentials; if false, pass through static creds
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
     pub name: String,
+    pub warehouse_name: Option<String>, // Reference to warehouse for credential vending
+    pub storage_location: Option<String>, // Base path for this catalog in the warehouse
     pub properties: HashMap<String, String>,
 }
 

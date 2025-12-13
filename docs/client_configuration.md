@@ -2,17 +2,32 @@
 
 This guide shows how to configure Apache Iceberg clients (PyIceberg, PySpark, Trino, etc.) to connect to Pangolin.
 
+## Authentication Modes
+
+Pangolin supports two authentication modes:
+
+### 1. NO_AUTH Mode (Testing/Evaluation)
+- Set `PANGOLIN_NO_AUTH=1` environment variable on the server
+- No authentication required from clients
+- Uses default tenant automatically
+- **Not recommended for production**
+
+### 2. Bearer Token Authentication (Production)
+- JWT tokens with tenant information
+- Iceberg REST specification compliant
+- Required for multi-tenant deployments
+
 ## PyIceberg
 
 ### Installation
 
 ```bash
-pip install "pyiceberg[s3fs,pyarrow]"
+pip install "pyiceberg[s3fs,pyarrow]" pyjwt
 ```
 
-### Configuration
+### NO_AUTH Mode (Testing)
 
-#### Python Code
+When the Pangolin server is running with `PANGOLIN_NO_AUTH=1`:
 
 ```python
 from pyiceberg.catalog import load_catalog
@@ -20,58 +35,126 @@ from pyiceberg.catalog import load_catalog
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "http://localhost:8080/v1/main_warehouse",
+        "uri": "http://localhost:8080",
+        "prefix": "analytics",  # Catalog name
         "s3.endpoint": "http://localhost:9000",
         "s3.access-key-id": "minioadmin",
         "s3.secret-access-key": "minioadmin",
         "s3.region": "us-east-1",
-        "py-io-impl": "pyiceberg.io.pyarrow.PyArrowFileIO",
-        "header.X-Pangolin-Tenant": "00000000-0000-0000-0000-000000000001",
     }
 )
 
 # List namespaces
 namespaces = catalog.list_namespaces()
 print(namespaces)
-
-# Create a namespace
-catalog.create_namespace("my_namespace")
-
-# Create a table
-from pyiceberg.schema import Schema
-from pyiceberg.types import NestedField, IntegerType, StringType
-
-schema = Schema(
-    NestedField(1, "id", IntegerType(), required=True),
-    NestedField(2, "data", StringType(), required=False),
-)
-
-table = catalog.create_table(
-    identifier="my_namespace.my_table",
-    schema=schema,
-    location="s3://pangolin/data/my_namespace/my_table"
-)
 ```
 
-#### Configuration File (`~/.pyiceberg.yaml`)
+### Bearer Token Authentication (Production)
 
-```yaml
-catalog:
-  pangolin:
-    uri: http://localhost:8080/v1/main_warehouse
-    s3.endpoint: http://localhost:9000
-    s3.access-key-id: minioadmin
-    s3.secret-access-key: minioadmin
-    s3.region: us-east-1
-    py-io-impl: pyiceberg.io.pyarrow.PyArrowFileIO
-    header.X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001
+#### Step 1: Generate Token
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tokens \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant_id": "00000000-0000-0000-0000-000000000001",
+    "username": "user@example.com",
+    "expires_in_hours": 24
+  }'
 ```
 
-Then in Python:
+Response:
+```json
+{
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "expires_at": "2025-12-14T02:37:49+00:00",
+  "tenant_id": "00000000-0000-0000-0000-000000000001"
+}
+```
+
+#### Step 2: Use Token with PyIceberg
 
 ```python
 from pyiceberg.catalog import load_catalog
 
+# Token from /api/v1/tokens endpoint
+token = "eyJ0eXAiOiJKV1QiLCJhbGc..."
+
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "http://localhost:8080",
+        "prefix": "analytics",  # Catalog name
+        "token": token,  # Bearer token authentication
+        "s3.endpoint": "http://localhost:9000",
+        "s3.access-key-id": "minioadmin",
+        "s3.secret-access-key": "minioadmin",
+        "s3.region": "us-east-1",
+    }
+)
+```
+
+#### Step 3: Generate Token Programmatically
+
+```python
+import jwt
+import datetime
+from pyiceberg.catalog import load_catalog
+
+def generate_token(tenant_id: str, secret: str = "secret") -> str:
+    """Generate JWT token with tenant_id"""
+    payload = {
+        "sub": "api-user",
+        "tenant_id": tenant_id,
+        "roles": ["User"],
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+    }
+    return jwt.encode(payload, secret, algorithm="HS256")
+
+# Generate token
+token = generate_token("00000000-0000-0000-0000-000000000001")
+
+# Use with PyIceberg
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "http://localhost:8080",
+        "prefix": "analytics",
+        "token": token,
+    }
+)
+```
+
+### Configuration File (`~/.pyiceberg.yaml`)
+
+#### NO_AUTH Mode
+```yaml
+catalog:
+  pangolin:
+    uri: http://localhost:8080
+    prefix: analytics
+    s3.endpoint: http://localhost:9000
+    s3.access-key-id: minioadmin
+    s3.secret-access-key: minioadmin
+    s3.region: us-east-1
+```
+
+#### With Bearer Token
+```yaml
+catalog:
+  pangolin:
+    uri: http://localhost:8080
+    prefix: analytics
+    token: eyJ0eXAiOiJKV1QiLCJhbGc...  # From /api/v1/tokens
+    s3.endpoint: http://localhost:9000
+    s3.access-key-id: minioadmin
+    s3.secret-access-key: minioadmin
+    s3.region: us-east-1
+```
+
+Then in Python:
+```python
+from pyiceberg.catalog import load_catalog
 catalog = load_catalog("pangolin")
 ```
 
@@ -94,36 +177,14 @@ spark = SparkSession.builder \\
     .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions") \\
     .config("spark.sql.catalog.pangolin", "org.apache.iceberg.spark.SparkCatalog") \\
     .config("spark.sql.catalog.pangolin.catalog-impl", "org.apache.iceberg.rest.RESTCatalog") \\
-    .config("spark.sql.catalog.pangolin.uri", "http://localhost:8080/v1/main_warehouse") \\
+    .config("spark.sql.catalog.pangolin.uri", "http://localhost:8080/v1/analytics") \\
     .config("spark.sql.catalog.pangolin.io-impl", "org.apache.iceberg.aws.s3.S3FileIO") \\
     .config("spark.sql.catalog.pangolin.s3.endpoint", "http://localhost:9000") \\
     .config("spark.sql.catalog.pangolin.s3.access-key-id", "minioadmin") \\
     .config("spark.sql.catalog.pangolin.s3.secret-access-key", "minioadmin") \\
     .config("spark.sql.catalog.pangolin.s3.path-style-access", "true") \\
-    .config("spark.sql.catalog.pangolin.header.X-Pangolin-Tenant", "00000000-0000-0000-0000-000000000001") \\
+    .config("spark.sql.catalog.pangolin.header.Authorization", f"Bearer {token}") \\  # Bearer token
     .getOrCreate()
-
-# Create a namespace
-spark.sql("CREATE NAMESPACE IF NOT EXISTS pangolin.my_namespace")
-
-# Create a table
-spark.sql("""
-    CREATE TABLE IF NOT EXISTS pangolin.my_namespace.my_table (
-        id INT,
-        data STRING
-    )
-    USING iceberg
-    LOCATION 's3://pangolin/data/my_namespace/my_table'
-""")
-
-# Insert data
-spark.sql("""
-    INSERT INTO pangolin.my_namespace.my_table VALUES (1, 'hello'), (2, 'world')
-""")
-
-# Query data
-df = spark.sql("SELECT * FROM pangolin.my_namespace.my_table")
-df.show()
 ```
 
 ## Trino
@@ -133,100 +194,49 @@ df.show()
 ```properties
 connector.name=iceberg
 iceberg.catalog.type=rest
-iceberg.rest.uri=http://localhost:8080/v1/main_warehouse
-iceberg.rest.http-headers=X-Pangolin-Tenant:00000000-0000-0000-0000-000000000001
+iceberg.rest.uri=http://localhost:8080/v1/analytics
+iceberg.rest.http-headers=Authorization:Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
 fs.s3a.endpoint=http://localhost:9000
 fs.s3a.access-key=minioadmin
 fs.s3a.secret-key=minioadmin
 fs.s3a.path.style.access=true
 ```
 
-## Dremio
-
-### Configuration
-
-1. Navigate to **Settings** → **Data Sources** → **Add Source**
-2. Select **Iceberg Catalog (REST)**
-3. Configure:
-   - **Name**: `pangolin`
-   - **REST Catalog URI**: `http://localhost:8080/v1/main_warehouse`
-   - **HTTP Headers**: `X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001`
-   - **S3 Endpoint**: `http://localhost:9000`
-   - **S3 Access Key**: `minioadmin`
-   - **S3 Secret Key**: `minioadmin`
-   - **Path Style Access**: `true`
-
 ## Environment Variables
 
-For production deployments, use environment variables instead of hardcoding credentials:
+For production deployments, use environment variables:
 
 ### PyIceberg
 
 ```python
 import os
+from pyiceberg.catalog import load_catalog
 
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": os.getenv("PANGOLIN_URI", "http://localhost:8080/v1/main_warehouse"),
-        "s3.endpoint": os.getenv("S3_ENDPOINT", "http://localhost:9000"),
+        "uri": os.getenv("PANGOLIN_URI", "http://localhost:8080"),
+        "prefix": os.getenv("PANGOLIN_CATALOG", "analytics"),
+        "token": os.getenv("PANGOLIN_TOKEN"),  # JWT token
+        "s3.endpoint": os.getenv("S3_ENDPOINT"),
         "s3.access-key-id": os.getenv("AWS_ACCESS_KEY_ID"),
         "s3.secret-access-key": os.getenv("AWS_SECRET_ACCESS_KEY"),
         "s3.region": os.getenv("AWS_REGION", "us-east-1"),
-        "header.X-Pangolin-Tenant": os.getenv("PANGOLIN_TENANT_ID"),
     }
 )
-```
-
-### PySpark
-
-```bash
-export PANGOLIN_URI="http://localhost:8080/v1/main_warehouse"
-export PANGOLIN_TENANT_ID="00000000-0000-0000-0000-000000000001"
-export AWS_ACCESS_KEY_ID="minioadmin"
-export AWS_SECRET_ACCESS_KEY="minioadmin"
-export S3_ENDPOINT="http://localhost:9000"
-```
-
-Then reference in Spark config:
-
-```python
-.config("spark.sql.catalog.pangolin.uri", os.getenv("PANGOLIN_URI")) \\
-.config("spark.sql.catalog.pangolin.header.X-Pangolin-Tenant", os.getenv("PANGOLIN_TENANT_ID")) \\
-```
-
-## Authentication
-
-For production environments with authentication enabled:
-
-### PyIceberg with JWT
-
-```python
-catalog = load_catalog(
-    "pangolin",
-    **{
-        "uri": "https://pangolin.example.com/v1/main_warehouse",
-        "header.Authorization": f"Bearer {jwt_token}",
-        "header.X-Pangolin-Tenant": tenant_id,
-        # ... other S3 config
-    }
-)
-```
-
-### PySpark with JWT
-
-```python
-.config("spark.sql.catalog.pangolin.header.Authorization", f"Bearer {jwt_token}") \\
-.config("spark.sql.catalog.pangolin.header.X-Pangolin-Tenant", tenant_id) \\
 ```
 
 ## Troubleshooting
 
 ### Connection Issues
 
-1. **404 Not Found**: Ensure the warehouse name in the URI matches an existing warehouse in Pangolin.
-2. **403 Forbidden**: Check that the `X-Pangolin-Tenant` header is set correctly.
-3. **S3 Access Denied**: Verify S3 credentials and endpoint configuration.
+1. **401 Unauthorized**: 
+   - In NO_AUTH mode: Ensure server has `PANGOLIN_NO_AUTH=1` set
+   - In production: Check that Bearer token is valid and not expired
+   
+2. **404 Not Found**: Ensure the catalog name in the prefix/URI matches an existing catalog
+
+3. **S3 Access Denied**: Verify S3 credentials and endpoint configuration
 
 ### Debugging
 
@@ -238,7 +248,26 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 ```
 
-**PySpark:**
+**Check Token:**
 ```python
-.config("spark.sql.debug.maxToStringFields", "100") \\
+import jwt
+decoded = jwt.decode(token, options={"verify_signature": False})
+print(f"Tenant ID: {decoded.get('tenant_id')}")
+print(f"Expires: {decoded.get('exp')}")
 ```
+
+## Migration from Custom Headers
+
+If you were using `header.X-Pangolin-Tenant`:
+
+**Old (Not compatible with PyIceberg):**
+```python
+"header.X-Pangolin-Tenant": "00000000-0000-0000-0000-000000000001"
+```
+
+**New (Iceberg REST spec compliant):**
+```python
+"token": generate_token("00000000-0000-0000-0000-000000000001")
+```
+
+The custom header approach still works for direct API calls but is not supported by PyIceberg due to its authentication architecture.

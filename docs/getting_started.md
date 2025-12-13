@@ -1,6 +1,42 @@
 # Getting Started with Pangolin
 
-This guide will walk you through setting up Pangolin and performing an end-to-end workflow: creating a tenant, setting up a warehouse, managing data, and using advanced features like branching and merging.
+This guide will walk you through setting up Pangolin and performing an end-to-end workflow.
+
+## Quick Start (NO_AUTH Mode)
+
+The fastest way to get started is using NO_AUTH mode for testing:
+
+1. **Start the server:**
+   ```bash
+   PANGOLIN_NO_AUTH=1 cargo run --bin pangolin_api
+   ```
+
+2. **Test with PyIceberg:**
+   ```python
+   from pyiceberg.catalog import load_catalog
+   
+   catalog = load_catalog(
+       "pangolin",
+       **{
+           "uri": "http://localhost:8080",
+           "prefix": "analytics",  # Catalog name
+       }
+   )
+   
+   # Create namespace
+   catalog.create_namespace("my_namespace")
+   
+   # List namespaces
+   print(catalog.list_namespaces())
+   ```
+
+3. **Test with curl:**
+   ```bash
+   # List namespaces (uses default tenant automatically)
+   curl http://localhost:8080/v1/analytics/namespaces
+   ```
+
+> **Note:** NO_AUTH mode is for testing only. It uses a single default tenant and disables authentication. For production, see the [Production Setup](#production-setup) section below.
 
 ## Prerequisites
 
@@ -17,15 +53,22 @@ This guide will walk you through setting up Pangolin and performing an end-to-en
     ```
 
 2.  **Run the Server**
+    
+    **For Testing (NO_AUTH mode):**
     ```bash
-    # Run from the workspace root
+    PANGOLIN_NO_AUTH=1 cargo run --bin pangolin_api
+    ```
+    
+    **For Production:**
+    ```bash
     cargo run --bin pangolin_api
     ```
+    
     The server will start at `http://localhost:8080`.
 
 ## End-to-End Walkthrough
 
-We will simulate a real-world scenario: A "Data Team" setting up their environment, creating a table, experimenting on a branch, and merging changes back.
+We will simulate a real-world scenario: A "Data Team" setting up their environment, creating tables, experimenting on a branch, and merging changes back.
 
 ### 1. Create a Tenant
 Pangolin is multi-tenant by default. First, create a tenant for your organization.
@@ -42,7 +85,7 @@ curl -X POST http://localhost:8080/api/v1/tenants \
 *Note: We are using a fixed UUID for simplicity. The `-u admin:password` corresponds to the default Root User credentials in `example.env`.*
 
 ### 2. Create a Warehouse
-A warehouse maps to a physical storage location (like an S3 bucket).
+A warehouse stores storage credentials and configuration.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/warehouses \
@@ -50,6 +93,7 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "main_warehouse",
+    "use_sts": false,
     "storage_config": {
       "type": "memory",
       "bucket": "demo-bucket",
@@ -57,28 +101,43 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
     }
   }'
 ```
-*Note: We use `type: "memory"` for this quick start. For S3, see [Configuration](configuration.md).*
+*Note: We use `type: "memory"` and `use_sts: false` for this quick start. For production S3 with STS, see [Warehouse Management](warehouse_management.md).*
 
-### 3. Create a Namespace
+### 3. Create a Catalog
+A catalog references a warehouse and specifies a storage location. The catalog name is what clients use in their connection URIs.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/catalogs \
+  -H "X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "analytics",
+    "warehouse_name": "main_warehouse",
+    "storage_location": "s3://demo-bucket/analytics"
+  }'
+```
+
+### 4. Create a Namespace
 Namespaces organize your tables (like schemas in a database).
 
 ```bash
-curl -X POST http://localhost:8080/v1/main_warehouse/namespaces \
+curl -X POST http://localhost:8080/v1/analytics/namespaces \
   -H "X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001" \
   -H "Content-Type: application/json" \
   -d '{"namespace": ["data_team"]}'
 ```
+*Note: The URL uses the catalog name `analytics` as the prefix.*
 
-### 4. Create a Table on `main`
+### 5. Create a Table on `main`
 Create an Iceberg table in the `data_team` namespace. By default, operations target the `main` branch.
 
 ```bash
-curl -X POST http://localhost:8080/v1/main_warehouse/namespaces/data_team/tables \
+curl -X POST http://localhost:8080/v1/analytics/namespaces/data_team/tables \
   -H "X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "users",
-    "location": "s3://demo-bucket/data/data_team/users",
+    "location": "s3://demo-bucket/analytics/data_team/users",
     "schema": {
       "type": "struct",
       "fields": [
@@ -89,7 +148,7 @@ curl -X POST http://localhost:8080/v1/main_warehouse/namespaces/data_team/tables
   }'
 ```
 
-### 5. Create a Feature Branch (`dev`)
+### 6. Create a Feature Branch (`dev`)
 Create a new branch named `dev` to experiment safely. We will use **Partial Branching** to only track the `users` table on this branch.
 
 ```bash
@@ -98,17 +157,18 @@ curl -X POST http://localhost:8080/api/v1/branches \
   -H "Content-Type: application/json" \
   -d '{
     "name": "dev",
+    "catalog": "analytics",
     "from_branch": "main",
     "branch_type": "experimental",
     "assets": ["data_team.users"]
   }'
 ```
 
-### 6. Update Table on `dev`
-Modify the table schema on the `dev` branch. Note the `@dev` suffix in the URL.
+### 7. Update Table on `dev`
+Modify the table schema on the `dev` branch. Note the `?branch=dev` query parameter.
 
 ```bash
-curl -X POST http://localhost:8080/v1/main_warehouse/namespaces/data_team/tables/users?branch=dev \
+curl -X POST http://localhost:8080/v1/analytics/namespaces/data_team/tables/users?branch=dev \
   -H "X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001" \
   -H "Content-Type: application/json" \
   -d '{
@@ -118,20 +178,20 @@ curl -X POST http://localhost:8080/v1/main_warehouse/namespaces/data_team/tables
   }'
 ```
 
-### 7. Verify Isolation
+### 8. Verify Isolation
 Check that the `main` branch is unaffected.
 
 ```bash
 # Check main (should NOT have email column)
-curl http://localhost:8080/v1/main_warehouse/namespaces/data_team/tables/users?branch=main \
+curl http://localhost:8080/v1/analytics/namespaces/data_team/tables/users?branch=main \
   -H "X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001"
 
 # Check dev (SHOULD have email column)
-curl http://localhost:8080/v1/main_warehouse/namespaces/data_team/tables/users?branch=dev \
+curl http://localhost:8080/v1/analytics/namespaces/data_team/tables/users?branch=dev \
   -H "X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001"
 ```
 
-### 8. Merge `dev` into `main`
+### 9. Merge `dev` into `main`
 Once satisfied, merge the changes back to `main`.
 
 ```bash
@@ -139,6 +199,7 @@ curl -X POST http://localhost:8080/api/v1/branches/merge \
   -H "X-Pangolin-Tenant: 00000000-0000-0000-0000-000000000001" \
   -H "Content-Type: application/json" \
   -d '{
+    "catalog": "analytics",
     "source_branch": "dev",
     "target_branch": "main"
   }'
@@ -150,4 +211,79 @@ Now, `main` will contain the schema updates made in `dev`.
 
 - Explore [Branch Management](branch_management.md) for advanced strategies.
 - Configure [S3 Storage](storage_s3.md) for production data.
-- Learn about [Warehouse Management](warehouse_management.md).
+- Learn about [Warehouse Management](warehouse_management.md) and credential vending.
+- Set up [Client Configuration](client_configuration.md) for PyIceberg, PySpark, Trino, or Dremio.
+
+## Production Setup
+
+For production deployments, disable NO_AUTH mode and use Bearer token authentication:
+
+### 1. Start Server (No NO_AUTH variable)
+
+```bash
+# Set JWT secret for production
+export PANGOLIN_JWT_SECRET="your-secret-key-here"
+cargo run --release --bin pangolin_api
+```
+
+### 2. Generate Tokens
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tokens \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant_id": "00000000-0000-0000-0000-000000000001",
+    "username": "user@example.com",
+    "expires_in_hours": 24
+  }'
+```
+
+Response:
+```json
+{
+  "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "expires_at": "2025-12-14T02:37:49+00:00",
+  "tenant_id": "00000000-0000-0000-0000-000000000001"
+}
+```
+
+### 3. Use Token with PyIceberg
+
+```python
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "http://localhost:8080",
+        "prefix": "analytics",
+        "token": "eyJ0eXAiOiJKV1QiLCJhbGc...",  # From /api/v1/tokens
+    }
+)
+```
+
+### 4. Tenant Creation Restriction
+
+In NO_AUTH mode, attempting to create additional tenants will fail:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tenants \
+  -H "Content-Type: application/json" \
+  -d '{"name": "test-tenant"}'
+```
+
+Response (403 Forbidden):
+```json
+{
+  "error": "Cannot create additional tenants in NO_AUTH mode",
+  "message": "NO_AUTH mode is only meant for evaluation and testing with a single default tenant. Please enable authentication and use Bearer tokens if you want to create multiple tenants.",
+  "hint": "Remove PANGOLIN_NO_AUTH environment variable and use /api/v1/tokens endpoint to generate tokens"
+}
+```
+
+## Next Steps
+
+- [PyIceberg Testing Guide](./pyiceberg_testing.md) - Comprehensive PyIceberg testing
+- [Client Configuration](./client_configuration.md) - Configure various Iceberg clients
+- [Warehouse Management](./warehouse_management.md) - Manage warehouses and catalogs
+- [API Reference](./api/) - Complete API documentation

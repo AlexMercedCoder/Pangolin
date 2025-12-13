@@ -502,6 +502,7 @@ mod tests {
             name: "main_warehouse".to_string(),
             tenant_id,
             storage_config: HashMap::new(),
+            use_sts: false,
         };
 
         store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();

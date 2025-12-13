@@ -87,7 +87,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>> {
-        let row = sqlx::query("SELECT id, name, storage_config FROM warehouses WHERE tenant_id = $1 AND name = $2")
+        let row = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config FROM warehouses WHERE tenant_id = $1 AND name = $2")
             .bind(tenant_id)
             .bind(name)
             .fetch_optional(&self.pool)
@@ -108,10 +108,11 @@ impl CatalogStore for PostgresStore {
             // Let's fix the schema for Warehouse ID.
             
             Ok(Some(Warehouse {
-                id: Uuid::new_v4(), // TODO: Fix schema to store ID
-                tenant_id,
+                id: row.get("id"),
                 name: row.get("name"),
-                storage_config: serde_json::from_value(row.get("storage_config"))?,
+                tenant_id: row.get("tenant_id"),
+                use_sts: row.try_get("use_sts").unwrap_or(false),
+                storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
             }))
         } else {
             Ok(None)
@@ -119,7 +120,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>> {
-        let rows = sqlx::query("SELECT name, storage_config FROM warehouses WHERE tenant_id = $1")
+        let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config FROM warehouses WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_all(&self.pool)
             .await?;
@@ -127,10 +128,11 @@ impl CatalogStore for PostgresStore {
         let mut warehouses = Vec::new();
         for row in rows {
             warehouses.push(Warehouse {
-                id: Uuid::new_v4(), // TODO: Fix schema
-                tenant_id,
+                id: row.get("id"),
                 name: row.get("name"),
-                storage_config: serde_json::from_value(row.get("storage_config"))?,
+                tenant_id: row.get("tenant_id"),
+                use_sts: row.try_get("use_sts").unwrap_or(false),
+                storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
             });
         }
         Ok(warehouses)
@@ -148,7 +150,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn get_catalog(&self, tenant_id: Uuid, name: String) -> Result<Option<Catalog>> {
-        let row = sqlx::query("SELECT name, properties FROM catalogs WHERE tenant_id = $1 AND name = $2")
+        let row = sqlx::query("SELECT name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1 AND name = $2")
             .bind(tenant_id)
             .bind(name)
             .fetch_optional(&self.pool)
@@ -157,7 +159,9 @@ impl CatalogStore for PostgresStore {
         if let Some(row) = row {
             Ok(Some(Catalog {
                 name: row.get("name"),
-                properties: serde_json::from_value(row.get("properties"))?,
+                warehouse_name: row.try_get("warehouse_name").ok(),
+                storage_location: row.try_get("storage_location").ok(),
+                properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             }))
         } else {
             Ok(None)
@@ -165,7 +169,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
-        let rows = sqlx::query("SELECT name, properties FROM catalogs WHERE tenant_id = $1")
+        let rows = sqlx::query("SELECT name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_all(&self.pool)
             .await?;
@@ -174,7 +178,9 @@ impl CatalogStore for PostgresStore {
         for row in rows {
             catalogs.push(Catalog {
                 name: row.get("name"),
-                properties: serde_json::from_value(row.get("properties"))?,
+                warehouse_name: row.try_get("warehouse_name").ok(),
+                storage_location: row.try_get("storage_location").ok(),
+                properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             });
         }
         Ok(catalogs)

@@ -15,6 +15,7 @@ use crate::iceberg_handlers::AppState;
 #[derive(Deserialize)]
 pub struct CreateWarehouseRequest {
     name: String,
+    use_sts: Option<bool>, // If true, use STS credential vending; if false, pass through static creds
     storage_config: Option<std::collections::HashMap<String, String>>,
 }
 
@@ -23,6 +24,7 @@ pub struct WarehouseResponse {
     id: Uuid,
     name: String,
     tenant_id: Uuid,
+    use_sts: bool,
     storage_config: std::collections::HashMap<String, String>,
 }
 
@@ -32,6 +34,7 @@ impl From<Warehouse> for WarehouseResponse {
             id: warehouse.id,
             name: warehouse.name,
             tenant_id: warehouse.tenant_id,
+            use_sts: warehouse.use_sts,
             storage_config: warehouse.storage_config,
         }
     }
@@ -59,6 +62,7 @@ pub async fn create_warehouse(
         id: Uuid::new_v4(),
         name: payload.name,
         tenant_id: tenant.0,
+        use_sts: payload.use_sts.unwrap_or(false), // Default to false (static credentials)
         storage_config: payload.storage_config.unwrap_or_default(),
     };
 

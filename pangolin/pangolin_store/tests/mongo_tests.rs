@@ -32,6 +32,8 @@ async fn test_mongo_store_flow() {
     // 2. Create Catalog
     let catalog = Catalog {
         name: "test_catalog".to_string(),
+        warehouse_name: None,
+        storage_location: None,
         properties: HashMap::new(),
     };
     store.create_catalog(tenant_id, catalog.clone()).await.expect("Failed to create catalog");

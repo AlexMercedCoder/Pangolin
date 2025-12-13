@@ -9,7 +9,7 @@ use std::sync::Arc;
 use pangolin_store::CatalogStore;
 use pangolin_store::memory::MemoryStore;
 use pangolin_core::model::{Namespace, Asset, AssetType};
-use pangolin_core::iceberg_metadata::{TableMetadata, Schema, PartitionSpec, SortOrder, Snapshot};
+use pangolin_core::iceberg_metadata::{TableMetadata, Schema, PartitionSpec, SortOrder, Snapshot, NestedField, Type};
 use uuid::Uuid;
 use std::collections::HashMap;
 use chrono::Utc;
@@ -52,6 +52,7 @@ pub struct TableResponse {
     name: String,
     location: String,
     properties: HashMap<String, String>,
+    metadata: TableMetadata,  // Required by Iceberg REST spec
 }
 
 #[derive(Serialize)]
@@ -63,6 +64,14 @@ pub struct ListTablesResponse {
 pub struct TableIdentifier {
     namespace: Vec<String>,
     name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct PartitionField {
+    pub source_id: i32,
+    pub field_id: i32,
+    pub name: String,
+    pub transform: String,
 }
 
 #[derive(Deserialize)]
@@ -190,16 +199,20 @@ pub async fn create_table(
     let table_uuid = Uuid::new_v4();
     let location = payload.location.unwrap_or_else(|| format!("s3://warehouse/{}/{}/{}", catalog_name, ns_vec.join("/"), tbl_name));
     
-    // Create initial TableMetadata
+    // Create initial TableMetadata with a valid schema
     let metadata = TableMetadata {
         format_version: 2,
         table_uuid,
         location: location.clone(),
         last_sequence_number: 0,
         last_updated_ms: Utc::now().timestamp_millis(),
-        last_column_id: 0, // Should be calculated from schema
+        last_column_id: 0,
         current_schema_id: 0,
-        schemas: vec![], // TODO: Parse schema from payload if provided
+        schemas: vec![Schema {
+            schema_id: 0,
+            identifier_field_ids: None,
+            fields: vec![], // Empty schema for now - should parse from payload
+        }],
         current_partition_spec_id: 0,
         partition_specs: vec![PartitionSpec { spec_id: 0, fields: vec![] }],
         default_sort_order_id: 0,
@@ -266,9 +279,10 @@ pub async fn create_table(
             )).await;
 
             (StatusCode::OK, Json(TableResponse {
-                name: asset.name,
-                location: asset.location,
-                properties: asset.properties,
+                name: asset.name.clone(),
+                location: asset.location.clone(),
+                properties: asset.properties.clone(),
+                metadata,  // Include the metadata we created
             })).into_response()
         },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
@@ -338,10 +352,33 @@ pub async fn load_table(
              }
         }
 
+        // For load_table, we should read the actual metadata file
+        // For now, return a minimal metadata structure
+        let metadata = TableMetadata {
+            format_version: 2,
+            table_uuid: Uuid::new_v4(),
+            location: asset.location.clone(),
+            last_sequence_number: 0,
+            last_updated_ms: Utc::now().timestamp_millis(),
+            last_column_id: 0,
+            current_schema_id: 0,
+            schemas: vec![],
+            current_partition_spec_id: 0,
+            partition_specs: vec![PartitionSpec { spec_id: 0, fields: vec![] }],
+            default_sort_order_id: 0,
+            sort_orders: vec![SortOrder { order_id: 0, fields: vec![] }],
+            properties: Some(asset.properties.clone()),
+            current_snapshot_id: None,
+            snapshots: Some(vec![]),
+            snapshot_log: Some(vec![]),
+            metadata_log: Some(vec![]),
+        };
+        
         (StatusCode::OK, Json(TableResponse {
             name: asset.name,
             location: asset.location,
             properties: asset.properties,
+            metadata,
         })).into_response()
     } else {
         (StatusCode::NOT_FOUND, "Metadata location not found").into_response()
@@ -420,8 +457,9 @@ pub async fn update_table(
                 // Success!
                 return (StatusCode::OK, Json(TableResponse {
                     name: metadata.properties.as_ref().and_then(|p: &std::collections::HashMap<String, String>| p.get("name").cloned()).unwrap_or_default(),
-                    location: metadata.location,
-                    properties: metadata.properties.unwrap_or_default(),
+                    location: metadata.location.clone(),
+                    properties: metadata.properties.clone().unwrap_or_default(),
+                    metadata,
                 })).into_response();
             },
             Err(_) => {

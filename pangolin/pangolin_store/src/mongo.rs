@@ -109,18 +109,27 @@ impl CatalogStore for MongoStore {
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()> {
         // Catalog struct doesn't have tenant_id, so we need to wrap it or add it?
         // Wait, Catalog struct in model.rs:
-        // pub struct Catalog { pub name: String, pub properties: HashMap<String, String> }
+        // pub struct Catalog { pub name: String, pub warehouse_name: Option<String>, pub storage_location: Option<String>, pub properties: HashMap<String, String> }
         // It doesn't have tenant_id.
         // In Postgres we added a column. In Mongo we can wrap it in a document or just add the field dynamically if we use Document.
         // But we are using typed Collection<Catalog>.
         // We should probably use a wrapper struct for storage or just use Document.
         // Let's use Document for flexibility here since we need to add tenant_id context.
         
-        let doc = doc! {
+        let mut doc = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "name": &catalog.name,
             "properties": mongodb::bson::to_bson(&catalog.properties)?
         };
+        
+        // Add optional fields
+        if let Some(ref warehouse_name) = catalog.warehouse_name {
+            doc.insert("warehouse_name", warehouse_name);
+        }
+        if let Some(ref storage_location) = catalog.storage_location {
+            doc.insert("storage_location", storage_location);
+        }
+        
         self.db.collection::<Document>("catalogs").insert_one(doc).await?;
         Ok(())
     }
