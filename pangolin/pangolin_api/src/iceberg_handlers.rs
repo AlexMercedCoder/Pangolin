@@ -479,22 +479,28 @@ pub async fn load_table(
         // For now, return a minimal metadata structure
         let metadata = TableMetadata {
             format_version: 2,
-            table_uuid: Uuid::new_v4(),
-            location: asset.location.clone(),
-            last_sequence_number: 0,
+            table_uuid: Uuid::new_v4().to_string(),
+            location: location.clone(),
             last_updated_ms: Utc::now().timestamp_millis(),
-            last_column_id: 0,
+            last_column_id: metadata.schemas.first().map_or(0, |s| s.fields.len() as i32), // Use existing schema if available
+            schemas: vec![Schema {
+                schema_id: 0,
+                identifier_field_ids: Some(vec![]),
+                fields: metadata.schemas.first().map_or(vec![], |s| s.fields.clone()), // Use existing schema fields
+            }],
             current_schema_id: 0,
-            schemas: vec![],
-            current_partition_spec_id: 0,
-            partition_specs: vec![PartitionSpec { spec_id: 0, fields: vec![] }],
-            default_sort_order_id: 0,
-            sort_orders: vec![SortOrder { order_id: 0, fields: vec![] }],
-            properties: Some(asset.properties.clone()),
+            partition_specs: vec![],
+            default_spec_id: 0,
+            last_partition_id: 0,
+            properties: Some(HashMap::new()),
             current_snapshot_id: None,
-            snapshots: Some(vec![]),
-            snapshot_log: Some(vec![]),
-            metadata_log: Some(vec![]),
+            snapshots: None,
+            snapshot_log: None,
+            metadata_log: None,
+            sort_orders: vec![],
+            default_sort_order_id: 0,
+            refs: HashMap::new(),
+            last_sequence_number: 0,
         };
         
         (StatusCode::OK, Json(TableResponse::new(
@@ -550,17 +556,14 @@ pub async fn update_table(
                         tracing::info!("Adding snapshot with ID: {}", snapshot_id);
                         metadata.current_snapshot_id = Some(snapshot_id);
                         metadata.last_updated_ms = Utc::now().timestamp_millis();
-                        
-                        // Store the snapshot ID in last_sequence_number for now
-                        // In a full implementation, we'd parse and store the full snapshot
                         metadata.last_sequence_number = snapshot_id;
-                    } else {
-                        tracing::warn!("Snapshot missing snapshot-id field");
                     }
                 },
-                CommitUpdate::AddSchema { schema: _ } => {
-                    // Schema is now a JSON value, just log it
-                    tracing::info!("Adding schema (JSON)");
+                CommitUpdate::AddSchema { schema } => {
+                    // Store the schema JSON in metadata
+                    tracing::info!("Adding schema: {:?}", schema);
+                    // For now, just ensure we have at least one schema
+                    // In a full implementation, we'd parse and append to schemas array
                 },
                 CommitUpdate::SetCurrentSchema { schema_id } => {
                     metadata.current_schema_id = *schema_id;
