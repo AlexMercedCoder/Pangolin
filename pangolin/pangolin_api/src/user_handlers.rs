@@ -81,15 +81,17 @@ pub struct AppConfig {
 
 /// Create a new user
 pub async fn create_user(
-    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Json(req): Json<CreateUserRequest>,
 ) -> Response {
     // TODO: Check permissions - only root or tenant admin can create users
     
     // Hash password if provided
     let password_hash = if let Some(password) = req.password {
-        // TODO: Use bcrypt to hash password
-        Some(password) // Placeholder
+        match crate::auth_middleware::hash_password(&password) {
+            Ok(hash) => Some(hash),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password").into_response(),
+        }
     } else {
         None
     };
@@ -117,8 +119,10 @@ pub async fn create_user(
         }
     };
     
-    // TODO: Store user in database
-    // store.create_user(user).await?;
+    // Store user in database
+    if let Err(_) = store.create_user(user.clone()).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create user").into_response();
+    }
     
     (StatusCode::CREATED, Json(UserInfo::from(user))).into_response()
 }

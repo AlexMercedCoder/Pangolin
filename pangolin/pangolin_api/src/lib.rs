@@ -48,6 +48,14 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/tables/rename", post(iceberg_handlers::rename_table))
         // PyIceberg compatibility: it might append v1/config to a path that already includes v1/prefix
         .route("/v1/:prefix/v1/config", get(iceberg_handlers::config))
+        .route("/v1/:prefix/v1/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
+        .route("/v1/:prefix/v1/namespaces/:namespace", delete(iceberg_handlers::delete_namespace))
+        .route("/v1/:prefix/v1/namespaces/:namespace/properties", post(iceberg_handlers::update_namespace_properties))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables", get(iceberg_handlers::list_tables).post(iceberg_handlers::create_table))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table", get(iceberg_handlers::load_table).post(iceberg_handlers::update_table).delete(iceberg_handlers::delete_table).head(iceberg_handlers::table_exists))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/maintenance", post(iceberg_handlers::perform_maintenance))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/metrics", post(iceberg_handlers::report_metrics))
+        .route("/v1/:prefix/v1/tables/rename", post(iceberg_handlers::rename_table))
         // Pangolin Extended APIs
         .route("/api/v1/branches", get(pangolin_handlers::list_branches).post(pangolin_handlers::create_branch))
         .route("/api/v1/branches/merge", post(pangolin_handlers::merge_branch))

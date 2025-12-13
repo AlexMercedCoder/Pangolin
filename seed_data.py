@@ -1,6 +1,7 @@
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import NestedField, IntegerType, StringType
+import pyarrow as pa
 
 # Configure catalog
 catalog = load_catalog(

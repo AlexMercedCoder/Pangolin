@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Duration, Utc};
 use pangolin_core::user::{UserRole, UserSession};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 /// JWT claims
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -112,14 +113,65 @@ pub async fn auth_middleware(
             86400,
         );
         req.extensions_mut().insert(session);
+        // Also insert TenantId for NO_AUTH mode (default tenant)
+        let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+        req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
+        // In NO_AUTH mode, we are effectively root
+        req.extensions_mut().insert(crate::auth::RootUser);
+        req.extensions_mut().insert(crate::auth::RootUser);
         return next.run(req).await;
     }
+
+    // Whitelist public endpoints
+    let path = req.uri().path();
+    if path == "/api/v1/users/login" || 
+       path == "/api/v1/app-config" || 
+       path == "/v1/config" || 
+       path.ends_with("/config") {
+            return next.run(req).await;
+    }
     
-    // Extract token from Authorization header
+    // Extract token from Authorization header or check for Basic Auth
     let auth_header = req.headers()
         .get(header::AUTHORIZATION)
         .and_then(|h| h.to_str().ok());
     
+    // Check for Basic Auth first
+    if let Some(header_val) = auth_header {
+        if header_val.starts_with("Basic ") {
+            let token = &header_val[6..];
+            if let Ok(decoded) = STANDARD.decode(token) {
+                if let Ok(cred_str) = String::from_utf8(decoded) {
+                    if let Some((username, password)) = cred_str.split_once(':') {
+                        let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_default();
+                        let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_default();
+                        
+                        if !root_user.is_empty() && username == root_user && password == root_pass {
+                             // Create a root session
+                            let session = create_session(
+                                Uuid::nil(),
+                                "root".to_string(),
+                                None,
+                                UserRole::Root,
+                                3600, // 1 hour session for root ops
+                            );
+                            req.extensions_mut().insert(session);
+                            
+                            // Insert default tenant ID for root
+                            let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+                            req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
+                            
+                            // Insert RootUser extension
+                            req.extensions_mut().insert(crate::auth::RootUser);
+                            
+                            return next.run(req).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let token = match auth_header {
         Some(header) if header.starts_with("Bearer ") => {
             &header[7..]
@@ -159,7 +211,19 @@ pub async fn auth_middleware(
     }
     
     // Add session to request extensions
-    req.extensions_mut().insert(session);
+    req.extensions_mut().insert(session.clone());
+
+    // Inject TenantId for handlers that require it (like iceberg_handlers)
+    // If session has a tenant_id, use it. Otherwise default to the nil UUID (system/root)
+    let tenant_uuid = session.tenant_id.unwrap_or_else(|| {
+        Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
+    });
+    req.extensions_mut().insert(crate::auth::TenantId(tenant_uuid));
+    
+    // If role is Root, insert RootUser extension
+    if session.role == UserRole::Root {
+        req.extensions_mut().insert(crate::auth::RootUser);
+    }
     
     next.run(req).await
 }

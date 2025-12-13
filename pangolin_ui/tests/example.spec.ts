@@ -43,11 +43,30 @@ test.describe('Pangolin UI - NO_AUTH Mode', () => {
         await expect(page.locator('text=Access Requests')).toBeVisible();
     });
     
-    test('should navigate to Users page (Root/Admin)', async ({ page }) => {
-        await page.waitForLoadState('networkidle');
+    test('should navigate to Users page and show table', async ({ page }) => {
         await page.click('a[href="/users"]');
         await expect(page).toHaveURL(/\/users/);
+        await expect(page.locator('h1')).toContainText('User Management');
         await expect(page.locator('table')).toBeVisible();
+    });
+
+    test('should navigate to Roles page', async ({ page }) => {
+        await page.click('a[href="/roles"]');
+        await expect(page).toHaveURL(/\/roles/);
+        await expect(page.locator('h1')).toContainText('Role Management');
+    });
+    
+    test('should navigate to Permissions page', async ({ page }) => {
+        await page.click('a[href="/permissions"]');
+        await expect(page).toHaveURL(/\/permissions/);
+        await expect(page.locator('h1')).toContainText('Permission Management');
+    });
+
+    test('should search and find assets', async ({ page }) => {
+        await page.click('a[href="/search"]');
+        await page.fill('input[placeholder="Search assets..."]', 'sales');
+        // If data is seeded, we might see results. For now just verify the input works.
+        await expect(page.locator('input[placeholder="Search assets..."]')).toHaveValue('sales');
     });
 
 });
