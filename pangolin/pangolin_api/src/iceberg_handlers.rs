@@ -44,6 +44,7 @@ pub struct CreateNamespaceResponse {
 pub struct CreateTableRequest {
     name: String,
     location: Option<String>,
+    schema: Option<serde_json::Value>,  // Accept schema as JSON
     properties: Option<HashMap<String, String>>,
 }
 
@@ -199,6 +200,43 @@ pub async fn create_table(
     let table_uuid = Uuid::new_v4();
     let location = payload.location.unwrap_or_else(|| format!("s3://warehouse/{}/{}/{}", catalog_name, ns_vec.join("/"), tbl_name));
     
+    // Parse schema from payload if provided, otherwise create empty schema
+    let schema_fields = if let Some(schema_value) = &payload.schema {
+        // Try to parse fields from schema
+        if let Some(fields) = schema_value.get("fields").and_then(|f| f.as_array()) {
+            fields.iter().filter_map(|field| {
+                // Parse each field into NestedField
+                let id = field.get("id")?.as_i64()? as i32;
+                let name = field.get("name")?.as_str()?.to_string();
+                let required = field.get("required")?.as_bool()?;
+                let field_type_str = field.get("type")?.as_str()?;
+                
+                // Map type string to Type enum
+                let field_type = match field_type_str {
+                    "int" | "integer" => Type::Primitive("int".to_string()),
+                    "long" => Type::Primitive("long".to_string()),
+                    "string" => Type::Primitive("string".to_string()),
+                    "boolean" => Type::Primitive("boolean".to_string()),
+                    "float" => Type::Primitive("float".to_string()),
+                    "double" => Type::Primitive("double".to_string()),
+                    _ => Type::Primitive(field_type_str.to_string()),
+                };
+                
+                Some(NestedField {
+                    id,
+                    name,
+                    required,
+                    field_type,
+                    doc: None,
+                })
+            }).collect()
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    };
+    
     // Create initial TableMetadata with a valid schema
     let metadata = TableMetadata {
         format_version: 2,
@@ -206,12 +244,12 @@ pub async fn create_table(
         location: location.clone(),
         last_sequence_number: 0,
         last_updated_ms: Utc::now().timestamp_millis(),
-        last_column_id: 0,
+        last_column_id: schema_fields.iter().map(|f| f.id).max().unwrap_or(0),
         current_schema_id: 0,
         schemas: vec![Schema {
             schema_id: 0,
-            identifier_field_ids: None,
-            fields: vec![], // Empty schema for now - should parse from payload
+            identifier_field_ids: Some(vec![]),  // Empty array instead of None
+            fields: schema_fields,
         }],
         current_partition_spec_id: 0,
         partition_specs: vec![PartitionSpec { spec_id: 0, fields: vec![] }],
