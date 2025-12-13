@@ -36,6 +36,12 @@ pub async fn auth_middleware(
     mut request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // Whitelist: Allow public access to config endpoints (Iceberg REST spec requirement)
+    let path = request.uri().path().to_string();
+    if path == "/v1/config" || path.ends_with("/config") {
+        return Ok(next.run(request).await);
+    }
+    
     // 0. Check for Root User (Basic Auth)
     if let Some(auth_header) = headers.get("Authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
@@ -86,13 +92,23 @@ pub async fn auth_middleware(
     }
 
     // 2. Fallback: Check for X-Pangolin-Tenant header (Dev/Legacy)
+    tracing::debug!("Checking X-Pangolin-Tenant header for path: {}", path);
     if let Some(tenant_header) = headers.get("X-Pangolin-Tenant") {
+        tracing::debug!("Found X-Pangolin-Tenant header: {:?}", tenant_header);
         if let Ok(tenant_str) = tenant_header.to_str() {
+            tracing::debug!("Parsed tenant header value: {}", tenant_str);
             if let Ok(tenant_uuid) = Uuid::parse_str(tenant_str) {
+                tracing::info!("Successfully authenticated with tenant: {}", tenant_uuid);
                 request.extensions_mut().insert(TenantId(tenant_uuid));
                 return Ok(next.run(request).await);
+            } else {
+                tracing::warn!("Failed to parse tenant UUID from: {}", tenant_str);
             }
+        } else {
+            tracing::warn!("Failed to convert tenant header to string");
         }
+    } else {
+        tracing::debug!("No X-Pangolin-Tenant header found. Available headers: {:?}", headers.keys().collect::<Vec<_>>());
     }
     
     // 3. Fallback: Nil Tenant (Dev only, warn)

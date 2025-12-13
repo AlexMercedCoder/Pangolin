@@ -7,28 +7,37 @@ import os
 
 # Configuration
 WAREHOUSE_NAME = "main_warehouse"
-CATALOG_URI = f"http://localhost:8080/v1/{WAREHOUSE_NAME}"
+CATALOG_URI = "http://localhost:8080"
 WAREHOUSE_PATH = "s3://pangolin/data"
 TENANT_ID = "00000000-0000-0000-0000-000000000001"
 
 print(f"Connecting to Pangolin Catalog at {CATALOG_URI}...")
+print(f"Using tenant ID: {TENANT_ID}")
+print(f"Using warehouse: {WAREHOUSE_NAME}")
 
 # 1. Initialize Catalog
+# According to PyIceberg docs, headers are added via header.* prefix
+# and the warehouse parameter tells PyIceberg which prefix to use in URLs
 catalog = load_catalog(
     "pangolin",
     **{
+        "type": "rest",
         "uri": CATALOG_URI,
+        "warehouse": WAREHOUSE_NAME,
+        "header.X-Pangolin-Tenant": TENANT_ID,
         "s3.endpoint": "http://localhost:9000",
         "s3.access-key-id": "minioadmin",
         "s3.secret-access-key": "minioadmin",
         "py-io-impl": "pyiceberg.io.pyarrow.PyArrowFileIO",
         "s3.region": "us-east-1",
-        "header.X-Pangolin-Tenant": TENANT_ID,
     }
 )
 
+print(f"Catalog initialized: {catalog}")
+print(f"Catalog properties: {catalog.properties}")
+
 # 2. Create Namespace
-print("\nCreating namespace 'test_ns'...")
+print("\\nCreating namespace 'test_ns'...")
 try:
     catalog.create_namespace("test_ns")
     print("Namespace 'test_ns' created.")
@@ -42,7 +51,7 @@ schema = Schema(
 )
 
 table_name = "test_ns.my_table"
-print(f"\nCreating table '{table_name}'...")
+print(f"\\nCreating table '{table_name}'...")
 try:
     table = catalog.create_table(
         identifier=table_name,
@@ -60,21 +69,4 @@ except Exception as e:
         print(f"Could not load table: {load_e}")
         exit(1)
 
-# 4. Append Data (Requires PyArrow)
-# import pyarrow as pa
-# df = pa.Table.from_pylist([
-#     {"id": 1, "data": "hello"},
-#     {"id": 2, "data": "world"},
-# ], schema=schema.as_arrow())
-# 
-# print("\nAppending data...")
-# table.append(df)
-# print("Data appended.")
-
-# 5. Read Data
-# print("\nReading data...")
-# scan = table.scan()
-# result = scan.to_arrow()
-# print(result)
-
-print("\nVerification Complete!")
+print("\\nVerification Complete!")
