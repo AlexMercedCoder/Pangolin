@@ -61,18 +61,34 @@ pub struct TableResponse {
 
 impl TableResponse {
     pub fn new(metadata_location: Option<String>, metadata: TableMetadata) -> Self {
+        Self::with_credentials(metadata_location, metadata, None)
+    }
+    
+    pub fn with_credentials(
+        metadata_location: Option<String>, 
+        metadata: TableMetadata,
+        credentials: Option<(String, String)>, // (access_key, secret_key)
+    ) -> Self {
         // Add credential vending config to tell PyIceberg to request credentials
         let mut config = HashMap::new();
         
-        // Tell PyIceberg to vend credentials for this table
-        // This makes it call POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials
-        config.insert("vended-credentials-enabled".to_string(), "true".to_string());
-        
-        // Optionally add S3 endpoint
+        // Add S3 endpoint - PyIceberg needs this to know it should request credentials for S3
         if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
             config.insert("s3.endpoint".to_string(), endpoint);
         } else if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
             config.insert("s3.endpoint".to_string(), endpoint);
+        } else {
+            // Default to MinIO for development
+            config.insert("s3.endpoint".to_string(), "http://localhost:9000".to_string());
+        }
+        
+        // Add region
+        config.insert("s3.region".to_string(), "us-east-1".to_string());
+        
+        // Add vended credentials if provided
+        if let Some((access_key, secret_key)) = credentials {
+            config.insert("s3.access-key-id".to_string(), access_key);
+            config.insert("s3.secret-access-key".to_string(), secret_key);
         }
         
         Self {
@@ -332,12 +348,12 @@ pub async fn create_table(
         last_sequence_number: 0,
         last_updated_ms: Utc::now().timestamp_millis(),
         last_column_id: schema_fields.iter().map(|f| f.id).max().unwrap_or(0),
-        current_schema_id: 0,
         schemas: vec![Schema {
             schema_id: 0,
-            identifier_field_ids: Some(vec![]),  // Empty array instead of None
+            identifier_field_ids: Some(vec![]),
             fields: schema_fields,
         }],
+        current_schema_id: 0,
         current_partition_spec_id: 0,
         partition_specs: vec![PartitionSpec { spec_id: 0, fields: vec![] }],
         default_sort_order_id: 0,
@@ -403,9 +419,34 @@ pub async fn create_table(
                 Some(location.clone())
             )).await;
 
-            (StatusCode::OK, Json(TableResponse::new(
+            // Fetch warehouse credentials for credential vending
+            let credentials = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+                Ok(Some(catalog)) => {
+                    if let Some(warehouse_name) = catalog.warehouse_name {
+                        match store.get_warehouse(tenant_id, warehouse_name).await {
+                            Ok(Some(warehouse)) => {
+                                let access_key = warehouse.storage_config.get("access_key_id").cloned();
+                                let secret_key = warehouse.storage_config.get("secret_access_key").cloned();
+                                
+                                if let (Some(ak), Some(sk)) = (access_key, secret_key) {
+                                    Some((ak, sk))
+                                } else {
+                                    None
+                                }
+                            },
+                            _ => None
+                        }
+                    } else {
+                        None
+                    }
+                },
+                _ => None
+            };
+
+            (StatusCode::OK, Json(TableResponse::with_credentials(
                 Some(location.clone()),
                 metadata,
+                credentials,
             ))).into_response()
         },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
@@ -475,37 +516,35 @@ pub async fn load_table(
              }
         }
 
-        // For load_table, we should read the actual metadata file
-        // For now, return a minimal metadata structure
-        let metadata = TableMetadata {
-            format_version: 2,
-            table_uuid: Uuid::new_v4().to_string(),
-            location: location.clone(),
-            last_updated_ms: Utc::now().timestamp_millis(),
-            last_column_id: metadata.schemas.first().map_or(0, |s| s.fields.len() as i32), // Use existing schema if available
-            schemas: vec![Schema {
-                schema_id: 0,
-                identifier_field_ids: Some(vec![]),
-                fields: metadata.schemas.first().map_or(vec![], |s| s.fields.clone()), // Use existing schema fields
-            }],
-            current_schema_id: 0,
-            partition_specs: vec![],
-            default_spec_id: 0,
-            last_partition_id: 0,
-            properties: Some(HashMap::new()),
-            current_snapshot_id: None,
-            snapshots: None,
-            snapshot_log: None,
-            metadata_log: None,
-            sort_orders: vec![],
-            default_sort_order_id: 0,
-            refs: HashMap::new(),
-            last_sequence_number: 0,
+        // 4. Try to fetch warehouse credentials for credential vending
+        let credentials = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+            Ok(Some(catalog)) => {
+                if let Some(warehouse_name) = catalog.warehouse_name {
+                    match store.get_warehouse(tenant_id, warehouse_name).await {
+                        Ok(Some(warehouse)) => {
+                            let access_key = warehouse.storage_config.get("access_key_id").cloned();
+                            let secret_key = warehouse.storage_config.get("secret_access_key").cloned();
+                            
+                            if let (Some(ak), Some(sk)) = (access_key, secret_key) {
+                                Some((ak, sk))
+                            } else {
+                                None
+                            }
+                        },
+                        _ => None
+                    }
+                } else {
+                    None
+                }
+            },
+            _ => None
         };
-        
-        (StatusCode::OK, Json(TableResponse::new(
-            Some(location.clone()),
+
+        // Return the metadata with vended credentials if available
+        (StatusCode::OK, Json(TableResponse::with_credentials(
+            Some(location),
             metadata,
+            credentials,
         ))).into_response()
     } else {
         (StatusCode::NOT_FOUND, "Metadata location not found").into_response()
@@ -551,12 +590,34 @@ pub async fn update_table(
         for update in &payload.updates {
             match update {
                 CommitUpdate::AddSnapshot { snapshot } => {
-                    // Parse the snapshot JSON and extract snapshot-id
-                    if let Some(snapshot_id) = snapshot.get("snapshot-id").and_then(|v| v.as_i64()) {
-                        tracing::info!("Adding snapshot with ID: {}", snapshot_id);
-                        metadata.current_snapshot_id = Some(snapshot_id);
-                        metadata.last_updated_ms = Utc::now().timestamp_millis();
-                        metadata.last_sequence_number = snapshot_id;
+                    // Parse the full snapshot object
+                    match serde_json::from_value::<Snapshot>(snapshot.clone()) {
+                        Ok(snapshot_obj) => {
+                            tracing::info!("Adding snapshot with ID: {}", snapshot_obj.snapshot_id);
+                            
+                            // Add to snapshots array
+                            if let Some(ref mut snapshots) = metadata.snapshots {
+                                snapshots.push(snapshot_obj.clone());
+                            } else {
+                                metadata.snapshots = Some(vec![snapshot_obj.clone()]);
+                            }
+                            
+                            // Set as current snapshot
+                            metadata.current_snapshot_id = Some(snapshot_obj.snapshot_id);
+                            metadata.last_updated_ms = Utc::now().timestamp_millis();
+                            metadata.last_sequence_number = snapshot_obj.snapshot_id;
+                        },
+                        Err(e) => {
+                            tracing::error!("Failed to parse snapshot: {}", e);
+                            // Continue anyway - don't fail the whole commit
+                            // Just extract snapshot-id as fallback
+                            if let Some(snapshot_id) = snapshot.get("snapshot-id").and_then(|v| v.as_i64()) {
+                                tracing::warn!("Using fallback: only setting snapshot ID without full object");
+                                metadata.current_snapshot_id = Some(snapshot_id);
+                                metadata.last_updated_ms = Utc::now().timestamp_millis();
+                                metadata.last_sequence_number = snapshot_id;
+                            }
+                        }
                     }
                 },
                 CommitUpdate::AddSchema { schema } => {

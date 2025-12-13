@@ -1,0 +1,207 @@
+use super::*;
+use crate::signing_handlers::{StorageCredential, LoadCredentialsResponse};
+use crate::iceberg_handlers::TableResponse;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use serde_json::json;
+use std::collections::HashMap;
+
+#[test]
+fn test_static_credentials_response_format() {
+    // Test that static credentials are returned in correct format
+    let mut storage_config = HashMap::new();
+    storage_config.insert("access_key_id".to_string(), "test_access_key".to_string());
+    storage_config.insert("secret_access_key".to_string(), "test_secret_key".to_string());
+    storage_config.insert("bucket".to_string(), "test-bucket".to_string());
+    storage_config.insert("endpoint".to_string(), "http://localhost:9000".to_string());
+    storage_config.insert("region".to_string(), "us-east-1".to_string());
+    
+    let warehouse = pangolin_core::model::Warehouse {
+        id: uuid::Uuid::new_v4(),
+        name: "test_warehouse".to_string(),
+        tenant_id: uuid::Uuid::nil(),
+        use_sts: false,
+        storage_config,
+    };
+    
+    // Simulate the credential vending logic
+    let mut config = HashMap::new();
+    let access_key = warehouse.storage_config.get("access_key_id").cloned().unwrap();
+    let secret_key = warehouse.storage_config.get("secret_access_key").cloned().unwrap();
+    
+    config.insert("access-key".to_string(), access_key.clone());
+    config.insert("secret-key".to_string(), secret_key.clone());
+    config.insert("s3.endpoint".to_string(), warehouse.storage_config.get("endpoint").cloned().unwrap());
+    config.insert("s3.region".to_string(), warehouse.storage_config.get("region").cloned().unwrap());
+    
+    let storage_credential = StorageCredential {
+        prefix: "s3://test-bucket/".to_string(),
+        config: config.clone(),
+    };
+    
+    let response = LoadCredentialsResponse {
+        storage_credentials: vec![storage_credential],
+    };
+    
+    // Verify response structure
+    assert_eq!(response.storage_credentials.len(), 1);
+    assert_eq!(response.storage_credentials[0].prefix, "s3://test-bucket/");
+    assert_eq!(response.storage_credentials[0].config.get("access-key").unwrap(), "test_access_key");
+    assert_eq!(response.storage_credentials[0].config.get("secret-key").unwrap(), "test_secret_key");
+    assert_eq!(response.storage_credentials[0].config.get("s3.endpoint").unwrap(), "http://localhost:9000");
+    assert_eq!(response.storage_credentials[0].config.get("s3.region").unwrap(), "us-east-1");
+}
+
+#[test]
+fn test_sts_credentials_response_format() {
+    // Test that STS credentials include session token
+    let mut storage_config = HashMap::new();
+    storage_config.insert("role_arn".to_string(), "arn:aws:iam::123456789012:role/TestRole".to_string());
+    storage_config.insert("bucket".to_string(), "test-bucket".to_string());
+    
+    let warehouse = pangolin_core::model::Warehouse {
+        id: uuid::Uuid::new_v4(),
+        name: "test_warehouse_sts".to_string(),
+        tenant_id: uuid::Uuid::nil(),
+        use_sts: true,
+        storage_config,
+    };
+    
+    // Simulate STS credential vending logic
+    let mut config = HashMap::new();
+    let role_arn = warehouse.storage_config.get("role_arn").cloned().unwrap();
+    
+    config.insert("access-key".to_string(), format!("STS_ACCESS_KEY_FOR_{}", role_arn));
+    config.insert("secret-key".to_string(), "STS_SECRET_KEY_PLACEHOLDER".to_string());
+    config.insert("session-token".to_string(), "STS_SESSION_TOKEN_PLACEHOLDER".to_string());
+    
+    let storage_credential = StorageCredential {
+        prefix: "s3://test-bucket/".to_string(),
+        config: config.clone(),
+    };
+    
+    let response = LoadCredentialsResponse {
+        storage_credentials: vec![storage_credential],
+    };
+    
+    // Verify STS response includes session token
+    assert_eq!(response.storage_credentials.len(), 1);
+    assert!(response.storage_credentials[0].config.get("access-key").unwrap().contains("STS_ACCESS_KEY"));
+    assert_eq!(response.storage_credentials[0].config.get("secret-key").unwrap(), "STS_SECRET_KEY_PLACEHOLDER");
+    assert_eq!(response.storage_credentials[0].config.get("session-token").unwrap(), "STS_SESSION_TOKEN_PLACEHOLDER");
+}
+
+#[test]
+fn test_credentials_response_serialization() {
+    // Test that the response serializes to correct JSON format
+    let mut config = HashMap::new();
+    config.insert("access-key".to_string(), "AKIAIOSFODNN7EXAMPLE".to_string());
+    config.insert("secret-key".to_string(), "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string());
+    config.insert("s3.endpoint".to_string(), "http://localhost:9000".to_string());
+    config.insert("s3.region".to_string(), "us-east-1".to_string());
+    
+    let storage_credential = StorageCredential {
+        prefix: "s3://warehouse/".to_string(),
+        config,
+    };
+    
+    let response = LoadCredentialsResponse {
+        storage_credentials: vec![storage_credential],
+    };
+    
+    let json = serde_json::to_value(&response).unwrap();
+    
+    // Verify JSON structure matches Iceberg REST spec
+    assert!(json.get("storage-credentials").is_some());
+    assert!(json["storage-credentials"].is_array());
+    assert_eq!(json["storage-credentials"].as_array().unwrap().len(), 1);
+    
+    let cred = &json["storage-credentials"][0];
+    assert_eq!(cred["prefix"], "s3://warehouse/");
+    assert!(cred["config"].is_object());
+    assert_eq!(cred["config"]["access-key"], "AKIAIOSFODNN7EXAMPLE");
+    assert_eq!(cred["config"]["s3.endpoint"], "http://localhost:9000");
+}
+
+#[test]
+fn test_table_response_includes_credentials() {
+    // Test that TableResponse includes credentials in config
+    use crate::iceberg_handlers::TableResponse;
+    use pangolin_core::iceberg_metadata::TableMetadata;
+    
+    let metadata = TableMetadata {
+        format_version: 2,
+        table_uuid: uuid::Uuid::new_v4(),
+        location: "s3://warehouse/test/table".to_string(),
+        last_updated_ms: 0,
+        last_column_id: 0,
+        schemas: vec![],
+        current_schema_id: 0,
+        partition_specs: vec![],
+        current_partition_spec_id: 0,
+        properties: None,
+        current_snapshot_id: None,
+        snapshots: None,
+        snapshot_log: None,
+        metadata_log: None,
+        sort_orders: vec![],
+        default_sort_order_id: 0,
+        last_sequence_number: 0,
+    };
+    
+    let credentials = Some(("test_access_key".to_string(), "test_secret_key".to_string()));
+    
+    let response = TableResponse::with_credentials(
+        Some("s3://warehouse/test/table/metadata/v1.json".to_string()),
+        metadata,
+        credentials,
+    );
+    
+    // Verify credentials are in config
+    assert!(response.config.is_some());
+    let config = response.config.unwrap();
+    assert_eq!(config.get("s3.access-key-id").unwrap(), "test_access_key");
+    assert_eq!(config.get("s3.secret-access-key").unwrap(), "test_secret_key");
+    assert!(config.contains_key("s3.endpoint"));
+    assert!(config.contains_key("s3.region"));
+}
+
+#[test]
+fn test_table_response_without_credentials() {
+    // Test that TableResponse works without credentials (client-provided scenario)
+    use crate::iceberg_handlers::TableResponse;
+    use pangolin_core::iceberg_metadata::TableMetadata;
+    
+    let metadata = TableMetadata {
+        format_version: 2,
+        table_uuid: uuid::Uuid::new_v4(),
+        location: "s3://warehouse/test/table".to_string(),
+        last_updated_ms: 0,
+        last_column_id: 0,
+        schemas: vec![],
+        current_schema_id: 0,
+        partition_specs: vec![],
+        current_partition_spec_id: 0,
+        properties: None,
+        current_snapshot_id: None,
+        snapshots: None,
+        snapshot_log: None,
+        metadata_log: None,
+        sort_orders: vec![],
+        default_sort_order_id: 0,
+        last_sequence_number: 0,
+    };
+    
+    let response = TableResponse::new(
+        Some("s3://warehouse/test/table/metadata/v1.json".to_string()),
+        metadata,
+    );
+    
+    // Verify config exists but doesn't have credentials
+    assert!(response.config.is_some());
+    let config = response.config.unwrap();
+    assert!(!config.contains_key("s3.access-key-id"));
+    assert!(!config.contains_key("s3.secret-access-key"));
+    assert!(config.contains_key("s3.endpoint")); // Should still have endpoint
+    assert!(config.contains_key("s3.region")); // Should still have region
+}

@@ -10,13 +10,18 @@ use pangolin_store::CatalogStore;
 use crate::iceberg_handlers::AppState;
 use crate::auth::TenantId;
 use axum::Extension;
+use std::collections::HashMap;
 
 #[derive(Serialize)]
-pub struct CredentialsResponse {
-    pub access_key_id: String,
-    pub secret_access_key: String,
-    pub session_token: Option<String>,
-    pub expiration: Option<String>,
+pub struct StorageCredential {
+    pub prefix: String,
+    pub config: HashMap<String, String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct LoadCredentialsResponse {
+    pub storage_credentials: Vec<StorageCredential>,
 }
 
 #[derive(Deserialize)]
@@ -64,6 +69,13 @@ pub async fn get_table_credentials(
     };
     
     // 4. Vend credentials based on warehouse configuration
+    // Get the storage location prefix from the warehouse
+    let storage_location = warehouse.storage_config.get("bucket")
+        .map(|bucket| format!("s3://{}/", bucket))
+        .unwrap_or_else(|| "s3://warehouse/".to_string());
+    
+    let mut config = HashMap::new();
+    
     if warehouse.use_sts {
         // STS mode: Generate temporary credentials
         // For MVP, we'll return a placeholder indicating STS would be used
@@ -75,15 +87,10 @@ pub async fn get_table_credentials(
             .unwrap_or_else(|| "arn:aws:iam::123456789012:role/PangolinRole".to_string());
         
         // TODO: Implement actual STS AssumeRole call
-        // For now, return placeholder credentials
-        let resp = CredentialsResponse {
-            access_key_id: format!("STS_ACCESS_KEY_FOR_{}", role_arn),
-            secret_access_key: "STS_SECRET_KEY_PLACEHOLDER".to_string(),
-            session_token: Some("STS_SESSION_TOKEN_PLACEHOLDER".to_string()),
-            expiration: Some(chrono::Utc::now().checked_add_signed(chrono::Duration::hours(1)).unwrap().to_rfc3339()),
-        };
-        
-        (StatusCode::OK, Json(resp)).into_response()
+        config.insert("access-key".to_string(), format!("STS_ACCESS_KEY_FOR_{}", role_arn));
+        config.insert("secret-key".to_string(), "STS_SECRET_KEY_PLACEHOLDER".to_string());
+        config.insert("session-token".to_string(), "STS_SESSION_TOKEN_PLACEHOLDER".to_string());
+        config.insert("expiration".to_string(), chrono::Utc::now().checked_add_signed(chrono::Duration::hours(1)).unwrap().to_rfc3339());
     } else {
         // Static mode: Pass through credentials from warehouse
         let access_key = warehouse.storage_config.get("access_key_id")
@@ -97,15 +104,30 @@ pub async fn get_table_credentials(
             return (StatusCode::INTERNAL_SERVER_ERROR, "Warehouse has no credentials configured").into_response();
         }
         
-        let resp = CredentialsResponse {
-            access_key_id: access_key,
-            secret_access_key: secret_key,
-            session_token: None,
-            expiration: None,
-        };
-        
-        (StatusCode::OK, Json(resp)).into_response()
+        config.insert("access-key".to_string(), access_key);
+        config.insert("secret-key".to_string(), secret_key);
     }
+    
+    // Add S3 endpoint if configured
+    if let Some(endpoint) = warehouse.storage_config.get("endpoint") {
+        config.insert("s3.endpoint".to_string(), endpoint.clone());
+    }
+    
+    // Add region if configured
+    if let Some(region) = warehouse.storage_config.get("region") {
+        config.insert("s3.region".to_string(), region.clone());
+    }
+    
+    let storage_credential = StorageCredential {
+        prefix: storage_location,
+        config,
+    };
+    
+    let resp = LoadCredentialsResponse {
+        storage_credentials: vec![storage_credential],
+    };
+    
+    (StatusCode::OK, Json(resp)).into_response()
 }
 
 /// Get a presigned URL for a specific file location

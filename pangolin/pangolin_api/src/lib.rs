@@ -13,6 +13,14 @@ pub mod auth;
 pub mod signing_handlers;
 pub mod token_handlers;
 
+#[cfg(test)]
+#[path = "iceberg_handlers_test.rs"]
+mod iceberg_handlers_test;
+
+#[cfg(test)]
+#[path = "signing_handlers_test.rs"]
+mod signing_handlers_test;
+
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
     Router::new()
         .route("/v1/config", get(iceberg_handlers::config))
@@ -48,7 +56,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/namespaces/:namespace/views", post(asset_handlers::create_view))
         .route("/v1/:prefix/namespaces/:namespace/views/:view", get(asset_handlers::get_view))
         // Signing APIs
-        .route("/v1/:prefix/namespaces/:namespace/tables/:table/credentials", post(signing_handlers::get_table_credentials))
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table/credentials", get(signing_handlers::get_table_credentials))
         .route("/v1/:prefix/namespaces/:namespace/tables/:table/presign", get(signing_handlers::get_presigned_url))
         // Token Generation
         .route("/api/v1/tokens", post(token_handlers::generate_token))
