@@ -15,8 +15,8 @@ pub mod token_handlers;
 
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
     Router::new()
-        .route("/v1/config", get(get_config))
-        .route("/v1/:prefix/config", get(get_config))
+        .route("/v1/config", get(iceberg_handlers::config))
+        .route("/v1/:prefix/config", get(iceberg_handlers::config))
         .route("/v1/:prefix/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
         .route("/v1/:prefix/namespaces/:namespace", delete(iceberg_handlers::delete_namespace))
         .route("/v1/:prefix/namespaces/:namespace/properties", post(iceberg_handlers::update_namespace_properties))
@@ -54,8 +54,4 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/tokens", post(token_handlers::generate_token))
         .layer(axum::middleware::from_fn(auth::auth_middleware))
         .with_state(store)
-}
-
-async fn get_config() -> &'static str {
-    "{\"defaults\": {}, \"overrides\": {}}"
 }

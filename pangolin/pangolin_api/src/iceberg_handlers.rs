@@ -50,13 +50,39 @@ pub struct CreateTableRequest {
 
 #[derive(Serialize)]
 pub struct TableResponse {
-    name: String,
-    location: String,
-    properties: HashMap<String, String>,
-    metadata: TableMetadata,  // Required by Iceberg REST spec
+    #[serde(rename = "metadata-location")]
+    pub metadata_location: Option<String>,
+    pub metadata: TableMetadata,
+    // Config tells PyIceberg how to access the table's data
+    // Including credential vending configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+impl TableResponse {
+    pub fn new(metadata_location: Option<String>, metadata: TableMetadata) -> Self {
+        // Add credential vending config to tell PyIceberg to request credentials
+        let mut config = HashMap::new();
+        
+        // Tell PyIceberg to vend credentials for this table
+        // This makes it call POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials
+        config.insert("vended-credentials-enabled".to_string(), "true".to_string());
+        
+        // Optionally add S3 endpoint
+        if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+            config.insert("s3.endpoint".to_string(), endpoint);
+        } else if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
+            config.insert("s3.endpoint".to_string(), endpoint);
+        }
+        
+        Self {
+            metadata_location,
+            metadata,
+            config: Some(config),
+        }
+    }
+}
+#[derive(Serialize, Deserialize)]
 pub struct ListTablesResponse {
     identifiers: Vec<TableIdentifier>,
 }
@@ -135,6 +161,35 @@ pub async fn list_namespaces(
     }
 }
 
+pub async fn config(
+    prefix: Option<Path<String>>,
+) -> Json<serde_json::Value> {
+    // Return Iceberg REST catalog config
+    // Use X-Iceberg-Access-Delegation header to enable credential vending
+    let mut defaults = HashMap::new();
+    
+    // This header tells PyIceberg to request credentials via the vend-credentials endpoint
+    // PyIceberg will call POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials
+    defaults.insert("header.X-Iceberg-Access-Delegation".to_string(), "vended-credentials".to_string());
+    
+    // Optionally provide S3 endpoint if using MinIO or custom S3
+    if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+        defaults.insert("s3.endpoint".to_string(), endpoint);
+    } else if let Ok(endpoint) = std::env::var("AWS_ENDPOINT_URL") {
+        defaults.insert("s3.endpoint".to_string(), endpoint);
+    }
+    
+    // Add region if specified
+    if let Ok(region) = std::env::var("AWS_REGION") {
+        defaults.insert("s3.region".to_string(), region);
+    }
+    
+    Json(serde_json::json!({
+        "defaults": defaults,
+        "overrides": {}
+    }))
+}
+
 pub async fn create_namespace(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -208,17 +263,27 @@ pub async fn create_table(
                 // Parse each field into NestedField
                 let id = field.get("id")?.as_i64()? as i32;
                 let name = field.get("name")?.as_str()?.to_string();
-                let required = field.get("required")?.as_bool()?;
+                // PyArrow creates all fields as optional by default
+                // So we ignore the 'required' flag from the request and make everything optional
+                let required = false;  // Always optional to match PyArrow
                 let field_type_str = field.get("type")?.as_str()?;
                 
                 // Map type string to Type enum
+                // PyArrow uses int64 (long) by default for Python integers
+                // So we map both "int" and "integer" to "long" for compatibility
                 let field_type = match field_type_str {
-                    "int" | "integer" => Type::Primitive("int".to_string()),
+                    "int" | "integer" => Type::Primitive("long".to_string()),  // PyArrow uses int64
                     "long" => Type::Primitive("long".to_string()),
                     "string" => Type::Primitive("string".to_string()),
                     "boolean" => Type::Primitive("boolean".to_string()),
                     "float" => Type::Primitive("float".to_string()),
                     "double" => Type::Primitive("double".to_string()),
+                    "date" => Type::Primitive("date".to_string()),
+                    "time" => Type::Primitive("time".to_string()),
+                    "timestamp" => Type::Primitive("timestamp".to_string()),
+                    "timestamptz" => Type::Primitive("timestamptz".to_string()),
+                    "binary" => Type::Primitive("binary".to_string()),
+                    "uuid" => Type::Primitive("uuid".to_string()),
                     _ => Type::Primitive(field_type_str.to_string()),
                 };
                 
@@ -316,12 +381,10 @@ pub async fn create_table(
                 Some(location.clone())
             )).await;
 
-            (StatusCode::OK, Json(TableResponse {
-                name: asset.name.clone(),
-                location: asset.location.clone(),
-                properties: asset.properties.clone(),
-                metadata,  // Include the metadata we created
-            })).into_response()
+            (StatusCode::OK, Json(TableResponse::new(
+                Some(location.clone()),
+                metadata,
+            ))).into_response()
         },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
@@ -412,12 +475,10 @@ pub async fn load_table(
             metadata_log: Some(vec![]),
         };
         
-        (StatusCode::OK, Json(TableResponse {
-            name: asset.name,
-            location: asset.location,
-            properties: asset.properties,
+        (StatusCode::OK, Json(TableResponse::new(
+            Some(location.clone()),
             metadata,
-        })).into_response()
+        ))).into_response()
     } else {
         (StatusCode::NOT_FOUND, "Metadata location not found").into_response()
     }
@@ -493,12 +554,10 @@ pub async fn update_table(
         match store.update_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone(), Some(current_metadata_location.clone()), new_metadata_location.clone()).await {
             Ok(_) => {
                 // Success!
-                return (StatusCode::OK, Json(TableResponse {
-                    name: metadata.properties.as_ref().and_then(|p: &std::collections::HashMap<String, String>| p.get("name").cloned()).unwrap_or_default(),
-                    location: metadata.location.clone(),
-                    properties: metadata.properties.clone().unwrap_or_default(),
+                return (StatusCode::OK, Json(TableResponse::new(
+                    Some(new_metadata_location.clone()),
                     metadata,
-                })).into_response();
+                ))).into_response();
             },
             Err(_) => {
                 // CAS failed, retry
