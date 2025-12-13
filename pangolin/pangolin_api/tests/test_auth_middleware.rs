@@ -1,11 +1,10 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-    };
+    use hyper::{Body, Request, StatusCode};
     use tower::ServiceExt;
+    use pangolin_api::app;
+    use pangolin_store::CatalogStore;
     use pangolin_store::memory::MemoryStore;
     use std::sync::Arc;
 
@@ -55,7 +54,7 @@ mod tests {
         use chrono::Utc;
 
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = app(store);
 
         // Generate valid token
         let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
@@ -87,7 +86,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_bearer_token_rejected() {
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = app(store);
 
         let request = Request::builder()
             .method("GET")
@@ -107,7 +106,7 @@ mod tests {
         use chrono::Utc;
 
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = app(store);
 
         // Generate expired token
         let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
@@ -150,7 +149,7 @@ mod tests {
         };
         store.create_tenant(default_tenant).await.unwrap();
 
-        let app = crate::app(store);
+        let app = app(store);
 
         let request = Request::builder()
             .method("GET")
@@ -172,7 +171,7 @@ mod tests {
         std::env::set_var("PANGOLIN_ROOT_PASSWORD", "password");
 
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = app(store);
 
         let credentials = STANDARD.encode("admin:password");
 
@@ -198,7 +197,7 @@ mod tests {
         std::env::set_var("PANGOLIN_ROOT_PASSWORD", "password");
 
         let store = Arc::new(MemoryStore::new());
-        let app = crate::app(store);
+        let app = app(store);
 
         let credentials = STANDARD.encode("admin:wrongpassword");
 

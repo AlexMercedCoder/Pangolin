@@ -10,9 +10,12 @@ A branch is a named pointer to a specific state of your catalog.
 - **Feature Branches**: Short-lived branches for testing new schemas or data loads (e.g., `dev`, `feature/new-schema`).
 
 ### Partial Branching
-Unlike Git, where a branch copies the entire repository, Pangolin supports **Partial Branching**. You can create a branch that only tracks a subset of tables.
-- **Use Case**: You want to test a schema change on `users` table without duplicating the state of 1,000 other tables in your warehouse.
-- **Behavior**: When you create a branch with specific assets, only those assets are "forked". Other assets are not visible or accessible on that branch.
+Unlike Git, where a branch copies the entire repository, Pangolin supports **Partial Branching**.
+For details on permissions required for branching (Experimental vs. Ingest), see [Permissions System](../permissions.md).
+
+Pangolin supports advanced branching capabilities similar to Git, optimized for data lakes. You can create a branch that only tracks a subset of tables.
+- **Use Case**: You want to test a schema change on `users` table without effecting the state of 1,000 other tables in your warehouse.
+- **Behavior**: When you create a branch with specific assets, only those assets metadata entries are "forked". Other assets are not visible or accessible on that branch.
 
 ## Workflows
 
@@ -51,10 +54,10 @@ To read or write to a specific branch, append the `@branchName` suffix to the ta
 **SQL Example (if supported by engine):**
 `SELECT * FROM pangolin.data_team.users.branch_dev`
 
-### 3. Merging a Branch
-Merging applies changes from a source branch to a target branch.
-
-**Endpoint:** `POST /api/v1/branches/merge`
+### 3. Merging
+- **Merge**: Integrate changes from a feature branch back into `main`.
+- **Conflict Resolution**: Pangolin detects data conflicts (e.g., concurrent updates to the same partition).
+- **See [Merge Conflicts & Best Practices](merge_conflicts.md)** for details on how to avoid and resolve merge issues.
 
 **Payload:**
 ```json

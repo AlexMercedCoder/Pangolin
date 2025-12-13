@@ -10,6 +10,8 @@ use pangolin_store::CatalogStore;
 use pangolin_core::model::{Branch, BranchType};
 use uuid::Uuid;
 use crate::auth::TenantId;
+use pangolin_core::permission::{PermissionScope, Action};
+use pangolin_core::user::UserSession;
 
 // Placeholder for AppState
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
@@ -81,16 +83,38 @@ pub async fn list_branches(
 pub async fn create_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Json(payload): Json<CreateBranchRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = payload.catalog.as_deref().unwrap_or("default");
-    let from_branch = payload.from_branch.as_deref().unwrap_or("main");
     
+    // Resolve catalog ID for permission check
+    let catalog = match store.get_catalog(tenant_id, catalog_name.to_string()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+
     let b_type = match payload.branch_type.as_deref() {
         Some("ingest") => BranchType::Ingest,
         _ => BranchType::Experimental,
     };
+    
+    let required_action = match b_type {
+        BranchType::Ingest => Action::IngestBranching,
+        BranchType::Experimental => Action::ExperimentalBranching,
+    };
+
+    let scope = PermissionScope::Catalog { catalog_id: catalog.id };
+    
+    match crate::authz::check_permission(&store, &session, &required_action, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response(),
+    }
+
+    let from_branch = payload.from_branch.as_deref().unwrap_or("main");
 
     // Logic for partial branching:
     // 1. Create the branch object.
@@ -331,6 +355,7 @@ pub struct CreateCatalogRequest {
 
 #[derive(Serialize)]
 pub struct CatalogResponse {
+    id: Uuid,
     name: String,
     warehouse_name: Option<String>,
     storage_location: Option<String>,
@@ -340,6 +365,7 @@ pub struct CatalogResponse {
 impl From<pangolin_core::model::Catalog> for CatalogResponse {
     fn from(c: pangolin_core::model::Catalog) -> Self {
         Self {
+            id: c.id,
             name: c.name,
             warehouse_name: c.warehouse_name,
             storage_location: c.storage_location,
@@ -367,6 +393,7 @@ pub async fn create_catalog(
     Json(payload): Json<CreateCatalogRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
+    tracing::info!("create_catalog: tenant_id={}, catalog_name={}", tenant_id, payload.name);
     
     // Validate warehouse exists if specified
     if let Some(ref warehouse_name) = payload.warehouse_name {
@@ -378,7 +405,8 @@ pub async fn create_catalog(
     }
     
     let catalog = pangolin_core::model::Catalog {
-        name: payload.name.clone(),
+        id: Uuid::new_v4(),
+        name: payload.name,
         warehouse_name: payload.warehouse_name,
         storage_location: payload.storage_location,
         properties: payload.properties.unwrap_or_default(),

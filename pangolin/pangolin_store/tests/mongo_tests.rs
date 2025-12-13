@@ -31,6 +31,7 @@ async fn test_mongo_store_flow() {
 
     // 2. Create Catalog
     let catalog = Catalog {
+        id: Uuid::new_v4(),
         name: "test_catalog".to_string(),
         warehouse_name: None,
         storage_location: None,
@@ -47,9 +48,10 @@ async fn test_mongo_store_flow() {
 
     // 4. Create Asset
     let asset = Asset {
+        id: Uuid::new_v4(),
         name: "test_table".to_string(),
         kind: AssetType::IcebergTable,
-        location: "s3://bucket/path".to_string(),
+        location: "s3://bucket/test".to_string(),
         properties: HashMap::new(),
     };
     store.create_asset(tenant_id, "test_catalog", None, namespace.name.clone(), asset.clone()).await.expect("Failed to create asset");

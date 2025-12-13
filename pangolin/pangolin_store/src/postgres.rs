@@ -158,6 +158,7 @@ impl CatalogStore for PostgresStore {
 
         if let Some(row) = row {
             Ok(Some(Catalog {
+                id: Uuid::new_v4(), // Placeholder until schema update
                 name: row.get("name"),
                 warehouse_name: row.try_get("warehouse_name").ok(),
                 storage_location: row.try_get("storage_location").ok(),
@@ -177,6 +178,7 @@ impl CatalogStore for PostgresStore {
         let mut catalogs = Vec::new();
         for row in rows {
             catalogs.push(Catalog {
+                id: Uuid::new_v4(), // Placeholder until schema update
                 name: row.get("name"),
                 warehouse_name: row.try_get("warehouse_name").ok(),
                 storage_location: row.try_get("storage_location").ok(),

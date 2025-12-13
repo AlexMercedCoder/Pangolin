@@ -5,8 +5,10 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
-    use tower::ServiceExt;
-    use pangolin_store::memory::MemoryStore;
+    use hyper; // For hyper::body::to_bytes
+    use tower::ServiceExt; // for oneshot
+    use pangolin_api::app;
+    use pangolin_store::{memory::MemoryStore, CatalogStore};
     use std::sync::Arc;
 
     #[tokio::test]

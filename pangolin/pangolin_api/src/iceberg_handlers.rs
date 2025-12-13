@@ -195,11 +195,26 @@ pub fn parse_table_identifier(identifier: &str) -> (String, Option<String>) {
 pub async fn list_namespaces(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path(prefix): Path<String>,
     Query(params): Query<ListNamespaceParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    tracing::info!("list_namespaces: tenant_id={}, catalog_name={}", tenant_id, catalog_name);
+    
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+
+    // Check Permissions (List Namespace requires List on Catalog)
+    let scope = PermissionScope::Catalog { catalog_id: catalog.id };
+    if let Err(e) = check_permission(&store, &session, &scope, Action::List).await {
+         return (e, "Forbidden").into_response();
+    }
     
     match store.list_namespaces(tenant_id, &catalog_name, params.parent).await {
         Ok(namespaces) => {
@@ -242,11 +257,26 @@ pub async fn config(
 pub async fn create_namespace(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path(prefix): Path<String>,
     Json(payload): Json<CreateNamespaceRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
+    // Check Permissions (Create Namespace requires Create on Catalog)
+    let scope = PermissionScope::Catalog { catalog_id: catalog.id };
+    if let Err(e) = check_permission(&store, &session, &scope, Action::Create).await {
+         return (e, "Forbidden").into_response();
+    }
+
     let ns = Namespace {
         name: payload.namespace.clone(),
         properties: payload.properties.unwrap_or_default(),
@@ -264,12 +294,27 @@ pub async fn create_namespace(
 pub async fn list_tables(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
     
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
     let (ns_name, branch) = parse_table_identifier(&namespace);
+    
+    // Check Permissions (List Tables requires List on Namespace)
+    let scope = PermissionScope::Namespace { catalog_id: catalog.id, namespace: ns_name.clone() };
+    if let Err(e) = check_permission(&store, &session, &scope, Action::List).await {
+         return (e, "Forbidden").into_response();
+    }
+    
     let ns_vec = vec![ns_name];
 
     match store.list_assets(tenant_id, &catalog_name, branch, ns_vec.clone()).await {
@@ -287,6 +332,7 @@ pub async fn list_tables(
 pub async fn create_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
     Query(params): Query<HashMap<String, String>>,
     Json(payload): Json<CreateTableRequest>,
@@ -294,10 +340,23 @@ pub async fn create_table(
     let tenant_id = tenant.0;
     let catalog_name = prefix;
     
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
     let (tbl_name, branch_from_name) = parse_table_identifier(&payload.name);
     let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
     let branch_from_query = params.get("branch").cloned();
     let branch = branch_from_name.or(branch_from_ns).or(branch_from_query);
+    
+    // Check Permissions (Create Table requires Create on Namespace)
+    let scope = PermissionScope::Namespace { catalog_id: catalog.id, namespace: ns_name.clone() };
+    if let Err(e) = check_permission(&store, &session, &scope, Action::Create).await {
+         return (e, "Forbidden").into_response();
+    }
     
     let ns_vec = vec![ns_name];
 
@@ -468,11 +527,19 @@ pub async fn create_table(
 pub async fn load_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace, table)): Path<(String, String, String)>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
     
     let (tbl_name, branch_from_name) = parse_table_identifier(&table);
     let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
@@ -486,6 +553,17 @@ pub async fn load_table(
         Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     };
+    
+    // Check Permissions (Load Table requires Read on Asset)
+    let scope = PermissionScope::Asset { 
+        catalog_id: catalog.id, 
+        namespace: ns_vec.join("."), 
+        asset_id: asset.id 
+    };
+    
+    if let Err(e) = check_permission(&store, &session, &scope, Action::Read).await {
+         return (e, "Forbidden").into_response();
+    }
 
     let current_metadata_location = asset.properties.get("metadata_location").cloned();
 
@@ -566,14 +644,41 @@ pub async fn load_table(
 pub async fn update_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace, table)): Path<(String, String, String)>,
     Json(payload): Json<CommitTableRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+
     let (table_name, branch_from_name) = parse_table_identifier(&table);
     let branch = branch_from_name.unwrap_or("main".to_string());
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    
+    // Check Permissions (Update Table requires Write on Asset)
+    // Need asset ID
+    let asset = match store.get_asset(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone()).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
+    let scope = PermissionScope::Asset { 
+        catalog_id: catalog.id, 
+        namespace: namespace_parts.join("."), 
+        asset_id: asset.id 
+    };
+    
+    if let Err(e) = check_permission(&store, &session, &scope, Action::Write).await {
+         return (e, "Forbidden").into_response();
+    }
 
     // Retry loop for OCC
     let mut retries = 0;
@@ -581,6 +686,10 @@ pub async fn update_table(
 
     while retries < MAX_RETRIES {
         // 1. Load current metadata location
+        // We already have asset from above check, but for correctness in CAS loop we might want to re-fetch if location changes?
+        // update_metadata_location takes old location.
+        // Actually, we can reuse `asset` for the first try, but if it loops we need to reload.
+        // Or simpler: just use get_metadata_location as before.
         let current_metadata_location = match store.get_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone()).await {
             Ok(Some(loc)) => loc,
             Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
@@ -685,6 +794,7 @@ pub struct RenameTableRequest {
 pub async fn rename_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path(prefix): Path<String>,
     Json(payload): Json<RenameTableRequest>,
 ) -> impl IntoResponse {
@@ -710,13 +820,40 @@ pub async fn rename_table(
 pub async fn delete_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace, table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
     let (table_name, branch_from_name) = parse_table_identifier(&table);
     let branch = branch_from_name.or(Some("main".to_string()));
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    
+    // Check Permissions (Delete Table requires Delete on Asset)
+    // Need asset ID
+    let asset = match store.get_asset(tenant_id, &catalog_name, branch.clone(), namespace_parts.clone(), table_name.clone()).await {
+        Ok(Some(a)) => a,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
+    let scope = PermissionScope::Asset { 
+        catalog_id: catalog.id, 
+        namespace: namespace_parts.join("."), 
+        asset_id: asset.id 
+    };
+    
+    if let Err(e) = check_permission(&store, &session, &scope, Action::Delete).await {
+         return (e, "Forbidden").into_response();
+    }
 
     match store.delete_asset(tenant_id, &catalog_name, branch, namespace_parts, table_name).await {
         Ok(_) => {
@@ -738,11 +875,30 @@ pub async fn delete_table(
 pub async fn delete_namespace(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    
+    // Check Permissions (Delete Namespace)
+    let scope = PermissionScope::Namespace { 
+        catalog_id: catalog.id, 
+        namespace: namespace_parts.join(".") 
+    };
+    
+    if let Err(e) = check_permission(&store, &session, &scope, Action::Delete).await {
+         return (e, "Forbidden").into_response();
+    }
 
     match store.delete_namespace(tenant_id, &catalog_name, namespace_parts).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -766,6 +922,7 @@ pub struct UpdateNamespacePropertiesResponse {
 pub async fn update_namespace_properties(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
     Json(payload): Json<UpdateNamespacePropertiesRequest>,
 ) -> impl IntoResponse {
@@ -798,6 +955,31 @@ pub async fn report_metrics(
     tracing::info!("Received metrics report");
     StatusCode::NO_CONTENT
 }
+
+// -------------------------------------------------------------------------------
+// Permission Helper
+// -------------------------------------------------------------------------------
+
+use pangolin_core::permission::{Action, PermissionScope};
+use pangolin_core::user::{UserRole, UserSession};
+
+// Permission Helper (Delegates to shared authz)
+async fn check_permission(
+    store: &AppState,
+    session: &UserSession,
+    required_scope: &PermissionScope,
+    required_action: Action
+) -> Result<(), StatusCode> {
+    match crate::authz::check_permission(store, session, &required_action, required_scope).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(StatusCode::FORBIDDEN),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+
+
+
 
 #[derive(Debug, Deserialize)]
 pub struct MaintenanceRequest {

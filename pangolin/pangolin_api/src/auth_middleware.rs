@@ -127,7 +127,9 @@ pub async fn auth_middleware(
     if path == "/api/v1/users/login" || 
        path == "/api/v1/app-config" || 
        path == "/v1/config" || 
-       path.ends_with("/config") {
+       path.ends_with("/config") ||
+       path.starts_with("/oauth/authorize/") ||
+       path.starts_with("/oauth/callback/") {
             return next.run(req).await;
     }
     

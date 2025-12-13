@@ -20,6 +20,7 @@ pub struct Warehouse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
+    pub id: Uuid, // Added ID for permission scoping
     pub name: String,
     pub warehouse_name: Option<String>, // Reference to warehouse for credential vending
     pub storage_location: Option<String>, // Base path for this catalog in the warehouse

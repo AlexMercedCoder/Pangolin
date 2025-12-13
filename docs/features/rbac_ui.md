@@ -2,6 +2,10 @@
 
 Pangolin implements a comprehensive RBAC system to manage access to catalogs, namespaces, and assets. The system is built on a 3-tier permission model combined with granular, dynamic roles.
 
+For a high-level overview of the permission system, see [Permissions System](../permissions.md) and [Authentication](../authentication.md).
+
+This document details the **User Interface** aspects of managing Roles and Users in Pangolin.
+
 ## 3-Tier Permission Model
 
 The core authorization hierarchy consists of three main user roles:

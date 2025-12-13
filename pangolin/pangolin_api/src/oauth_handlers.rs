@@ -11,6 +11,7 @@ use pangolin_core::auth::OAuthConfig;
 use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use crate::auth_middleware::{create_session, generate_token};
+use base64::Engine;
 
 /// OAuth callback query parameters
 #[derive(Debug, Deserialize)]
@@ -27,10 +28,16 @@ pub struct OAuthUserInfo {
     pub name: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct AuthorizeParams {
+    pub redirect_uri: Option<String>,
+}
+
 /// Initiate OAuth flow
 pub async fn oauth_authorize(
     State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Path(provider): Path<String>,
+    Query(params): Query<AuthorizeParams>,
 ) -> Response {
     let oauth_config = get_oauth_config(&provider);
     
@@ -41,7 +48,7 @@ pub async fn oauth_authorize(
     let config = oauth_config.unwrap();
     
     // Build authorization URL
-    let auth_url = build_auth_url(&config);
+    let auth_url = build_auth_url(&config, params.redirect_uri);
     
     // Redirect to OAuth provider
     Redirect::to(&auth_url).into_response()
@@ -166,13 +173,24 @@ pub async fn oauth_callback(
     };
 
     // 6. Return response (Redirect to frontend with token)
-    // In a real SPA, we'd redirect to e.g. /auth/callback?token=...
-    // For now, let's return JSON for testing
-    // Or redirect if a redirect_uri query param was passed (state?)
+    // Extract redirect_uri from state
+    let frontend_url = if let Some(state_str) = callback.state {
+        // Try to decode state as JSON
+        if let Ok(decoded) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(&state_str) {
+             if let Ok(state_json) = serde_json::from_slice::<serde_json::Value>(&decoded) {
+                 state_json.get("redirect_uri").and_then(|s| s.as_str()).map(|s| s.to_string())
+             } else { None }
+        } else { None }
+    } else { None };
+
+    let base_url = frontend_url.unwrap_or_else(|| std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string()));
     
-    // Let's assume a frontend URL from env or default
-    let frontend_url = std::env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
-    let redirect_url = format!("{}/auth/callback?token={}", frontend_url, token);
+    // Append token to URL (handling query params)
+    let redirect_url = if base_url.contains('?') {
+        format!("{}&token={}", base_url, token)
+    } else {
+        format!("{}?token={}", base_url, token)
+    };
     
     Redirect::to(&redirect_url).into_response()
 }
@@ -212,9 +230,16 @@ fn get_oauth_config(provider: &str) -> Option<OAuthConfig> {
 }
 
 /// Build OAuth authorization URL
-fn build_auth_url(config: &OAuthConfig) -> String {
+fn build_auth_url(config: &OAuthConfig, client_redirect: Option<String>) -> String {
     let scopes = config.scopes.join(" ");
-    let state = Uuid::new_v4().to_string(); // TODO: Store state for CSRF protection
+    
+    // Create state JSON with nonce and redirect_uri
+    let state_data = serde_json::json!({
+        "nonce": Uuid::new_v4().to_string(),
+        "redirect_uri": client_redirect
+    });
+    
+    let state = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(state_data.to_string());
     
     format!(
         "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}",

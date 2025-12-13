@@ -1,6 +1,9 @@
 # Tag Management
 
-Pangolin supports tagging commits to mark specific points in history, such as releases or stable versions.
+For details on configured Tag-Based Access Control policies, see [Permissions System](../permissions.md).
+
+Tags allow for categorical organization and security governance of assets.
+ory, such as releases or stable versions.
 
 ## Data Model
 

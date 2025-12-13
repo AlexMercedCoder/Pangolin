@@ -8,10 +8,10 @@ mod tests {
     use tower::ServiceExt;
     use pangolin_store::memory::MemoryStore;
     use pangolin_store::CatalogStore;
+    use pangolin_api::{app, auth::Claims};
     use std::sync::Arc;
     use tokio::sync::RwLock;
     use jsonwebtoken::{encode, EncodingKey, Header};
-    use crate::auth::Claims;
     use chrono::Utc;
 
     fn create_test_token(tenant_id: &str) -> String {
@@ -54,14 +54,15 @@ mod tests {
         store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
 
         let catalog = pangolin_core::model::Catalog {
-            name: "analytics".to_string(),
-            warehouse_name: "test_warehouse".to_string(),
-            storage_location: "memory://test".to_string(),
+            id: Uuid::new_v4(),
+            name: "default".to_string(),
+            warehouse_name: Some("test_wh".to_string()),
+            storage_location: Some("s3://bucket/test".to_string()),
             properties: std::collections::HashMap::new(),
         };
         store.create_catalog(tenant_id, catalog).await.unwrap();
 
-        let app = crate::app(store);
+        let app = app(store);
 
         let token = create_test_token("00000000-0000-0000-0000-000000000001");
 
@@ -111,7 +112,7 @@ mod tests {
         };
         store.create_tenant(tenant).await.unwrap();
 
-        let app = crate::app(store);
+        let app = app(store);
 
         // First create a table, then load it
         let create_request = Request::builder()
@@ -167,7 +168,7 @@ mod tests {
         };
         store.create_tenant(tenant).await.unwrap();
 
-        let app = crate::app(store);
+        let app = app(store);
 
         let request = Request::builder()
             .method("POST")

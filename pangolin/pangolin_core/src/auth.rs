@@ -48,9 +48,12 @@ impl OAuthConfig {
     pub fn google(client_id: String, client_secret: String, redirect_uri: String) -> Self {
         Self {
             provider: OAuthProviderConfig::Google {
-                auth_url: "https://accounts.google.com/o/oauth2/v2/auth".to_string(),
-                token_url: "https://oauth2.googleapis.com/token".to_string(),
-                userinfo_url: "https://www.googleapis.com/oauth2/v2/userinfo".to_string(),
+                auth_url: std::env::var("OAUTH_GOOGLE_AUTH_URL")
+                    .unwrap_or_else(|_| "https://accounts.google.com/o/oauth2/v2/auth".to_string()),
+                token_url: std::env::var("OAUTH_GOOGLE_TOKEN_URL")
+                    .unwrap_or_else(|_| "https://oauth2.googleapis.com/token".to_string()),
+                userinfo_url: std::env::var("OAUTH_GOOGLE_USERINFO_URL")
+                    .unwrap_or_else(|_| "https://www.googleapis.com/oauth2/v2/userinfo".to_string()),
             },
             client_id,
             client_secret,
@@ -73,15 +76,12 @@ impl OAuthConfig {
         Self {
             provider: OAuthProviderConfig::Microsoft {
                 tenant_id: tenant_id.clone(),
-                auth_url: format!(
-                    "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize",
-                    tenant_id
-                ),
-                token_url: format!(
-                    "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
-                    tenant_id
-                ),
-                userinfo_url: "https://graph.microsoft.com/v1.0/me".to_string(),
+                auth_url: std::env::var("OAUTH_MICROSOFT_AUTH_URL")
+                    .unwrap_or_else(|_| format!("https://login.microsoftonline.com/{}/oauth2/v2.0/authorize", tenant_id)),
+                token_url: std::env::var("OAUTH_MICROSOFT_TOKEN_URL")
+                    .unwrap_or_else(|_| format!("https://login.microsoftonline.com/{}/oauth2/v2.0/token", tenant_id)),
+                userinfo_url: std::env::var("OAUTH_MICROSOFT_USERINFO_URL")
+                    .unwrap_or_else(|_| "https://graph.microsoft.com/oidc/userinfo".to_string()),
             },
             client_id,
             client_secret,
@@ -98,9 +98,12 @@ impl OAuthConfig {
     pub fn github(client_id: String, client_secret: String, redirect_uri: String) -> Self {
         Self {
             provider: OAuthProviderConfig::GitHub {
-                auth_url: "https://github.com/login/oauth/authorize".to_string(),
-                token_url: "https://github.com/login/oauth/access_token".to_string(),
-                userinfo_url: "https://api.github.com/user".to_string(),
+                auth_url: std::env::var("OAUTH_GITHUB_AUTH_URL")
+                    .unwrap_or_else(|_| "https://github.com/login/oauth/authorize".to_string()),
+                token_url: std::env::var("OAUTH_GITHUB_TOKEN_URL")
+                    .unwrap_or_else(|_| "https://github.com/login/oauth/access_token".to_string()),
+                userinfo_url: std::env::var("OAUTH_GITHUB_USERINFO_URL")
+                    .unwrap_or_else(|_| "https://api.github.com/user".to_string()),
             },
             client_id,
             client_secret,

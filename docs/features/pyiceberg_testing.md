@@ -137,49 +137,69 @@ tables = catalog.list_tables("test_namespace")
 print(f"✓ Tables: {tables}")
 ```
 
-## Testing with Bearer Token Authentication
 
-For production testing with authentication:
+## Authentication
 
-### Step 1: Generate Token
+Pangolin supports both **OAuth 2.0** and **Basic Authentication**.
 
-```bash
-curl -X POST http://localhost:8080/api/v1/tokens \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant_id": "00000000-0000-0000-0000-000000000001",
-    "username": "test-user",
-    "expires_in_hours": 24
-  }'
-```
+> **Note**: For detailed configuration of OAuth providers (Google, GitHub, etc.), please see [Authentication](../authentication.md).
 
-### Step 2: Use Token
+### Option 1: Using an OAuth Token (Recommended)
+
+After logging in via the UI/OAuth flow, you can use your JWT token directly.
 
 ```python
-import jwt
-import datetime
 from pyiceberg.catalog import load_catalog
 
-def generate_token(tenant_id: str, secret: str = "secret") -> str:
-    """Generate JWT token with tenant_id"""
-    payload = {
-        "sub": "test-user",
-        "tenant_id": tenant_id,
-        "roles": ["User"],
-        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=24)
-    }
-    return jwt.encode(payload, secret, algorithm="HS256")
-
-# Generate token
-token = generate_token("00000000-0000-0000-0000-000000000001")
-
-# Connect with token
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "http://localhost:8080",
-        "prefix": "analytics",
-        "token": token,  # Bearer token authentication
+        "uri": "http://localhost:8080/iceberg/default", # 'default' is the catalog name
+        "type": "rest",
+        "token": "YOUR_JWT_TOKEN",            # Token from UI or OAuth callback
+        # No S3 keys needed if Credential Vending is active
+    }
+)
+```
+
+### Option 2: Basic Authentication (Root User Only)
+
+**Only the Root User** can use the `credential` parameter directly. Standard Tenant Users must use a Token (Option 1).
+
+```python
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "http://localhost:8080/iceberg/default",
+        "type": "rest",
+        "credential": "root_user:root_password",
+    }
+)
+```
+
+## Obtaining a Token (for Scripts/Service Accounts)
+
+For automated scripts acting as a Tenant User ("Service Account"), you must programmically exchange your credentials for a token before initializing the catalog.
+
+```python
+import requests
+from pyiceberg.catalog import load_catalog
+
+# 1. Login to get Token
+response = requests.post("http://localhost:8080/api/v1/users/login", json={
+    "username": "my-service-account",
+    "password": "my-secure-password",
+    "tenant_id": "00000000-0000-0000-0000-000000000001" # Optional if user unique
+})
+token = response.json()["token"]
+
+# 2. Use Token
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "http://localhost:8080/iceberg/default",
+        "type": "rest",
+        "token": token
     }
 )
 ```

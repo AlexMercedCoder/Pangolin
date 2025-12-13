@@ -12,7 +12,7 @@ pub async fn check_permission(
 ) -> Result<bool> {
     
     use pangolin_core::user::UserRole as RoleEnum;
-
+    
     // 1. Root User - Global Access
     if session.role == RoleEnum::Root {
         return Ok(true);
@@ -44,10 +44,13 @@ pub async fn check_permission(
     // 3. Fetch Assigned Roles
     let user_roles = store.get_user_roles(session.user_id).await?;
     
-    for user_role in user_roles {
+    for user_role in &user_roles {
         if let Some(role) = store.get_role(user_role.role_id).await? {
             for grant in role.permissions {
-                if grant.scope.covers(scope) && grant.actions.iter().any(|a| a.implies(action)) {
+                // Determine if grant allows
+                let grant_allows_action = grant.actions.iter().any(|a| a.implies(action));
+                
+                if grant.scope.covers(scope) && grant_allows_action {
                     return Ok(true);
                 }
             }
@@ -56,12 +59,40 @@ pub async fn check_permission(
     
     // 4. Fetch Direct Permissions
     let direct_perms = store.list_user_permissions(session.user_id).await?;
-    for perm in direct_perms {
+    for perm in &direct_perms {
         if perm.scope.covers(scope) && perm.actions.iter().any(|a| a.implies(action)) {
              return Ok(true);
         }
     }
     
+    // 5. Tag-based Permissions (If required scope is Asset)
+    if let PermissionScope::Asset { catalog_id: _, namespace: _, asset_id } = scope {
+        if let Ok(Some(metadata)) = store.get_business_metadata(*asset_id).await {
+             for tag in metadata.tags {
+                 let tag_scope = PermissionScope::Tag { tag_name: tag };
+                 
+                 // Check if user has permission on this Tag Scope
+                 // 1. Direct
+                for perm in &direct_perms {
+                    if perm.scope.covers(&tag_scope) && perm.actions.iter().any(|a| a.implies(action)) {
+                        return Ok(true);
+                    }
+                }
+                
+                // 2. Role
+                 for user_role in &user_roles {
+                    if let Ok(Some(role)) = store.get_role(user_role.role_id).await {
+                        for grant in role.permissions {
+                             if grant.scope.covers(&tag_scope) && grant.actions.iter().any(|a| a.implies(action)) {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+             }
+        }
+    }
+
     Ok(false)
 }
 
@@ -131,5 +162,80 @@ mod tests {
         
         // 8. Check Write (Should NOW Pass)
         assert!(check_permission(&store, &session, &write_action, &scope_ns).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_branch_and_tag_permissions() {
+        let store_impl = MemoryStore::new();
+        let store: Arc<dyn CatalogStore + Send + Sync> = Arc::new(store_impl);
+        
+        let tenant_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        
+        let session = UserSession {
+            user_id,
+            tenant_id: Some(tenant_id),
+            role: UserRoleEnum::TenantUser,
+            username: "test_user".to_string(),
+            issued_at: chrono::Utc::now(),
+            expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        };
+        
+        // --- Branch Permission Test ---
+        let branch_action = Action::ExperimentalBranching; // Use actual action checked by handler
+        let scope_branch = PermissionScope::Catalog { 
+            catalog_id 
+        };
+        
+        // Fail initially
+        assert!(!check_permission(&store, &session, &branch_action, &scope_branch).await.unwrap());
+        
+        // Grant Branch Permission (on Catalog)
+        let mut role = Role::new("BranchManager".to_string(), None, tenant_id, Uuid::new_v4());
+        let mut actions = HashSet::new();
+        actions.insert(Action::ExperimentalBranching);
+        role.add_permission(scope_branch.clone(), actions);
+        store.create_role(role.clone()).await.unwrap();
+        
+        // Assign Role
+        let user_role = UserRoleStruct::new(user_id, role.id, Uuid::new_v4());
+        store.assign_role(user_role).await.unwrap();
+        
+        // Pass
+        assert!(check_permission(&store, &session, &branch_action, &scope_branch).await.unwrap());
+        
+        // --- Tag Permission Test ---
+        let asset_id = Uuid::new_v4();
+        let scope_asset = PermissionScope::Asset { 
+            catalog_id, 
+            namespace: "finance".to_string(), 
+            asset_id 
+        };
+        let read_action = Action::Read;
+        
+        // Fail initially on asset
+        assert!(!check_permission(&store, &session, &read_action, &scope_asset).await.unwrap());
+        
+        // Add "PII" tag to asset
+        use pangolin_core::business_metadata::BusinessMetadata;
+        let mut metadata = BusinessMetadata::new(asset_id, user_id); // Pass UUID
+        metadata.tags.push("PII".to_string());
+        store.upsert_business_metadata(metadata).await.unwrap(); // Use upsert variant
+        
+        // Create Role with Tag Permission
+        let mut tag_role = Role::new("PIIAccess".to_string(), None, tenant_id, Uuid::new_v4());
+        let mut tag_actions = HashSet::new();
+        tag_actions.insert(Action::Read);
+        let tag_scope = PermissionScope::Tag { tag_name: "PII".to_string() };
+        tag_role.add_permission(tag_scope, tag_actions);
+        store.create_role(tag_role.clone()).await.unwrap();
+        
+        // Assign Tag Role
+        let user_tag_role = UserRoleStruct::new(user_id, tag_role.id, Uuid::new_v4());
+        store.assign_role(user_tag_role).await.unwrap();
+        
+        // Pass (Access via Tag)
+        assert!(check_permission(&store, &session, &read_action, &scope_asset).await.unwrap());
     }
 }

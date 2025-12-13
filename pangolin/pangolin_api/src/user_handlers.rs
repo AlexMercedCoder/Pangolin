@@ -104,14 +104,20 @@ pub async fn create_user(
             User::new_root(req.username, req.email, password_hash.unwrap())
         }
         UserRole::TenantAdmin => {
-            let tenant_id = req.tenant_id.ok_or("Tenant admin requires tenant_id").unwrap();
+            let tenant_id = match req.tenant_id {
+                Some(id) => id,
+                None => return (StatusCode::BAD_REQUEST, "Tenant admin requires tenant_id").into_response(),
+            };
             if password_hash.is_none() {
                 return (StatusCode::BAD_REQUEST, "Tenant admin requires password").into_response();
             }
             User::new_tenant_admin(req.username, req.email, password_hash.unwrap(), tenant_id)
         }
         UserRole::TenantUser => {
-            let tenant_id = req.tenant_id.ok_or("Tenant user requires tenant_id").unwrap();
+            let tenant_id = match req.tenant_id {
+                Some(id) => id,
+                None => return (StatusCode::BAD_REQUEST, "Tenant user requires tenant_id").into_response(),
+            };
             if password_hash.is_none() {
                 return (StatusCode::BAD_REQUEST, "Tenant user requires password").into_response();
             }
