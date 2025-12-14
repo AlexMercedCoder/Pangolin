@@ -68,6 +68,33 @@ See [Backend Storage Documentation](../backend_storage/README.md) for detailed c
 | `GOOGLE_SERVICE_ACCOUNT_PATH` | Path to GCP service account JSON | - | For GCS storage |
 | `GCS_BUCKET` | GCS bucket name | `pangolin` | For GCS storage |
 
+## Cloud Provider Credential Vending
+
+### AWS STS Configuration
+
+For AWS STS AssumeRole credential vending:
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `AWS_ACCESS_KEY_ID` | AWS access key for STS API calls | - | For AWS STS |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret key for STS API calls | - | For AWS STS |
+| `AWS_REGION` | AWS region | `us-east-1` | No |
+
+**Note**: Warehouse-specific configuration (role ARN, external ID) is stored in the warehouse `storage_config`.
+
+### Azure OAuth2 Configuration
+
+Azure OAuth2 credentials are configured per-warehouse in the `storage_config`:
+- `tenant_id` - Azure AD tenant ID
+- `client_id` - Azure AD application (client) ID
+- `client_secret` - Azure AD client secret
+
+### GCP Service Account Configuration
+
+GCP service account keys are configured per-warehouse in the `storage_config`:
+- `service_account_key` - GCP service account JSON key
+- `project_id` - GCP project ID
+
 ## Service Users (New)
 
 Service users use API keys for authentication. No additional environment variables required - API keys are managed via the API.

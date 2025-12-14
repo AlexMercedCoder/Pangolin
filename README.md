@@ -37,6 +37,8 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - **Multi-Cloud Storage**: S3, Azure Blob, Google Cloud Storage support
 - **Multiple Backend Options**: PostgreSQL, MongoDB, SQLite for metadata storage
 - **Management UI**: SvelteKit-based web interface (in development)
+- **Cloud Credential Vending**: AWS STS, Azure OAuth2, GCP service account tokens
+- **Complete CRUD Operations**: Full create, read, update, delete for all entities
 
 ---
 
@@ -134,7 +136,8 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - JWT-based authentication
 - OAuth 2.0 integration (Google, Microsoft, GitHub, Okta)
 - Service users with API keys
-- S3 credential vending with STS
+- S3 credential vending with STS (AWS, Azure, GCP)
+- Cloud provider OAuth2 token generation
 
 ---
 
@@ -154,6 +157,8 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - ✅ MongoDB backend
 - ✅ SQLite backend
 - ✅ S3, Azure, GCS warehouse support
+- ✅ AWS STS, Azure OAuth2, GCP credential vending
+- ✅ Complete CRUD operations (all entities)
 
 **In Development**:
 - 🚧 Management UI

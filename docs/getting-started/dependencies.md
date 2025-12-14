@@ -55,6 +55,27 @@ Pangolin is built with the following key Rust crates:
 - `bytes` - Request/response body handling
 - `axum::http` - HTTP types for forwarding
 
+### Cloud Provider SDKs (Optional)
+
+For credential vending with AWS STS, Azure OAuth2, or GCP service accounts:
+
+- **AWS SDK**: `aws-config`, `aws-sdk-sts`, `aws-credential-types`, `aws-smithy-types`
+- **Azure Identity**: `azure_identity`, `azure_core`
+- **GCP Auth**: `gcp_auth`
+
+**Build with cloud features**:
+```bash
+# All cloud providers
+cargo build --features cloud-credentials
+
+# Individual providers
+cargo build --features aws-sts
+cargo build --features azure-oauth
+cargo build --features gcp-oauth
+```
+
+**Default build** (without features) uses placeholder implementations for development.
+
 ## System Requirements
 
 ### Minimum

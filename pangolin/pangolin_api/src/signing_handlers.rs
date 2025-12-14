@@ -54,7 +54,7 @@ pub struct PresignResponse {
 
 /// Assume an AWS IAM role using STS and return temporary credentials
 #[cfg(feature = "aws-sts")]
-async fn assume_role_aws(
+pub(crate) async fn assume_role_aws(
     role_arn: &str,
     external_id: Option<&str>,
     session_name: &str,
@@ -88,7 +88,7 @@ async fn assume_role_aws(
 
 /// Fallback implementation when AWS STS feature is not enabled
 #[cfg(not(feature = "aws-sts"))]
-async fn assume_role_aws(
+pub(crate) async fn assume_role_aws(
     role_arn: &str,
     _external_id: Option<&str>,
     _session_name: &str,
@@ -109,7 +109,7 @@ async fn assume_role_aws(
 
 /// Get an Azure OAuth2 token using client credentials
 #[cfg(feature = "azure-oauth")]
-async fn get_azure_token(
+pub(crate) async fn get_azure_token(
     tenant_id: &str,
     client_id: &str,
     client_secret: &str,
@@ -135,7 +135,7 @@ async fn get_azure_token(
 
 /// Fallback implementation when Azure OAuth feature is not enabled
 #[cfg(not(feature = "azure-oauth"))]
-async fn get_azure_token(
+pub(crate) async fn get_azure_token(
     _tenant_id: &str,
     _client_id: &str,
     _client_secret: &str,
@@ -150,7 +150,7 @@ async fn get_azure_token(
 
 /// Get a GCP OAuth2 token using service account credentials
 #[cfg(feature = "gcp-oauth")]
-async fn get_gcp_token(
+pub(crate) async fn get_gcp_token(
     service_account_key_json: &str,
 ) -> Result<String, String> {
     let service_account = CustomServiceAccount::from_json(service_account_key_json)
@@ -167,7 +167,7 @@ async fn get_gcp_token(
 
 /// Fallback implementation when GCP OAuth feature is not enabled
 #[cfg(not(feature = "gcp-oauth"))]
-async fn get_gcp_token(
+pub(crate) async fn get_gcp_token(
     _service_account_key_json: &str,
 ) -> Result<String, String> {
     tracing::warn!("GCP OAuth feature not enabled, returning placeholder token");

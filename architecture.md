@@ -35,7 +35,8 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
     - `SqliteStore`: ✅ Production-ready embedded storage for development and edge deployments.
 - **Warehouse Storage (Data)**:
     - S3/GCS/Azure: Object storage for Iceberg table data files (via `object_store` crate).
-    - Credential vending via STS for secure, temporary access.
+    - **Credential Vending**: AWS STS AssumeRole, Azure OAuth2, GCP service account tokens.
+    - **Cloud Features**: Optional feature flags (`aws-sts`, `azure-oauth`, `gcp-oauth`) for production credential vending.
 - **Merge Operations**: Tracks merge operations and conflicts with full lifecycle management.
 
 ### 4. Security & Authentication
@@ -64,7 +65,17 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 - **RBAC Integration**: Pangolin permissions apply to federated catalogs.
 - **Management API**: 5 endpoints for creating, listing, testing, and deleting federated catalogs.
 
-### 7. Management UI (`pangolin_ui`)
+### 8. Complete CRUD Operations
+- **All Entities**: Full create, read, update, delete operations for:
+    - Tenants: 5 endpoints (list, create, get, update, delete)
+    - Warehouses: 5 endpoints (list, create, get, update, delete)
+    - Catalogs: 5 endpoints (list, create, get, update, delete)
+    - Users: 5 endpoints (list, create, get, update, delete)
+    - Roles & Permissions: 8 endpoints (full RBAC management)
+- **Backend Support**: All operations implemented across Memory, SQLite, PostgreSQL, and MongoDB stores.
+- **Production Ready**: Comprehensive error handling, validation, and logging.
+
+### 9. Management UI (`pangolin_ui`)
 - **Framework**: SvelteKit + TailwindCSS (planned).
 - **Goal**: Provide a modern visual interface for catalog management, RBAC, and data discovery.
 

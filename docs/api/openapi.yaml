@@ -1,0 +1,516 @@
+openapi: 3.0.3
+info:
+  title: Pangolin Lakehouse Catalog API
+  description: |
+    Pangolin is a multi-tenant, branch-aware lakehouse catalog compatible with Apache Iceberg REST API.
+    
+    This API provides:
+    - Full Iceberg REST Catalog API compliance (see Apache Iceberg REST spec)
+    - Extended management endpoints for tenants, warehouses, catalogs
+    - Authentication and authorization (JWT, OAuth2, API keys)
+    - Credential vending for cloud storage (AWS STS, Azure OAuth2, GCP)
+    - Advanced features (federated catalogs, merge operations, RBAC)
+    
+  version: 0.1.0
+  contact:
+    name: Pangolin API Support
+    url: https://github.com/your-org/pangolin
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.pangolin.example.com
+    description: Production server
+
+tags:
+  - name: Iceberg REST API
+    description: Standard Apache Iceberg REST Catalog endpoints (see Iceberg spec)
+  - name: Tenants
+    description: Multi-tenant management
+  - name: Warehouses
+    description: Storage warehouse configuration
+  - name: Catalogs
+    description: Catalog management
+  - name: Users
+    description: User management and authentication
+  - name: Roles & Permissions
+    description: Role-based access control
+  - name: Service Users
+    description: API key authentication for automation
+  - name: Federated Catalogs
+    description: External catalog integration
+  - name: Merge Operations
+    description: Branch merging and conflict resolution
+  - name: Business Metadata
+    description: Custom metadata and tagging
+  - name: Credentials
+    description: Cloud storage credential vending
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+  - NoAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    NoAuth:
+      type: http
+      scheme: none
+
+  schemas:
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+
+    Warehouse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        tenant_id:
+          type: string
+          format: uuid
+        use_sts:
+          type: boolean
+          description: Enable cloud credential vending
+        storage_config:
+          type: object
+          additionalProperties: true
+          description: Cloud-specific configuration (bucket, region, role_arn, etc.)
+
+    Catalog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        tenant_id:
+          type: string
+          format: uuid
+        warehouse_name:
+          type: string
+          nullable: true
+        storage_location:
+          type: string
+          nullable: true
+        properties:
+          type: object
+          additionalProperties: true
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        tenant_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: integer
+
+paths:
+  # ============================================================================
+  # ICEBERG REST API
+  # ============================================================================
+  /v1/config:
+    get:
+      tags: [Iceberg REST API]
+      summary: Get catalog configuration
+      description: See Apache Iceberg REST Catalog specification
+      responses:
+        '200':
+          description: Configuration returned
+
+  /v1/{catalog}/namespaces:
+    get:
+      tags: [Iceberg REST API]
+      summary: List namespaces
+      description: See Apache Iceberg REST Catalog specification
+      parameters:
+        - name: catalog
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Namespaces listed
+
+  /v1/{catalog}/namespaces/{namespace}/tables:
+    get:
+      tags: [Iceberg REST API]
+      summary: List tables
+      description: See Apache Iceberg REST Catalog specification
+      parameters:
+        - name: catalog
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tables listed
+
+  # ============================================================================
+  # TENANT MANAGEMENT
+  # ============================================================================
+  /api/v1/tenants:
+    get:
+      tags: [Tenants]
+      summary: List all tenants
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tenant'
+
+    post:
+      tags: [Tenants]
+      summary: Create a new tenant
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                properties:
+                  type: object
+      responses:
+        '201':
+          description: Tenant created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+
+  /api/v1/tenants/{id}:
+    get:
+      tags: [Tenants]
+      summary: Get tenant by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Tenant details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+
+    put:
+      tags: [Tenants]
+      summary: Update tenant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                properties:
+                  type: object
+      responses:
+        '200':
+          description: Tenant updated
+
+    delete:
+      tags: [Tenants]
+      summary: Delete tenant
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Tenant deleted
+
+  # ============================================================================
+  # WAREHOUSE MANAGEMENT
+  # ============================================================================
+  /api/v1/warehouses:
+    get:
+      tags: [Warehouses]
+      summary: List warehouses
+      responses:
+        '200':
+          description: List of warehouses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Warehouse'
+
+    post:
+      tags: [Warehouses]
+      summary: Create warehouse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                use_sts:
+                  type: boolean
+                storage_config:
+                  type: object
+      responses:
+        '201':
+          description: Warehouse created
+
+  /api/v1/warehouses/{name}:
+    get:
+      tags: [Warehouses]
+      summary: Get warehouse
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Warehouse details
+
+    put:
+      tags: [Warehouses]
+      summary: Update warehouse
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                use_sts:
+                  type: boolean
+                storage_config:
+                  type: object
+      responses:
+        '200':
+          description: Warehouse updated
+
+    delete:
+      tags: [Warehouses]
+      summary: Delete warehouse
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Warehouse deleted
+
+  # ============================================================================
+  # CATALOG MANAGEMENT
+  # ============================================================================
+  /api/v1/catalogs:
+    get:
+      tags: [Catalogs]
+      summary: List catalogs
+      responses:
+        '200':
+          description: List of catalogs
+
+    post:
+      tags: [Catalogs]
+      summary: Create catalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                warehouse_name:
+                  type: string
+                  nullable: true
+                storage_location:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Catalog created
+
+  /api/v1/catalogs/{name}:
+    get:
+      tags: [Catalogs]
+      summary: Get catalog
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Catalog details
+
+    put:
+      tags: [Catalogs]
+      summary: Update catalog
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                warehouse_name:
+                  type: string
+                storage_location:
+                  type: string
+                properties:
+                  type: object
+      responses:
+        '200':
+          description: Catalog updated
+
+    delete:
+      tags: [Catalogs]
+      summary: Delete catalog
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Catalog deleted
+
+  # ============================================================================
+  # CREDENTIAL VENDING
+  # ============================================================================
+  /v1/{catalog}/namespaces/{namespace}/tables/{table}/credentials:
+    get:
+      tags: [Credentials]
+      summary: Get storage credentials
+      description: Vend temporary credentials for accessing table data (AWS STS, Azure OAuth2, GCP)
+      parameters:
+        - name: catalog
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: table
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Credentials vended
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storage-credentials:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        prefix:
+                          type: string
+                        config:
+                          type: object
