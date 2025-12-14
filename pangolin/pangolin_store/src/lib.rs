@@ -185,4 +185,50 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn update_service_user_last_used(&self, _id: Uuid, _timestamp: DateTime<Utc>) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
+
+    // Merge Operation Methods
+    async fn create_merge_operation(&self, _operation: pangolin_core::model::MergeOperation) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn get_merge_operation(&self, _operation_id: Uuid) -> Result<Option<pangolin_core::model::MergeOperation>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn list_merge_operations(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn update_merge_operation_status(&self, _operation_id: Uuid, _status: pangolin_core::model::MergeStatus) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn complete_merge_operation(&self, _operation_id: Uuid, _result_commit_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn abort_merge_operation(&self, _operation_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Merge Conflict Methods
+    async fn create_merge_conflict(&self, _conflict: pangolin_core::model::MergeConflict) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn get_merge_conflict(&self, _conflict_id: Uuid) -> Result<Option<pangolin_core::model::MergeConflict>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn list_merge_conflicts(&self, _operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn resolve_merge_conflict(&self, _conflict_id: Uuid, _resolution: pangolin_core::model::ConflictResolution) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn add_conflict_to_operation(&self, _operation_id: Uuid, _conflict_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 }

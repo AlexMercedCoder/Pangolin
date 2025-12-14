@@ -25,6 +25,7 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 
 ### ⚡ [Features](docs/features/)
 - [Branch Management](docs/features/branch_management.md) - Git-like branching
+- [Merge Conflict Resolution](docs/merge_conflicts.md) - Intelligent conflict detection and resolution
 - [Time Travel](docs/features/time_travel.md) - Query historical data
 - [Warehouse Management](docs/features/warehouse_management.md) - Multi-cloud storage
 - [PyIceberg Integration](docs/features/pyiceberg_testing.md) - Full compatibility
@@ -53,6 +54,7 @@ Pangolin is a high-performance catalog designed for modern lakehouse architectur
 - **Iceberg REST Catalog**: Full compliance including Commit support.
 - **Security**: JWT-based Authentication, RBAC, and Service Users with API keys.
 - **Service Users**: Dedicated programmatic identities for CI/CD, ETL, and automation.
+- **Enhanced Merge Conflict Resolution**: Intelligent conflict detection with manual and automatic resolution.
 - **Management UI**: SvelteKit-based web interface.
 - **Warehouse Management**: Manage storage configurations per tenant.
 - **Git-like Branching**: Branch and merge catalogs for experiment isolation.

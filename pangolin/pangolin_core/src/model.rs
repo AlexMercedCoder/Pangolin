@@ -104,6 +104,142 @@ pub struct Tag {
     pub commit_id: Uuid,
 }
 
+// Merge Conflict Resolution Models
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ConflictType {
+    SchemaChange {
+        asset_name: String,
+        source_schema: serde_json::Value,
+        target_schema: serde_json::Value,
+    },
+    DataOverlap {
+        asset_name: String,
+        overlapping_partitions: Vec<String>,
+    },
+    MetadataConflict {
+        asset_name: String,
+        conflicting_properties: Vec<String>,
+    },
+    DeletionConflict {
+        asset_name: String,
+        deleted_in: String, // "source" or "target"
+        modified_in: String, // "source" or "target"
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ResolutionStrategy {
+    AutoMerge,          // Automatically merge non-conflicting changes
+    TakeSource,         // Use source branch version
+    TakeTarget,         // Use target branch version
+    Manual,             // Requires manual resolution
+    ThreeWayMerge,      // Merge using base commit as reference
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictResolution {
+    pub conflict_id: Uuid,
+    pub strategy: ResolutionStrategy,
+    pub resolved_value: Option<serde_json::Value>,
+    pub resolved_by: Uuid,
+    pub resolved_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeConflict {
+    pub id: Uuid,
+    pub merge_operation_id: Uuid,
+    pub conflict_type: ConflictType,
+    pub asset_id: Option<Uuid>,
+    pub description: String,
+    pub resolution: Option<ConflictResolution>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl MergeConflict {
+    pub fn new(
+        merge_operation_id: Uuid,
+        conflict_type: ConflictType,
+        asset_id: Option<Uuid>,
+        description: String,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            merge_operation_id,
+            conflict_type,
+            asset_id,
+            description,
+            resolution: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    pub fn is_resolved(&self) -> bool {
+        self.resolution.is_some()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MergeStatus {
+    Pending,        // Merge initiated, conflicts being detected
+    Conflicted,     // Conflicts detected, awaiting resolution
+    Resolving,      // Manual resolution in progress
+    Ready,          // All conflicts resolved, ready to complete
+    Completed,      // Merge successfully completed
+    Aborted,        // Merge aborted by user
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MergeOperation {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub catalog_name: String,
+    pub source_branch: String,
+    pub target_branch: String,
+    pub base_commit_id: Option<Uuid>, // Common ancestor for 3-way merge
+    pub status: MergeStatus,
+    pub conflicts: Vec<Uuid>, // IDs of MergeConflict records
+    pub initiated_by: Uuid,
+    pub initiated_at: chrono::DateTime<chrono::Utc>,
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub result_commit_id: Option<Uuid>, // Commit ID if merge completed
+}
+
+impl MergeOperation {
+    pub fn new(
+        tenant_id: Uuid,
+        catalog_name: String,
+        source_branch: String,
+        target_branch: String,
+        base_commit_id: Option<Uuid>,
+        initiated_by: Uuid,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            tenant_id,
+            catalog_name,
+            source_branch,
+            target_branch,
+            base_commit_id,
+            status: MergeStatus::Pending,
+            conflicts: Vec::new(),
+            initiated_by,
+            initiated_at: chrono::Utc::now(),
+            completed_at: None,
+            result_commit_id: None,
+        }
+    }
+
+    pub fn has_conflicts(&self) -> bool {
+        !self.conflicts.is_empty()
+    }
+
+    pub fn can_complete(&self) -> bool {
+        self.status == MergeStatus::Ready || (self.status == MergeStatus::Pending && !self.has_conflicts())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

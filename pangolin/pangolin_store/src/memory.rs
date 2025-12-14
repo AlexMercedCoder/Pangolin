@@ -36,6 +36,8 @@ pub struct MemoryStore {
     business_metadata: Arc<DashMap<Uuid, pangolin_core::business_metadata::BusinessMetadata>>,
     access_requests: Arc<DashMap<Uuid, pangolin_core::business_metadata::AccessRequest>>,
     service_users: Arc<DashMap<Uuid, pangolin_core::user::ServiceUser>>,
+    merge_operations: Arc<DashMap<Uuid, pangolin_core::model::MergeOperation>>,
+    merge_conflicts: Arc<DashMap<Uuid, pangolin_core::model::MergeConflict>>,
 }
 
 impl MemoryStore {
@@ -59,6 +61,8 @@ impl MemoryStore {
             business_metadata: Arc::new(DashMap::new()),
             access_requests: Arc::new(DashMap::new()),
             service_users: Arc::new(DashMap::new()),
+            merge_operations: Arc::new(DashMap::new()),
+            merge_conflicts: Arc::new(DashMap::new()),
         }
     }
 }
@@ -693,6 +697,92 @@ impl CatalogStore for MemoryStore {
             Ok(())
         } else {
             Err(anyhow::anyhow!("Service user not found"))
+        }
+    }
+
+    // Merge Operation Methods
+    async fn create_merge_operation(&self, operation: pangolin_core::model::MergeOperation) -> Result<()> {
+        self.merge_operations.insert(operation.id, operation);
+        Ok(())
+    }
+    
+    async fn get_merge_operation(&self, operation_id: Uuid) -> Result<Option<pangolin_core::model::MergeOperation>> {
+        Ok(self.merge_operations.get(&operation_id).map(|r| r.value().clone()))
+    }
+    
+    async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+        Ok(self.merge_operations
+            .iter()
+            .filter(|r| r.value().tenant_id == tenant_id && r.value().catalog_name == catalog_name)
+            .map(|r| r.value().clone())
+            .collect())
+    }
+    
+    async fn update_merge_operation_status(&self, operation_id: Uuid, status: pangolin_core::model::MergeStatus) -> Result<()> {
+        if let Some(mut operation) = self.merge_operations.get_mut(&operation_id) {
+            operation.status = status;
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Merge operation not found"))
+        }
+    }
+    
+    async fn complete_merge_operation(&self, operation_id: Uuid, result_commit_id: Uuid) -> Result<()> {
+        if let Some(mut operation) = self.merge_operations.get_mut(&operation_id) {
+            operation.status = pangolin_core::model::MergeStatus::Completed;
+            operation.result_commit_id = Some(result_commit_id);
+            operation.completed_at = Some(chrono::Utc::now());
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Merge operation not found"))
+        }
+    }
+    
+    async fn abort_merge_operation(&self, operation_id: Uuid) -> Result<()> {
+        if let Some(mut operation) = self.merge_operations.get_mut(&operation_id) {
+            operation.status = pangolin_core::model::MergeStatus::Aborted;
+            operation.completed_at = Some(chrono::Utc::now());
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Merge operation not found"))
+        }
+    }
+
+    // Merge Conflict Methods
+    async fn create_merge_conflict(&self, conflict: pangolin_core::model::MergeConflict) -> Result<()> {
+        self.merge_conflicts.insert(conflict.id, conflict);
+        Ok(())
+    }
+    
+    async fn get_merge_conflict(&self, conflict_id: Uuid) -> Result<Option<pangolin_core::model::MergeConflict>> {
+        Ok(self.merge_conflicts.get(&conflict_id).map(|r| r.value().clone()))
+    }
+    
+    async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        Ok(self.merge_conflicts
+            .iter()
+            .filter(|r| r.value().merge_operation_id == operation_id)
+            .map(|r| r.value().clone())
+            .collect())
+    }
+    
+    async fn resolve_merge_conflict(&self, conflict_id: Uuid, resolution: pangolin_core::model::ConflictResolution) -> Result<()> {
+        if let Some(mut conflict) = self.merge_conflicts.get_mut(&conflict_id) {
+            conflict.resolution = Some(resolution);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Merge conflict not found"))
+        }
+    }
+    
+    async fn add_conflict_to_operation(&self, operation_id: Uuid, conflict_id: Uuid) -> Result<()> {
+        if let Some(mut operation) = self.merge_operations.get_mut(&operation_id) {
+            if !operation.conflicts.contains(&conflict_id) {
+                operation.conflicts.push(conflict_id);
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Merge operation not found"))
         }
     }
 }

@@ -17,6 +17,8 @@ pub mod oauth_handlers;
 pub mod auth_middleware;
 pub mod authz;
 pub mod business_metadata_handlers;
+pub mod conflict_detector;
+pub mod merge_handlers;
 pub mod tests_common;
 
 #[cfg(test)]
@@ -59,12 +61,20 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/metrics", post(iceberg_handlers::report_metrics))
         .route("/v1/:prefix/v1/tables/rename", post(iceberg_handlers::rename_table))
         // Pangolin Extended APIs
-        .route("/api/v1/branches", get(pangolin_handlers::list_branches).post(pangolin_handlers::create_branch))
+        // Branch Operations
+        .route("/api/v1/branches", post(pangolin_handlers::create_branch).get(pangolin_handlers::list_branches))
         .route("/api/v1/branches/merge", post(pangolin_handlers::merge_branch))
         .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
         .route("/api/v1/branches/:name/commits", get(pangolin_handlers::list_commits))
-        // Tag Management
-        .route("/api/v1/tags", get(pangolin_handlers::list_tags).post(pangolin_handlers::create_tag))
+        // Merge Operations
+        .route("/api/v1/catalogs/:catalog_name/merge-operations", get(merge_handlers::list_merge_operations))
+        .route("/api/v1/merge-operations/:operation_id", get(merge_handlers::get_merge_operation))
+        .route("/api/v1/merge-operations/:operation_id/conflicts", get(merge_handlers::list_merge_conflicts))
+        .route("/api/v1/merge-operations/:operation_id/complete", post(merge_handlers::complete_merge))
+        .route("/api/v1/merge-operations/:operation_id/abort", post(merge_handlers::abort_merge))
+        .route("/api/v1/conflicts/:conflict_id/resolve", post(merge_handlers::resolve_conflict))
+        // Tag Operations
+        .route("/api/v1/tags", post(pangolin_handlers::create_tag).get(pangolin_handlers::list_tags))
         .route("/api/v1/tags/:name", delete(pangolin_handlers::delete_tag))
         // Audit Logs
         .route("/api/v1/audit", get(pangolin_handlers::list_audit_events))

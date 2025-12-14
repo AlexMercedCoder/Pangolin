@@ -203,30 +203,93 @@ pub async fn get_branch(
 pub async fn merge_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Json(payload): Json<MergeBranchRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = payload.catalog.as_deref().unwrap_or("default");
 
+    // Create a merge operation
+    let operation = pangolin_core::model::MergeOperation::new(
+        tenant_id,
+        catalog_name.to_string(),
+        payload.source_branch.clone(),
+        payload.target_branch.clone(),
+        None, // TODO: Implement base commit detection for 3-way merge
+        session.user_id,
+    );
+
+    // Store the merge operation
+    if let Err(e) = store.create_merge_operation(operation.clone()).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+            "error": format!("Failed to create merge operation: {}", e)
+        }))).into_response();
+    }
+
+    // Detect conflicts
+    let detector = crate::conflict_detector::ConflictDetector::new(store.clone());
+    let conflicts = match detector.detect_conflicts(&operation).await {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = store.abort_merge_operation(operation.id).await;
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+                "error": format!("Failed to detect conflicts: {}", e)
+            }))).into_response();
+        }
+    };
+
+    // If conflicts detected, store them and return conflict response
+    if !conflicts.is_empty() {
+        for conflict in &conflicts {
+            if let Err(e) = store.create_merge_conflict(conflict.clone()).await {
+                eprintln!("Failed to store conflict: {}", e);
+            }
+            if let Err(e) = store.add_conflict_to_operation(operation.id, conflict.id).await {
+                eprintln!("Failed to link conflict to operation: {}", e);
+            }
+        }
+
+        // Update operation status to Conflicted
+        let _ = store.update_merge_operation_status(
+            operation.id,
+            pangolin_core::model::MergeStatus::Conflicted
+        ).await;
+
+        return (StatusCode::CONFLICT, Json(serde_json::json!({
+            "status": "conflicted",
+            "operation_id": operation.id,
+            "conflicts": conflicts.len(),
+            "message": format!("Merge has {} conflicts that need resolution", conflicts.len())
+        }))).into_response();
+    }
+
+    // No conflicts - proceed with merge
     match store.merge_branch(tenant_id, catalog_name, payload.source_branch.clone(), payload.target_branch.clone()).await {
         Ok(_) => {
-             // Audit Log
+            // Complete the merge operation
+            let commit_id = uuid::Uuid::new_v4(); // In real implementation, get actual commit ID
+            let _ = store.complete_merge_operation(operation.id, commit_id).await;
+
+            // Audit Log
             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
                 tenant_id,
-                "system".to_string(),
+                session.username.clone(),
                 "merge_branch".to_string(),
                 format!("{}/{}->{}", catalog_name, payload.source_branch, payload.target_branch),
                 None
             )).await;
             
-            (StatusCode::OK, Json(serde_json::json!({"status": "merged"}))).into_response()
+            (StatusCode::OK, Json(serde_json::json!({
+                "status": "merged",
+                "operation_id": operation.id,
+                "commit_id": commit_id
+            }))).into_response()
         },
         Err(e) => {
-            if e.to_string().contains("Conflict detected") {
-                (StatusCode::CONFLICT, Json(serde_json::json!({"error": e.to_string()}))).into_response()
-            } else {
-                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response()
-            }
+            let _ = store.abort_merge_operation(operation.id).await;
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
+                "error": e.to_string()
+            }))).into_response()
         }
     }
 }

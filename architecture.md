@@ -33,6 +33,7 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
     - `PostgresStore` (Alpha): Persistent relational storage.
     - `MongoStore` (Alpha): NoSQL document storage.
     - `S3/GCS/Azure`: Object storage for data files (via `object_store` crate).
+- **Merge Operations**: Tracks merge operations and conflicts with full lifecycle management.
 
 ### 4. Security & Authentication
 - **Modes**:
@@ -44,6 +45,13 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
     - **RBAC**: 3-tier role system (Root, TenantAdmin, TenantUser).
     - **Service Users**: Dedicated programmatic identities for CI/CD, ETL, and automation.
     - **Granular Logic**: Scope-based permissions (Catalog, Namespace, Asset, Tag).
+
+### 5. Merge Conflict Resolution
+- **Conflict Detection**: Automatic detection of schema, deletion, metadata, and data overlap conflicts.
+- **Conflict Types**: 4 categories with specific detection algorithms.
+- **Resolution Strategies**: Manual (TakeSource, TakeTarget, Custom) and automatic resolution.
+- **Lifecycle Management**: Full tracking from initiation to completion/abort.
+- **API Endpoints**: 6 dedicated endpoints for managing merge operations and conflicts.
 
 ### 5. Management UI (`pangolin_ui`)
 - **Framework**: SvelteKit + TailwindCSS (planned).
