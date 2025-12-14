@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth';
 	import { themeStore } from '$lib/stores/theme';
+	import Notification from '$lib/components/ui/Notification.svelte';
 	import '../app.css';
 
 	let sidebarOpen = true;
@@ -65,6 +66,17 @@
 								<span>Dashboard</span>
 							{/if}
 						</a>
+						{#if $authStore.user?.role === 'Root'}
+						<a
+							href="/tenants"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">🏛️</span>
+							{#if sidebarOpen}
+								<span>Tenants</span>
+							{/if}
+						</a>
+						{/if}
 						<a
 							href="/catalogs"
 							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -172,3 +184,6 @@
 		<slot />
 	{/if}
 </div>
+
+<!-- Global Notifications -->
+<Notification />

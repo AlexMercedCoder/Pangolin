@@ -105,6 +105,10 @@ impl CatalogStore for MongoStore {
         Ok(warehouses)
     }
 
+    async fn delete_warehouse(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
+        Err(anyhow::anyhow!("MongoStore not fully implemented"))
+    }
+
     // Catalog Operations
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()> {
         // Catalog struct doesn't have tenant_id, so we need to wrap it or add it?
@@ -145,6 +149,10 @@ impl CatalogStore for MongoStore {
         let cursor = self.db.collection::<Catalog>("catalogs").find(filter).await?;
         let catalogs: Vec<Catalog> = cursor.try_collect().await?;
         Ok(catalogs)
+    }
+
+    async fn delete_catalog(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
+        Err(anyhow::anyhow!("MongoStore not fully implemented"))
     }
 
     // Namespace Operations

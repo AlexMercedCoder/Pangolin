@@ -494,3 +494,23 @@ pub async fn get_catalog(
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
+
+pub async fn delete_catalog(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    tracing::info!("delete_catalog: tenant_id={}, catalog_name={}", tenant_id, name);
+    
+    match store.delete_catalog(tenant_id, name.clone()).await {
+        Ok(_) => {
+            tracing::info!("Successfully deleted catalog: {}", name);
+            StatusCode::NO_CONTENT.into_response()
+        },
+        Err(e) => {
+            tracing::error!("Failed to delete catalog {}: {}", name, e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
+    }
+}

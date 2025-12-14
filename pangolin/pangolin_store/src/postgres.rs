@@ -138,6 +138,10 @@ impl CatalogStore for PostgresStore {
         Ok(warehouses)
     }
 
+    async fn delete_warehouse(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
+        Err(anyhow::anyhow!("PostgresStore not fully implemented"))
+    }
+
     // Catalog Operations
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()> {
         sqlx::query("INSERT INTO catalogs (tenant_id, name, properties) VALUES ($1, $2, $3)")
@@ -190,6 +194,10 @@ impl CatalogStore for PostgresStore {
             });
         }
         Ok(catalogs)
+    }
+
+    async fn delete_catalog(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
+        Err(anyhow::anyhow!("PostgresStore not fully implemented"))
     }
 
     // Namespace Operations

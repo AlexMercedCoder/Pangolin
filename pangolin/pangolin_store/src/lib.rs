@@ -28,10 +28,12 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()>;
     async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>>;
     async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>>;
+    async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()>;
 
     // Catalog Operations
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()>;
     async fn get_catalog(&self, tenant_id: Uuid, name: String) -> Result<Option<Catalog>>;
+    async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()>;
     async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>>;
 
     // Namespace Operations

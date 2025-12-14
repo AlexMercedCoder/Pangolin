@@ -111,6 +111,17 @@ impl CatalogStore for MemoryStore {
         Ok(warehouses)
     }
 
+    async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        let mut warehouses = self.warehouses.write().await;
+        let key = (tenant_id, name.clone());
+        
+        if warehouses.remove(&key).is_some() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Warehouse '{}' not found", name))
+        }
+    }
+
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()> {
         let key = (tenant_id, catalog.name.clone());
         self.catalogs.insert(key, catalog);
@@ -135,6 +146,15 @@ impl CatalogStore for MemoryStore {
             }
         }
         Ok(catalogs)
+    }
+
+    async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        let key = (tenant_id, name);
+        if self.catalogs.remove(&key).is_some() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Catalog not found"))
+        }
     }
 
     async fn create_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Namespace) -> Result<()> {
