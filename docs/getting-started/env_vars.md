@@ -14,7 +14,7 @@ Pangolin supports the following environment variables for configuration:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `PANGOLIN_NO_AUTH` | Disable authentication (development only) | `false` | No |
+| `PANGOLIN_NO_AUTH` | Disable authentication (development only). Must be set to exactly `"true"` (case-insensitive) to enable. Any other value keeps auth enabled. | unset | No |
 | `PANGOLIN_JWT_SECRET` | Secret key for signing JWTs (min 32 chars) | - | For JWT auth |
 | `PANGOLIN_ROOT_USER` | Username for Root operations | - | For initial setup |
 | `PANGOLIN_ROOT_PASSWORD` | Password for Root operations | - | For initial setup |
@@ -70,9 +70,11 @@ Federated catalog credentials are stored in the catalog configuration. No additi
 ### Development (Memory Store, No Auth)
 ```bash
 export RUST_LOG=debug
-export PANGOLIN_NO_AUTH=true
+export PANGOLIN_NO_AUTH=true  # Must be exactly "true" (case-insensitive)
 export PANGOLIN_STORAGE_TYPE=memory
 ```
+
+> **Security Note**: `PANGOLIN_NO_AUTH` must be set to exactly `"true"` (case-insensitive) to enable NO_AUTH mode. Setting it to `"false"`, `"0"`, or any other value will keep authentication enabled. This prevents accidental exposure of data.
 
 ### Production (S3 Storage, JWT Auth)
 ```bash

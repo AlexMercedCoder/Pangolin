@@ -55,15 +55,20 @@ pub async fn create_tenant(
     Json(payload): Json<CreateTenantRequest>,
 ) -> impl IntoResponse {
     // Check if running in no-auth mode
-    if std::env::var("PANGOLIN_NO_AUTH").is_ok() {
+    // Check if NO_AUTH mode is enabled (must be exactly "true" for security)
+    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+    
+    if no_auth_enabled {
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({
-                "error": "Cannot create additional tenants in NO_AUTH mode",
-                "message": "NO_AUTH mode is only meant for evaluation and testing with a single default tenant. Please enable authentication and use Bearer tokens if you want to create multiple tenants.",
+                "error": "Tenant creation is disabled in NO_AUTH mode",
                 "hint": "Remove PANGOLIN_NO_AUTH environment variable and use /api/v1/tokens endpoint to generate tokens"
-            }))
-        ).into_response();
+            })),
+        )
+            .into_response();
     }
     
     let tenant = Tenant {

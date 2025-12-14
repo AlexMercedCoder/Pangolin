@@ -98,6 +98,44 @@ catalog = load_catalog(
 )
 ```
 
+## NO_AUTH Mode (Development Only)
+
+For local development and testing, Pangolin supports a NO_AUTH mode that disables authentication entirely.
+
+### Enabling NO_AUTH Mode
+
+Set the `PANGOLIN_NO_AUTH` environment variable to exactly `"true"` when starting the server:
+
+```bash
+PANGOLIN_NO_AUTH=true cargo run --bin pangolin_api
+```
+
+> **Security**: The value must be exactly `"true"` (case-insensitive). Setting it to `"false"`, `"0"`, or any other value will keep authentication enabled. This prevents accidental data exposure if someone sets `PANGOLIN_NO_AUTH=false` thinking they're disabling it.
+
+### Behavior in NO_AUTH Mode
+
+- **API Server**: All requests are automatically authenticated as Root user
+- **Management UI**: Login page is automatically skipped, user goes directly to dashboard
+- **No credentials required**: No JWT tokens, passwords, or API keys needed
+- **Default tenant**: All operations use the default tenant (`00000000-0000-0000-0000-000000000000`)
+
+### Security Warning
+
+⚠️ **NEVER use NO_AUTH mode in production!** This mode completely disables authentication and authorization, allowing anyone to access and modify all data.
+
+Use NO_AUTH mode only for:
+- Local development
+- Automated testing
+- Quick prototyping
+
+For production deployments, always use proper authentication with JWT tokens or OAuth.
+
 ## Troubleshooting
-- **401 Unauthorized**: Check if your token has expired or if the `credential` format is correct.
-- **403 Forbidden**: Your user does not have permission for the requested resource (check RBAC/Tags).
+
+### 401 Unauthorized
+- **Cause**: Token is missing, invalid, or expired.
+- **Fix**: Generate a new token via `/api/v1/users/login` or `/api/v1/tokens`.
+
+### 403 Forbidden
+- **Cause**: User lacks permissions for the requested resource.
+- **Fix**: Check user's role and permissions. Contact a Tenant Admin to grant access.

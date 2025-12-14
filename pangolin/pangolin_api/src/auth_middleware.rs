@@ -106,8 +106,12 @@ pub async fn auth_middleware(
     mut req: Request,
     next: Next,
 ) -> Response {
-    // Check if NO_AUTH mode is enabled
-    if std::env::var("PANGOLIN_NO_AUTH").is_ok() {
+    // Check if NO_AUTH mode is enabled (must be exactly "true" for security)
+    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+    
+    if no_auth_enabled {
         // In NO_AUTH mode, create a default root user session
         let session = create_session(
             Uuid::nil(),
@@ -290,7 +294,11 @@ pub async fn auth_middleware_wrapper(
     // This is a temporary solution - ideally all routes should use the new middleware
     
     // Check if NO_AUTH mode is enabled
-    if std::env::var("PANGOLIN_NO_AUTH").is_ok() {
+    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+    
+    if no_auth_enabled {
         let session = create_session(
             Uuid::nil(),
             "root".to_string(),

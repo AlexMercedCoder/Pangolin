@@ -37,8 +37,12 @@ pub async fn auth_middleware(
 ) -> Result<Response, StatusCode> {
     let path = request.uri().path().to_string();
     
-    // Check if running in no-auth mode
-    if std::env::var("PANGOLIN_NO_AUTH").is_ok() {
+    // Check if NO_AUTH mode is enabled (must be exactly "true" for security)
+    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+    
+    if no_auth_enabled {
         // No-auth mode: bypass all authentication and use default tenant
         let default_tenant_id = Uuid::parse_str("00000000-0000-0000-0000-000000000000")
             .expect("Failed to parse default tenant UUID");
