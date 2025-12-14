@@ -15,7 +15,8 @@ Pangolin is built with the following key Rust crates:
 ## Storage
 - **[Object Store](https://github.com/apache/arrow-rs/tree/master/object_store)**: Unified interface for object storage (S3, GCS, Azure, Local).
 - **[DashMap](https://github.com/xacrimon/dashmap)**: Concurrent associative array for high-performance in-memory storage.
-- **[SQLx](https://github.com/launchbadge/sqlx)**: Async SQL toolkit for PostgreSQL.
+- **[SQLx](https://github.com/launchbadge/sqlx)**: Async SQL toolkit for PostgreSQL, MongoDB, and SQLite.
+  - Features: `postgres`, `mongodb`, `sqlite`, `uuid`, `chrono`, `json`
 - **[MongoDB](https://github.com/mongodb/mongo-rust-driver)**: Official MongoDB driver for Rust.
 
 ## Security & Authentication
@@ -65,8 +66,11 @@ Pangolin is built with the following key Rust crates:
 - Rust 1.92+
 - 4GB+ RAM
 - Linux (Ubuntu 20.04+ or similar)
-- PostgreSQL 13+ or MongoDB 5+ (for persistent storage)
-- S3-compatible object storage
+- **Backend Storage** (choose one):
+  - PostgreSQL 12+ (recommended for production)
+  - MongoDB 5+ (recommended for cloud-native)
+  - SQLite 3.35+ (recommended for development/embedded)
+- **Warehouse Storage**: S3, Azure Blob, or GCS
 
 ## Building from Source
 

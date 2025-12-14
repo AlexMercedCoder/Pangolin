@@ -7,8 +7,19 @@ Pangolin supports the following environment variables for configuration:
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `RUST_LOG` | Log level (`error`, `warn`, `info`, `debug`, `trace`) | `info` | No |
-| `PANGOLIN_STORAGE_TYPE` | Storage backend (`memory`, `s3`, `postgres`, `mongo`) | `memory` | No |
-| `DATABASE_URL` | Connection string for Postgres or MongoDB | - | For Postgres/Mongo |
+
+## Backend Storage (Metadata Persistence)
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `DATABASE_URL` | Connection string for backend storage | - | Yes |
+
+**Supported Backends**:
+- **PostgreSQL**: `postgresql://user:password@host:port/database`
+- **MongoDB**: `mongodb://user:password@host:port/database`
+- **SQLite**: `sqlite:///path/to/pangolin.db` or `sqlite::memory:`
+
+See [Backend Storage Documentation](../backend_storage/README.md) for detailed configuration.
 
 ## Authentication & Security
 

@@ -1,3 +1,5 @@
+![Pangolin Logo](pangolin_logo.png)
+
 # Pangolin (Status: Alpha)
 
 **A Rust-Based, Multi-Tenant, Iceberg-Compatible Lakehouse Catalog**
@@ -33,7 +35,8 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - **Service Users**: API key authentication for CI/CD, ETL, and automation
 - **Security**: JWT authentication, OAuth 2.0, RBAC, and credential vending
 - **Multi-Cloud Storage**: S3, Azure Blob, Google Cloud Storage support
-- **Management UI**: SvelteKit-based web interface (planned)
+- **Multiple Backend Options**: PostgreSQL, MongoDB, SQLite for metadata storage
+- **Management UI**: SvelteKit-based web interface (in development)
 
 ---
 
@@ -52,6 +55,7 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [Authentication Setup](docs/authentication.md) - JWT and OAuth configuration
 - [Service Users](docs/service_users.md) - API key authentication for programmatic access
 - [Security & Credential Vending](docs/features/security_vending.md) - S3 credential vending
+- [Permissions](docs/permissions.md) - Role-based access control
 
 ### ⚡ Core Features
 - [Branch Management](docs/features/branch_management.md) - Git-like branching for catalogs
@@ -62,12 +66,18 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [Audit Logs](docs/features/audit_logs.md) - Track all catalog operations
 - [Entities & Models](docs/features/entities.md) - Core data models (Tenant, Branch, Asset)
 
-### 💾 Storage Backends
-- [AWS S3](docs/storage/storage_s3.md) - ✅ Production Ready
-- [Azure Blob Storage](docs/storage/storage_azure.md) - ✅ Implemented
-- [Google Cloud Storage](docs/storage/storage_gcs.md) - ✅ Implemented
-- [MongoDB](docs/storage/storage_mongo.md) - Alpha
-- [PostgreSQL](docs/storage/storage_postgres.md) - Alpha
+### 💾 Backend Storage (Metadata Persistence)
+- [Overview & Comparison](docs/backend_storage/README.md) - Choose the right backend
+- [PostgreSQL](docs/backend_storage/postgresql.md) - ✅ Production Ready
+- [MongoDB](docs/backend_storage/mongodb.md) - ✅ Production Ready
+- [SQLite](docs/backend_storage/sqlite.md) - ✅ Production Ready (Development/Embedded)
+- [Detailed Comparison](docs/backend_storage/comparison.md) - Feature comparison matrix
+
+### 🗄️ Warehouse Storage (Object Storage for Data)
+- [Warehouse Concept](docs/warehouse/README.md) - Understanding warehouses
+- [AWS S3](docs/warehouse/s3.md) - ✅ Production Ready
+- [Azure Blob Storage](docs/warehouse/azure.md) - ✅ Production Ready
+- [Google Cloud Storage](docs/warehouse/gcs.md) - ✅ Production Ready
 
 ### 🔌 API Reference
 - [API Overview](docs/api/api_overview.md) - Complete API documentation
@@ -80,9 +90,6 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 ### 🏗️ Architecture
 - [Architecture Overview](architecture.md) - System design and components
 - [Repository Organization](ORGANIZATION.md) - Project structure
-
-### 🔬 Research & Planning
-- [Research Notes](docs/research/) - Implementation plans and design docs
 
 ---
 
@@ -138,16 +145,18 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - ✅ Iceberg REST Catalog API
 - ✅ Multi-tenancy
 - ✅ Branch management
-- ✅ S3 storage backend
-- ✅ JWT authentication
-- ✅ Service users
 - ✅ Merge conflict resolution
 - ✅ Federated catalogs
+- ✅ JWT authentication
+- ✅ Service users
+- ✅ PostgreSQL backend
+- ✅ MongoDB backend
+- ✅ SQLite backend
+- ✅ S3, Azure, GCS warehouse support
 
 **In Development**:
 - 🚧 Management UI
-- 🚧 PostgreSQL backend (Alpha)
-- 🚧 MongoDB backend (Alpha)
+- 🚧 Advanced RBAC features
 
 ---
 

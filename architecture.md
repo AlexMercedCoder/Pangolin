@@ -28,11 +28,14 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 
 ### 3. Storage Layer (`pangolin_store`)
 - **Responsibility**: Abstract persistence layer via `CatalogStore` trait.
-- **Implementations**:
+- **Backend Storage (Metadata)**:
     - `MemoryStore`: High-performance, concurrent in-memory store (using `DashMap`) for testing/dev.
-    - `PostgresStore` (Alpha): Persistent relational storage.
-    - `MongoStore` (Alpha): NoSQL document storage.
-    - `S3/GCS/Azure`: Object storage for data files (via `object_store` crate).
+    - `PostgresStore`: ✅ Production-ready relational storage with ACID guarantees.
+    - `MongoStore`: ✅ Production-ready NoSQL document storage with horizontal scalability.
+    - `SqliteStore`: ✅ Production-ready embedded storage for development and edge deployments.
+- **Warehouse Storage (Data)**:
+    - S3/GCS/Azure: Object storage for Iceberg table data files (via `object_store` crate).
+    - Credential vending via STS for secure, temporary access.
 - **Merge Operations**: Tracks merge operations and conflicts with full lifecycle management.
 
 ### 4. Security & Authentication
