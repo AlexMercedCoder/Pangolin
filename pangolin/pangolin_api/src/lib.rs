@@ -26,6 +26,7 @@ pub mod auth_test;
 pub mod business_metadata_test;
 
 pub mod permission_handlers; // Registered new module
+pub mod service_user_handlers; // Service user management
 
 #[cfg(test)]
 #[path = "iceberg_handlers_test.rs"]
@@ -99,18 +100,26 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Role Management
         .route("/api/v1/roles", post(permission_handlers::create_role).get(permission_handlers::list_roles))
         .route("/api/v1/roles/:id", get(permission_handlers::get_role).put(permission_handlers::update_role).delete(permission_handlers::delete_role))
-        // Permission Management
-        .route("/api/v1/permissions", post(permission_handlers::grant_permission))
+        // Permission Management (commented out - handlers not yet implemented)
+        // .route("/api/v1/permissions", post(permission_handlers::create_permission))
         .route("/api/v1/permissions/:id", delete(permission_handlers::revoke_permission))
-        .route("/api/v1/permissions/user/:id", get(permission_handlers::get_user_permissions))
-        // Role Assignment
-        .route("/api/v1/users/:id/roles", post(permission_handlers::assign_role))
-        .route("/api/v1/users/:id/roles/:role_id", delete(permission_handlers::revoke_role))
+        // .route("/api/v1/users/:user_id/permissions", get(permission_handlers::list_user_permissions))
+        // Service User Management
+        .route("/api/v1/service-users", get(service_user_handlers::list_service_users).post(service_user_handlers::create_service_user))
+        .route("/api/v1/service-users/:id", get(service_user_handlers::get_service_user).put(service_user_handlers::update_service_user).delete(service_user_handlers::delete_service_user))
+        .route("/api/v1/service-users/:id/rotate", post(service_user_handlers::rotate_api_key))
         // Token Generation
         .route("/api/v1/tokens", post(token_handlers::generate_token))
         // OAuth
         .route("/oauth/authorize/:provider", get(oauth_handlers::oauth_authorize))
         .route("/oauth/callback/:provider", get(oauth_handlers::oauth_callback))
-        .layer(axum::middleware::from_fn(auth_middleware::auth_middleware))
+        // Business Metadata (commented out - handlers not yet fully implemented)
+        .route("/api/v1/business-metadata/:asset_id", get(business_metadata_handlers::get_business_metadata).delete(business_metadata_handlers::delete_business_metadata))
+        // .route("/api/v1/business-metadata/:asset_id", put(business_metadata_handlers::upsert_business_metadata))
+        // Access Requests (commented out - handlers not yet fully implemented)
+        .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
+        // .route("/api/v1/access-requests", post(business_metadata_handlers::create_access_request))
+        // .route("/api/v1/access-requests/:id", get(business_metadata_handlers::get_access_request).put(business_metadata_handlers::update_access_request))
+        .layer(axum::middleware::from_fn(auth_middleware::auth_middleware_wrapper))
         .with_state(store)
 }

@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalog, Warehouse};
 use uuid::Uuid;
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 
 use crate::signer::Signer;
 
@@ -153,6 +154,35 @@ pub trait CatalogStore: Send + Sync + Signer {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     async fn update_access_request(&self, _request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Service User Operations
+    async fn create_service_user(&self, _service_user: pangolin_core::user::ServiceUser) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_service_user(&self, _id: Uuid) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_service_user_by_api_key_hash(&self, _api_key_hash: &str) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_service_users(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_service_user(
+        &self,
+        _id: Uuid,
+        _name: Option<String>,
+        _description: Option<String>,
+        _active: Option<bool>,
+    ) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn delete_service_user(&self, _id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_service_user_last_used(&self, _id: Uuid, _timestamp: DateTime<Utc>) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
 }

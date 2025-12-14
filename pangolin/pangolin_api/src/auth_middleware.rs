@@ -1,9 +1,12 @@
 use axum::{
-    extract::Request,
+    extract::{Request, State},
     http::{header, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use std::sync::Arc;
+use pangolin_store::CatalogStore;
+use bcrypt::verify;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -99,6 +102,7 @@ pub fn create_session(
 
 /// Axum middleware to extract and verify JWT token
 pub async fn auth_middleware(
+    State(store): State<Arc<dyn CatalogStore>>,
     mut req: Request,
     next: Next,
 ) -> Response {
@@ -120,6 +124,53 @@ pub async fn auth_middleware(
         req.extensions_mut().insert(crate::auth::RootUser);
         req.extensions_mut().insert(crate::auth::RootUser);
         return next.run(req).await;
+    }
+
+    // Check for X-API-Key header (Service User authentication)
+    if let Some(api_key_header) = req.headers().get("X-API-Key") {
+        if let Ok(api_key) = api_key_header.to_str() {
+            // We need to iterate through all service users and verify the API key
+            // This is not ideal for performance but works for MVP
+            // In production, consider caching or indexing strategies
+            
+            // Get all tenants and check their service users
+            if let Ok(tenants) = store.list_tenants().await {
+                for tenant in tenants {
+                    if let Ok(service_users) = store.list_service_users(tenant.id).await {
+                        for service_user in service_users {
+                            // Verify the API key against the stored hash
+                            if let Ok(true) = verify(api_key, &service_user.api_key_hash) {
+                                // Check if service user is valid (active and not expired)
+                                if service_user.is_valid() {
+                                    // Create session from service user
+                                    let session = create_session(
+                                        service_user.id,
+                                        service_user.name.clone(),
+                                        Some(service_user.tenant_id),
+                                        service_user.role.clone(),
+                                        86400, // 24 hour session
+                                    );
+                                    req.extensions_mut().insert(session);
+                                    req.extensions_mut().insert(crate::auth::TenantId(service_user.tenant_id));
+                                    
+                                    // Update last_used timestamp (fire and forget)
+                                    let store_clone = store.clone();
+                                    let service_user_id = service_user.id;
+                                    tokio::spawn(async move {
+                                        let _ = store_clone.update_service_user_last_used(service_user_id, Utc::now()).await;
+                                    });
+                                    
+                                    return next.run(req).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // If we get here, API key was invalid
+            return (StatusCode::UNAUTHORIZED, "Invalid or expired API key").into_response();
+        }
     }
 
     // Whitelist public endpoints
@@ -223,6 +274,123 @@ pub async fn auth_middleware(
     req.extensions_mut().insert(crate::auth::TenantId(tenant_uuid));
     
     // If role is Root, insert RootUser extension
+    if session.role == UserRole::Root {
+        req.extensions_mut().insert(crate::auth::RootUser);
+    }
+    
+    next.run(req).await
+}
+
+/// Wrapper for middleware that doesn't require state (for backward compatibility)
+pub async fn auth_middleware_wrapper(
+    mut req: Request,
+    next: Next,
+) -> Response {
+    // For routes that don't have service user support, use the old middleware
+    // This is a temporary solution - ideally all routes should use the new middleware
+    
+    // Check if NO_AUTH mode is enabled
+    if std::env::var("PANGOLIN_NO_AUTH").is_ok() {
+        let session = create_session(
+            Uuid::nil(),
+            "root".to_string(),
+            None,
+            UserRole::Root,
+            86400,
+        );
+        req.extensions_mut().insert(session);
+        let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+        req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
+        req.extensions_mut().insert(crate::auth::RootUser);
+        return next.run(req).await;
+    }
+
+    // Whitelist public endpoints
+    let path = req.uri().path();
+    if path == "/api/v1/users/login" || 
+       path == "/api/v1/app-config" || 
+       path == "/v1/config" || 
+       path.ends_with("/config") ||
+       path.starts_with("/oauth/authorize/") ||
+       path.starts_with("/oauth/callback/") {
+            return next.run(req).await;
+    }
+    
+    // Extract token from Authorization header or check for Basic Auth
+    let auth_header = req.headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok());
+    
+    // Check for Basic Auth first
+    if let Some(header_val) = auth_header {
+        if header_val.starts_with("Basic ") {
+            let token = &header_val[6..];
+            if let Ok(decoded) = STANDARD.decode(token) {
+                if let Ok(cred_str) = String::from_utf8(decoded) {
+                    if let Some((username, password)) = cred_str.split_once(':') {
+                        let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_default();
+                        let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_default();
+                        
+                        if !root_user.is_empty() && username == root_user && password == root_pass {
+                            let session = create_session(
+                                Uuid::nil(),
+                                "root".to_string(),
+                                None,
+                                UserRole::Root,
+                                3600,
+                            );
+                            req.extensions_mut().insert(session);
+                            let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+                            req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
+                            req.extensions_mut().insert(crate::auth::RootUser);
+                            return next.run(req).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let token = match auth_header {
+        Some(header) if header.starts_with("Bearer ") => {
+            &header[7..]
+        }
+        _ => {
+            return (StatusCode::UNAUTHORIZED, "Missing or invalid authorization header").into_response();
+        }
+    };
+    
+    let secret = match std::env::var("PANGOLIN_JWT_SECRET") {
+        Ok(s) => s,
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "JWT secret not configured").into_response();
+        }
+    };
+    
+    let claims = match verify_token(token, &secret) {
+        Ok(c) => c,
+        Err(e) => {
+            return (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e)).into_response();
+        }
+    };
+    
+    let session = match claims.to_session() {
+        Ok(s) => s,
+        Err(e) => {
+            return (StatusCode::UNAUTHORIZED, format!("Invalid session: {}", e)).into_response();
+        }
+    };
+    
+    if session.expires_at < Utc::now() {
+        return (StatusCode::UNAUTHORIZED, "Token expired").into_response();
+    }
+    
+    req.extensions_mut().insert(session.clone());
+    let tenant_uuid = session.tenant_id.unwrap_or_else(|| {
+        Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
+    });
+    req.extensions_mut().insert(crate::auth::TenantId(tenant_uuid));
+    
     if session.role == UserRole::Root {
         req.extensions_mut().insert(crate::auth::RootUser);
     }

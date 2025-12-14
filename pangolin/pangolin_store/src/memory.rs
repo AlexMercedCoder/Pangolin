@@ -35,6 +35,7 @@ pub struct MemoryStore {
     permissions: Arc<DashMap<Uuid, Permission>>,
     business_metadata: Arc<DashMap<Uuid, pangolin_core::business_metadata::BusinessMetadata>>,
     access_requests: Arc<DashMap<Uuid, pangolin_core::business_metadata::AccessRequest>>,
+    service_users: Arc<DashMap<Uuid, pangolin_core::user::ServiceUser>>,
 }
 
 impl MemoryStore {
@@ -57,6 +58,7 @@ impl MemoryStore {
             permissions: Arc::new(DashMap::new()),
             business_metadata: Arc::new(DashMap::new()),
             access_requests: Arc::new(DashMap::new()),
+            service_users: Arc::new(DashMap::new()),
         }
     }
 }
@@ -627,6 +629,71 @@ impl CatalogStore for MemoryStore {
     async fn update_access_request(&self, request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
         self.access_requests.insert(request.id, request);
         Ok(())
+    }
+
+    // Service User Operations
+    async fn create_service_user(&self, service_user: pangolin_core::user::ServiceUser) -> Result<()> {
+        self.service_users.insert(service_user.id, service_user);
+        Ok(())
+    }
+
+    async fn get_service_user(&self, id: Uuid) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        Ok(self.service_users.get(&id).map(|r| r.value().clone()))
+    }
+
+    async fn get_service_user_by_api_key_hash(&self, api_key_hash: &str) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        // Linear search through all service users to find matching hash
+        for entry in self.service_users.iter() {
+            if entry.value().api_key_hash == api_key_hash {
+                return Ok(Some(entry.value().clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    async fn list_service_users(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        Ok(self.service_users
+            .iter()
+            .filter(|entry| entry.value().tenant_id == tenant_id)
+            .map(|entry| entry.value().clone())
+            .collect())
+    }
+
+    async fn update_service_user(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        active: Option<bool>,
+    ) -> Result<()> {
+        if let Some(mut service_user) = self.service_users.get_mut(&id) {
+            if let Some(n) = name {
+                service_user.name = n;
+            }
+            if let Some(d) = description {
+                service_user.description = Some(d);
+            }
+            if let Some(a) = active {
+                service_user.active = a;
+            }
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Service user not found"))
+        }
+    }
+
+    async fn delete_service_user(&self, id: Uuid) -> Result<()> {
+        self.service_users.remove(&id);
+        Ok(())
+    }
+
+    async fn update_service_user_last_used(&self, id: Uuid, timestamp: chrono::DateTime<chrono::Utc>) -> Result<()> {
+        if let Some(mut service_user) = self.service_users.get_mut(&id) {
+            service_user.last_used = Some(timestamp);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Service user not found"))
+        }
     }
 }
 

@@ -57,6 +57,70 @@ pub struct UserSession {
     pub expires_at: DateTime<Utc>,
 }
 
+/// Service user for API key authentication
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
+pub struct ServiceUser {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub tenant_id: Uuid,
+    pub api_key_hash: String,  // bcrypt hash of API key
+    pub role: UserRole,
+    pub created_at: DateTime<Utc>,
+    pub created_by: Uuid,  // User who created this service user
+    pub last_used: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub active: bool,
+}
+
+/// API Key response (only shown once on creation)
+#[derive(Debug, Serialize)]
+pub struct ApiKeyResponse {
+    pub service_user_id: Uuid,
+    pub name: String,
+    pub api_key: String,  // Plain text, only shown once
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+impl ServiceUser {
+    pub fn new(
+        name: String,
+        description: Option<String>,
+        tenant_id: Uuid,
+        api_key_hash: String,
+        role: UserRole,
+        created_by: Uuid,
+        expires_at: Option<DateTime<Utc>>,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            description,
+            tenant_id,
+            api_key_hash,
+            role,
+            created_at: Utc::now(),
+            created_by,
+            last_used: None,
+            expires_at,
+            active: true,
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        if let Some(expires_at) = self.expires_at {
+            expires_at < Utc::now()
+        } else {
+            false
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self.active && !self.is_expired()
+    }
+}
+
 impl User {
     pub fn new_root(username: String, email: String, password_hash: String) -> Self {
         Self {

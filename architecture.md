@@ -13,7 +13,8 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
     - `pangolin_handlers`: Extended capabilities (branching, commits).
     - `business_metadata_handlers`: Business catalog features (metadata, access requests).
     - `user_handlers`, `permission_handlers`: RBAC and user management.
-    - `middleware`: JWT authentication and tenant context resolution.
+    - `service_user_handlers`: Service user management and API key operations.
+    - `middleware`: JWT authentication, API key authentication, and tenant context resolution.
 
 ### 2. Core Domain (`pangolin_core`)
 - **Responsibility**: Defines shared data models, traits, and business logic.
@@ -22,6 +23,7 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
     - `Asset`: Unified representation of Tables, Views, and other resources.
     - `BusinessMetadata`: Descriptive metadata, tags, and properties.
     - `User`, `Role`, `Permission`: RBAC entities.
+    - `ServiceUser`: Programmatic identities with API key authentication.
     - `Branch`: Git-like commit history reference.
 
 ### 3. Storage Layer (`pangolin_store`)
@@ -36,9 +38,11 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 - **Modes**:
     - **No Auth**: Open access for development (`PANGOLIN_NO_AUTH=true`).
     - **JWT**: Bearer token authentication with `bcrypt` password hashing.
+    - **API Keys**: Service user authentication via `X-API-Key` header.
     - **OAuth 2.0**: OIDC integration with Google, Microsoft, GitHub, Okta.
 - **Authorization**:
     - **RBAC**: 3-tier role system (Root, TenantAdmin, TenantUser).
+    - **Service Users**: Dedicated programmatic identities for CI/CD, ETL, and automation.
     - **Granular Logic**: Scope-based permissions (Catalog, Namespace, Asset, Tag).
 
 ### 5. Management UI (`pangolin_ui`)
