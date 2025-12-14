@@ -50,3 +50,49 @@ s3://<warehouse>/<catalog>/<namespace>/<table>/metadata/
 ```
 
 Pangolin manages the atomic updates of the `metadata.json` file during table commits.
+
+---
+
+## Storage Clarification
+
+**Important**: Pangolin uses S3 for two different purposes:
+
+### 1. Catalog Metadata Storage
+- **Controlled by**: `PANGOLIN_STORAGE_TYPE=s3` environment variable
+- **Stores**: Pangolin's internal catalog metadata (tenants, catalogs, branches, namespaces, etc.)
+- **Location**: `s3://<PANGOLIN_S3_BUCKET>/<PANGOLIN_S3_PREFIX>/tenants/...`
+- **Purpose**: Where Pangolin stores its own state
+
+### 2. Table Data Storage
+- **Controlled by**: Warehouse `storage_config` in API
+- **Stores**: Iceberg table data files (Parquet, Avro, ORC, etc.) and metadata
+- **Location**: Defined per-warehouse (e.g., `s3://my-data-bucket/warehouse/`)
+- **Purpose**: Where your actual Iceberg table data lives
+
+**Example Configuration**:
+```bash
+# Catalog metadata in S3
+export PANGOLIN_STORAGE_TYPE=s3
+export PANGOLIN_S3_BUCKET=pangolin-catalog
+export PANGOLIN_S3_PREFIX=metadata
+
+# Table data in different S3 bucket (via warehouse)
+curl -X POST /api/v1/warehouses -d '{
+  "name": "production",
+  "storage_config": {
+    "type": "s3",
+    "bucket": "my-data-bucket",
+    "region": "us-east-1"
+  }
+}'
+```
+
+This separation allows flexibility: you could store catalog metadata in Postgres while table data lives in S3, or use different S3 buckets for each.
+
+---
+
+## Related Documentation
+
+- [Warehouse Management](../features/warehouse_management.md) - Configuring warehouses for table data
+- [Environment Variables](../getting-started/env_vars.md) - Complete env var reference
+- [Deployment](../getting-started/deployment.md) - Production deployment guide

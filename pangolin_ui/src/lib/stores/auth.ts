@@ -1,72 +1,125 @@
 import { writable, derived } from 'svelte/store';
 import type { User } from '$lib/api/auth';
+import { authApi } from '$lib/api/auth';
+import { browser } from '$app/environment';
 
 interface AuthState {
-	user: User | null;
 	token: string | null;
+	user: User | null;
 	isAuthenticated: boolean;
 	isLoading: boolean;
+	authEnabled: boolean; // Track if auth is enabled on server
 }
 
 const initialState: AuthState = {
-	user: null,
 	token: null,
+	user: null,
 	isAuthenticated: false,
 	isLoading: true,
+	authEnabled: true, // Default to true until we check
 };
 
 function createAuthStore() {
 	const { subscribe, set, update } = writable<AuthState>(initialState);
 
-	return {
-		subscribe,
-		setUser: (user: User, token: string) => {
-			localStorage.setItem('auth_token', token);
-			localStorage.setItem('auth_user', JSON.stringify(user));
-			update(state => ({
-				...state,
-				user,
-				token,
-				isAuthenticated: true,
-				isLoading: false,
-			}));
-		},
-		clearUser: () => {
-			localStorage.removeItem('auth_token');
-			localStorage.removeItem('auth_user');
-			set({
-				user: null,
-				token: null,
-				isAuthenticated: false,
-				isLoading: false,
-			});
-		},
-		loadFromStorage: () => {
-			const token = localStorage.getItem('auth_token');
-			const userStr = localStorage.getItem('auth_user');
+	// Check server config and initialize auth state
+	async function initialize() {
+		try {
+			// Check if server has auth enabled
+			const config = await authApi.getAppConfig();
 			
-			if (token && userStr) {
-				try {
-					const user = JSON.parse(userStr) as User;
+			if (!config.auth_enabled) {
+				// NO_AUTH mode - auto-authenticate with mock session
+				const mockUser: User = {
+					id: 'no-auth-user',
+					username: 'no-auth',
+					role: 'Root',
+				};
+				
+				update(state => ({
+					...state,
+					authEnabled: false,
+					isAuthenticated: true,
+					user: mockUser,
+					token: 'no-auth-mode',
+					isLoading: false,
+				}));
+				
+				// Store in localStorage for consistency
+				if (browser) {
+					localStorage.setItem('auth_token', 'no-auth-mode');
+					localStorage.setItem('auth_user', JSON.stringify(mockUser));
+				}
+				return;
+			}
+
+			// Auth is enabled - check for existing token
+			update(state => ({ ...state, authEnabled: true }));
+			
+			if (browser) {
+				const token = localStorage.getItem('auth_token');
+				const userStr = localStorage.getItem('auth_user');
+
+				if (token && userStr) {
+					const user = JSON.parse(userStr);
 					update(state => ({
 						...state,
-						user,
 						token,
+						user,
 						isAuthenticated: true,
 						isLoading: false,
 					}));
-				} catch (e) {
-					// Invalid stored data, clear it
-					localStorage.removeItem('auth_token');
-					localStorage.removeItem('auth_user');
+				} else {
 					update(state => ({ ...state, isLoading: false }));
 				}
 			} else {
 				update(state => ({ ...state, isLoading: false }));
 			}
+		} catch (error) {
+			console.error('Failed to initialize auth:', error);
+			// On error, assume auth is enabled and not authenticated
+			update(state => ({ ...state, isLoading: false, authEnabled: true }));
+		}
+	}
+
+	return {
+		subscribe,
+		initialize,
+		async login(username: string, password: string) {
+			try {
+				const response = await authApi.login({ username, password });
+				const user: User = response.user;
+
+				update(state => ({
+					...state,
+					token: response.token,
+					user,
+					isAuthenticated: true,
+				}));
+
+				if (browser) {
+					localStorage.setItem('auth_token', response.token);
+					localStorage.setItem('auth_user', JSON.stringify(user));
+				}
+
+				return { success: true };
+			} catch (error: any) {
+				console.error('Login failed:', error);
+				return { success: false, error: error.message || 'Login failed' };
+			}
 		},
-		setLoading: (isLoading: boolean) => {
-			update(state => ({ ...state, isLoading }));
+		logout() {
+			update(state => ({
+				...state,
+				token: null,
+				user: null,
+				isAuthenticated: false,
+			}));
+
+			if (browser) {
+				localStorage.removeItem('auth_token');
+				localStorage.removeItem('auth_user');
+			}
 		},
 	};
 }

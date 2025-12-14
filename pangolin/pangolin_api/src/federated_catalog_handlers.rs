@@ -64,7 +64,7 @@ pub async fn create_federated_catalog(
     }
 
     // Check if a catalog with this name already exists (local or federated)
-    match store.get_catalog(tenant.0, &payload.name).await {
+    match store.get_catalog(tenant.0, payload.name.clone()).await {
         Ok(Some(_)) => {
             return (
                 StatusCode::CONFLICT,

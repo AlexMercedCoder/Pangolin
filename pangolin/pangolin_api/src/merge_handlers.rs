@@ -186,8 +186,10 @@ pub async fn complete_merge(
         operation.source_branch.clone(),
         operation.target_branch.clone(),
     ).await {
-        Ok(commit_id) => {
-            // Use the actual commit ID from the merge operation
+        Ok(_) => {
+            // TODO: merge_branch should return the commit ID
+            // For now, generate a placeholder UUID
+            let commit_id = Uuid::new_v4();
             let _ = store.complete_merge_operation(operation_id, commit_id).await;
 
             // Audit log

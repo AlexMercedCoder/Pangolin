@@ -23,9 +23,17 @@ export interface OAuthProvider {
 	url: string;
 }
 
+export interface AppConfig {
+	auth_enabled: boolean;
+}
+
 export const authApi = {
+	async getAppConfig(): Promise<AppConfig> {
+		return apiClient.get<AppConfig>('/api/v1/app-config');
+	},
+
 	async login(credentials: LoginRequest): Promise<LoginResponse> {
-		return apiClient.post<LoginResponse>('/api/v1/login', credentials);
+		return apiClient.post<LoginResponse>('/api/v1/users/login', credentials);
 	},
 
 	async logout(): Promise<void> {

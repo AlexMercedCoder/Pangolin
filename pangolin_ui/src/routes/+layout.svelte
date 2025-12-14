@@ -8,17 +8,20 @@
 
 	let sidebarOpen = true;
 
-	onMount(() => {
-		// Load auth from storage
-		authStore.loadFromStorage();
+	onMount(async () => {
+		// Initialize auth - checks server config and auto-authenticates if NO_AUTH mode
+		await authStore.initialize();
 		
 		// Load theme
 		themeStore.loadTheme();
 
-		// Redirect to login if not authenticated
+		// Redirect to login if not authenticated (and auth is enabled)
 		const unsubscribe = authStore.subscribe(state => {
-			if (!state.isLoading && !state.isAuthenticated && $page.url.pathname !== '/login') {
+			if (!state.isLoading && !state.isAuthenticated && state.authEnabled && $page.url.pathname !== '/login') {
 				goto('/login');
+			} else if (!state.isLoading && state.isAuthenticated && $page.url.pathname === '/login') {
+				// If authenticated and on login page, redirect to dashboard
+				goto('/');
 			}
 		});
 

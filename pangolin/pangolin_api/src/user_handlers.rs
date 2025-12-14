@@ -249,6 +249,8 @@ pub async fn logout(
 }
 
 pub async fn get_app_config() -> Response {
-    let auth_enabled = std::env::var("PANGOLIN_NO_AUTH").unwrap_or_else(|_| "false".to_string()) != "true";
+    // Check if NO_AUTH mode is enabled (variable exists, regardless of value)
+    let no_auth = std::env::var("PANGOLIN_NO_AUTH").is_ok();
+    let auth_enabled = !no_auth;
     (StatusCode::OK, Json(AppConfig { auth_enabled })).into_response()
 }

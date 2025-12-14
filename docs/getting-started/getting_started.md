@@ -85,7 +85,13 @@ curl -X POST http://localhost:8080/api/v1/tenants \
 *Note: We are using a fixed UUID for simplicity. The `-u admin:password` corresponds to the default Root User credentials in `example.env`.*
 
 ### 2. Create a Warehouse
-A warehouse stores storage credentials and configuration.
+A warehouse stores storage credentials and configuration for **Iceberg table data**.
+
+> **Storage Clarification**:
+> - **Catalog Metadata Storage** (controlled by `PANGOLIN_STORAGE_TYPE` env var): Where Pangolin stores its catalog metadata (tenants, catalogs, branches, etc.)
+> - **Table Data Storage** (controlled by warehouse config): Where Iceberg table data files are stored
+> 
+> These are separate! For example, you can store catalog metadata in Postgres while table data lives in S3.
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/warehouses \
@@ -95,13 +101,13 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
     "name": "main_warehouse",
     "use_sts": false,
     "storage_config": {
-      "type": "memory",
+      "type": "s3",
       "bucket": "demo-bucket",
-      "prefix": "data"
+      "region": "us-east-1"
     }
   }'
 ```
-*Note: We use `type: "memory"` and `use_sts: false` for this quick start. For production S3 with STS, see [Warehouse Management](warehouse_management.md).*
+*Note: We use `use_sts: false` for this quick start. For production with STS credential vending, see [Warehouse Management](../features/warehouse_management.md).*
 
 ### 3. Create a Catalog
 A catalog references a warehouse and specifies a storage location. The catalog name is what clients use in their connection URIs.
