@@ -304,3 +304,25 @@ mod tests {
         assert_eq!(tenant.name, deserialized.name);
     }
 }
+
+// Update structs for CRUD operations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TenantUpdate {
+    pub name: Option<String>,
+    pub properties: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WarehouseUpdate {
+    pub name: Option<String>,
+    pub storage_config: Option<HashMap<String, String>>,
+    pub use_sts: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CatalogUpdate {
+    pub warehouse_name: Option<String>,
+    pub storage_location: Option<String>,
+    pub properties: Option<HashMap<String, String>>,
+}
+

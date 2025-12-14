@@ -5,7 +5,7 @@ use futures::stream::TryStreamExt;
 use mongodb::{Client, Collection, Database};
 use mongodb::bson::{doc, Document, Bson, Binary};
 use mongodb::bson::spec::BinarySubtype;
-use mongodb::options::{ClientOptions, UpdateOptions, ReplaceOptions};
+use mongodb::options::{ClientOptions, ReplaceOptions};
 use pangolin_core::model::{
     Asset, AssetType, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse,
 };
@@ -84,6 +84,39 @@ impl CatalogStore for MongoStore {
         Ok(tenants)
     }
 
+    async fn update_tenant(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant> {
+        let filter = doc! { "id": to_bson_uuid(tenant_id) };
+        let mut update_doc = doc! {};
+        
+        if let Some(name) = updates.name {
+            update_doc.insert("name", name);
+        }
+        if let Some(properties) = updates.properties {
+            update_doc.insert("properties", bson::to_bson(&properties)?);
+        }
+        
+        if update_doc.is_empty() {
+            return self.get_tenant(tenant_id).await?
+                .ok_or_else(|| anyhow::anyhow!("Tenant not found"));
+        }
+        
+        let update = doc! { "$set": update_doc };
+        self.tenants().update_one(filter.clone(), update).await?;
+        
+        self.get_tenant(tenant_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Tenant not found"))
+    }
+
+    async fn delete_tenant(&self, tenant_id: Uuid) -> Result<()> {
+        let filter = doc! { "id": to_bson_uuid(tenant_id) };
+        let result = self.tenants().delete_one(filter).await?;
+        
+        if result.deleted_count == 0 {
+            return Err(anyhow::anyhow!("Tenant not found"));
+        }
+        Ok(())
+    }
+
     // Warehouse Operations
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
         // We might want to store tenant_id in the warehouse document if it's not already there
@@ -103,6 +136,33 @@ impl CatalogStore for MongoStore {
         let cursor = self.warehouses().find(filter).await?;
         let warehouses: Vec<Warehouse> = cursor.try_collect().await?;
         Ok(warehouses)
+    }
+
+    async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": &name };
+        let mut update_doc = doc! {};
+        
+        if let Some(new_name) = &updates.name {
+            update_doc.insert("name", new_name);
+        }
+        if let Some(config) = &updates.storage_config {
+            update_doc.insert("storage_config", bson::to_bson(config)?);
+        }
+        if let Some(use_sts) = updates.use_sts {
+            update_doc.insert("use_sts", use_sts);
+        }
+        
+        if update_doc.is_empty() {
+            return self.get_warehouse(tenant_id, name).await?
+                .ok_or_else(|| anyhow::anyhow!("Warehouse not found"));
+        }
+        
+        let update = doc! { "$set": update_doc };
+        self.warehouses().update_one(filter, update).await?;
+        
+        let new_name = updates.name.unwrap_or(name);
+        self.get_warehouse(tenant_id, new_name).await?
+            .ok_or_else(|| anyhow::anyhow!("Warehouse not found"))
     }
 
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
@@ -160,6 +220,32 @@ impl CatalogStore for MongoStore {
         let cursor = self.db.collection::<Catalog>("catalogs").find(filter).await?;
         let catalogs: Vec<Catalog> = cursor.try_collect().await?;
         Ok(catalogs)
+    }
+
+    async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": &name };
+        let mut update_doc = doc! {};
+        
+        if let Some(warehouse_name) = updates.warehouse_name {
+            update_doc.insert("warehouse_name", warehouse_name);
+        }
+        if let Some(storage_location) = updates.storage_location {
+            update_doc.insert("storage_location", storage_location);
+        }
+        if let Some(properties) = updates.properties {
+            update_doc.insert("properties", bson::to_bson(&properties)?);
+        }
+        
+        if update_doc.is_empty() {
+            return self.get_catalog(tenant_id, name).await?
+                .ok_or_else(|| anyhow::anyhow!("Catalog not found"));
+        }
+        
+        let update = doc! { "$set": update_doc };
+        self.db.collection::<Document>("catalogs").update_one(filter, update).await?;
+        
+        self.get_catalog(tenant_id, name).await?
+            .ok_or_else(|| anyhow::anyhow!("Catalog not found"))
     }
 
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {

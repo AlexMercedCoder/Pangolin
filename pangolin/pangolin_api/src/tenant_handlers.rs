@@ -19,6 +19,12 @@ pub struct CreateTenantRequest {
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateTenantRequest {
+    name: Option<String>,
+    properties: Option<std::collections::HashMap<String, String>>,
+}
+
 #[derive(Serialize)]
 pub struct TenantResponse {
     id: Uuid,
@@ -92,5 +98,45 @@ pub async fn get_tenant(
         Ok(Some(tenant)) => (StatusCode::OK, Json(TenantResponse::from(tenant))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Tenant not found").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn update_tenant(
+    State(store): State<AppState>,
+    Extension(_root): Extension<RootUser>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateTenantRequest>,
+) -> impl IntoResponse {
+    let updates = pangolin_core::model::TenantUpdate {
+        name: payload.name,
+        properties: payload.properties,
+    };
+    
+    match store.update_tenant(id, updates).await {
+        Ok(tenant) => (StatusCode::OK, Json(TenantResponse::from(tenant))).into_response(),
+        Err(e) => {
+            if e.to_string().contains("not found") {
+                (StatusCode::NOT_FOUND, "Tenant not found").into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
+        }
+    }
+}
+
+pub async fn delete_tenant(
+    State(store): State<AppState>,
+    Extension(_root): Extension<RootUser>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    match store.delete_tenant(id).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => {
+            if e.to_string().contains("not found") {
+                (StatusCode::NOT_FOUND, "Tenant not found").into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
+        }
     }
 }

@@ -2,7 +2,7 @@ use crate::CatalogStore;
 use anyhow::Result;
 use async_trait::async_trait;
 use pangolin_core::model::{
-    Asset, AssetType, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse,
+    Asset, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse,
 };
 use pangolin_core::audit::AuditLogEntry;
 use sqlx::postgres::{PgPool, PgPoolOptions};
@@ -75,6 +75,59 @@ impl CatalogStore for PostgresStore {
         Ok(tenants)
     }
 
+    async fn update_tenant(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant> {
+        // Build dynamic UPDATE query based on which fields are provided
+        let mut query = String::from("UPDATE tenants SET ");
+        let mut set_clauses = Vec::new();
+        let mut bind_count = 1;
+
+        if updates.name.is_some() {
+            set_clauses.push(format!("name = ${}", bind_count));
+            bind_count += 1;
+        }
+        if updates.properties.is_some() {
+            set_clauses.push(format!("properties = ${}", bind_count));
+            bind_count += 1;
+        }
+
+        if set_clauses.is_empty() {
+            // No updates provided, just return current tenant
+            return self.get_tenant(tenant_id).await?
+                .ok_or_else(|| anyhow::anyhow!("Tenant not found"));
+        }
+
+        query.push_str(&set_clauses.join(", "));
+        query.push_str(&format!(" WHERE id = ${} RETURNING id, name, properties", bind_count));
+
+        let mut q = sqlx::query(&query);
+        if let Some(name) = &updates.name {
+            q = q.bind(name);
+        }
+        if let Some(properties) = &updates.properties {
+            q = q.bind(serde_json::to_value(properties)?);
+        }
+        q = q.bind(tenant_id);
+
+        let row = q.fetch_one(&self.pool).await?;
+        Ok(Tenant {
+            id: row.get("id"),
+            name: row.get("name"),
+            properties: serde_json::from_value(row.get("properties"))?,
+        })
+    }
+
+    async fn delete_tenant(&self, tenant_id: Uuid) -> Result<()> {
+        let result = sqlx::query("DELETE FROM tenants WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&self.pool)
+            .await?;
+        
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Tenant not found"));
+        }
+        Ok(())
+    }
+
     // Warehouse Operations
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
         sqlx::query("INSERT INTO warehouses (id, tenant_id, name, use_sts, storage_config) VALUES ($1, $2, $3, $4, $5)")
@@ -138,6 +191,54 @@ impl CatalogStore for PostgresStore {
             });
         }
         Ok(warehouses)
+    }
+
+    async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse> {
+        let mut query = String::from("UPDATE warehouses SET ");
+        let mut set_clauses = Vec::new();
+        let mut bind_count = 1;
+
+        if updates.name.is_some() {
+            set_clauses.push(format!("name = ${}", bind_count));
+            bind_count += 1;
+        }
+        if updates.storage_config.is_some() {
+            set_clauses.push(format!("storage_config = ${}", bind_count));
+            bind_count += 1;
+        }
+        if updates.use_sts.is_some() {
+            set_clauses.push(format!("use_sts = ${}", bind_count));
+            bind_count += 1;
+        }
+
+        if set_clauses.is_empty() {
+            return self.get_warehouse(tenant_id, name).await?
+                .ok_or_else(|| anyhow::anyhow!("Warehouse not found"));
+        }
+
+        query.push_str(&set_clauses.join(", "));
+        query.push_str(&format!(" WHERE tenant_id = ${} AND name = ${} RETURNING id, name, tenant_id, use_sts, storage_config", bind_count, bind_count + 1));
+
+        let mut q = sqlx::query(&query);
+        if let Some(new_name) = &updates.name {
+            q = q.bind(new_name);
+        }
+        if let Some(config) = &updates.storage_config {
+            q = q.bind(serde_json::to_value(config)?);
+        }
+        if let Some(use_sts) = updates.use_sts {
+            q = q.bind(use_sts);
+        }
+        q = q.bind(tenant_id).bind(&name);
+
+        let row = q.fetch_one(&self.pool).await?;
+        Ok(Warehouse {
+            id: row.get("id"),
+            name: row.get("name"),
+            tenant_id: row.get("tenant_id"),
+            use_sts: row.try_get("use_sts").unwrap_or(false),
+            storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+        })
     }
 
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
@@ -217,6 +318,63 @@ impl CatalogStore for PostgresStore {
             });
         }
         Ok(catalogs)
+    }
+
+    async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog> {
+        let mut query = String::from("UPDATE catalogs SET ");
+        let mut set_clauses = Vec::new();
+        let mut bind_count = 1;
+
+        if updates.warehouse_name.is_some() {
+            set_clauses.push(format!("warehouse_name = ${}", bind_count));
+            bind_count += 1;
+        }
+        if updates.storage_location.is_some() {
+            set_clauses.push(format!("storage_location = ${}", bind_count));
+            bind_count += 1;
+        }
+        if updates.properties.is_some() {
+            set_clauses.push(format!("properties = ${}", bind_count));
+            bind_count += 1;
+        }
+
+        if set_clauses.is_empty() {
+            return self.get_catalog(tenant_id, name).await?
+                .ok_or_else(|| anyhow::anyhow!("Catalog not found"));
+        }
+
+        query.push_str(&set_clauses.join(", "));
+        query.push_str(&format!(" WHERE tenant_id = ${} AND name = ${} RETURNING id, name, catalog_type, warehouse_name, storage_location, federated_config, properties", bind_count, bind_count + 1));
+
+        let mut q = sqlx::query(&query);
+        if let Some(warehouse_name) = &updates.warehouse_name {
+            q = q.bind(warehouse_name);
+        }
+        if let Some(storage_location) = &updates.storage_location {
+            q = q.bind(storage_location);
+        }
+        if let Some(properties) = &updates.properties {
+            q = q.bind(serde_json::to_value(properties)?);
+        }
+        q = q.bind(tenant_id).bind(&name);
+
+        let row = q.fetch_one(&self.pool).await?;
+        let catalog_type_str: String = row.get("catalog_type");
+        let catalog_type = match catalog_type_str.as_str() {
+            "Local" => pangolin_core::model::CatalogType::Local,
+            "Federated" => pangolin_core::model::CatalogType::Federated,
+            _ => pangolin_core::model::CatalogType::Local,
+        };
+
+        Ok(Catalog {
+            id: row.get("id"),
+            name: row.get("name"),
+            catalog_type,
+            warehouse_name: row.get("warehouse_name"),
+            storage_location: row.get("storage_location"),
+            federated_config: serde_json::from_value(row.get("federated_config")).ok(),
+            properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
+        })
     }
 
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {

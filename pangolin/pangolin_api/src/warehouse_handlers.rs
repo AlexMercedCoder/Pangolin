@@ -19,6 +19,13 @@ pub struct CreateWarehouseRequest {
     storage_config: Option<std::collections::HashMap<String, String>>,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateWarehouseRequest {
+    name: Option<String>,
+    use_sts: Option<bool>,
+    storage_config: Option<std::collections::HashMap<String, String>>,
+}
+
 #[derive(Serialize)]
 pub struct WarehouseResponse {
     id: Uuid,
@@ -94,6 +101,30 @@ pub async fn delete_warehouse(
         Err(e) => {
             if e.to_string().contains("not found") {
                 (StatusCode::NOT_FOUND, format!("Warehouse '{}' not found", name)).into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
+        }
+    }
+}
+
+pub async fn update_warehouse(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(name): Path<String>,
+    Json(payload): Json<UpdateWarehouseRequest>,
+) -> impl IntoResponse {
+    let updates = pangolin_core::model::WarehouseUpdate {
+        name: payload.name,
+        use_sts: payload.use_sts,
+        storage_config: payload.storage_config,
+    };
+    
+    match store.update_warehouse(tenant.0, name, updates).await {
+        Ok(warehouse) => (StatusCode::OK, Json(WarehouseResponse::from(warehouse))).into_response(),
+        Err(e) => {
+            if e.to_string().contains("not found") {
+                (StatusCode::NOT_FOUND, "Warehouse not found").into_response()
             } else {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
             }

@@ -9,8 +9,7 @@ use pangolin_core::audit::AuditLogEntry;
 use uuid::Uuid;
 use anyhow::Result;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use std::collections::HashMap;
+
 use tracing;
 
 
@@ -88,6 +87,29 @@ impl CatalogStore for MemoryStore {
         Ok(tenants)
     }
 
+    async fn update_tenant(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant> {
+        if let Some(mut tenant) = self.tenants.get_mut(&tenant_id) {
+            if let Some(name) = updates.name {
+                tenant.name = name;
+            }
+            if let Some(properties) = updates.properties {
+                tenant.properties.extend(properties);
+            }
+            Ok(tenant.clone())
+        } else {
+            Err(anyhow::anyhow!("Tenant not found"))
+        }
+    }
+
+    async fn delete_tenant(&self, tenant_id: Uuid) -> Result<()> {
+        if self.tenants.remove(&tenant_id).is_some() {
+            // TODO: Cascade delete warehouses and catalogs
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Tenant not found"))
+        }
+    }
+
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
         let key = (tenant_id, warehouse.name.clone());
         self.warehouses.insert(key, warehouse);
@@ -109,6 +131,31 @@ impl CatalogStore for MemoryStore {
             .map(|r| r.value().clone())
             .collect();
         Ok(warehouses)
+    }
+
+    async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse> {
+        let key = (tenant_id, name.clone());
+        if let Some(mut warehouse) = self.warehouses.get_mut(&key) {
+            if let Some(new_name) = updates.name {
+                // If name is changing, we need to remove old key and insert with new key
+                let mut w = warehouse.clone();
+                w.name = new_name.clone();
+                drop(warehouse); // Release the mutable reference
+                self.warehouses.remove(&key);
+                let new_key = (tenant_id, new_name);
+                self.warehouses.insert(new_key, w.clone());
+                return Ok(w);
+            }
+            if let Some(config) = updates.storage_config {
+                warehouse.storage_config.extend(config);
+            }
+            if let Some(use_sts) = updates.use_sts {
+                warehouse.use_sts = use_sts;
+            }
+            Ok(warehouse.clone())
+        } else {
+            Err(anyhow::anyhow!("Warehouse '{}' not found", name))
+        }
     }
 
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
@@ -145,6 +192,24 @@ impl CatalogStore for MemoryStore {
             }
         }
         Ok(catalogs)
+    }
+
+    async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog> {
+        let key = (tenant_id, name.clone());
+        if let Some(mut catalog) = self.catalogs.get_mut(&key) {
+            if let Some(warehouse_name) = updates.warehouse_name {
+                catalog.warehouse_name = Some(warehouse_name);
+            }
+            if let Some(storage_location) = updates.storage_location {
+                catalog.storage_location = Some(storage_location);
+            }
+            if let Some(properties) = updates.properties {
+                catalog.properties.extend(properties);
+            }
+            Ok(catalog.clone())
+        } else {
+            Err(anyhow::anyhow!("Catalog '{}' not found", name))
+        }
     }
 
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {

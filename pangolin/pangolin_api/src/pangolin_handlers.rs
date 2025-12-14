@@ -416,6 +416,13 @@ pub struct CreateCatalogRequest {
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
+#[derive(Deserialize)]
+pub struct UpdateCatalogRequest {
+    warehouse_name: Option<String>,
+    storage_location: Option<String>,
+    properties: Option<std::collections::HashMap<String, String>>,
+}
+
 #[derive(Serialize)]
 pub struct CatalogResponse {
     id: Uuid,
@@ -511,6 +518,32 @@ pub async fn delete_catalog(
         Err(e) => {
             tracing::error!("Failed to delete catalog {}: {}", name, e);
             (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
+    }
+}
+
+pub async fn update_catalog(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(name): Path<String>,
+    Json(payload): Json<UpdateCatalogRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    
+    let updates = pangolin_core::model::CatalogUpdate {
+        warehouse_name: payload.warehouse_name,
+        storage_location: payload.storage_location,
+        properties: payload.properties,
+    };
+    
+    match store.update_catalog(tenant_id, name, updates).await {
+        Ok(catalog) => (StatusCode::OK, Json(CatalogResponse::from(catalog))).into_response(),
+        Err(e) => {
+            if e.to_string().contains("not found") {
+                (StatusCode::NOT_FOUND, "Catalog not found").into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
         }
     }
 }

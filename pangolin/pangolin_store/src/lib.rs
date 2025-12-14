@@ -24,16 +24,20 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn create_tenant(&self, tenant: Tenant) -> Result<()>;
     async fn get_tenant(&self, tenant_id: Uuid) -> Result<Option<Tenant>>;
     async fn list_tenants(&self) -> Result<Vec<Tenant>>;
+    async fn update_tenant(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant>;
+    async fn delete_tenant(&self, tenant_id: Uuid) -> Result<()>;
 
     // Warehouse Operations
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()>;
     async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>>;
     async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>>;
+    async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse>;
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()>;
 
     // Catalog Operations
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()>;
     async fn get_catalog(&self, tenant_id: Uuid, name: String) -> Result<Option<Catalog>>;
+    async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog>;
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()>;
     async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>>;
 

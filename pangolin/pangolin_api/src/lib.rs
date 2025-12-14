@@ -96,13 +96,13 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/audit", get(pangolin_handlers::list_audit_events))
         // Tenant Management
         .route("/api/v1/tenants", get(tenant_handlers::list_tenants).post(tenant_handlers::create_tenant))
-        .route("/api/v1/tenants/:id", get(tenant_handlers::get_tenant))
+        .route("/api/v1/tenants/:id", get(tenant_handlers::get_tenant).put(tenant_handlers::update_tenant).delete(tenant_handlers::delete_tenant))
         // Warehouse Management
         .route("/api/v1/warehouses", get(warehouse_handlers::list_warehouses).post(warehouse_handlers::create_warehouse))
-        .route("/api/v1/warehouses/:name", get(warehouse_handlers::get_warehouse).delete(warehouse_handlers::delete_warehouse))
+        .route("/api/v1/warehouses/:name", get(warehouse_handlers::get_warehouse).put(warehouse_handlers::update_warehouse).delete(warehouse_handlers::delete_warehouse))
         // Catalog Management
         .route("/api/v1/catalogs", get(pangolin_handlers::list_catalogs).post(pangolin_handlers::create_catalog))
-        .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog).delete(pangolin_handlers::delete_catalog))
+        .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog).put(pangolin_handlers::update_catalog).delete(pangolin_handlers::delete_catalog))
         // Federated Catalog Management
         .route("/api/v1/federated-catalogs", post(federated_catalog_handlers::create_federated_catalog).get(federated_catalog_handlers::list_federated_catalogs))
         .route("/api/v1/federated-catalogs/:name", get(federated_catalog_handlers::get_federated_catalog).delete(federated_catalog_handlers::delete_federated_catalog))
