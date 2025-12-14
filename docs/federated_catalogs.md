@@ -440,6 +440,6 @@ pub struct FederatedCatalogConfig {
 ## Related Documentation
 
 - [Service Users](./service_users.md) - For creating service users for federation
-- [RBAC](./features/rbac.md) - For managing permissions on federated catalogs
+- [Permissions System](../permissions.md) - For managing permissions on federated catalogs
 - [Audit Logs](./features/audit_logs.md) - For monitoring federated access
 - [API Reference](./api/api_overview.md) - Complete API documentation

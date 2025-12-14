@@ -1,17 +1,111 @@
 # Warehouse Management
 
-Pangolin uses warehouses to store credentials and storage configuration. Warehouses are internal to Pangolin and are referenced by catalogs.
+## Overview
 
-## Concepts
-- **Warehouse**: Stores storage credentials and configuration (S3, Azure, GCS, etc.)
-- **Catalog**: References a warehouse and specifies a storage location for that catalog
-- **Credential Vending**: Warehouses can be configured to use STS (dynamic credentials) or static credentials
+Warehouses in Pangolin define storage configurations and credential management strategies for your Iceberg tables. Each warehouse represents a storage backend (S3, Azure Blob, GCS) and controls how clients access data.
 
-## Warehouse Configuration
+**Key Concepts**:
+- **Warehouse**: Storage configuration and credential vending settings
+- **Catalog**: References a warehouse and defines a storage location
+- **Credential Vending**: Automatic provisioning of temporary credentials to clients
 
-### use_sts Flag
-- **`true`**: Pangolin will vend temporary STS credentials to clients (recommended for production)
-- **`false`**: Pangolin will pass through static credentials from the warehouse configuration
+---
+
+## Creating a Warehouse
+
+### Basic Warehouse (Static Credentials)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -H "X-Pangolin-Tenant: <tenant-id>" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "dev_warehouse",
+    "use_sts": false,
+    "storage_config": {
+      "type": "s3",
+      "bucket": "my-dev-bucket",
+      "region": "us-east-1"
+    }
+  }'
+```
+
+**Configuration**:
+- `use_sts: false` - Clients use static credentials from their environment
+- Suitable for development and testing
+
+### Production Warehouse (STS Credential Vending)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -H "X-Pangolin-Tenant: <tenant-id>" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "production_warehouse",
+    "use_sts": true,
+    "storage_config": {
+      "type": "s3",
+      "bucket": "my-prod-bucket",
+      "region": "us-east-1",
+      "role_arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
+    }
+  }'
+```
+
+**Configuration**:
+- `use_sts: true` - Pangolin vends temporary STS credentials to clients
+- Recommended for production environments
+- Requires IAM role with S3 access permissions
+
+---
+
+## Storage Backend Configuration
+
+### AWS S3
+
+```json
+{
+  "type": "s3",
+  "bucket": "my-bucket",
+  "region": "us-east-1",
+  "role_arn": "arn:aws:iam::123456789012:role/DataAccess"
+}
+```
+
+### Azure Blob Storage
+
+```json
+{
+  "type": "azure",
+  "account_name": "mystorageaccount",
+  "container": "data"
+}
+```
+
+### Google Cloud Storage
+
+```json
+{
+  "type": "gcs",
+  "bucket": "my-gcs-bucket",
+  "project_id": "my-project"
+}
+```
+
+### MinIO (S3-Compatible)
+
+```json
+{
+  "type": "s3",
+  "bucket": "minio-bucket",
+  "endpoint": "http://minio:9000",
+  "allow_http": true
+}
+```
+
+---
 
 ## API Endpoints
 
@@ -22,30 +116,8 @@ Pangolin uses warehouses to store credentials and storage configuration. Warehou
 - `Authorization`: `Bearer <token>`
 - `X-Pangolin-Tenant`: `<Tenant-ID>`
 
-**Response:**
-```json
-[
-  {
-    "id": "uuid",
-    "name": "main_warehouse",
-    "tenant_id": "uuid",
-    "use_sts": true,
-    "storage_config": {
-      "type": "s3",
-      "bucket": "my-bucket",
-      "region": "us-east-1",
-      "role_arn": "arn:aws:iam::123456789012:role/PangolinRole"
-    }
-  }
-]
-```
-
 ### Create Warehouse
 `POST /api/v1/warehouses`
-
-**Headers:**
-- `Authorization`: `Bearer <token>`
-- `X-Pangolin-Tenant`: `<Tenant-ID>`
 
 **Body (with STS):**
 ```json
@@ -61,31 +133,14 @@ Pangolin uses warehouses to store credentials and storage configuration. Warehou
 }
 ```
 
-**Body (without STS - static credentials):**
-```json
-{
-  "name": "dev_warehouse",
-  "use_sts": false,
-  "storage_config": {
-    "type": "s3",
-    "bucket": "dev-bucket",
-    "region": "us-east-1",
-    "access_key_id": "AKIAIOSFODNN7EXAMPLE",
-    "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-  }
-}
-```
-
 ### Get Warehouse
 `GET /api/v1/warehouses/{name}`
 
-**Headers:**
-- `Authorization`: `Bearer <token>`
-- `X-Pangolin-Tenant`: `<Tenant-ID>`
+---
 
 ## Catalog Association
 
-After creating a warehouse, you can create catalogs that reference it:
+After creating a warehouse, create catalogs that reference it:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/catalogs \
@@ -98,9 +153,19 @@ curl -X POST http://localhost:8080/api/v1/catalogs \
   }'
 ```
 
+---
+
 ## Best Practices
 
-1. **Use STS in Production**: Set `use_sts: true` for production warehouses to leverage temporary credentials
-2. **Static Credentials for Development**: Use `use_sts: false` with static credentials for local development
-3. **Separate Warehouses by Environment**: Create different warehouses for dev, staging, and production
-4. **Scope Storage Locations**: Use the catalog's `storage_location` to organize data within a warehouse
+1. **Use STS in Production**: Set `use_sts: true` for production warehouses
+2. **Static Credentials for Development**: Use `use_sts: false` for local development
+3. **Separate Warehouses by Environment**: Create different warehouses for dev, staging, production
+4. **Scope Storage Locations**: Use catalog's `storage_location` to organize data
+
+---
+
+## Related Documentation
+
+- [Security & Credential Vending](./security_vending.md) - Detailed credential vending guide
+- [AWS S3 Storage](../storage/storage_s3.md) - S3 backend configuration
+- [Client Configuration](../getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup

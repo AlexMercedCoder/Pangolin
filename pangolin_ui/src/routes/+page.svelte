@@ -1,94 +1,41 @@
 <script lang="ts">
-    import { user } from '$lib/stores';
+	import Card from '$lib/components/ui/Card.svelte';
 </script>
 
-<div class="dashboard">
-    <h1>Dashboard</h1>
-    
-    <div class="welcome-section">
-        <h2>Welcome, {$user?.username || 'Guest'}!</h2>
-        <p>This is your Pangolin Lakehouse Catalog.</p>
-    </div>
+<svelte:head>
+	<title>Dashboard - Pangolin</title>
+</svelte:head>
 
-    <div class="stats-grid">
-        <div class="stat-card">
-            <span class="material-icons">inventory_2</span>
-            <div class="stat-info">
-                <span class="value">0</span>
-                <span class="label">Total Assets</span>
-            </div>
-        </div>
-        <div class="stat-card">
-            <span class="material-icons">group</span>
-            <div class="stat-info">
-                <span class="value">0</span>
-                <span class="label">Users</span>
-            </div>
-        </div>
-         <div class="stat-card">
-            <span class="material-icons">lock</span>
-            <div class="stat-info">
-                <span class="value">0</span>
-                <span class="label">Access Requests</span>
-            </div>
-        </div>
-    </div>
+<div class="space-y-6">
+	<div>
+		<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+		<p class="mt-2 text-gray-600 dark:text-gray-400">Welcome to Pangolin Lakehouse Catalog</p>
+	</div>
+
+	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+		<Card title="Catalogs">
+			<div class="text-center">
+				<p class="text-4xl font-bold text-primary-600">0</p>
+				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Total Catalogs</p>
+			</div>
+		</Card>
+
+		<Card title="Namespaces">
+			<div class="text-center">
+				<p class="text-4xl font-bold text-secondary-600">0</p>
+				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Total Namespaces</p>
+			</div>
+		</Card>
+
+		<Card title="Tables">
+			<div class="text-center">
+				<p class="text-4xl font-bold text-success-600">0</p>
+				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Total Tables</p>
+			</div>
+		</Card>
+	</div>
+
+	<Card title="Recent Activity">
+		<p class="text-gray-600 dark:text-gray-400">No recent activity</p>
+	</Card>
 </div>
-
-<style>
-    .dashboard {
-        padding: 1rem;
-    }
-    
-    h1 {
-        font-size: 2rem;
-        margin-bottom: 2rem;
-        color: var(--md-sys-color-primary);
-    }
-
-    .welcome-section {
-        margin-bottom: 3rem;
-        background-color: var(--md-sys-color-surface-container);
-        padding: 2rem;
-        border-radius: 16px;
-    }
-
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 1.5rem;
-    }
-
-    .stat-card {
-        background-color: var(--md-sys-color-surface);
-        padding: 1.5rem;
-        border-radius: 16px;
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border: 1px solid var(--md-sys-color-outline-variant);
-    }
-
-    .stat-card .material-icons {
-        font-size: 3rem;
-        color: var(--md-sys-color-primary);
-        opacity: 0.8;
-    }
-
-    .stat-info {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .value {
-        font-size: 2rem;
-        font-weight: bold;
-        color: var(--md-sys-color-on-surface);
-    }
-
-    .label {
-        font-size: 0.875rem;
-        color: var(--md-sys-color-outline);
-    }
-</style>

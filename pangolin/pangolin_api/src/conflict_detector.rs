@@ -50,7 +50,7 @@ impl ConflictDetector {
         branch_name: &str,
     ) -> Result<Vec<Asset>> {
         // Get all namespaces in the catalog
-        let namespaces = self.store.list_namespaces(tenant_id, catalog_name).await?;
+        let namespaces = self.store.list_namespaces(tenant_id, catalog_name, None).await?;
         
         let mut all_assets = Vec::new();
         for namespace in namespaces {

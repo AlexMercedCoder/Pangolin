@@ -9,7 +9,8 @@ use pangolin_store::CatalogStore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::auth::{TenantId, UserSession};
+use crate::auth::TenantId;
+use pangolin_core::user::UserSession;
 
 type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
@@ -185,8 +186,8 @@ pub async fn complete_merge(
         operation.source_branch.clone(),
         operation.target_branch.clone(),
     ).await {
-        Ok(_) => {
-            let commit_id = Uuid::new_v4(); // In real implementation, get actual commit ID
+        Ok(commit_id) => {
+            // Use the actual commit ID from the merge operation
             let _ = store.complete_merge_operation(operation_id, commit_id).await;
 
             // Audit log

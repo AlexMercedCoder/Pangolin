@@ -21,9 +21,10 @@ chrono = { workspace = true }
 jsonwebtoken = { version = "10.2.0", features = ["rust_crypto", "use_pem"], default-features = false }
 base64 = "0.22.1"
 bcrypt = "0.15"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.11", features = ["json"] }
 urlencoding = "2.1"
 rand = "0.8"
+bytes = "1.5"
 
 [dev-dependencies]
 hyper = { version = "1.0", features = ["full"] }

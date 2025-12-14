@@ -3,6 +3,8 @@ use std::sync::Arc;
 use pangolin_store::CatalogStore;
 use pangolin_store::memory::MemoryStore;
 use axum::routing::{get, post, delete, put};
+use tower_http::cors::{CorsLayer, Any};
+use axum::http::{HeaderValue, Method};
 
 pub mod iceberg_handlers;
 pub mod pangolin_handlers;
@@ -41,7 +43,19 @@ mod iceberg_handlers_test;
 mod signing_handlers_test;
 
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
+    // Configure CORS to allow UI requests
+    let cors = CorsLayer::new()
+        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::ACCEPT,
+        ])
+        .allow_credentials(true);
+
     Router::new()
+        .route("/health", get(|| async { "OK" }))
         .route("/v1/config", get(iceberg_handlers::config))
         .route("/v1/:prefix/config", get(iceberg_handlers::config))
         .route("/v1/:prefix/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
@@ -132,10 +146,11 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Business Metadata (commented out - handlers not yet fully implemented)
         .route("/api/v1/business-metadata/:asset_id", get(business_metadata_handlers::get_business_metadata).delete(business_metadata_handlers::delete_business_metadata))
         // .route("/api/v1/business-metadata/:asset_id", put(business_metadata_handlers::upsert_business_metadata))
-        // Access Requests (commented out - handlers not yet fully implemented)
-        .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
+        // Access Requests - DUPLICATE REMOVED (already defined on line 107-108)
+        // .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
         // .route("/api/v1/access-requests", post(business_metadata_handlers::create_access_request))
         // .route("/api/v1/access-requests/:id", get(business_metadata_handlers::get_access_request).put(business_metadata_handlers::update_access_request))
         .layer(axum::middleware::from_fn(auth_middleware::auth_middleware_wrapper))
+        .layer(cors)
         .with_state(store)
 }

@@ -14,7 +14,7 @@ Pangolin supports secure authentication via **Basic Auth** (username/password) a
 - **Method**: Bearer Token header (`Authorization: Bearer <jwt_token>`).
 - **Use Case**: Day-to-day operations, PyIceberg connections, Data Engineering workflows.
 
-> **Note on Service Accounts**: Pangolin does not currently have a separate "Service Account" entity. To create a service account for a script/pipeline, simply create a standard Tenant User and manage their credentials securely.
+> **Note on Service Accounts**: Pangolin implements service accounts as **Service Users** with API key authentication. See [Service Users](./service_users.md) for details on creating programmatic identities for CI/CD, ETL, and automation.
 
 ## Token Generation Flows
 
@@ -63,9 +63,9 @@ from pyiceberg.catalog import load_catalog
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "http://localhost:8080/iceberg/default", # 'default' is the catalog name
-        "type": "rest",
-        "token": "YOUR_PANGOLIN_JWT_TOKEN",            # Obtained from login
+        "uri": "http://localhost:8080",
+        "prefix": "analytics",  # Catalog name
+        "token": "YOUR_PANGOLIN_JWT_TOKEN",  # Obtained from login
         # If accessing storage directly (no vending):
         # "s3.access-key-id": "...",
         # "s3.secret-access-key": "...",

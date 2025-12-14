@@ -57,7 +57,7 @@ To read or write to a specific branch, append the `@branchName` suffix to the ta
 ### 3. Merging
 - **Merge**: Integrate changes from a feature branch back into `main`.
 - **Conflict Resolution**: Pangolin detects data conflicts (e.g., concurrent updates to the same partition).
-- **See [Merge Conflicts & Best Practices](merge_conflicts.md)** for details on how to avoid and resolve merge issues.
+- **See [Merge Conflicts & Best Practices](../merge_conflicts.md)** for details on how to avoid and resolve merge issues.
 
 **Payload:**
 ```json
@@ -75,5 +75,5 @@ To read or write to a specific branch, append the `@branchName` suffix to the ta
 
 ## Best Practices
 - **Isolation**: Always use a new branch for schema evolution or bulk data ingestion.
-- **Cleanup**: Delete experimental branches after dpc.
+- **Cleanup**: Delete experimental branches after merge.
 - **Naming**: Use descriptive names like `user/feature-x` or `ingest/batch-123`.

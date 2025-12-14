@@ -32,7 +32,7 @@ async fn check_and_forward_if_federated(
     headers: HeaderMap,
 ) -> Option<axum::response::Response> {
     // Get the catalog
-    let catalog = match store.get_catalog(tenant_id, catalog_name).await {
+    let catalog = match store.get_catalog(tenant_id, catalog_name.to_string()).await {
         Ok(Some(c)) => c,
         Ok(None) => return None, // Catalog not found, let handler deal with it
         Err(_) => return None,

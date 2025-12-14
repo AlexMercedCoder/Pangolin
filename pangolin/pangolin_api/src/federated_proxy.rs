@@ -32,8 +32,19 @@ impl FederatedCatalogProxy {
     ) -> Result<Response> {
         let url = format!("{}{}", config.base_url, path);
         
-        // Create request
-        let mut request = self.client.request(method.clone(), &url);
+        // Convert axum::http::Method to reqwest::Method
+        let reqwest_method = match method {
+            Method::GET => reqwest::Method::GET,
+            Method::POST => reqwest::Method::POST,
+            Method::PUT => reqwest::Method::PUT,
+            Method::DELETE => reqwest::Method::DELETE,
+            Method::HEAD => reqwest::Method::HEAD,
+            Method::OPTIONS => reqwest::Method::OPTIONS,
+            Method::PATCH => reqwest::Method::PATCH,
+            _ => reqwest::Method::GET, // Default fallback
+        };
+        
+        let mut request = self.client.request(reqwest_method, &url);
         
         // Add authentication
         request = self.add_auth(request, config);
@@ -41,7 +52,10 @@ impl FederatedCatalogProxy {
         // Forward relevant headers (skip auth headers from client)
         for (key, value) in headers.iter() {
             if !Self::is_auth_header(key.as_str()) {
-                request = request.header(key, value);
+                // Convert axum headers to reqwest headers via strings
+                if let Ok(value_str) = value.to_str() {
+                    request = request.header(key.as_str(), value_str);
+                }
             }
         }
         

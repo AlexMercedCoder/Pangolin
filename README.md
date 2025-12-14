@@ -49,7 +49,7 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [Client Configuration](docs/getting-started/client_configuration.md) - PyIceberg, Spark, Trino, Dremio setup
 
 ### 🔐 Security & Authentication
-- [Authentication Setup](docs/setup/authentication.md) - JWT and OAuth configuration
+- [Authentication Setup](docs/authentication.md) - JWT and OAuth configuration
 - [Service Users](docs/service_users.md) - API key authentication for programmatic access
 - [Security & Credential Vending](docs/features/security_vending.md) - S3 credential vending
 
