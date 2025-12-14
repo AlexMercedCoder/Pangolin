@@ -2,10 +2,13 @@ pub mod memory;
 pub mod signer;
 pub mod postgres;
 pub mod mongo;
+pub mod sqlite;
 
 pub use memory::MemoryStore;
 pub use postgres::PostgresStore;
 pub use mongo::MongoStore;
+pub use sqlite::SqliteStore;
+pub use signer::SignerImpl;
 
 use async_trait::async_trait;
 use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalog, Warehouse};
