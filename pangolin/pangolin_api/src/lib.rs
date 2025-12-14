@@ -99,7 +99,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/tenants/:id", get(tenant_handlers::get_tenant))
         // Warehouse Management
         .route("/api/v1/warehouses", get(warehouse_handlers::list_warehouses).post(warehouse_handlers::create_warehouse))
-        .route("/api/v1/warehouses/:name", get(warehouse_handlers::get_warehouse))
+        .route("/api/v1/warehouses/:name", get(warehouse_handlers::get_warehouse).delete(warehouse_handlers::delete_warehouse))
         // Catalog Management
         .route("/api/v1/catalogs", get(pangolin_handlers::list_catalogs).post(pangolin_handlers::create_catalog))
         .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog).delete(pangolin_handlers::delete_catalog))

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::env;
 use tower_http::cors::{CorsLayer, Any};
 use axum::http::{HeaderValue, Method};
-use pangolin_store::{CatalogStore, MemoryStore, S3Store, PostgresStore, MongoStore};
+use pangolin_store::{CatalogStore, MemoryStore, PostgresStore, MongoStore};
 use pangolin_api::app;
 use uuid::Uuid;
 use pangolin_core::model::Tenant;
@@ -18,14 +18,12 @@ async fn main() {
     
     let store: Arc<dyn CatalogStore + Send + Sync> = if let Ok(db_url) = std::env::var("DATABASE_URL") {
         if db_url.starts_with("postgresql://") || db_url.starts_with("postgres://") {
-            tracing::info!("Using Postgres Storage");
-            Arc::new(PostgresStore::new(&db_url).await.expect("Failed to connect to Postgres"))
+            tracing::info!("Using PostgreSQL storage backend");
+            Arc::new(PostgresStore::new(&db_url).await.expect("Failed to connect to PostgreSQL"))
         } else if db_url.starts_with("mongodb://") || db_url.starts_with("mongodb+srv://") {
-            tracing::info!("Using MongoDB Storage");
-            Arc::new(MongoStore::new(&db_url).await.expect("Failed to connect to MongoDB"))
-        } else if db_url.starts_with("s3://") {
-            tracing::info!("Using S3 Storage");
-            Arc::new(S3Store::new().expect("Failed to initialize S3 storage"))
+            tracing::info!("Using MongoDB storage backend");
+            let db_name = std::env::var("MONGO_DB_NAME").unwrap_or_else(|_| "pangolin".to_string());
+            Arc::new(MongoStore::new(&db_url, &db_name).await.expect("Failed to connect to MongoDB"))
         } else {
             tracing::warn!("Unknown DATABASE_URL format, falling back to Memory Storage");
             Arc::new(MemoryStore::new())

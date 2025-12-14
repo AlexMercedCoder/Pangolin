@@ -77,10 +77,12 @@ impl CatalogStore for PostgresStore {
 
     // Warehouse Operations
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
-        sqlx::query("INSERT INTO warehouses (tenant_id, name, storage_config) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO warehouses (id, tenant_id, name, use_sts, storage_config) VALUES ($1, $2, $3, $4, $5)")
+            .bind(warehouse.id)
             .bind(tenant_id)
-            .bind(warehouse.name)
-            .bind(serde_json::to_value(warehouse.storage_config)?)
+            .bind(&warehouse.name)
+            .bind(warehouse.use_sts)
+            .bind(serde_json::to_value(&warehouse.storage_config)?)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -138,36 +140,57 @@ impl CatalogStore for PostgresStore {
         Ok(warehouses)
     }
 
-    async fn delete_warehouse(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
-        Err(anyhow::anyhow!("PostgresStore not fully implemented"))
+    async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        let result = sqlx::query("DELETE FROM warehouses WHERE tenant_id = $1 AND name = $2")
+            .bind(tenant_id)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+        
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Warehouse '{}' not found", name));
+        }
+        Ok(())
     }
 
     // Catalog Operations
     async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()> {
-        sqlx::query("INSERT INTO catalogs (tenant_id, name, properties) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO catalogs (id, tenant_id, name, catalog_type, warehouse_name, storage_location, federated_config, properties) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+            .bind(catalog.id)
             .bind(tenant_id)
-            .bind(catalog.name)
-            .bind(serde_json::to_value(catalog.properties)?)
+            .bind(&catalog.name)
+            .bind(format!("{:?}", catalog.catalog_type))
+            .bind(&catalog.warehouse_name)
+            .bind(&catalog.storage_location)
+            .bind(serde_json::to_value(&catalog.federated_config)?)
+            .bind(serde_json::to_value(&catalog.properties)?)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
     async fn get_catalog(&self, tenant_id: Uuid, name: String) -> Result<Option<Catalog>> {
-        let row = sqlx::query("SELECT name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1 AND name = $2")
+        let row = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = $1 AND name = $2")
             .bind(tenant_id)
             .bind(name)
             .fetch_optional(&self.pool)
             .await?;
 
         if let Some(row) = row {
+            let catalog_type_str: String = row.get("catalog_type");
+            let catalog_type = match catalog_type_str.as_str() {
+                "Local" => pangolin_core::model::CatalogType::Local,
+                "Federated" => pangolin_core::model::CatalogType::Federated,
+                _ => pangolin_core::model::CatalogType::Local,
+            };
+            
             Ok(Some(Catalog {
                 id: row.get("id"),
                 name: row.get("name"),
-                catalog_type: pangolin_core::model::CatalogType::Local,
+                catalog_type,
                 warehouse_name: row.get("warehouse_name"),
                 storage_location: row.get("storage_location"),
-                federated_config: None,
+                federated_config: serde_json::from_value(row.get("federated_config")).ok(),
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             }))
         } else {
@@ -196,35 +219,43 @@ impl CatalogStore for PostgresStore {
         Ok(catalogs)
     }
 
-    async fn delete_catalog(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
-        Err(anyhow::anyhow!("PostgresStore not fully implemented"))
+    async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        let result = sqlx::query("DELETE FROM catalogs WHERE tenant_id = $1 AND name = $2")
+            .bind(tenant_id)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+        
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Catalog '{}' not found", name));
+        }
+        Ok(())
     }
 
     // Namespace Operations
     async fn create_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Namespace) -> Result<()> {
-        sqlx::query("INSERT INTO namespaces (tenant_id, catalog_name, name, properties) VALUES ($1, $2, $3, $4)")
+        sqlx::query("INSERT INTO namespaces (id, tenant_id, catalog_name, namespace_path, properties) VALUES ($1, $2, $3, $4, $5)")
+            .bind(Uuid::new_v4())
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(namespace.name.join("\x1F"))
-            .bind(serde_json::to_value(namespace.properties)?)
+            .bind(&namespace.name)
+            .bind(serde_json::to_value(&namespace.properties)?)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
     async fn get_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<Option<Namespace>> {
-        let name_str = namespace.join("\x1F");
-        let row = sqlx::query("SELECT name, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 AND name = $3")
+        let row = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3")
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(name_str)
+            .bind(&namespace)
             .fetch_optional(&self.pool)
             .await?;
 
         if let Some(row) = row {
-            let name_val: String = row.get("name");
             Ok(Some(Namespace {
-                name: name_val.split('\x1F').map(|s| s.to_string()).collect(),
+                name: row.get("namespace_path"),
                 properties: serde_json::from_value(row.get("properties"))?,
             }))
         } else {
@@ -232,25 +263,17 @@ impl CatalogStore for PostgresStore {
         }
     }
 
-    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>) -> Result<Vec<Namespace>> {
-        let prefix = if let Some(p) = parent {
-            p + "\x1F%"
-        } else {
-            "%".to_string()
-        };
-
-        let rows = sqlx::query("SELECT name, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 AND name LIKE $3")
+    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>) -> Result<Vec<Namespace>> {
+        let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2")
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(prefix)
             .fetch_all(&self.pool)
             .await?;
 
         let mut namespaces = Vec::new();
         for row in rows {
-            let name_val: String = row.get("name");
             namespaces.push(Namespace {
-                name: name_val.split('\x1F').map(|s| s.to_string()).collect(),
+                name: row.get("namespace_path"),
                 properties: serde_json::from_value(row.get("properties"))?,
             });
         }
@@ -258,26 +281,24 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()> {
-        let name_str = namespace.join("\x1F");
-        sqlx::query("DELETE FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 AND name = $3")
+        sqlx::query("DELETE FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3")
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(name_str)
+            .bind(&namespace)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
     async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()> {
-        let name_str = namespace.join("\x1F");
         let ns = self.get_namespace(tenant_id, catalog_name, namespace.clone()).await?;
         if let Some(mut n) = ns {
             n.properties.extend(properties);
-            sqlx::query("UPDATE namespaces SET properties = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND name = $4")
-                .bind(serde_json::to_value(n.properties)?)
+            sqlx::query("UPDATE namespaces SET properties = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_path = $4")
+                .bind(serde_json::to_value(&n.properties)?)
                 .bind(tenant_id)
                 .bind(catalog_name)
-                .bind(name_str)
+                .bind(&namespace)
                 .execute(&self.pool)
                 .await?;
         }
@@ -285,105 +306,97 @@ impl CatalogStore for PostgresStore {
     }
 
     // Asset Operations
-    async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
-        let namespace_name = namespace.join("\x1F");
-        
-        sqlx::query("INSERT INTO assets (tenant_id, catalog_name, namespace_name, name, kind, location, properties, active_branch) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (tenant_id, catalog_name, namespace_name, name) DO UPDATE SET kind = $5, location = $6, properties = $7, active_branch = $8")
+    async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
+        sqlx::query("INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, asset_type, metadata_location, properties) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+            .bind(Uuid::new_v4())
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(namespace_name)
-            .bind(asset.name)
+            .bind(&namespace)
+            .bind(&asset.name)
             .bind(format!("{:?}", asset.kind))
-            .bind(asset.location)
-            .bind(serde_json::to_value(asset.properties)?)
-            .bind(branch)
+            .bind(&asset.location)
+            .bind(serde_json::to_value(&asset.properties)?)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
-    async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
-        let namespace_name = namespace.join("\x1F");
-        let row = sqlx::query("SELECT name, kind, location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_name = $3 AND name = $4")
+    async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
+        let row = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3 AND name = $4")
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(namespace_name)
-            .bind(name)
+            .bind(&namespace)
+            .bind(&name)
             .fetch_optional(&self.pool)
             .await?;
 
         if let Some(row) = row {
-            let kind_str: String = row.get("kind");
-            let kind = match kind_str.as_str() {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
+            let asset_type_str: String = row.get("asset_type");
+            let kind = match asset_type_str.as_str() {
+                "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
+                "View" => pangolin_core::model::AssetType::View,
+                _ => pangolin_core::model::AssetType::IcebergTable,
             };
-
+            
             Ok(Some(Asset {
-                id: Uuid::new_v4(), // Placeholder until schema update
+                id: row.get("id"),
                 name: row.get("name"),
                 kind,
-                location: row.get("location"),
-                properties: serde_json::from_value(row.get("properties"))?,
+                location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
+                properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             }))
         } else {
             Ok(None)
         }
     }
 
-    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
-        let namespace_name = namespace.join("\x1F");
-        let rows = sqlx::query("SELECT name, kind, location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_name = $3")
+    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3")
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(namespace_name)
+            .bind(&namespace)
             .fetch_all(&self.pool)
             .await?;
 
         let mut assets = Vec::new();
         for row in rows {
-            let kind_str: String = row.get("kind");
-            let kind = match kind_str.as_str() {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
+            let asset_type_str: String = row.get("asset_type");
+            let kind = match asset_type_str.as_str() {
+                "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
+                "View" => pangolin_core::model::AssetType::View,
+                _ => pangolin_core::model::AssetType::IcebergTable,
             };
-
+            
             assets.push(Asset {
-                id: Uuid::new_v4(), // Placeholder until schema update
+                id: row.get("id"),
                 name: row.get("name"),
                 kind,
-                location: row.get("location"),
-                properties: serde_json::from_value(row.get("properties"))?,
+                location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
+                properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             });
         }
         Ok(assets)
     }
 
-    async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
-        let namespace_name = namespace.join("\x1F");
-        sqlx::query("DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_name = $3 AND name = $4")
+    async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
+        sqlx::query("DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3 AND name = $4")
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(namespace_name)
-            .bind(name)
+            .bind(&namespace)
+            .bind(&name)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
-    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
-         let source_ns_str = source_namespace.join("\x1F");
-         let dest_ns_str = dest_namespace.join("\x1F");
-         
-         sqlx::query("UPDATE assets SET name = $1, namespace_name = $2 WHERE tenant_id = $3 AND catalog_name = $4 AND namespace_name = $5 AND name = $6")
-            .bind(dest_name)
-            .bind(dest_ns_str)
+    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
+        sqlx::query("UPDATE assets SET namespace_path = $1, name = $2 WHERE tenant_id = $3 AND catalog_name = $4 AND namespace_path = $5 AND name = $6")
+            .bind(&dest_namespace)
+            .bind(&dest_name)
             .bind(tenant_id)
             .bind(catalog_name)
-            .bind(source_ns_str)
-            .bind(source_name)
+            .bind(&source_namespace)
+            .bind(&source_name)
             .execute(&self.pool)
             .await?;
         Ok(())

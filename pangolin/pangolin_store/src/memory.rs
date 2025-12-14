@@ -112,10 +112,9 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
-        let mut warehouses = self.warehouses.write().await;
         let key = (tenant_id, name.clone());
         
-        if warehouses.remove(&key).is_some() {
+        if self.warehouses.remove(&key).is_some() {
             Ok(())
         } else {
             Err(anyhow::anyhow!("Warehouse '{}' not found", name))

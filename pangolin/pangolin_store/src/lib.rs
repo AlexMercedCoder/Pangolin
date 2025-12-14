@@ -1,11 +1,9 @@
 pub mod memory;
-pub mod s3;
 pub mod signer;
 pub mod postgres;
 pub mod mongo;
 
 pub use memory::MemoryStore;
-pub use s3::S3Store;
 pub use postgres::PostgresStore;
 pub use mongo::MongoStore;
 

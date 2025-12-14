@@ -20,10 +20,10 @@ pub struct MongoStore {
 }
 
 impl MongoStore {
-    pub async fn new(connection_string: &str) -> Result<Self> {
+    pub async fn new(connection_string: &str, database_name: &str) -> Result<Self> {
         let client_options = ClientOptions::parse(connection_string).await?;
         let client = Client::with_options(client_options)?;
-        let db = client.database("pangolin"); // Default DB name, could be configurable
+        let db = client.database(database_name);
         Ok(Self { client, db })
     }
 
@@ -105,8 +105,14 @@ impl CatalogStore for MongoStore {
         Ok(warehouses)
     }
 
-    async fn delete_warehouse(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
-        Err(anyhow::anyhow!("MongoStore not fully implemented"))
+    async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": &name };
+        let result = self.warehouses().delete_one(filter).await?;
+        
+        if result.deleted_count == 0 {
+            return Err(anyhow::anyhow!("Warehouse '{}' not found", name));
+        }
+        Ok(())
     }
 
     // Catalog Operations
@@ -121,8 +127,10 @@ impl CatalogStore for MongoStore {
         // Let's use Document for flexibility here since we need to add tenant_id context.
         
         let mut doc = doc! {
+            "id": to_bson_uuid(catalog.id),
             "tenant_id": to_bson_uuid(tenant_id),
             "name": &catalog.name,
+            "catalog_type": format!("{:?}", catalog.catalog_type),
             "properties": mongodb::bson::to_bson(&catalog.properties)?
         };
         
@@ -132,6 +140,9 @@ impl CatalogStore for MongoStore {
         }
         if let Some(ref storage_location) = catalog.storage_location {
             doc.insert("storage_location", storage_location);
+        }
+        if let Some(ref federated_config) = catalog.federated_config {
+            doc.insert("federated_config", mongodb::bson::to_bson(federated_config)?);
         }
         
         self.db.collection::<Document>("catalogs").insert_one(doc).await?;
@@ -151,8 +162,14 @@ impl CatalogStore for MongoStore {
         Ok(catalogs)
     }
 
-    async fn delete_catalog(&self, _tenant_id: Uuid, _name: String) -> Result<()> {
-        Err(anyhow::anyhow!("MongoStore not fully implemented"))
+    async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": &name };
+        let result = self.db.collection::<Document>("catalogs").delete_one(filter).await?;
+        
+        if result.deleted_count == 0 {
+            return Err(anyhow::anyhow!("Catalog '{}' not found", name));
+        }
+        Ok(())
     }
 
     // Namespace Operations

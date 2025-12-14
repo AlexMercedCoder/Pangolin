@@ -83,3 +83,20 @@ pub async fn get_warehouse(
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
+
+pub async fn delete_warehouse(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match store.delete_warehouse(tenant.0, name.clone()).await {
+        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => {
+            if e.to_string().contains("not found") {
+                (StatusCode::NOT_FOUND, format!("Warehouse '{}' not found", name)).into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
+        }
+    }
+}
