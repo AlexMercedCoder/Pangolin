@@ -12,6 +12,20 @@ use crate::auth::TenantId;
 use axum::Extension;
 use std::collections::HashMap;
 
+// Cloud provider SDK imports (conditional on features)
+#[cfg(feature = "aws-sts")]
+use aws_sdk_sts::Client as StsClient;
+#[cfg(feature = "aws-sts")]
+use aws_config;
+
+#[cfg(feature = "azure-oauth")]
+use azure_identity::ClientSecretCredential;
+#[cfg(feature = "azure-oauth")]
+use azure_core::auth::TokenCredential;
+
+#[cfg(feature = "gcp-oauth")]
+use gcp_auth::{CustomServiceAccount, TokenProvider};
+
 #[derive(Serialize)]
 pub struct StorageCredential {
     pub prefix: String,
@@ -33,6 +47,136 @@ pub struct PresignParams {
 pub struct PresignResponse {
     pub url: String,
 }
+
+// ============================================================================
+// AWS STS Helper Functions
+// ============================================================================
+
+/// Assume an AWS IAM role using STS and return temporary credentials
+#[cfg(feature = "aws-sts")]
+async fn assume_role_aws(
+    role_arn: &str,
+    external_id: Option<&str>,
+    session_name: &str,
+) -> Result<(String, String, String, String), String> {
+    let config = aws_config::load_from_env().await;
+    let sts_client = StsClient::new(&config);
+    
+    let mut request = sts_client
+        .assume_role()
+        .role_arn(role_arn)
+        .role_session_name(session_name)
+        .duration_seconds(3600); // 1 hour
+    
+    if let Some(ext_id) = external_id {
+        request = request.external_id(ext_id);
+    }
+    
+    let response = request.send().await
+        .map_err(|e| format!("STS AssumeRole failed: {}", e))?;
+    
+    let creds = response.credentials()
+        .ok_or_else(|| "No credentials returned from STS".to_string())?;
+    
+    Ok((
+        creds.access_key_id().to_string(),
+        creds.secret_access_key().to_string(),
+        creds.session_token().to_string(),
+        creds.expiration().to_string(),
+    ))
+}
+
+/// Fallback implementation when AWS STS feature is not enabled
+#[cfg(not(feature = "aws-sts"))]
+async fn assume_role_aws(
+    role_arn: &str,
+    _external_id: Option<&str>,
+    _session_name: &str,
+) -> Result<(String, String, String, String), String> {
+    tracing::warn!("AWS STS feature not enabled, returning placeholder credentials");
+    Ok((
+        format!("STS_ACCESS_KEY_FOR_{}", role_arn),
+        "STS_SECRET_KEY_PLACEHOLDER".to_string(),
+        "STS_SESSION_TOKEN_PLACEHOLDER".to_string(),
+        chrono::Utc::now().checked_add_signed(chrono::Duration::hours(1))
+            .unwrap().to_rfc3339(),
+    ))
+}
+
+// ============================================================================
+// Azure OAuth2 Helper Functions
+// ============================================================================
+
+/// Get an Azure OAuth2 token using client credentials
+#[cfg(feature = "azure-oauth")]
+async fn get_azure_token(
+    tenant_id: &str,
+    client_id: &str,
+    client_secret: &str,
+) -> Result<String, String> {
+    let authority_host = azure_core::Url::parse("https://login.microsoftonline.com")
+        .map_err(|e| format!("Failed to parse authority host: {}", e))?;
+    
+    let credential = ClientSecretCredential::new(
+        azure_core::new_http_client(),
+        authority_host,
+        tenant_id.to_string(),
+        client_id.to_string(),
+        client_secret.to_string(),
+    );
+    
+    let token = credential
+        .get_token(&["https://storage.azure.com/.default"])
+        .await
+        .map_err(|e| format!("Azure token acquisition failed: {}", e))?;
+    
+    Ok(token.token.secret().to_string())
+}
+
+/// Fallback implementation when Azure OAuth feature is not enabled
+#[cfg(not(feature = "azure-oauth"))]
+async fn get_azure_token(
+    _tenant_id: &str,
+    _client_id: &str,
+    _client_secret: &str,
+) -> Result<String, String> {
+    tracing::warn!("Azure OAuth feature not enabled, returning placeholder token");
+    Ok("AZURE_OAUTH_TOKEN_PLACEHOLDER".to_string())
+}
+
+// ============================================================================
+// GCP Service Account Helper Functions
+// ============================================================================
+
+/// Get a GCP OAuth2 token using service account credentials
+#[cfg(feature = "gcp-oauth")]
+async fn get_gcp_token(
+    service_account_key_json: &str,
+) -> Result<String, String> {
+    let service_account = CustomServiceAccount::from_json(service_account_key_json)
+        .map_err(|e| format!("Failed to parse GCP service account key: {}", e))?;
+    
+    let scopes = &["https://www.googleapis.com/auth/devstorage.read_write"];
+    let token = service_account
+        .token(scopes)
+        .await
+        .map_err(|e| format!("GCP token acquisition failed: {}", e))?;
+    
+    Ok(token.as_str().to_string())
+}
+
+/// Fallback implementation when GCP OAuth feature is not enabled
+#[cfg(not(feature = "gcp-oauth"))]
+async fn get_gcp_token(
+    _service_account_key_json: &str,
+) -> Result<String, String> {
+    tracing::warn!("GCP OAuth feature not enabled, returning placeholder token");
+    Ok("GCS_OAUTH_TOKEN_PLACEHOLDER".to_string())
+}
+
+// ============================================================================
+// Credential Vending Handlers
+// ============================================================================
 
 /// Get credentials for accessing a table
 /// This endpoint vends credentials based on the catalog's warehouse configuration
@@ -104,10 +248,34 @@ pub async fn get_table_credentials(
         "azure" => {
             // Azure ADLS Gen2 credentials
             if warehouse.use_sts {
-                // Azure STS/OAuth2 mode
-                // TODO: Implement Azure AD OAuth2 token generation
-                config.insert("adls.auth.type".to_string(), "OAuth2".to_string());
-                config.insert("adls.oauth2.token".to_string(), "AZURE_OAUTH_TOKEN_PLACEHOLDER".to_string());
+                // Azure OAuth2 mode - get token using client credentials
+                let tenant_id = match warehouse.storage_config.get("tenant_id") {
+                    Some(id) => id,
+                    None => return (StatusCode::BAD_REQUEST, "Azure tenant_id required for OAuth2").into_response(),
+                };
+                
+                let client_id = match warehouse.storage_config.get("client_id") {
+                    Some(id) => id,
+                    None => return (StatusCode::BAD_REQUEST, "Azure client_id required for OAuth2").into_response(),
+                };
+                
+                let client_secret = match warehouse.storage_config.get("client_secret") {
+                    Some(secret) => secret,
+                    None => return (StatusCode::BAD_REQUEST, "Azure client_secret required for OAuth2").into_response(),
+                };
+                
+                match get_azure_token(tenant_id, client_id, client_secret).await {
+                    Ok(token) => {
+                        config.insert("adls.auth.type".to_string(), "OAuth2".to_string());
+                        config.insert("adls.oauth2.token".to_string(), token);
+                        tracing::info!("✅ Successfully vended Azure OAuth2 token");
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to get Azure token: {}", e);
+                        return (StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Failed to vend Azure credentials: {}", e)).into_response();
+                    }
+                }
             } else {
                 // Azure account key mode
                 let account_name = warehouse.storage_config.get("account_name")
@@ -133,10 +301,24 @@ pub async fn get_table_credentials(
         "gcs" => {
             // Google Cloud Storage credentials
             if warehouse.use_sts {
-                // GCS OAuth2 mode
-                // TODO: Implement GCS OAuth2 token generation
-                config.insert("gcs.auth.type".to_string(), "OAuth2".to_string());
-                config.insert("gcs.oauth2.token".to_string(), "GCS_OAUTH_TOKEN_PLACEHOLDER".to_string());
+                // GCP OAuth2 mode - get token using service account
+                let service_account_key = match warehouse.storage_config.get("service_account_key") {
+                    Some(key) => key,
+                    None => return (StatusCode::BAD_REQUEST, "GCS service_account_key required for OAuth2").into_response(),
+                };
+                
+                match get_gcp_token(service_account_key).await {
+                    Ok(token) => {
+                        config.insert("gcs.auth.type".to_string(), "OAuth2".to_string());
+                        config.insert("gcs.oauth2.token".to_string(), token);
+                        tracing::info!("✅ Successfully vended GCP OAuth2 token");
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to get GCP token: {}", e);
+                        return (StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Failed to vend GCP credentials: {}", e)).into_response();
+                    }
+                }
             } else {
                 // GCS service account key mode
                 let project_id = warehouse.storage_config.get("project_id")
@@ -162,20 +344,30 @@ pub async fn get_table_credentials(
         _ => {
             // S3 credentials (existing logic)
             if warehouse.use_sts {
-                // STS mode: Generate temporary credentials
-                // For MVP, we'll return a placeholder indicating STS would be used
-                // In production, this would call AWS STS AssumeRole
-                
-                // Get role ARN from storage_config
+                // AWS STS mode: Generate temporary credentials via AssumeRole
                 let role_arn = warehouse.storage_config.get("role_arn")
                     .cloned()
                     .unwrap_or_else(|| "arn:aws:iam::123456789012:role/PangolinRole".to_string());
                 
-                // TODO: Implement actual STS AssumeRole call
-                config.insert("access-key".to_string(), format!("STS_ACCESS_KEY_FOR_{}", role_arn));
-                config.insert("secret-key".to_string(), "STS_SECRET_KEY_PLACEHOLDER".to_string());
-                config.insert("session-token".to_string(), "STS_SESSION_TOKEN_PLACEHOLDER".to_string());
-                config.insert("expiration".to_string(), chrono::Utc::now().checked_add_signed(chrono::Duration::hours(1)).unwrap().to_rfc3339());
+                let external_id = warehouse.storage_config.get("external_id")
+                    .map(|s| s.as_str());
+                
+                let session_name = format!("pangolin-{}-{}", tenant_id, catalog_name);
+                
+                match assume_role_aws(&role_arn, external_id, &session_name).await {
+                    Ok((access_key, secret_key, session_token, expiration)) => {
+                        config.insert("access-key".to_string(), access_key);
+                        config.insert("secret-key".to_string(), secret_key);
+                        config.insert("session-token".to_string(), session_token);
+                        config.insert("expiration".to_string(), expiration);
+                        tracing::info!("✅ Successfully assumed AWS role: {}", role_arn);
+                    },
+                    Err(e) => {
+                        tracing::error!("Failed to assume AWS role: {}", e);
+                        return (StatusCode::INTERNAL_SERVER_ERROR,
+                                format!("Failed to vend AWS credentials: {}", e)).into_response();
+                    }
+                }
             } else {
                 // Static mode: Pass through credentials from warehouse
                 let access_key = warehouse.storage_config.get("access_key_id")
