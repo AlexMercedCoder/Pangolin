@@ -19,25 +19,43 @@ Backend storage is where Pangolin stores **catalog metadata** including:
 
 | Backend | Status | Best For | Production Ready |
 |---------|--------|----------|------------------|
+| [In-Memory](memory.md) | ✅ Stable | Development, testing, CI/CD | No (ephemeral) |
+| [SQLite](sqlite.md) | ✅ Stable | Development, embedded, edge deployments | Yes |
 | [PostgreSQL](postgresql.md) | ✅ Stable | Production deployments | Yes |
 | [MongoDB](mongodb.md) | ✅ Stable | Cloud-native, scalable deployments | Yes |
-| [SQLite](sqlite.md) | ✅ Stable | Development, embedded, edge deployments | Yes |
 
 ## Quick Comparison
 
-| Feature | PostgreSQL | MongoDB | SQLite |
-|---------|-----------|---------|--------|
-| **Setup Complexity** | Medium | Medium | Low |
-| **Scalability** | High | Very High | Low |
-| **Transactions** | ✅ ACID | ✅ ACID | ✅ ACID |
-| **Foreign Keys** | ✅ Yes | ❌ No | ✅ Yes |
-| **Schema** | Strict SQL | Flexible | Strict SQL |
-| **Replication** | ✅ Built-in | ✅ Built-in | ❌ Manual |
-| **Cloud Managed** | ✅ RDS, Azure, GCP | ✅ Atlas, Azure, GCP | ❌ No |
-| **Resource Usage** | Medium | Medium | Very Low |
-| **Multi-Tenant Isolation** | ✅ Excellent | ✅ Excellent | ✅ Excellent |
+| Feature | In-Memory | SQLite | PostgreSQL | MongoDB |
+|---------|-----------|--------|------------|---------|
+| **Setup Complexity** | None | Low | Medium | Medium |
+| **Scalability** | Low | Low | High | Very High |
+| **Transactions** | ✅ ACID | ✅ ACID | ✅ ACID | ✅ ACID |
+| **Foreign Keys** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |
+| **Schema** | Strict | Strict SQL | Strict SQL | Flexible |
+| **Replication** | ❌ No | ❌ Manual | ✅ Built-in | ✅ Built-in |
+| **Cloud Managed** | ❌ No | ❌ No | ✅ RDS, Azure, GCP | ✅ Atlas, Azure, GCP |
+| **Resource Usage** | Very Low | Very Low | Medium | Medium |
+| **Persistence** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Multi-Tenant Isolation** | ✅ Excellent | ✅ Excellent | ✅ Excellent | ✅ Excellent |
 
 ## Choosing a Backend
+
+### Use In-Memory When:
+- ✅ You're developing locally
+- ✅ You're running tests (unit or integration)
+- ✅ You need instant setup with zero configuration
+- ✅ You're prototyping or learning
+- ✅ Data persistence is not required
+- ✅ You're running in CI/CD pipelines
+
+### Use SQLite When:
+- ✅ You're developing locally and need persistence
+- ✅ You need embedded database
+- ✅ You're deploying to edge/IoT devices
+- ✅ You want zero configuration with persistence
+- ✅ You have low concurrent write needs
+- ✅ You want minimal resource usage
 
 ### Use PostgreSQL When:
 - ✅ You need a proven, battle-tested SQL database
@@ -53,35 +71,30 @@ Backend storage is where Pangolin stores **catalog metadata** including:
 - ✅ You want flexible schema evolution
 - ✅ You're already using MongoDB in your stack
 
-### Use SQLite When:
-- ✅ You're developing locally
-- ✅ You need embedded database (no separate server)
-- ✅ You're deploying to edge/IoT devices
-- ✅ You have low concurrent write requirements
-- ✅ You want zero configuration
-
 ## Configuration
 
 Set the backend using the `DATABASE_URL` environment variable:
 
 ```bash
+# In-Memory (default - no DATABASE_URL needed)
+# Just don't set DATABASE_URL
+
+# SQLite
+DATABASE_URL=sqlite:///path/to/pangolin.db
+
 # PostgreSQL
 DATABASE_URL=postgresql://user:password@localhost:5432/pangolin
 
 # MongoDB
 DATABASE_URL=mongodb://user:password@localhost:27017/pangolin
-
-# SQLite
-DATABASE_URL=sqlite:///path/to/pangolin.db
-# Or in-memory for testing:
-DATABASE_URL=sqlite::memory:
 ```
 
 ## Next Steps
 
+- [In-Memory Setup Guide](memory.md)
+- [SQLite Setup Guide](sqlite.md)
 - [PostgreSQL Setup Guide](postgresql.md)
 - [MongoDB Setup Guide](mongodb.md)
-- [SQLite Setup Guide](sqlite.md)
 - [Detailed Comparison](comparison.md)
 
 ## Migration Between Backends

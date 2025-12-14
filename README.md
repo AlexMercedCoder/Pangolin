@@ -68,9 +68,10 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 
 ### 💾 Backend Storage (Metadata Persistence)
 - [Overview & Comparison](docs/backend_storage/README.md) - Choose the right backend
+- [In-Memory](docs/backend_storage/memory.md) - ✅ Development & Testing (Ephemeral)
+- [SQLite](docs/backend_storage/sqlite.md) - ✅ Production Ready (Development/Embedded)
 - [PostgreSQL](docs/backend_storage/postgresql.md) - ✅ Production Ready
 - [MongoDB](docs/backend_storage/mongodb.md) - ✅ Production Ready
-- [SQLite](docs/backend_storage/sqlite.md) - ✅ Production Ready (Development/Embedded)
 - [Detailed Comparison](docs/backend_storage/comparison.md) - Feature comparison matrix
 
 ### 🗄️ Warehouse Storage (Object Storage for Data)
