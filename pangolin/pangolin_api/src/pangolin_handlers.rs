@@ -469,10 +469,12 @@ pub async fn create_catalog(
     
     let catalog = pangolin_core::model::Catalog {
         id: Uuid::new_v4(),
-        name: payload.name,
-        warehouse_name: payload.warehouse_name,
-        storage_location: payload.storage_location,
-        properties: payload.properties.unwrap_or_default(),
+        name: payload.name.clone(),
+        catalog_type: pangolin_core::model::CatalogType::Local,
+        warehouse_name: payload.warehouse_name.clone(),
+        storage_location: payload.storage_location.clone(),
+        federated_config: None,
+        properties: payload.properties.clone().unwrap_or_default(),
     };
 
     match store.create_catalog(tenant_id, catalog.clone()).await {

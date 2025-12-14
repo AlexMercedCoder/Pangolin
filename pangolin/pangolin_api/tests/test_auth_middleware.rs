@@ -30,6 +30,7 @@ mod tests {
             properties: std::collections::HashMap::new(),
         }).await.unwrap();
         store.create_catalog(default_tenant_id, pangolin_core::model::Catalog {
+            catalog_type: pangolin_core::model::CatalogType::Local,
             id: uuid::Uuid::new_v4(),
             name: "analytics".to_string(),
             warehouse_name: None,
@@ -86,6 +87,7 @@ mod tests {
             properties: std::collections::HashMap::new(),
         }).await.unwrap();
         store.create_catalog(tenant_id, pangolin_core::model::Catalog {
+            catalog_type: pangolin_core::model::CatalogType::Local,
             id: uuid::Uuid::new_v4(),
             name: "analytics".to_string(),
             warehouse_name: None,
@@ -197,6 +199,7 @@ mod tests {
             properties: std::collections::HashMap::new(),
         }).await.unwrap();
         store.create_catalog(default_tenant_id, pangolin_core::model::Catalog {
+            catalog_type: pangolin_core::model::CatalogType::Local,
             id: uuid::Uuid::new_v4(),
             name: "analytics".to_string(),
             warehouse_name: None,

@@ -40,6 +40,7 @@ mod iceberg_endpoint_tests {
 
         // Create catalog
         store.create_catalog(tenant_id, Catalog {
+            catalog_type: pangolin_core::model::CatalogType::Local,
             id: Uuid::new_v4(),
             name: "test_warehouse".to_string(), // Name matches the prefix used in tests
             warehouse_name: Some("test_warehouse".to_string()),

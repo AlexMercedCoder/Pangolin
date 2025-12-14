@@ -41,11 +41,13 @@ async fn test_merge_branch_flow() {
 
     // 2.1 Create 'default' Catalog directly in store
     store.create_catalog(tenant_id, Catalog {
+            catalog_type: pangolin_core::model::CatalogType::Local,
         id: Uuid::new_v4(),
         name: "default".to_string(),
         warehouse_name: None,
         storage_location: None,
         properties: HashMap::new(),
+            federated_config: None,
     }).await.unwrap();
 
     // 2.5 Create Namespace

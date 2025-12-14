@@ -53,7 +53,15 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 - **Lifecycle Management**: Full tracking from initiation to completion/abort.
 - **API Endpoints**: 6 dedicated endpoints for managing merge operations and conflicts.
 
-### 5. Management UI (`pangolin_ui`)
+### 6. Federated Catalogs
+- **Transparent Proxy**: Connect to external Iceberg REST catalogs seamlessly.
+- **Unified Authentication**: Users authenticate to Pangolin, not individual catalogs.
+- **Cross-Tenant Federation**: Tenant A can access Tenant B's catalogs through Pangolin.
+- **Multiple Auth Types**: Support for None, BasicAuth, BearerToken, and ApiKey.
+- **RBAC Integration**: Pangolin permissions apply to federated catalogs.
+- **Management API**: 5 endpoints for creating, listing, testing, and deleting federated catalogs.
+
+### 7. Management UI (`pangolin_ui`)
 - **Framework**: SvelteKit + TailwindCSS (planned).
 - **Goal**: Provide a modern visual interface for catalog management, RBAC, and data discovery.
 

@@ -158,10 +158,12 @@ impl CatalogStore for PostgresStore {
 
         if let Some(row) = row {
             Ok(Some(Catalog {
-                id: Uuid::new_v4(), // Placeholder until schema update
+                id: row.get("id"),
                 name: row.get("name"),
-                warehouse_name: row.try_get("warehouse_name").ok(),
-                storage_location: row.try_get("storage_location").ok(),
+                catalog_type: pangolin_core::model::CatalogType::Local,
+                warehouse_name: row.get("warehouse_name"),
+                storage_location: row.get("storage_location"),
+                federated_config: None,
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             }))
         } else {
@@ -170,7 +172,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
-        let rows = sqlx::query("SELECT name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1")
+        let rows = sqlx::query("SELECT id, name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_all(&self.pool)
             .await?;
@@ -178,10 +180,12 @@ impl CatalogStore for PostgresStore {
         let mut catalogs = Vec::new();
         for row in rows {
             catalogs.push(Catalog {
-                id: Uuid::new_v4(), // Placeholder until schema update
+                id: row.get("id"),
                 name: row.get("name"),
-                warehouse_name: row.try_get("warehouse_name").ok(),
-                storage_location: row.try_get("storage_location").ok(),
+                catalog_type: pangolin_core::model::CatalogType::Local,
+                warehouse_name: row.get("warehouse_name"),
+                storage_location: row.get("storage_location"),
+                federated_config: None,
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             });
         }

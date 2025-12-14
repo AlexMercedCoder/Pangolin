@@ -2,21 +2,63 @@ use axum::{
     extract::{Path, State, Query, Extension},
     Json,
     response::IntoResponse,
-    http::StatusCode,
+    http::{StatusCode, HeaderMap, Method, Request},
+    body::Body,
 };
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use pangolin_store::CatalogStore;
 use pangolin_store::memory::MemoryStore;
-use pangolin_core::model::{Namespace, Asset, AssetType};
+use pangolin_core::model::{Namespace, Asset, AssetType, CatalogType};
 use pangolin_core::iceberg_metadata::{TableMetadata, Schema, PartitionSpec, SortOrder, Snapshot, NestedField, Type};
 use uuid::Uuid;
 use std::collections::HashMap;
 use chrono::Utc;
 use crate::auth::TenantId;
+use crate::federated_proxy::FederatedCatalogProxy;
 
 // Placeholder for AppState
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
+
+/// Helper function to check if a catalog is federated and forward the request if so
+async fn check_and_forward_if_federated(
+    store: &Arc<dyn CatalogStore + Send + Sync>,
+    tenant_id: Uuid,
+    catalog_name: &str,
+    method: Method,
+    path: &str,
+    body: Option<Bytes>,
+    headers: HeaderMap,
+) -> Option<axum::response::Response> {
+    // Get the catalog
+    let catalog = match store.get_catalog(tenant_id, catalog_name).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return None, // Catalog not found, let handler deal with it
+        Err(_) => return None,
+    };
+
+    // Check if it's federated
+    if catalog.catalog_type == CatalogType::Federated {
+        if let Some(config) = catalog.federated_config {
+            let proxy = FederatedCatalogProxy::new();
+            match proxy.forward_request(&config, method, path, body, headers).await {
+                Ok(response) => Some(response),
+                Err(e) => Some((
+                    StatusCode::BAD_GATEWAY,
+                    Json(serde_json::json!({"error": format!("Federated catalog error: {}", e)})),
+                ).into_response()),
+            }
+        } else {
+            Some((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "Federated catalog missing configuration"})),
+            ).into_response())
+        }
+    } else {
+        None // Not federated, continue with local handling
+    }
+}
 
 #[derive(Deserialize)]
 pub struct ListNamespaceParams {
@@ -200,9 +242,24 @@ pub async fn list_namespaces(
     Query(params): Query<ListNamespaceParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = prefix;
+    let catalog_name = prefix.clone();
     tracing::info!("list_namespaces: tenant_id={}, catalog_name={}", tenant_id, catalog_name);
     
+    // Check if this is a federated catalog and forward if so
+    let path = format!("/v1/{}/namespaces", prefix);
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::GET,
+        &path,
+        None,
+        HeaderMap::new(),
+    ).await {
+        return response;
+    }
+    
+    // Local catalog handling (existing logic)
     // Resolve catalog ID
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,

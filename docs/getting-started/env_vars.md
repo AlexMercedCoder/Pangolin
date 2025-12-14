@@ -1,17 +1,114 @@
 # Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `RUST_LOG` | Log level (e.g., `info`, `debug`) | `info` |
-| `PANGOLIN_STORAGE_TYPE` | Storage backend (`memory`, `s3`, `postgres`, `mongo`) | `memory` |
-| `DATABASE_URL` | Connection string for Postgres or MongoDB | - |
-| `PANGOLIN_S3_BUCKET` | S3 Bucket name | `pangolin` |
-| `PANGOLIN_S3_PREFIX` | S3 Prefix for data | `data` |
-| `AWS_ACCESS_KEY_ID` | S3 Access Key | - |
-| `AWS_SECRET_ACCESS_KEY` | S3 Secret Key | - |
-| `AWS_REGION` | S3 Region | `us-east-1` |
-| `AWS_ENDPOINT_URL` | S3 Endpoint URL (for MinIO) | - |
-| `AWS_ALLOW_HTTP` | Allow HTTP for S3 (true/false) | `false` |
-| `PANGOLIN_ROOT_USER` | Username for Root operations (e.g., creating tenants) | - |
-| `PANGOLIN_ROOT_PASSWORD` | Password for Root operations | - |
-| `PANGOLIN_JWT_SECRET` | Secret key for signing JWTs | - |
+Pangolin supports the following environment variables for configuration:
+
+## Core Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `RUST_LOG` | Log level (`error`, `warn`, `info`, `debug`, `trace`) | `info` | No |
+| `PANGOLIN_STORAGE_TYPE` | Storage backend (`memory`, `s3`, `postgres`, `mongo`) | `memory` | No |
+| `DATABASE_URL` | Connection string for Postgres or MongoDB | - | For Postgres/Mongo |
+
+## Authentication & Security
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `PANGOLIN_NO_AUTH` | Disable authentication (development only) | `false` | No |
+| `PANGOLIN_JWT_SECRET` | Secret key for signing JWTs (min 32 chars) | - | For JWT auth |
+| `PANGOLIN_ROOT_USER` | Username for Root operations | - | For initial setup |
+| `PANGOLIN_ROOT_PASSWORD` | Password for Root operations | - | For initial setup |
+
+## OAuth 2.0 Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth client ID | - | For Google OAuth |
+| `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth client secret | - | For Google OAuth |
+| `OAUTH_MICROSOFT_CLIENT_ID` | Microsoft OAuth client ID | - | For Microsoft OAuth |
+| `OAUTH_MICROSOFT_CLIENT_SECRET` | Microsoft OAuth client secret | - | For Microsoft OAuth |
+| `OAUTH_GITHUB_CLIENT_ID` | GitHub OAuth client ID | - | For GitHub OAuth |
+| `OAUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth client secret | - | For GitHub OAuth |
+
+## S3 Storage Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `PANGOLIN_S3_BUCKET` | S3 bucket name | `pangolin` | For S3 storage |
+| `PANGOLIN_S3_PREFIX` | S3 prefix for data | `data` | No |
+| `AWS_ACCESS_KEY_ID` | AWS access key ID | - | For S3 storage |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret access key | - | For S3 storage |
+| `AWS_REGION` | AWS region | `us-east-1` | No |
+| `AWS_ENDPOINT_URL` | S3 endpoint URL (for MinIO) | - | For MinIO |
+| `AWS_ALLOW_HTTP` | Allow HTTP for S3 (true/false) | `false` | No |
+
+## Azure Blob Storage Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `AZURE_STORAGE_ACCOUNT_NAME` | Azure storage account name | - | For Azure storage |
+| `AZURE_STORAGE_ACCOUNT_KEY` | Azure storage account key | - | For Azure storage |
+| `AZURE_STORAGE_CONTAINER` | Azure blob container name | `pangolin` | No |
+
+## Google Cloud Storage Configuration
+
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `GOOGLE_SERVICE_ACCOUNT_PATH` | Path to GCP service account JSON | - | For GCS storage |
+| `GCS_BUCKET` | GCS bucket name | `pangolin` | For GCS storage |
+
+## Service Users (New)
+
+Service users use API keys for authentication. No additional environment variables required - API keys are managed via the API.
+
+## Federated Catalogs (New)
+
+Federated catalog credentials are stored in the catalog configuration. No additional environment variables required.
+
+## Example Configuration
+
+### Development (Memory Store, No Auth)
+```bash
+export RUST_LOG=debug
+export PANGOLIN_NO_AUTH=true
+export PANGOLIN_STORAGE_TYPE=memory
+```
+
+### Production (S3 Storage, JWT Auth)
+```bash
+export RUST_LOG=info
+export PANGOLIN_STORAGE_TYPE=s3
+export PANGOLIN_S3_BUCKET=my-lakehouse-bucket
+export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+export AWS_REGION=us-west-2
+export PANGOLIN_JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+export PANGOLIN_ROOT_USER=admin
+export PANGOLIN_ROOT_PASSWORD=secure-password
+```
+
+### Production (PostgreSQL, OAuth)
+```bash
+export RUST_LOG=info
+export PANGOLIN_STORAGE_TYPE=postgres
+export DATABASE_URL=postgresql://user:password@localhost:5432/pangolin
+export PANGOLIN_JWT_SECRET=your-super-secret-jwt-key-min-32-chars
+export OAUTH_GOOGLE_CLIENT_ID=your-google-client-id
+export OAUTH_GOOGLE_CLIENT_SECRET=your-google-client-secret
+```
+
+## Security Best Practices
+
+1. **Never commit secrets to version control**
+2. **Use strong JWT secrets** (minimum 32 characters, random)
+3. **Rotate credentials regularly**
+4. **Use environment-specific configurations**
+5. **Enable HTTPS in production**
+6. **Disable `PANGOLIN_NO_AUTH` in production**
+
+## Related Documentation
+
+- [Configuration](./configuration.md) - Detailed configuration guide
+- [Authentication Setup](../setup/authentication.md) - JWT and OAuth setup
+- [Service Users](../service_users.md) - API key authentication
+- [Deployment](./deployment.md) - Production deployment guide

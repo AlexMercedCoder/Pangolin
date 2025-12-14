@@ -19,6 +19,8 @@ pub mod authz;
 pub mod business_metadata_handlers;
 pub mod conflict_detector;
 pub mod merge_handlers;
+pub mod federated_proxy;
+pub mod federated_catalog_handlers;
 pub mod tests_common;
 
 #[cfg(test)]
@@ -87,6 +89,10 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Catalog Management
         .route("/api/v1/catalogs", get(pangolin_handlers::list_catalogs).post(pangolin_handlers::create_catalog))
         .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog))
+        // Federated Catalog Management
+        .route("/api/v1/federated-catalogs", post(federated_catalog_handlers::create_federated_catalog).get(federated_catalog_handlers::list_federated_catalogs))
+        .route("/api/v1/federated-catalogs/:name", get(federated_catalog_handlers::get_federated_catalog).delete(federated_catalog_handlers::delete_federated_catalog))
+        .route("/api/v1/federated-catalogs/:name/test", post(federated_catalog_handlers::test_federated_connection))
         // Asset Management (Views)
         .route("/v1/:prefix/namespaces/:namespace/views", post(asset_handlers::create_view))
         .route("/v1/:prefix/namespaces/:namespace/views/:view", get(asset_handlers::get_view))

@@ -18,12 +18,45 @@ pub struct Warehouse {
     pub use_sts: bool, // If true, vend STS credentials; if false, pass through static creds
 }
 
+// Federated Catalog Support
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CatalogType {
+    Local,      // Native Pangolin catalog
+    Federated,  // External Iceberg REST catalog (proxy)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum FederatedAuthType {
+    None,           // No authentication required
+    BasicAuth,      // Username/password
+    BearerToken,    // JWT token
+    ApiKey,         // X-API-Key header
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederatedCredentials {
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub token: Option<String>,
+    pub api_key: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederatedCatalogConfig {
+    pub base_url: String,
+    pub auth_type: FederatedAuthType,
+    pub credentials: Option<FederatedCredentials>,
+    pub timeout_seconds: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Catalog {
     pub id: Uuid, // Added ID for permission scoping
     pub name: String,
-    pub warehouse_name: Option<String>, // Reference to warehouse for credential vending
-    pub storage_location: Option<String>, // Base path for this catalog in the warehouse
+    pub catalog_type: CatalogType, // Local or Federated
+    pub warehouse_name: Option<String>, // Reference to warehouse for credential vending (Local only)
+    pub storage_location: Option<String>, // Base path for this catalog in the warehouse (Local only)
+    pub federated_config: Option<FederatedCatalogConfig>, // Configuration for federated catalogs
     pub properties: HashMap<String, String>,
 }
 
