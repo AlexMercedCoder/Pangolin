@@ -17,12 +17,12 @@ Create a new catalog backed by an existing warehouse.
 
 **Syntax**:
 ```bash
-pangolin-admin create-catalog --name <name> --warehouse <warehouse_name>
+pangolin-admin create-catalog <name> --warehouse <warehouse_name>
 ```
 
 **Example**:
 ```bash
-pangolin-admin create-catalog --name sales_catalog --warehouse main_lake
+pangolin-admin create-catalog sales_catalog --warehouse main_lake
 ```
 
 ### Delete Catalog

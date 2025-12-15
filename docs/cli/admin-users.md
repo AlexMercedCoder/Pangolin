@@ -17,15 +17,15 @@ Create a new user account. You will be prompted for a password securely.
 
 **Syntax**:
 ```bash
-pangolin-admin create-user --username <username> [--role <role>]
+pangolin-admin create-user <username> [--role <role>]
 ```
 
 **Options**:
-- `--role`: Assign an initial role (default: `user`).
+- `--role`: Assign an initial role (default: `tenant-user`).
 
 **Example**:
 ```bash
-pangolin-admin create-user --username alice --role data_engineer
+pangolin-admin create-user alice --role tenant-user
 ```
 
 ### Delete User

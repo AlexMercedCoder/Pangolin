@@ -4,7 +4,7 @@ Pangolin implements a flexible Role-Based Access Control (RBAC) system enhanced 
 
 ## 1. Role-Based Access Control (RBAC)
 
-Permissions are assigned to **Roles**, and Roles are assigned to **Users**.
+Permissions are assigned to **Users** directly or via **Roles** (which group permissions for easier management).
 
 ### Scope Hierarchy
 Permissions can be granted at different levels of the hierarchy:

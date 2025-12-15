@@ -110,7 +110,7 @@ impl PangolinClient {
         self.config.username = Some(username.to_string());
         
         // Try to extract tenant from user object if available
-        if let Some(tenant_id) = data.user.get("tenant_id").and_then(|t| t.as_str()) {
+        if let Some(tenant_id) = data.user.get("tenant-id").and_then(|t| t.as_str()) {
              self.config.tenant_id = Some(tenant_id.to_string());
         }
 

@@ -64,3 +64,9 @@ Additional endpoints for features not covered by the Iceberg spec.
 - `POST /api/v1/login`: Authenticate and receive a JWT.
 - `POST /api/v1/users`: Create a new user (Admin only).
 - `GET /api/v1/users`: List users (Admin only).
+
+### Permission Management
+- `POST /api/v1/permissions`: Grant permission to a user.
+- `DELETE /api/v1/permissions/{id}`: Revoke a permission.
+- `GET /api/v1/roles`: List roles.
+- `POST /api/v1/roles`: Create a new role.

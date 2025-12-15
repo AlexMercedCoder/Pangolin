@@ -179,7 +179,8 @@ pub async fn auth_middleware(
 
     // Whitelist public endpoints
     let path = req.uri().path();
-    if path == "/api/v1/users/login" || 
+    if path == "/health" ||
+       path == "/api/v1/users/login" || 
        path == "/api/v1/app-config" || 
        path == "/v1/config" || 
        path.ends_with("/config") ||
@@ -220,6 +221,21 @@ pub async fn auth_middleware(
                             
                             // Insert RootUser extension
                             req.extensions_mut().insert(crate::auth::RootUser);
+                            
+                            // Allow Root to override tenant context via header (duplicate logic, TODO: cleanup)
+                            tracing::debug!("Root user (Basic Auth) detected, checking for X-Pangolin-Tenant header");
+                            if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
+                                if let Ok(tenant_str) = tenant_header.to_str() {
+                                    tracing::debug!("X-Pangolin-Tenant header value: {}", tenant_str);
+                                    if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
+                                        tracing::info!("Root user (Basic Auth) overriding tenant context: {} -> {}", default_tenant, override_uuid);
+                                        // Overwrite the TenantId extension
+                                        req.extensions_mut().insert(crate::auth::TenantId(override_uuid));
+                                    } else {
+                                        tracing::warn!("Failed to parse X-Pangolin-Tenant header as UUID: {}", tenant_str);
+                                    }
+                                }
+                            }
                             
                             return next.run(req).await;
                         }
@@ -327,7 +343,8 @@ pub async fn auth_middleware_wrapper(
 
     // Whitelist public endpoints
     let path = req.uri().path();
-    if path == "/api/v1/users/login" || 
+    if path == "/health" ||
+       path == "/api/v1/users/login" || 
        path == "/api/v1/app-config" || 
        path == "/v1/config" || 
        path.ends_with("/config") ||
@@ -363,6 +380,19 @@ pub async fn auth_middleware_wrapper(
                             let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
                             req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
                             req.extensions_mut().insert(crate::auth::RootUser);
+                            
+                            // Allow Root to override tenant context via header (duplicate logic, TODO: cleanup)
+                            tracing::debug!("Root user (Basic Auth) detected in wrapper, checking for X-Pangolin-Tenant header");
+                            if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
+                                if let Ok(tenant_str) = tenant_header.to_str() {
+                                    if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
+                                        tracing::info!("Root user (Basic Auth) overriding tenant context in wrapper: {} -> {}", default_tenant, override_uuid);
+                                        // Overwrite the TenantId extension
+                                        req.extensions_mut().insert(crate::auth::TenantId(override_uuid));
+                                    }
+                                }
+                            }
+
                             return next.run(req).await;
                         }
                     }

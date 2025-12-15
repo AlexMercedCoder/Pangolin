@@ -17,6 +17,10 @@ pub enum AdminCommand {
         #[arg(short, long)]
         password: Option<String>,
     },
+    /// Switch tenant context (Root operations only)
+    Use {
+        name: String
+    },
     /// List all tenants (Root Only)
     ListTenants,
     /// Create a new tenant (Root Only)
@@ -51,6 +55,16 @@ pub enum AdminCommand {
         name: String,
         #[arg(long, default_value = "s3")]
         type_: String,
+        #[arg(long)]
+        bucket: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        endpoint: Option<String>,
     },
     DeleteWarehouse {
         name: String,
@@ -73,7 +87,7 @@ pub enum AdminCommand {
         user: Option<String>,
     },
     GrantPermission {
-        role: String,
+        username: String,
         action: String,
         resource: String,
     },

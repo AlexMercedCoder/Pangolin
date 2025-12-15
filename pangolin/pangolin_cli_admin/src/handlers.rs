@@ -17,8 +17,64 @@ pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<Stri
             .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
     };
 
+    // Reset tenant context before login to ensure fresh state
+    client.config.tenant_id = None;
+    client.config.tenant_name = None;
+
     client.login(&username, &password).await?;
+    
+    // If tenant_id was set by login (Tenant Admin), try to fetch name
+    if let Some(_) = client.config.tenant_id {
+         // Try to fetch accessible tenants to resolve name
+         // For Tenant Admin, /api/v1/tenants might return their own tenant
+         if let Ok(res_tenants) = client.get("/api/v1/tenants").await {
+             if res_tenants.status().is_success() {
+                  if let Ok(tenants) = res_tenants.json::<Vec<Value>>().await {
+                      if let Some(my_id) = &client.config.tenant_id {
+                          if let Some(t) = tenants.iter().find(|t| t["id"].as_str() == Some(my_id)) {
+                              if let Some(name) = t["name"].as_str() {
+                                  client.config.tenant_name = Some(name.to_string());
+                              }
+                          }
+                      }
+                  }
+             }
+         }
+    } else {
+        // Root user login - clear any previous context
+        client.config.tenant_id = None;
+        client.config.tenant_name = None;
+    }
+    
     println!("✅ Logged in successfully as {}", username);
+    
+    Ok(())
+}
+
+pub async fn handle_use(client: &mut PangolinClient, name: String) -> Result<(), CliError> {
+    // 1. List tenants to find the ID
+    let res = client.get("/api/v1/tenants").await?;
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to fetch tenants: {}", res.status())));
+    }
+    
+    let tenants: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    // 2. Find matching name
+    let found = tenants.iter().find(|t| t["name"].as_str() == Some(&name));
+    
+    if let Some(tenant) = found {
+        if let Some(id) = tenant["id"].as_str() {
+            client.config.tenant_id = Some(id.to_string());
+            client.config.tenant_name = Some(name.clone());
+            println!("✅ Switched context to tenant '{}' ({})", name, id);
+        } else {
+             return Err(CliError::ApiError("Tenant found but has no ID".to_string()));
+        }
+    } else {
+        return Err(CliError::ApiError(format!("Tenant '{}' not found", name)));
+    }
+    
     Ok(())
 }
 
@@ -107,7 +163,7 @@ pub async fn handle_create_user(client: &PangolinClient, username: String, email
         "email": email,
         "password": password,
         "role": role.unwrap_or_else(|| "tenant-user".to_string()),
-        "tenant_id": tenant_id_opt.or(client.config.tenant_id.clone())
+        "tenant-id": tenant_id_opt.or(client.config.tenant_id.clone())
     });
 
     let res = client.post("/api/v1/users", &payload).await?; // Assuming endpoint is /api/v1/users based on search
@@ -134,14 +190,52 @@ pub async fn handle_list_warehouses(client: &PangolinClient) -> Result<(), CliEr
     Ok(())
 }
 
-pub async fn handle_create_warehouse(client: &PangolinClient, name: String, type_: String) -> Result<(), CliError> {
+pub async fn handle_create_warehouse(
+    client: &PangolinClient, 
+    name: String, 
+    type_: String,
+    bucket_opt: Option<String>,
+    access_key_opt: Option<String>,
+    secret_key_opt: Option<String>,
+    region_opt: Option<String>,
+    endpoint_opt: Option<String>
+) -> Result<(), CliError> {
     // Interactive config based on type
     let mut config = serde_json::Map::new();
     if type_ == "s3" {
-         let bucket: String = Input::new().with_prompt("Bucket Name").interact_text().map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?; 
+         let bucket: String = match bucket_opt {
+             Some(b) => b,
+             None => Input::new().with_prompt("Bucket Name").interact_text().map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+         };
          config.insert("bucket".to_string(), Value::String(bucket));
-         // ... more prompts
+
+         let access_key: String = match access_key_opt {
+             Some(k) => k,
+             None => Input::new().with_prompt("Access Key").interact_text().map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+         };
+         config.insert("access_key".to_string(), Value::String(access_key));
+
+         let secret_key: String = match secret_key_opt {
+             Some(k) => k,
+             None => Password::new().with_prompt("Secret Key").interact().map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+         };
+         config.insert("secret_key".to_string(), Value::String(secret_key));
+
+         let region: String = match region_opt {
+             Some(r) => r,
+             None => Input::new().with_prompt("Region").default("us-east-1".to_string()).interact_text().map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+         };
+         config.insert("region".to_string(), Value::String(region));
+
+         let endpoint: String = match endpoint_opt {
+             Some(e) => e,
+             None => Input::new().with_prompt("Endpoint (Optional)").allow_empty(true).interact_text().map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+         };
+         if !endpoint.is_empty() {
+            config.insert("endpoint".to_string(), Value::String(endpoint));
+         }
     }
+    // Add logic for other types if needed (filesystem, etc)
 
     let body = serde_json::json!({
         "name": name,
@@ -231,15 +325,142 @@ pub async fn handle_list_permissions(client: &PangolinClient, role: Option<Strin
     Ok(())
 }
 
-pub async fn handle_grant_permission(client: &PangolinClient, role: String, action: String, resource: String) -> Result<(), CliError> {
+async fn resolve_user_id(client: &PangolinClient, username: &str) -> Result<String, CliError> {
+    let res = client.get("/api/v1/users").await?;
+    if !res.status().is_success() { return Err(CliError::ApiError(format!("Failed to list users: {}", res.status()))); }
+    let users: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    // Find user
+    // Note: The /api/v1/users endpoint returns objects with "username" and "id" (if we added ID exposing to API, checking handler...)
+    // Wait, the `list_users` handler in API usually returns User objects. Core User struct has ID.
+    // Let's assume it has "id".
+    // If not, we might need lookup by username endpoint?
+    // Let's check `pangolin_api/src/user_handlers.rs`... User struct has id.
+    
+    if let Some(u) = users.iter().find(|u| u["username"].as_str() == Some(username)) {
+        if let Some(id) = u["id"].as_str() {
+            return Ok(id.to_string());
+        }
+    }
+    Err(CliError::ApiError(format!("User '{}' not found", username)))
+}
+
+async fn resolve_scope(client: &PangolinClient, resource: &str) -> Result<serde_json::Value, CliError> {
+    let parts: Vec<&str> = resource.split(':').collect();
+    if parts.len() != 2 {
+        return Err(CliError::ApiError("Invalid resource format. Use type:name (e.g. catalog:mycat, namespace:mycat.myns)".to_string()));
+    }
+    let type_ = parts[0];
+    let path = parts[1];
+
+    match type_ {
+        "catalog" => {
+            // path is catalog_name
+            let res = client.get("/api/v1/catalogs").await?; // Better lookup?
+            let catalogs: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+            if let Some(c) = catalogs.iter().find(|c| c["name"].as_str() == Some(path)) {
+                let id = c["id"].as_str().unwrap().to_string();
+                Ok(serde_json::json!({
+                    "type": "catalog",
+                    "catalog_id": id
+                }))
+            } else {
+                Err(CliError::ApiError(format!("Catalog '{}' not found", path)))
+            }
+        },
+        "namespace" => {
+            // path is catalog.namespace
+            let ns_parts: Vec<&str> = path.split('.').collect();
+            if ns_parts.len() < 2 { return Err(CliError::ApiError("Invalid namespace format. Use catalog.namespace".to_string())); }
+            let cat_name = ns_parts[0];
+            let ns_name = ns_parts[1..].join("."); // Handle nested?
+            
+            // Resolve Catalog ID
+            let res = client.get("/api/v1/catalogs").await?;
+            let catalogs: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+            if let Some(c) = catalogs.iter().find(|c| c["name"].as_str() == Some(cat_name)) {
+                let id = c["id"].as_str().unwrap().to_string();
+                Ok(serde_json::json!({
+                    "type": "namespace",
+                    "catalog_id": id,
+                    "namespace": ns_name
+                }))
+            } else {
+                Err(CliError::ApiError(format!("Catalog '{}' not found", cat_name)))
+            }
+        },
+        "table" => {
+            // path is catalog.namespace.table
+            // This is tricky if namespace has dots. Assuming simple 3 parts for MVP or first dot is cat.
+            // Helper: parse first component as catalog.
+            if let Some((cat_name, rest)) = path.split_once('.') {
+                if let Some((ns_name, tbl_name)) = rest.rsplit_once('.') { // Namespace might have dots, split at LAST dot for table?
+                    // Resolve Catalog ID
+                    let res = client.get("/api/v1/catalogs").await?;
+                    let catalogs: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+                    let cat_id = if let Some(c) = catalogs.iter().find(|c| c["name"].as_str() == Some(cat_name)) {
+                        c["id"].as_str().unwrap().to_string()
+                    } else {
+                        return Err(CliError::ApiError(format!("Catalog '{}' not found", cat_name)));
+                    };
+                    
+                    // Resolve Table ID by fetching metadata
+                    // GET /v1/{prefix}/namespaces/{namespace}/tables/{table}
+                    let url = format!("/v1/{}/namespaces/{}/tables/{}", cat_name, ns_name, tbl_name);
+                    let res = client.get(&url).await?;
+                    if !res.status().is_success() {
+                        return Err(CliError::ApiError(format!("Failed to resolve table: {}", res.status())));
+                    }
+                    let body: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+                    
+                    // TableResponse -> metadata -> table-uuid
+                    if let Some(uuid) = body.pointer("/metadata/table-uuid").and_then(|v| v.as_str()) {
+                         Ok(serde_json::json!({
+                            "type": "asset",
+                            "catalog_id": cat_id,
+                            "namespace": ns_name,
+                            "asset_id": uuid
+                        }))
+                    } else {
+                        Err(CliError::ApiError("Could not find table UUID in response".to_string()))
+                    }
+                } else {
+                     Err(CliError::ApiError("Invalid table format. Use catalog.namespace.table".to_string())) 
+                }
+            } else {
+                 Err(CliError::ApiError("Invalid format".to_string()))
+            }
+        },
+        _ => Err(CliError::ApiError(format!("Unsupported resource type: {}", type_)))
+    }
+}
+
+pub async fn handle_grant_permission(client: &PangolinClient, username: String, action: String, resource: String) -> Result<(), CliError> {
+    // 1. Resolve User ID
+    let user_id = resolve_user_id(client, &username).await?;
+    
+    // 2. Resolve Scope
+    let scope = resolve_scope(client, &resource).await?;
+    
+    // 3. Parse Actions
+    // Allow comma separated: "read,write"
+    let actions: Vec<String> = action.split(',')
+        .map(|s| s.trim().to_lowercase()) // normalize?
+        .collect();
+        
     let body = serde_json::json!({
-        "role": role,
-        "action": action,
-        "resource": resource
+        "user-id": user_id,
+        "scope": scope,
+        "actions": actions
     });
+    
     let res = client.post("/api/v1/permissions", &body).await?;
-    if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
-    println!("✅ Permission granted.");
+    if !res.status().is_success() {
+         let s = res.status();
+         let t = res.text().await.unwrap_or_default();
+         return Err(CliError::ApiError(format!("Error: {} - {}", s, t))); 
+    }
+    println!("✅ Permission granted to user '{}' on '{}'", username, resource);
     Ok(())
 }
 

@@ -35,9 +35,11 @@ impl ConflictDetector {
         ).await?;
 
         // Detect different types of conflicts
-        conflicts.extend(self.detect_schema_conflicts(operation, &source_assets, &target_assets).await?);
+        // For MVP Fast-Forward merge support, we disable strict schema/metadata comparison
+        // to allow Source to overwrite Target properties.
+        // conflicts.extend(self.detect_schema_conflicts(operation, &source_assets, &target_assets).await?);
         conflicts.extend(self.detect_deletion_conflicts(operation, &source_assets, &target_assets).await?);
-        conflicts.extend(self.detect_metadata_conflicts(operation, &source_assets, &target_assets).await?);
+        // conflicts.extend(self.detect_metadata_conflicts(operation, &source_assets, &target_assets).await?);
 
         Ok(conflicts)
     }

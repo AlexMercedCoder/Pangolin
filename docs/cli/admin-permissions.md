@@ -47,17 +47,17 @@ pangolin-admin list-permissions --role analyst
 ```
 
 ### Grant Permission
-Grant a specific action on a resource to a role.
+Grant a specific action on a resource to a **User**.
 
 **Syntax**:
 ```bash
-pangolin-admin grant-permission <role> <action> <resource>
+pangolin-admin grant-permission <username> <action> <resource>
 ```
 
 **Examples**:
 ```bash
-# Grant 'analyst' role read access to the 'sales' catalog
-pangolin-admin grant-permission analyst read catalog:sales
+# Grant 'admin_user' read access to the 'sales' catalog
+pangolin-admin grant-permission admin_user read catalog:sales
 
 # Grant 'data_engineer' write access to a specific namespace
 pangolin-admin grant-permission data_engineer write namespace:sales:region_us
@@ -71,11 +71,11 @@ Remove a previously granted permission. The arguments must match exactly.
 
 **Syntax**:
 ```bash
-pangolin-admin revoke-permission <role> <action> <resource>
+pangolin-admin revoke-permission <username> <action> <resource>
 ```
 
 **Examples**:
 ```bash
-# Remove write access for analysts on the sales catalog
-pangolin-admin revoke-permission analyst write catalog:sales
+# Remove write access for 'analyst_user' on the sales catalog
+pangolin-admin revoke-permission analyst_user write catalog:sales
 ```

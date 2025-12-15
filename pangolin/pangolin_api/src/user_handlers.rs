@@ -134,15 +134,25 @@ pub async fn create_user(
 }
 
 /// List all users (filtered by permissions)
+use crate::auth::TenantId;
+
+/// List all users (filtered by permissions)
 pub async fn list_users(
-    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(_session): Extension<UserSession>,
 ) -> Response {
-    // TODO: Implement user listing with permission filtering
-    // Root can see all, tenant admin can see their tenant users
-    
-    let users: Vec<UserInfo> = vec![]; // Placeholder
-    
-    (StatusCode::OK, Json(users)).into_response()
+    // Determine tenant_id to list for
+    // Extension(TenantId) provides the effective tenant (from token or header fallback)
+    let tenant_id = tenant.0;
+
+    match store.list_users(Some(tenant_id)).await {
+        Ok(users) => {
+             let infos: Vec<UserInfo> = users.into_iter().map(UserInfo::from).collect();
+             (StatusCode::OK, Json(infos)).into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list users: {}", e)).into_response(),
+    }
 }
 
 /// Get user by ID

@@ -79,6 +79,14 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 - **Framework**: SvelteKit + TailwindCSS (planned).
 - **Goal**: Provide a modern visual interface for catalog management, RBAC, and data discovery.
 
+### 10. CLI Tools
+- **Pangolin Admin (`pangolin-admin`)**: Administrative CLI for managing tenants, warehouses, catalogs, users, and permissions.
+- **Pangolin User (`pangolin-user`)**: User-facing CLI for discovery, branching, and access requests.
+- **Architecture**:
+    - `pangolin_cli_common`: Shared configuration and API client code.
+    - `pangolin_cli_admin`: Admin specific commands.
+    - `pangolin_cli_user`: User specific commands.
+
 ## Data Model
 
 ### Branching Model

@@ -10,6 +10,7 @@ pub struct CliConfig {
     pub auth_token: Option<String>,
     pub username: Option<String>,
     pub tenant_id: Option<String>,
+    pub tenant_name: Option<String>,
 }
 
 impl Default for CliConfig {
@@ -19,6 +20,7 @@ impl Default for CliConfig {
             auth_token: None,
             username: None,
             tenant_id: None,
+            tenant_name: None,
         }
     }
 }

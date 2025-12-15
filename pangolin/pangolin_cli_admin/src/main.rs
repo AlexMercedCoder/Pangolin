@@ -19,6 +19,9 @@ struct Args {
     #[arg(long, short = 'p')]
     profile: Option<String>,
 
+    #[arg(long, env = "PANGOLIN_TENANT")]
+    tenant: Option<String>,
+
     #[command(subcommand)]
     command: Option<AdminCommand>,
 }
@@ -40,6 +43,10 @@ async fn main() -> anyhow::Result<()> {
         config.base_url = url;
     }
     
+    if let Some(tenant) = args.tenant {
+        config.tenant_id = Some(tenant);
+    }
+    
     let mut client = PangolinClient::new(config.clone());
 
     // If a subcommand was passed directly (non-interactive mode), execute it and exit
@@ -53,6 +60,15 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             },
+            AdminCommand::Use { name } => {
+                 if let Err(e) = handlers::handle_use(&mut client, name).await {
+                    eprintln!("Error: {}", e);
+                } else {
+                     if let Err(e) = config_manager.save(&client.config) {
+                         eprintln!("Warning: Failed to save config: {}", e);
+                     }
+                }
+            },
             AdminCommand::ListTenants => handlers::handle_list_tenants(&client).await?,
             AdminCommand::CreateTenant { name } => handlers::handle_create_tenant(&client, name).await?,
             AdminCommand::DeleteTenant { id } => handlers::handle_delete_tenant(&client, id).await?,
@@ -60,13 +76,13 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::CreateUser { username, email, role, password, tenant_id } => handlers::handle_create_user(&client, username, email, role, password, tenant_id).await?,
             AdminCommand::DeleteUser { username } => handlers::handle_delete_user(&client, username).await?,
             AdminCommand::ListWarehouses => handlers::handle_list_warehouses(&client).await?,
-            AdminCommand::CreateWarehouse { name, type_ } => handlers::handle_create_warehouse(&client, name, type_).await?,
+            AdminCommand::CreateWarehouse { name, type_, bucket, access_key, secret_key, region, endpoint } => handlers::handle_create_warehouse(&client, name, type_, bucket, access_key, secret_key, region, endpoint).await?,
             AdminCommand::DeleteWarehouse { name } => handlers::handle_delete_warehouse(&client, name).await?,
             AdminCommand::ListCatalogs => handlers::handle_list_catalogs(&client).await?,
             AdminCommand::CreateCatalog { name, warehouse } => handlers::handle_create_catalog(&client, name, warehouse).await?,
             AdminCommand::DeleteCatalog { name } => handlers::handle_delete_catalog(&client, name).await?,
             AdminCommand::ListPermissions { role, user } => handlers::handle_list_permissions(&client, role, user).await?,
-            AdminCommand::GrantPermission { role, action, resource } => handlers::handle_grant_permission(&client, role, action, resource).await?,
+            AdminCommand::GrantPermission { username, action, resource } => handlers::handle_grant_permission(&client, username, action, resource).await?,
             AdminCommand::RevokePermission { role, action, resource } => handlers::handle_revoke_permission(&client, role, action, resource).await?,
             AdminCommand::GetMetadata { entity_type, entity_id } => handlers::handle_get_metadata(&client, entity_type, entity_id).await?,
             AdminCommand::SetMetadata { entity_type, entity_id, key, value } => handlers::handle_set_metadata(&client, entity_type, entity_id, key, value).await?,
@@ -89,10 +105,10 @@ async fn main() -> anyhow::Result<()> {
     let mut rl = Editor::<(), rustyline::history::DefaultHistory>::new()?;
     
     loop {
-        let prompt = if let Some(user) = &client.config.username {
-            format!("(admin:{})> ", user)
-        } else {
-            "(admin:unauth)> ".to_string()
+        let prompt = match (&client.config.username, &client.config.tenant_name) {
+            (Some(user), Some(tenant)) => format!("(admin:{}@{})> ", user, tenant),
+            (Some(user), None) => format!("(admin:{})> ", user),
+            (None, _) => "(admin:unauth)> ".to_string(),
         };
 
         let readline = rl.readline(&prompt);
@@ -133,6 +149,15 @@ async fn main() -> anyhow::Result<()> {
                                             }
                                         }
                                     },
+                                    AdminCommand::Use { name } => {
+                                         if let Err(e) = handlers::handle_use(&mut client, name).await {
+                                            eprintln!("Error: {}", e);
+                                        } else {
+                                             if let Err(e) = config_manager.save(&client.config) {
+                                                 eprintln!("Warning: Failed to save config: {}", e);
+                                             }
+                                        }
+                                    },
                                     AdminCommand::ListTenants => {
                                         if let Err(e) = handlers::handle_list_tenants(&client).await {
                                             eprintln!("Error: {}", e);
@@ -158,8 +183,8 @@ async fn main() -> anyhow::Result<()> {
                                     AdminCommand::ListWarehouses => {
                                         if let Err(e) = handlers::handle_list_warehouses(&client).await { eprintln!("Error: {}", e); }
                                     },
-                                    AdminCommand::CreateWarehouse { name, type_ } => {
-                                        if let Err(e) = handlers::handle_create_warehouse(&client, name, type_).await { eprintln!("Error: {}", e); }
+                                    AdminCommand::CreateWarehouse { name, type_, bucket, access_key, secret_key, region, endpoint } => {
+                                        if let Err(e) = handlers::handle_create_warehouse(&client, name, type_, bucket, access_key, secret_key, region, endpoint).await { eprintln!("Error: {}", e); }
                                     },
                                     AdminCommand::DeleteWarehouse { name } => {
                                         if let Err(e) = handlers::handle_delete_warehouse(&client, name).await { eprintln!("Error: {}", e); }
@@ -176,8 +201,8 @@ async fn main() -> anyhow::Result<()> {
                                     AdminCommand::ListPermissions { role, user } => {
                                         if let Err(e) = handlers::handle_list_permissions(&client, role, user).await { eprintln!("Error: {}", e); }
                                     },
-                                    AdminCommand::GrantPermission { role, action, resource } => {
-                                        if let Err(e) = handlers::handle_grant_permission(&client, role, action, resource).await { eprintln!("Error: {}", e); }
+                                    AdminCommand::GrantPermission { username, action, resource } => {
+                                        if let Err(e) = handlers::handle_grant_permission(&client, username, action, resource).await { eprintln!("Error: {}", e); }
                                     },
                                     AdminCommand::RevokePermission { role, action, resource } => {
                                         if let Err(e) = handlers::handle_revoke_permission(&client, role, action, resource).await { eprintln!("Error: {}", e); }

@@ -59,6 +59,21 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [Security & Credential Vending](docs/features/security_vending.md) - S3 credential vending
 - [Permissions](docs/permissions.md) - Role-based access control
 
+### 💻 CLI Reference
+- [Overview](docs/cli/overview.md) - Introduction to Pangolin CLI
+- [Configuration](docs/cli/configuration.md) - Configuring the CLI
+- **Admin Commands**:
+    - [Tenants](docs/cli/admin-tenants.md)
+    - [Users](docs/cli/admin-users.md)
+    - [Warehouses](docs/cli/admin-warehouses.md)
+    - [Catalogs](docs/cli/admin-catalogs.md)
+    - [Permissions](docs/cli/admin-permissions.md)
+- **User Commands**:
+    - [Discovery](docs/cli/user-discovery.md)
+    - [Branches](docs/cli/user-branches.md)
+    - [Tags](docs/cli/user-tags.md)
+    - [Access Requests](docs/cli/user-access.md)
+
 ### ⚡ Core Features
 - [Branch Management](docs/features/branch_management.md) - Git-like branching for catalogs
 - [Merge Conflict Resolution](docs/merge_conflicts.md) - Intelligent conflict detection and resolution
