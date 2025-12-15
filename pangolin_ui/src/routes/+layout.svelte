@@ -4,10 +4,14 @@
 	import { page } from '$app/stores';
 	import { authStore, isRoot } from '$lib/stores/auth';
 	import { themeStore } from '$lib/stores/theme';
+	import { tenantStore } from '$lib/stores/tenant';
+	import { tenantsApi, type Tenant } from '$lib/api/tenants';
 	import Notification from '$lib/components/ui/Notification.svelte';
 	import '../app.css';
 
 	let sidebarOpen = true;
+	let tenants: Tenant[] = [];
+	let loadingTenants = false;
 
 	onMount(async () => {
 		// Initialize auth - checks server config and auto-authenticates if NO_AUTH mode
@@ -17,20 +21,49 @@
 		themeStore.loadTheme();
 
 		// Redirect to login if not authenticated (and auth is enabled)
-		const unsubscribe = authStore.subscribe(state => {
+		const unsubscribeAuth = authStore.subscribe(async state => {
 			if (!state.isLoading && !state.isAuthenticated && state.authEnabled && $page.url.pathname !== '/login') {
 				goto('/login');
 			} else if (!state.isLoading && state.isAuthenticated && $page.url.pathname === '/login') {
 				// If authenticated and on login page, redirect to dashboard
 				goto('/');
 			}
+
+			// Load tenants if root and not loaded
+			if (state.isAuthenticated && state.user?.role?.toLowerCase() === 'root' && tenants.length === 0 && !loadingTenants) {
+				loadingTenants = true;
+				try {
+					tenants = await tenantsApi.list();
+				} catch (e) {
+					console.error('Failed to load tenants for switcher', e);
+				} finally {
+					loadingTenants = false;
+				}
+			}
 		});
 
-		return unsubscribe;
+		return unsubscribeAuth;
 	});
 
 	function toggleSidebar() {
 		sidebarOpen = !sidebarOpen;
+	}
+
+	function handleTenantChange(event: Event) {
+		const select = event.target as HTMLSelectElement;
+		const tenantId = select.value;
+		
+		if (tenantId) {
+			const tenant = tenants.find(t => t.id === tenantId);
+			if (tenant) {
+				tenantStore.selectTenant(tenant.id, tenant.name);
+			}
+		} else {
+			tenantStore.clearTenant();
+		}
+		
+		// Reload to apply context globally (simplest way to ensure all API calls and stores use new context)
+		window.location.reload(); 
 	}
 </script>
 
@@ -72,6 +105,15 @@
 							{/if}
 						</a>
 						{#if $isRoot}
+						<a
+							href="/root-dashboard"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">🌐</span>
+							{#if sidebarOpen}
+								<span>Root Dashboard</span>
+							{/if}
+						</a>
 						<a
 							href="/tenants"
 							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -135,6 +177,22 @@
 						</div>
 
 						<div class="flex items-center gap-4">
+							{#if $isRoot}
+								<div class="flex items-center gap-2">
+									<span class="text-sm text-gray-500 dark:text-gray-400">Context:</span>
+									<select
+										class="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
+										value={$tenantStore.selectedTenantId || ''}
+										on:change={handleTenantChange}
+									>
+										<option value="">Global (System)</option>
+										{#each tenants as tenant}
+											<option value={tenant.id}>{tenant.name}</option>
+										{/each}
+									</select>
+								</div>
+							{/if}
+
 							<!-- Theme toggle -->
 							<button
 								on:click={() => {

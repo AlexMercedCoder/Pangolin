@@ -12,11 +12,11 @@ use uuid::Uuid;
 use crate::auth::TenantId;
 use crate::iceberg_handlers::AppState;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CreateWarehouseRequest {
-    name: String,
-    use_sts: Option<bool>, // If true, use STS credential vending; if false, pass through static creds
-    storage_config: Option<std::collections::HashMap<String, String>>,
+    pub name: String,
+    pub use_sts: Option<bool>, // If true, use STS credential vending; if false, pass through static creds
+    pub storage_config: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Deserialize)]
@@ -26,13 +26,13 @@ pub struct UpdateWarehouseRequest {
     storage_config: Option<std::collections::HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct WarehouseResponse {
-    id: Uuid,
-    name: String,
-    tenant_id: Uuid,
-    use_sts: bool,
-    storage_config: std::collections::HashMap<String, String>,
+    pub id: Uuid,
+    pub name: String,
+    pub tenant_id: Uuid,
+    pub use_sts: bool,
+    pub storage_config: std::collections::HashMap<String, String>,
 }
 
 impl From<Warehouse> for WarehouseResponse {
@@ -131,3 +131,5 @@ pub async fn update_warehouse(
         }
     }
 }
+
+

@@ -13,6 +13,9 @@ pub mod warehouse_handlers;
 pub mod asset_handlers;
 pub mod auth;
 pub mod signing_handlers;
+
+#[cfg(test)]
+mod isolation_test;
 pub mod token_handlers;
 pub mod user_handlers;
 pub mod oauth_handlers;
@@ -50,6 +53,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
+            "x-pangolin-tenant".parse::<axum::http::HeaderName>().unwrap(),
         ]);
         //.allow_credentials(true);
 

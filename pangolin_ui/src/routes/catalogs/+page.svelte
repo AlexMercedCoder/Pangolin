@@ -5,6 +5,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
+	import { tenantStore } from '$lib/stores/tenant';
 	import { notifications } from '$lib/stores/notifications';
 
 	let catalogs: Catalog[] = [];
@@ -16,9 +17,10 @@
 		{ key: 'storage_location', label: 'Storage Location', sortable: false },
 	];
 
-	onMount(async () => {
-		await loadCatalogs();
-	});
+	// Reload when tenant changes
+	$: if ($tenantStore.selectedTenantId || $tenantStore.selectedTenantId === null) {
+		loadCatalogs();
+	}
 
 	async function loadCatalogs() {
 		loading = true;

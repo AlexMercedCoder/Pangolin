@@ -93,10 +93,27 @@ pub async fn auth_middleware(
                 
                 match decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &validation) {
                     Ok(token_data) => {
+                        let mut final_tenant_id: Option<Uuid> = None;
+                        
+                        // 1. From Token
                         if let Some(tid_str) = token_data.claims.tenant_id {
                             if let Ok(tid) = Uuid::parse_str(&tid_str) {
-                                request.extensions_mut().insert(TenantId(tid));
+                                final_tenant_id = Some(tid);
                             }
+                        }
+
+                        // 2. From Header (Override)
+                        // Allows Root users to switch context
+                        if let Some(tenant_header) = headers.get("X-Pangolin-Tenant") {
+                            if let Ok(tenant_str) = tenant_header.to_str() {
+                                if let Ok(tenant_uuid) = Uuid::parse_str(tenant_str) {
+                                    final_tenant_id = Some(tenant_uuid);
+                                }
+                            }
+                        }
+
+                        if let Some(tid) = final_tenant_id {
+                             request.extensions_mut().insert(TenantId(tid));
                         }
                         request.extensions_mut().insert(token_data.claims.roles);
                         return Ok(next.run(request).await);

@@ -6,8 +6,9 @@
 	import Modal from '$lib/components/ui/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import CreateUserForm from '$lib/components/forms/CreateUserForm.svelte';
-	import { listUsers, deleteUser, type User } from '$lib/api/users';
+	import { usersApi, type User } from '$lib/api/users';
 	import { authStore } from '$lib/stores/auth';
+	import { tenantStore } from '$lib/stores/tenant';
 	import { notifications } from '$lib/stores/notifications';
 
 	let users: User[] = [];
@@ -17,6 +18,11 @@
 	let selectedUser: User | null = null;
 	let searchQuery = '';
 	let roleFilter = 'all';
+
+	// Reload when tenant changes
+	$: if ($tenantStore.selectedTenantId || $tenantStore.selectedTenantId === null) {
+		loadUsers();
+	}
 
 	const roleColors: Record<string, string> = {
 		Root: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
@@ -55,7 +61,7 @@
 	async function loadUsers() {
 		loading = true;
 		try {
-			users = await listUsers();
+			users = await usersApi.list();
 		} catch (error: any) {
 			notifications.error('Failed to load users: ' + error.message);
 		} finally {
@@ -76,7 +82,7 @@
 		if (!selectedUser) return;
 
 		try {
-			await deleteUser(selectedUser.id);
+			await usersApi.delete(selectedUser.id);
 			notifications.success(`User "${selectedUser.username}" deleted successfully`);
 			showDeleteDialog = false;
 			selectedUser = null;

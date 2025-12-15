@@ -10,7 +10,7 @@ export interface Catalog {
 
 export interface CreateCatalogRequest {
 	name: string;
-	warehouse_name: string;
+	warehouse_name?: string;
 	storage_location: string;
 	properties?: Record<string, string>;
 }

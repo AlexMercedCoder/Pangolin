@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { getUser, deleteUser, type User } from '$lib/api/users';
+  import { usersApi, type User } from '$lib/api/users';
   import Button from '$lib/components/ui/Button.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
   import { notifications } from '$lib/stores/notifications';
@@ -12,12 +12,12 @@
   let showDeleteDialog = false;
   let deleting = false;
 
-  const userId = $page.params.id;
+  const userId = $page.params.id!;
 
   async function loadUser() {
     loading = true;
     try {
-      user = await getUser(userId);
+      user = await usersApi.get(userId);
     } catch (error: any) {
       notifications.error('Failed to load user: ' + error.message);
       goto('/users');
@@ -35,7 +35,7 @@
   async function handleDelete() {
     deleting = true;
     try {
-      await deleteUser(userId);
+      await usersApi.delete(userId);
       notifications.success(`User "${user?.username}" deleted successfully`);
       goto('/users');
     } catch (error: any) {

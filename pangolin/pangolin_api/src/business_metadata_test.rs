@@ -35,7 +35,7 @@ async fn test_business_metadata_flow() {
         .route("/api/v1/assets/:id/request-access", post(request_access))
         .route("/api/v1/access-requests", get(list_access_requests))
         .route("/api/v1/access-requests/:id", put(update_access_request))
-        .layer(axum::middleware::from_fn(auth_middleware))
+        .layer(axum::middleware::from_fn(crate::auth_middleware::auth_middleware_wrapper))
         .with_state(store.clone());
 
     // 3. Create Tenant & User

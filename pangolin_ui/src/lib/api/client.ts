@@ -1,3 +1,5 @@
+import { TENANT_STORAGE_KEY } from '$lib/stores/tenant';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080';
 
 export interface ApiError {
@@ -19,12 +21,18 @@ class ApiClient {
 	): Promise<ApiResponse<T>> {
 		try {
 			const token = localStorage.getItem('auth_token');
+			const tenantId = localStorage.getItem(TENANT_STORAGE_KEY);
+			
 			const headers: HeadersInit = {
 				'Content-Type': 'application/json',
 			};
 
 			if (token && token !== 'no-auth-mode') {
 				headers['Authorization'] = `Bearer ${token}`;
+			}
+
+			if (tenantId) {
+				headers['X-Pangolin-Tenant'] = tenantId;
 			}
 
 			const options: RequestInit = {

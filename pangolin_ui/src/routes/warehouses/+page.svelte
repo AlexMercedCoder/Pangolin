@@ -5,6 +5,7 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
 	import { warehousesApi, type Warehouse } from '$lib/api/warehouses';
+	import { tenantStore } from '$lib/stores/tenant';
 	import { notifications } from '$lib/stores/notifications';
 
 	let warehouses: Warehouse[] = [];
@@ -18,9 +19,10 @@
 		{ key: 'use_sts', label: 'Auth', sortable: false, width: '100px' },
 	];
 
-	onMount(async () => {
-		await loadWarehouses();
-	});
+	// Reload when tenant changes
+	$: if ($tenantStore.selectedTenantId || $tenantStore.selectedTenantId === null) {
+		loadWarehouses();
+	}
 
 	async function loadWarehouses() {
 		loading = true;

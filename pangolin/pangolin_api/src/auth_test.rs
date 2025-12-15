@@ -89,14 +89,15 @@ async fn test_auth_flow() {
     
     use crate::auth_middleware::auth_middleware;
     use axum::middleware;
+    use axum::Extension;
+    use pangolin_core::user::UserSession;
 
     let protected_app = Router::new()
-        .route("/me", get(|state: axum::extract::State<Arc<dyn CatalogStore + Send + Sync>>, ext: axum::Extension<pangolin_core::user::UserSession>| async move {
+        .route("/me", get(|Extension(session): Extension<UserSession>| async move {
             // Mock handler that returns the session user
-            // In real app, get_current_user would do this or look up DB
-            Json(ext.0) 
+            Json(session)
         }))
-        .layer(middleware::from_fn(auth_middleware))
+        .layer(middleware::from_fn(crate::auth_middleware::auth_middleware_wrapper))
         .with_state(store.clone());
         
     // Set JWT secret for test

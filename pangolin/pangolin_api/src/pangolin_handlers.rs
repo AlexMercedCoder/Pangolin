@@ -448,8 +448,10 @@ pub async fn list_catalogs(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
 ) -> impl IntoResponse {
+    tracing::info!("list_catalogs called with tenant_id: {}", tenant.0);
     match store.list_catalogs(tenant.0).await {
         Ok(catalogs) => {
+            tracing::info!("list_catalogs returning {} catalogs for tenant {}", catalogs.len(), tenant.0);
             let resp: Vec<CatalogResponse> = catalogs.into_iter().map(|c| c.into()).collect();
             (StatusCode::OK, Json(resp)).into_response()
         }
@@ -467,10 +469,12 @@ pub async fn create_catalog(
     
     // Validate warehouse exists if specified
     if let Some(ref warehouse_name) = payload.warehouse_name {
-        match store.get_warehouse(tenant_id, warehouse_name.clone()).await {
-            Ok(Some(_)) => {}, // Warehouse exists, continue
-            Ok(None) => return (StatusCode::BAD_REQUEST, "Warehouse not found").into_response(),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to validate warehouse").into_response(),
+        if !warehouse_name.is_empty() {
+             match store.get_warehouse(tenant_id, warehouse_name.clone()).await {
+                Ok(Some(_)) => {}, // Warehouse exists, continue
+                Ok(None) => return (StatusCode::BAD_REQUEST, "Warehouse not found").into_response(),
+                Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to validate warehouse").into_response(),
+            }
         }
     }
     
@@ -478,7 +482,7 @@ pub async fn create_catalog(
         id: Uuid::new_v4(),
         name: payload.name.clone(),
         catalog_type: pangolin_core::model::CatalogType::Local,
-        warehouse_name: payload.warehouse_name.clone(),
+        warehouse_name: payload.warehouse_name.clone().filter(|n| !n.is_empty()), // Filter empty string to None
         storage_location: payload.storage_location.clone(),
         federated_config: None,
         properties: payload.properties.clone().unwrap_or_default(),

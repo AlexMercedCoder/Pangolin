@@ -61,7 +61,7 @@
 		try {
 			const request: CreateCatalogRequest = {
 				name,
-				warehouse_name: warehouseName,
+				warehouse_name: warehouseName || undefined,
 				storage_location: storageLocation,
 				properties: {}
 			};
@@ -112,10 +112,15 @@
 						label="Warehouse"
 						bind:value={warehouseName}
 						options={warehouses}
-						placeholder={loadingWarehouses ? "Loading warehouses..." : "Select a warehouse"}
-						required
+						placeholder={loadingWarehouses ? "Loading warehouses..." : "Select a warehouse (Optional)"}
 						disabled={loading || loadingWarehouses}
 					/>
+					{#if !warehouseName}
+						<div class="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-200 text-sm rounded-lg flex items-start gap-2">
+							<span class="text-lg">⚠️</span>
+							<p>Without a warehouse, you must manually specify storage credentials and details in your client configuration.</p>
+						</div>
+					{/if}
 					{#if warehouses.length === 0 && !loadingWarehouses}
 						<p class="mt-1 text-sm text-error-600">
 							No warehouses found. <a href="/warehouses/new" class="underline">Create a warehouse</a> first.
@@ -150,7 +155,7 @@
 					variant="primary"
 					type="submit"
 					{loading}
-					disabled={loading || !name || !warehouseName || !storageLocation}
+					disabled={loading || !name || !storageLocation}
 				>
 					{loading ? 'Creating...' : 'Create Catalog'}
 				</Button>

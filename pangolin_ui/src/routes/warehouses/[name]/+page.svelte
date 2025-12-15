@@ -26,7 +26,7 @@
     try {
       loading = true;
       if (!warehouseName) return;
-      warehouse = await warehousesApi.getWarehouse(warehouseName);
+      warehouse = await warehousesApi.get(warehouseName);
     } catch (error: any) {
       notifications.error(`Failed to load warehouse: ${error.message}`);
       goto('/warehouses');
@@ -39,7 +39,7 @@
     try {
       deleting = true;
       if (!warehouseName) return;
-      await warehousesApi.deleteWarehouse(warehouseName);
+      await warehousesApi.delete(warehouseName);
       notifications.success(`Warehouse "${warehouseName}" deleted successfully`);
       goto('/warehouses');
     } catch (error: any) {

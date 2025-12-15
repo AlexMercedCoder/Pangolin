@@ -272,9 +272,21 @@ pub async fn auth_middleware(
 
     // Inject TenantId for handlers that require it (like iceberg_handlers)
     // If session has a tenant_id, use it. Otherwise default to the nil UUID (system/root)
-    let tenant_uuid = session.tenant_id.unwrap_or_else(|| {
+    let mut tenant_uuid = session.tenant_id.unwrap_or_else(|| {
         Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
     });
+
+    // Allow Root to override tenant context via header
+    if session.role == UserRole::Root {
+        if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
+            if let Ok(tenant_str) = tenant_header.to_str() {
+                if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
+                    tenant_uuid = override_uuid;
+                }
+            }
+        }
+    }
+
     req.extensions_mut().insert(crate::auth::TenantId(tenant_uuid));
     
     // If role is Root, insert RootUser extension
@@ -394,9 +406,29 @@ pub async fn auth_middleware_wrapper(
     }
     
     req.extensions_mut().insert(session.clone());
-    let tenant_uuid = session.tenant_id.unwrap_or_else(|| {
+    let mut tenant_uuid = session.tenant_id.unwrap_or_else(|| {
         Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
     });
+
+    // Allow Root to override tenant context via header
+    if session.role == UserRole::Root {
+        tracing::debug!("Root user detected, checking for X-Pangolin-Tenant header");
+        if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
+            if let Ok(tenant_str) = tenant_header.to_str() {
+                tracing::debug!("X-Pangolin-Tenant header value: {}", tenant_str);
+                if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
+                    tracing::info!("Root user overriding tenant context: {} -> {}", tenant_uuid, override_uuid);
+                    tenant_uuid = override_uuid;
+                } else {
+                    tracing::warn!("Failed to parse X-Pangolin-Tenant header as UUID: {}", tenant_str);
+                }
+            }
+        } else {
+            tracing::debug!("No X-Pangolin-Tenant header found for Root user");
+        }
+    }
+
+    tracing::info!("Setting TenantId extension to: {}", tenant_uuid);
     req.extensions_mut().insert(crate::auth::TenantId(tenant_uuid));
     
     if session.role == UserRole::Root {
