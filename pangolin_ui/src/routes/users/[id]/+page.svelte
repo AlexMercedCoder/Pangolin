@@ -27,9 +27,7 @@
   }
 
   function handleEdit() {
-    // Navigate to edit page (to be implemented)
-    // goto(`/users/${userId}/edit`);
-    notifications.info('Edit functionality coming soon');
+    goto(`/users/${userId}/edit`);
   }
 
   async function handleDelete() {

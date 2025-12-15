@@ -1,0 +1,151 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import Card from '$lib/components/ui/Card.svelte';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Input from '$lib/components/ui/Input.svelte';
+	import { catalogsApi, type Catalog, type UpdateCatalogRequest } from '$lib/api/catalogs';
+	import { notifications } from '$lib/stores/notifications';
+
+	let catalog: Catalog | null = null;
+	let loading = true;
+	let submitting = false;
+
+	// Form data
+	let warehouseName = '';
+	let storageLocation = '';
+	let errors: Record<string, string> = {};
+
+	$: catalogName = $page.params.name;
+
+	onMount(async () => {
+		await loadCatalog();
+	});
+
+	async function loadCatalog() {
+		if (!catalogName) return;
+
+		loading = true;
+		try {
+			catalog = await catalogsApi.get(catalogName);
+			// Pre-populate form
+			warehouseName = catalog.warehouse_name || '';
+			storageLocation = catalog.storage_location || '';
+		} catch (error: any) {
+			notifications.error(`Failed to load catalog: ${error.message}`);
+			goto('/catalogs');
+		}
+		loading = false;
+	}
+
+	function validateForm(): boolean {
+		errors = {};
+
+		if (!storageLocation) {
+			errors.storageLocation = 'Storage location is required';
+		}
+
+		return Object.keys(errors).length === 0;
+	}
+
+	async function handleSubmit() {
+		if (!validateForm() || !catalogName) return;
+
+		submitting = true;
+		try {
+			const updateData: UpdateCatalogRequest = {
+				storage_location: storageLocation,
+			};
+
+			// Only include warehouse_name if it's not empty
+			if (warehouseName) {
+				updateData.warehouse_name = warehouseName;
+			}
+
+			await catalogsApi.update(catalogName, updateData);
+			notifications.success(`Catalog "${catalogName}" updated successfully`);
+			goto(`/catalogs/${encodeURIComponent(catalogName)}`);
+		} catch (error: any) {
+			notifications.error(`Failed to update catalog: ${error.message}`);
+		}
+		submitting = false;
+	}
+</script>
+
+<svelte:head>
+	<title>Edit {catalog?.name || 'Catalog'} - Pangolin</title>
+</svelte:head>
+
+<div class="space-y-6">
+	<!-- Header -->
+	<div>
+		<div class="flex items-center gap-3">
+			<button
+				on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}`)}
+				class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+			>
+				← Back
+			</button>
+			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+				Edit Catalog: {catalog?.name || 'Loading...'}
+			</h1>
+		</div>
+		<p class="mt-2 text-gray-600 dark:text-gray-400">Update catalog configuration</p>
+	</div>
+
+	{#if loading}
+		<Card>
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+		</Card>
+	{:else if catalog}
+		<Card>
+			<form on:submit|preventDefault={handleSubmit} class="space-y-6">
+				<div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+					<p class="text-sm text-blue-800 dark:text-blue-200">
+						<strong>Note:</strong> Catalog name cannot be changed. To rename a catalog, create a new one and migrate your data.
+					</p>
+				</div>
+
+				<Input
+					label="Catalog Name"
+					value={catalog.name}
+					disabled
+					helpText="Catalog name is immutable"
+				/>
+
+				<Input
+					label="Warehouse Name"
+					bind:value={warehouseName}
+					placeholder="Leave empty for no warehouse"
+					helpText="Optional: Link this catalog to a warehouse for credential vending"
+				/>
+
+				<Input
+					label="Storage Location"
+					bind:value={storageLocation}
+					error={errors.storageLocation}
+					required
+					placeholder="s3://bucket/path or /local/path"
+					helpText="Base path where Iceberg table data will be stored"
+				/>
+
+				<div class="flex items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+					<Button
+						type="button"
+						variant="ghost"
+						on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}`)}
+						disabled={submitting}
+					>
+						Cancel
+					</Button>
+					<Button type="submit" loading={submitting}>
+						{submitting ? 'Updating...' : 'Update Catalog'}
+					</Button>
+				</div>
+			</form>
+		</Card>
+	{/if}
+</div>

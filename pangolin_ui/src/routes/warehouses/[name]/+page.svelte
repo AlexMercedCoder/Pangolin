@@ -79,6 +79,12 @@
         </div>
         <div class="flex gap-3">
           <button
+            on:click={() => goto(`/warehouses/${encodeURIComponent(warehouseName)}/edit`)}
+            class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Edit Warehouse
+          </button>
+          <button
             on:click={() => showDeleteDialog = true}
             class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >

@@ -32,9 +32,8 @@
 	}
 
 	function handleRowClick(event: CustomEvent) {
-		// Future: Navigate to tenant details
-		// const tenant = event.detail;
-		// goto(`/tenants/${tenant.id}`);
+		const tenant = event.detail;
+		goto(`/tenants/${tenant.id}`);
 	}
 </script>
 

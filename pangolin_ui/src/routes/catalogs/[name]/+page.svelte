@@ -74,6 +74,9 @@
 			<p class="mt-2 text-gray-600 dark:text-gray-400">Catalog details and configuration</p>
 		</div>
 		<div class="flex items-center gap-3">
+			<Button on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}/edit`)} disabled={loading}>
+				Edit Catalog
+			</Button>
 			<Button variant="error" on:click={() => (showDeleteDialog = true)} disabled={loading}>
 				Delete Catalog
 			</Button>
