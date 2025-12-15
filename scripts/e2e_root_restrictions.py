@@ -124,7 +124,7 @@ def test_root_actions():
 
     # 6. Create Tenant User (Forbidden)
     print("6. Creating Tenant User as Root (Should FAIL)...")
-    run_command(f"{CLI_BIN} create-user regular_user --role tenant-user --tenant-id {tenant_id} --email test@test.com", expect_fail=True)
+    run_command(f"{CLI_BIN} create-user regular_user --role tenant-user --tenant-id {tenant_id} --email test@test.com --password password123", expect_fail=True)
 
     print("✅ Root User Restrictions Verified.")
 
@@ -140,13 +140,13 @@ def test_tenant_admin_actions():
     print("2. Creating Warehouse 't_wh' (Should Succeed)...")
     run_command(f"{CLI_BIN} create-warehouse t_wh --type memory")
     
-    # 3. Create Catalog (Allowed)
+    # 3. Creating Catalog 't_cat' (Should Succeed)...")
     print("3. Creating Catalog 't_cat' (Should Succeed)...")
     run_command(f"{CLI_BIN} create-catalog t_cat --warehouse t_wh")
     
-    # 4. Create User (Allowed)
+    # 4. Creating Regular User 't_user' (Should Succeed)
     print("4. Creating Regular User 't_user' (Should Succeed)...")
-    run_command(f"{CLI_BIN} create-user t_user --role tenant-user --email user@test.com", input_str="userpass\n")
+    run_command(f"{CLI_BIN} create-user t_user --role tenant-user --email user@test.com --password password123", input_str="userpass\n")
 
     # 5. Check List Users
     print("5. Listing Users...")

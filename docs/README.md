@@ -33,7 +33,7 @@ Implementation plans and research notes.
 
 | Category | Description | Key Documents |
 |----------|-------------|---------------|
-| **Getting Started** | Setup and deployment | [Quick Start](getting-started/getting_started.md), [Deployment](getting-started/deployment.md) |
+| **Getting Started** | Setup and deployment | [Quick Start](getting-started/getting_started.md), [Evaluating](getting-started/evaluating-pangolin.md), [Deployment](getting-started/deployment.md) |
 | **Storage** | Cloud storage configuration | [S3](warehouse/s3.md), [Azure](warehouse/azure.md), [GCS](warehouse/gcs.md) |
 | **API** | REST API reference | [API Overview](api/api_overview.md), [Authentication](api/authentication.md) |
 | **Features** | Advanced capabilities | [Branching](features/branch_management.md), [Time Travel](features/time_travel.md), [PyIceberg](features/pyiceberg_testing.md) |

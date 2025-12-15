@@ -7,6 +7,8 @@ use pangolin_store::{CatalogStore, MemoryStore, PostgresStore, MongoStore};
 use pangolin_api::app;
 use uuid::Uuid;
 use pangolin_core::model::Tenant;
+use pangolin_core::user::{User, UserRole}; // Import User and UserRole
+use pangolin_api::auth_middleware::{create_session, generate_token};
 
 #[tokio::main]
 async fn main() {
@@ -48,6 +50,67 @@ async fn main() {
     match store.create_tenant(default_tenant.clone()).await {
         Ok(_) => tracing::info!("Created default tenant for testing: {}", default_tenant_id),
         Err(_) => tracing::debug!("Default tenant already exists"),
+    }
+
+    // Check for NO_AUTH mode and auto-provision initial Tenant Admin
+    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+
+    if no_auth_enabled {
+        let admin_username = std::env::var("PANGOLIN_ADMIN_USER").unwrap_or_else(|_| "tenant_admin".to_string());
+        let admin_password = std::env::var("PANGOLIN_ADMIN_PASSWORD").unwrap_or_else(|_| "password123".to_string());
+        let jwt_secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
+        
+        // Hash password
+        let password_hash = pangolin_api::auth_middleware::hash_password(&admin_password)
+            .expect("Failed to hash default admin password");
+
+        let admin_user = User::new_tenant_admin(
+            admin_username.clone(),
+            format!("{}@example.com", admin_username),
+            password_hash,
+            default_tenant_id // Create inside default tenant
+        );
+
+        // Try to create the user
+        let user_id = admin_user.id; // Copy ID before moving
+        match store.create_user(admin_user.clone()).await {
+            Ok(_) => tracing::info!("Auto-provisioned initial Tenant Admin: {}", admin_username),
+            Err(_) => tracing::debug!("Tenant Admin '{}' already exists", admin_username),
+        }
+
+        // Generate a long-lived token for display
+        let session = create_session(
+            user_id,
+            admin_username.clone(),
+            Some(default_tenant_id),
+            UserRole::TenantAdmin,
+            31536000, // 365 days
+        );
+        let token = generate_token(session, &jwt_secret).expect("Failed to generate startup token");
+
+        // PRINT THE BANNER
+        println!("\n========================================================");
+        println!(" WARNING: NO_AUTH MODE ENABLED - FOR EVALUATION ONLY");
+        println!("========================================================");
+        println!("Initial Tenant Admin Auto-Provisioned:");
+        println!(" Username: {}", admin_username);
+        println!(" Password: {}", admin_password);
+        println!(" Tenant ID: {}", default_tenant_id);
+        println!("--------------------------------------------------------");
+        println!("PyIceberg Configuration Snippet:");
+        println!("--------------------------------------------------------");
+        println!("catalog = load_catalog(");
+        println!("    \"local\",");
+        println!("    **{{");
+        println!("        \"type\": \"rest\",");
+        println!("        \"uri\": \"http://127.0.0.1:8080/api/v1/catalogs/my_catalog/iceberg\",");
+        println!("        \"token\": \"{}\",", token);
+        println!("        \"header.X-Pangolin-Tenant\": \"{}\"", default_tenant_id);
+        println!("    }}");
+        println!(")");
+        println!("========================================================\n");
     }
 
     // Build our application with a route

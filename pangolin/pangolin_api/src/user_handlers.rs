@@ -226,13 +226,10 @@ pub async fn login(
             // Check for Root User via Environment Variables
             let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_else(|_| "admin".to_string());
             let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
-            
-            println!("Debug Login: Request user='{}', pass='{}'", req.username, req.password);
-            println!("Debug Login: Root user='{}', pass='{}'", root_user, root_pass);
 
             if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
                 // Create a temporary User object for the root user session
-                println!("Debug Login: Root credentials matched.");
+                // Use a deterministic UUID for root to ensure consistency across restarts
                 let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap(); 
                 User {
                     id: root_id,
