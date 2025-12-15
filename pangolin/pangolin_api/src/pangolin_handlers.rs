@@ -66,10 +66,10 @@ pub async fn list_branches(
     Query(params): Query<ListBranchParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    // For now assume "default" catalog if not specified in query (which we haven't implemented yet)
-    // Or maybe we should add catalog to path?
-    // Let's assume "default" for now to keep it simple, or add a query param.
-    let catalog_name = "default";
+    
+    // Use catalog from query params or default to "default"
+    let catalog_name_string = params.catalog.clone().unwrap_or_else(|| "default".to_string());
+    let catalog_name = catalog_name_string.as_str();
     
     match store.list_branches(tenant_id, catalog_name).await {
         Ok(branches) => {
@@ -189,9 +189,12 @@ pub async fn get_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Path(name): Path<String>,
+    Query(params): Query<ListBranchParams>, // Reusing ListBranchParams which has optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = "default"; // TODO: Support catalog in path
+    
+    let catalog_name_string = params.catalog.clone().unwrap_or_else(|| "default".to_string());
+    let catalog_name = catalog_name_string.as_str();
     
     match store.get_branch(tenant_id, catalog_name, name).await {
         Ok(Some(branch)) => (StatusCode::OK, Json(BranchResponse::from(branch))).into_response(),

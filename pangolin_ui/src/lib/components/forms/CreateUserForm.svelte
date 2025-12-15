@@ -8,6 +8,7 @@
 	import { usersApi, type CreateUserRequest } from '$lib/api/users';
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
 	import { authStore, isRoot } from '$lib/stores/auth';
+	import { tenantStore } from '$lib/stores/tenant';
 
 	const dispatch = createEventDispatcher();
 
@@ -37,12 +38,24 @@
 
 	$: tenantOptions = tenants.map((t) => ({ value: t.id, label: t.name }));
 
-	$: showTenantSelect = formData.role && formData.role !== 'Root';
+	// Only show tenant select for Root users creating non-Root users
+	// In NO_AUTH mode, always use default tenant
+	$: showTenantSelect = $isRoot && formData.role && formData.role !== 'Root' && !$authStore.authEnabled;
+
+	// Auto-set tenant for non-root users or in NO_AUTH mode
+	$: if (!$authStore.authEnabled) {
+		// In NO_AUTH mode, use the default tenant
+		formData.tenant_id = '00000000-0000-0000-0000-000000000000';
+	} else if (!$isRoot && $tenantStore.selectedTenantId) {
+		formData.tenant_id = $tenantStore.selectedTenantId;
+	}
 
 	async function loadTenants() {
 		loadingTenants = true;
 		try {
-			tenants = await tenantsApi.list();
+			if ($isRoot) {
+				tenants = await tenantsApi.list();
+			}
 		} catch (error) {
 			console.error('Failed to load tenants:', error);
 		} finally {
@@ -90,8 +103,11 @@
 			errors.role = 'Please select a role';
 		}
 
-		// Tenant validation (for non-Root users)
-		if (formData.role !== 'Root' && !formData.tenant_id) {
+		// Tenant validation
+		// Root users don't need a tenant
+		// TenantAdmins use their current tenant (auto-set)
+		// Only validate if we're showing the tenant select
+		if (showTenantSelect && !formData.tenant_id) {
 			errors.tenant_id = 'Please select a tenant';
 		}
 

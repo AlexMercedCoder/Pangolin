@@ -94,7 +94,8 @@ describe('Warehouse Edit Page', () => {
 
 		await waitFor(() => expect(warehousesApi.get).toHaveBeenCalled());
 
-		const storageTypeSelect = screen.getByLabelText(/Storage Type/i);
+		// Find select by its current value
+		const storageTypeSelect = screen.getByDisplayValue('Amazon S3 / MinIO');
 		await fireEvent.change(storageTypeSelect, { target: { value: 'azure' } });
 
 		await waitFor(() => {

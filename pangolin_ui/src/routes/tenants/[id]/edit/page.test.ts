@@ -66,7 +66,7 @@ describe('Tenant Edit Page', () => {
 		const nameInput = screen.getByLabelText(/Name/i);
 		await fireEvent.input(nameInput, { target: { value: 'Updated Tenant' } });
 
-		const descInput = screen.getByLabelText(/Description/i);
+		const descInput = screen.getByPlaceholderText(/Optional description/i);
 		await fireEvent.input(descInput, { target: { value: 'Updated description' } });
 
 		const submitButton = screen.getByRole('button', { name: /Update Tenant/i });
@@ -87,7 +87,7 @@ describe('Tenant Edit Page', () => {
 
 		await waitFor(() => expect(tenantsApi.get).toHaveBeenCalled());
 
-		const descInput = screen.getByLabelText(/Description/i);
+		const descInput = screen.getByPlaceholderText(/Optional description/i);
 		await fireEvent.input(descInput, { target: { value: '' } });
 
 		const submitButton = screen.getByRole('button', { name: /Update Tenant/i });

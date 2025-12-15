@@ -6,9 +6,12 @@
 	import Button from '$lib/components/ui/Button.svelte';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
+	import { branchesApi, type Branch } from '$lib/api/branches';
 	import { notifications } from '$lib/stores/notifications';
 
 	let catalog: Catalog | null = null;
+	let branches: Branch[] = [];
+	let selectedBranch = 'main';
 	let loading = true;
 	let showDeleteDialog = false;
 	let deleting = false;
@@ -23,32 +26,45 @@
 		if (!catalogName) return;
 
 		loading = true;
-		const response = await catalogsApi.get(catalogName);
-
-		if (response.error) {
-			notifications.error(`Failed to load catalog: ${response.error.message}`);
+		try {
+			catalog = await catalogsApi.get(catalogName);
+			// Load branches for this catalog
+			await loadBranches();
+		} catch (error: any) {
+			console.error('Error loading catalog:', error);
+			notifications.error(`Failed to load catalog: ${error.message}`);
 			goto('/catalogs');
-		} else {
-			catalog = response.data || null;
+		} finally {
+			loading = false;
 		}
+	}
 
-		loading = false;
+	async function loadBranches() {
+		try {
+			const allBranches = await branchesApi.list();
+			branches = allBranches.filter(b => b.catalog === catalogName);
+		} catch (error: any) {
+			console.error('Failed to load branches:', error);
+			branches = [];
+		}
 	}
 
 	async function handleDelete() {
 		if (!catalogName) return;
 
 		deleting = true;
-		const response = await catalogsApi.delete(catalogName);
-
-		if (response.error) {
-			notifications.error(`Failed to delete catalog: ${response.error.message}`);
-		} else {
+		try {
+			await catalogsApi.delete(catalogName);
 			notifications.success(`Catalog "${catalogName}" deleted successfully`);
-			goto('/catalogs');
+			// Navigate back to catalog list
+			await goto('/catalogs');
+		} catch (error: any) {
+			console.error('Error deleting catalog:', error);
+			notifications.error(`Failed to delete catalog: ${error.message}`);
+		} finally {
+			deleting = false;
+			showDeleteDialog = false;
 		}
-
-		deleting = false;
 	}
 </script>
 
@@ -149,6 +165,64 @@
 			<p class="text-gray-600 dark:text-gray-400">
 				Namespace browsing will be available in Phase 3.
 			</p>
+		</Card>
+
+		<!-- Branch Management Card -->
+		<Card>
+			<div class="flex items-center justify-between mb-4">
+				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Branches</h3>
+				<Button size="sm" on:click={() => goto('/branches/new')}>
+					Create Branch
+				</Button>
+			</div>
+
+			{#if branches.length === 0}
+				<p class="text-gray-600 dark:text-gray-400 text-center py-8">
+					No branches found for this catalog. Create a branch to enable isolated development.
+				</p>
+			{:else}
+				<div class="space-y-3">
+					<div class="space-y-2">
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Active Branch
+						</label>
+						<select
+							bind:value={selectedBranch}
+							class="block w-full md:w-64 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 dark:text-white"
+						>
+							{#each branches as branch}
+								<option value={branch.name}>
+									{branch.name} ({branch.branch_type})
+								</option>
+							{/each}
+						</select>
+						<p class="text-sm text-gray-500 dark:text-gray-400">
+							Select a branch to view its details
+						</p>
+					</div>
+
+					<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+						{#each branches as branch}
+							<button
+								on:click={() => goto(`/branches/${encodeURIComponent(branch.catalog)}/${encodeURIComponent(branch.name)}`)}
+								class="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 transition-colors text-left"
+							>
+								<div class="flex-1">
+									<div class="font-medium text-gray-900 dark:text-white">
+										{branch.name}
+									</div>
+									<div class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+										{branch.assets?.length || 0} assets • {branch.branch_type}
+									</div>
+								</div>
+								<svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+								</svg>
+							</button>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		</Card>
 	{/if}
 </div>

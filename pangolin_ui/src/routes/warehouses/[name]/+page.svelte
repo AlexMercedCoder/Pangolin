@@ -41,7 +41,7 @@
       if (!warehouseName) return;
       await warehousesApi.delete(warehouseName);
       notifications.success(`Warehouse "${warehouseName}" deleted successfully`);
-      goto('/warehouses');
+      await goto('/warehouses');
     } catch (error: any) {
       notifications.error(`Failed to delete warehouse: ${error.message}`);
     } finally {
@@ -95,30 +95,30 @@
     </div>
 
     <!-- Warehouse Details -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 class="text-xl font-semibold mb-4">Warehouse Configuration</h2>
+    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Warehouse Configuration</h2>
       
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Basic Info -->
         <div>
-          <h3 class="text-sm font-medium text-gray-500 mb-3">Basic Information</h3>
+          <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Basic Information</h3>
           <dl class="space-y-3">
             <div>
-              <dt class="text-sm font-medium text-gray-700">Name</dt>
-              <dd class="mt-1 text-sm text-gray-900">{warehouse.name}</dd>
+              <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Name</dt>
+              <dd class="mt-1 text-sm text-gray-900 dark:text-white">{warehouse.name}</dd>
             </div>
             <div>
-              <dt class="text-sm font-medium text-gray-700">Storage Type</dt>
+              <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Storage Type</dt>
               <dd class="mt-1">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
                   {getStorageType(warehouse.storage_config)}
                 </span>
               </dd>
             </div>
             <div>
-              <dt class="text-sm font-medium text-gray-700">Authentication Method</dt>
+              <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Authentication Method</dt>
               <dd class="mt-1">
-                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {warehouse.use_sts ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {warehouse.use_sts ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
                   {getAuthMethod(warehouse.use_sts)}
                 </span>
               </dd>
@@ -128,30 +128,30 @@
 
         <!-- Storage Configuration -->
         <div>
-          <h3 class="text-sm font-medium text-gray-500 mb-3">Storage Configuration</h3>
+          <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Storage Configuration</h3>
           <dl class="space-y-3">
             {#if warehouse.storage_config.bucket}
               <div>
-                <dt class="text-sm font-medium text-gray-700">Bucket/Container</dt>
-                <dd class="mt-1 text-sm text-gray-900 font-mono">{warehouse.storage_config.bucket}</dd>
+                <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Bucket/Container</dt>
+                <dd class="mt-1 text-sm text-gray-900 dark:text-white font-mono">{warehouse.storage_config.bucket}</dd>
               </div>
             {/if}
             {#if warehouse.storage_config.region}
               <div>
-                <dt class="text-sm font-medium text-gray-700">Region</dt>
-                <dd class="mt-1 text-sm text-gray-900">{warehouse.storage_config.region}</dd>
+                <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Region</dt>
+                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{warehouse.storage_config.region}</dd>
               </div>
             {/if}
             {#if warehouse.storage_config.endpoint}
               <div>
-                <dt class="text-sm font-medium text-gray-700">Custom Endpoint</dt>
-                <dd class="mt-1 text-sm text-gray-900 font-mono">{warehouse.storage_config.endpoint}</dd>
+                <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Custom Endpoint</dt>
+                <dd class="mt-1 text-sm text-gray-900 dark:text-white font-mono">{warehouse.storage_config.endpoint}</dd>
               </div>
             {/if}
             {#if warehouse.storage_config.account_name}
               <div>
-                <dt class="text-sm font-medium text-gray-700">Account Name</dt>
-                <dd class="mt-1 text-sm text-gray-900">{warehouse.storage_config.account_name}</dd>
+                <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Account Name</dt>
+                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{warehouse.storage_config.account_name}</dd>
               </div>
             {/if}
             {#if warehouse.storage_config.project_id}
@@ -225,5 +225,5 @@
   variant="danger"
   confirmText="Delete"
   loading={deleting}
-  on:confirm={handleDelete}
+  onConfirm={handleDelete}
 />

@@ -5,10 +5,13 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
+	import Select from '$lib/components/ui/Select.svelte';
 	import { catalogsApi, type Catalog, type UpdateCatalogRequest } from '$lib/api/catalogs';
+	import { warehousesApi, type Warehouse } from '$lib/api/warehouses';
 	import { notifications } from '$lib/stores/notifications';
 
 	let catalog: Catalog | null = null;
+	let warehouses: Warehouse[] = [];
 	let loading = true;
 	let submitting = false;
 
@@ -18,9 +21,14 @@
 	let errors: Record<string, string> = {};
 
 	$: catalogName = $page.params.name;
+	
+	$: warehouseOptions = [
+		{ value: '', label: 'None (No warehouse)' },
+		...warehouses.map(w => ({ value: w.name, label: w.name }))
+	];
 
 	onMount(async () => {
-		await loadCatalog();
+		await Promise.all([loadCatalog(), loadWarehouses()]);
 	});
 
 	async function loadCatalog() {
@@ -37,6 +45,15 @@
 			goto('/catalogs');
 		}
 		loading = false;
+	}
+	
+	async function loadWarehouses() {
+		try {
+			warehouses = await warehousesApi.list();
+		} catch (error: any) {
+			console.error('Failed to load warehouses:', error);
+			warehouses = [];
+		}
 	}
 
 	function validateForm(): boolean {
@@ -116,12 +133,13 @@
 					helpText="Catalog name is immutable"
 				/>
 
-				<Input
-					label="Warehouse Name"
-					bind:value={warehouseName}
-					placeholder="Leave empty for no warehouse"
-					helpText="Optional: Link this catalog to a warehouse for credential vending"
-				/>
+				<Select
+				label="Warehouse"
+				bind:value={warehouseName}
+				options={warehouseOptions}
+				placeholder="Select a warehouse..."
+				helpText="Optional: Link this catalog to a warehouse for credential vending"
+			/>
 
 				<Input
 					label="Storage Location"

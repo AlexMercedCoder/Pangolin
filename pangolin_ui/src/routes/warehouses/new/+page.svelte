@@ -17,6 +17,8 @@
 	let bucket = '';
 	let region = 'us-east-1';
 	let endpoint = '';
+	let accessKeyId = '';
+	let secretAccessKey = '';
 	let roleArn = '';
 	let externalId = '';
 
@@ -49,9 +51,18 @@
 				request.storage_config.bucket = bucket;
 				request.storage_config.region = region;
 				if (endpoint) request.storage_config.endpoint = endpoint;
-				// If using STS, typically standard S3 setup, might need extra fields later
-				// Depending on backend support for role assumption from frontend config
-				// Assuming standard static credential config happens on backend or environment for now if not STS
+				
+				if (use_sts) {
+					// Add IAM role configuration for STS
+					if (roleArn) request.storage_config.role_arn = roleArn;
+					if (externalId) request.storage_config.external_id = externalId;
+				} else {
+					// Add static credentials if not using STS
+					if (accessKeyId && secretAccessKey) {
+						request.storage_config.access_key_id = accessKeyId;
+						request.storage_config.secret_access_key = secretAccessKey;
+					}
+				}
 			} else if (storageType === 'azure') {
 				request.storage_config.account_name = accountName;
 				request.storage_config.container = container;
@@ -64,6 +75,7 @@
 				}
 			} else if (storageType === 'gcs') {
 				request.storage_config.bucket = bucket;
+				if (projectId) request.storage_config.project_id = projectId;
 				if (serviceAccountJson) request.storage_config.service_account_json = serviceAccountJson;
 			}
 
@@ -162,8 +174,53 @@
 								label="Endpoint (Optional)"
 								bind:value={endpoint}
 								placeholder="http://localhost:9000"
+								helpText="For MinIO or custom S3-compatible endpoints"
 								disabled={loading}
 							/>
+							
+							{#if use_sts}
+								<div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+									<p class="text-sm text-blue-800 dark:text-blue-200">
+										<strong>IAM Role (STS):</strong> Provide the ARN of the IAM role to assume for S3 access.
+									</p>
+								</div>
+								<Input
+									label="Role ARN"
+									bind:value={roleArn}
+									placeholder="arn:aws:iam::123456789012:role/MyS3AccessRole"
+									helpText="IAM Role ARN to assume for accessing S3"
+									required
+									disabled={loading}
+								/>
+								<Input
+									label="External ID (Optional)"
+									bind:value={externalId}
+									placeholder="unique-external-id"
+									helpText="External ID for additional security when assuming the role"
+									disabled={loading}
+								/>
+							{:else}
+								<div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+									<p class="text-sm text-yellow-800 dark:text-yellow-200">
+										<strong>Static Credentials:</strong> Provide AWS access credentials. For production, use STS/IAM roles instead.
+									</p>
+								</div>
+								<Input
+									label="Access Key ID"
+									bind:value={accessKeyId}
+									placeholder="AKIAIOSFODNN7EXAMPLE"
+									helpText="AWS Access Key ID or MinIO access key"
+									disabled={loading}
+								/>
+								<Input
+									label="Secret Access Key"
+									type="password"
+									bind:value={secretAccessKey}
+									placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+									helpText="AWS Secret Access Key or MinIO secret key"
+									disabled={loading}
+								/>
+							{/if}
 						</div>
 					{:else if storageType === 'azure'}
 						<div class="grid gap-4">
@@ -179,16 +236,26 @@
 								required
 								disabled={loading}
 							/>
+							
 							{#if use_sts}
+								<div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+									<p class="text-sm text-blue-800 dark:text-blue-200">
+										<strong>Azure AD (Service Principal):</strong> Provide Azure AD credentials for authentication.
+									</p>
+								</div>
 								<Input
 									label="Tenant ID"
 									bind:value={tenantId}
+									placeholder="00000000-0000-0000-0000-000000000000"
+									helpText="Azure AD Tenant ID"
 									required
 									disabled={loading}
 								/>
 								<Input
 									label="Client ID"
 									bind:value={clientId}
+									placeholder="00000000-0000-0000-0000-000000000000"
+									helpText="Azure AD Application (Client) ID"
 									required
 									disabled={loading}
 								/>
@@ -196,14 +263,21 @@
 									label="Client Secret"
 									type="password"
 									bind:value={clientSecret}
+									helpText="Azure AD Application Client Secret"
 									required
 									disabled={loading}
 								/>
 							{:else}
+								<div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+									<p class="text-sm text-yellow-800 dark:text-yellow-200">
+										<strong>Account Key:</strong> Provide the storage account key. For production, use Azure AD authentication instead.
+									</p>
+								</div>
 								<Input
 									label="Account Key"
 									type="password"
 									bind:value={accountKey}
+									helpText="Azure Storage Account Key"
 									required
 									disabled={loading}
 								/>
@@ -211,22 +285,43 @@
 						</div>
 					{:else if storageType === 'gcs'}
 						<div class="grid gap-4">
+							<div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+								<p class="text-sm text-blue-800 dark:text-blue-200">
+									<strong>Service Account:</strong> Provide your GCP service account credentials in JSON format.
+								</p>
+							</div>
+							
 							<Input
-								label="Bucket Name"
-								bind:value={bucket}
+								label="Project ID"
+								bind:value={projectId}
+								placeholder="my-gcp-project"
+								helpText="Google Cloud Project ID"
 								required
 								disabled={loading}
 							/>
+							
+							<Input
+								label="Bucket Name"
+								bind:value={bucket}
+								placeholder="my-gcs-bucket"
+								required
+								disabled={loading}
+							/>
+							
 							<div>
 								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-									Service Account JSON
+									Service Account JSON (Optional)
 								</label>
 								<textarea
 									bind:value={serviceAccountJson}
 									rows="5"
+									placeholder="Paste service account JSON here..."
 									class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 dark:text-white font-mono text-sm"
 									disabled={loading}
 								></textarea>
+								<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+									Paste the entire service account JSON key file. Leave empty to use Application Default Credentials.
+								</p>
 							</div>
 						</div>
 					{/if}

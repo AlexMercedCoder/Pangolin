@@ -1,15 +1,25 @@
+```
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { usersApi, type User } from '$lib/api/users';
+  import { permissionsApi, type Permission } from '$lib/api/permissions';
   import Button from '$lib/components/ui/Button.svelte';
+  import Card from '$lib/components/ui/Card.svelte';
   import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+  import EditPermissionsDialog from '$lib/components/dialogs/EditPermissionsDialog.svelte';
+  import EditRolesDialog from '$lib/components/dialogs/EditRolesDialog.svelte';
   import { notifications } from '$lib/stores/notifications';
+  import { getScopeDisplay } from '$lib/api/permissions';
 
   let user: User | null = null;
+  let permissions: Permission[] = [];
+  let userRoles: string[] = []; // Role IDs
   let loading = true;
   let showDeleteDialog = false;
+  let showPermissionsDialog = false;
+  let showRolesDialog = false;
   let deleting = false;
 
   const userId = $page.params.id!;
@@ -18,6 +28,9 @@
     loading = true;
     try {
       user = await usersApi.get(userId);
+      // Load user permissions
+      permissions = await permissionsApi.getUserPermissions(userId);
+      // Note: User roles would need backend support to list
     } catch (error: any) {
       notifications.error('Failed to load user: ' + error.message);
       goto('/users');
@@ -85,12 +98,9 @@
 
     {#if loading}
       <div class="flex justify-center py-12">
-        <div class="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
       </div>
     {:else if user}
-      <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-          <!-- Account Details -->
           <div>
             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Account Details</h3>
             <dl class="space-y-4">

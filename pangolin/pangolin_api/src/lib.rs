@@ -49,6 +49,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
     let cors = CorsLayer::new()
         //.allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
         .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::PATCH, Method::OPTIONS])
         .allow_headers([
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,

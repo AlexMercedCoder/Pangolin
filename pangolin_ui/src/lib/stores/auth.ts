@@ -22,13 +22,36 @@ const initialState: AuthState = {
 function createAuthStore() {
 	const { subscribe, set, update } = writable<AuthState>(initialState);
 
-	// Check server config and initialize auth state
+		// Check server config and initialize auth state
 	async function initialize() {
 		try {
-			// Check if server has auth enabled
-			const config = await authApi.getAppConfig();
+			// Try to check if server has auth enabled
+			// If the endpoint doesn't exist or returns error, assume auth is enabled
+			let authEnabled = true;
 			
-			if (!config.auth_enabled) {
+			try {
+				const config = await authApi.getAppConfig();
+				authEnabled = config.auth_enabled;
+			} catch (configError) {
+				// If app-config endpoint doesn't exist, try to detect NO_AUTH mode
+				// by attempting to access a protected endpoint without auth
+				try {
+					const response = await fetch('/api/v1/catalogs', {
+						method: 'GET',
+						headers: { 'Content-Type': 'application/json' }
+					});
+					
+					// If we get a 200 without auth, we're in NO_AUTH mode
+					if (response.ok) {
+						authEnabled = false;
+					}
+				} catch {
+					// If fetch fails, assume auth is enabled
+					authEnabled = true;
+				}
+			}
+			
+			if (!authEnabled) {
 				// NO_AUTH mode - auto-authenticate with mock session
 				const mockUser: User = {
 					id: 'no-auth-user',

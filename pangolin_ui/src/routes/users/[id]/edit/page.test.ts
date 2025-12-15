@@ -66,7 +66,8 @@ describe('User Edit Page', () => {
 		const emailInput = screen.getByLabelText(/Email/i);
 		await fireEvent.input(emailInput, { target: { value: 'newemail@example.com' } });
 
-		const roleSelect = screen.getByLabelText(/Role/i);
+		// Find select by its current value
+		const roleSelect = screen.getByDisplayValue('TenantUser');
 		await fireEvent.change(roleSelect, { target: { value: 'TenantAdmin' } });
 
 		const submitButton = screen.getByRole('button', { name: /Update User/i });
