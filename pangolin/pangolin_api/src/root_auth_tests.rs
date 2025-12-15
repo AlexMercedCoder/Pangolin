@@ -162,7 +162,7 @@ async fn test_no_auth_mode_access() {
     assert_eq!(config["auth_enabled"], false);
 
     // 2. Try a protected endpoint (create warehouse) WITHOUT token
-    // In No-Auth mode, handler sees "Root". Root cannot create warehouse -> 403 Forbidden.
+    // In No-Auth mode, handler sees "TenantAdmin" (changed from Root). TenantAdmin CAN create warehouse -> 201 Created.
     
     let wh_req_json = serde_json::json!({
         "name": "no_auth_wh",
@@ -180,5 +180,5 @@ async fn test_no_auth_mode_access() {
         .unwrap();
 
     let response = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), StatusCode::CREATED);
 }

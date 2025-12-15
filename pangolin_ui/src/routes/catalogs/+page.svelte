@@ -6,7 +6,9 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
 	import { tenantStore } from '$lib/stores/tenant';
+	import { tenantStore } from '$lib/stores/tenant';
 	import { notifications } from '$lib/stores/notifications';
+    import { isTenantAdmin } from '$lib/stores/auth';
 
 	let catalogs: Catalog[] = [];
 	let loading = true;
@@ -52,10 +54,12 @@
 				Manage Iceberg catalogs and their configurations
 			</p>
 		</div>
+        {#if $isTenantAdmin}
 		<Button on:click={() => goto('/catalogs/new')}>
 			<span class="text-lg mr-2">+</span>
 			Create Catalog
 		</Button>
+        {/if}
 	</div>
 
 	<Card>

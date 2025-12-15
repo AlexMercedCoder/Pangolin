@@ -25,9 +25,9 @@
 	}
 
 	const roleColors: Record<string, string> = {
-		Root: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-		TenantAdmin: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-		TenantUser: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+		root: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+		'tenant-admin': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+		'tenant-user': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
 	};
 
 	const columns = [
@@ -155,9 +155,9 @@
 						focus:ring-2 focus:ring-primary-500 focus:border-transparent"
 				>
 					<option value="all">All Roles</option>
-					<option value="Root">Root</option>
-					<option value="TenantAdmin">Tenant Admin</option>
-					<option value="TenantUser">Tenant User</option>
+					<option value="root">Root</option>
+					<option value="tenant-admin">Tenant Admin</option>
+					<option value="tenant-user">Tenant User</option>
 				</select>
 			</div>
 		</div>

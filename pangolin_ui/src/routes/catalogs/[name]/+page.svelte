@@ -7,7 +7,9 @@
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
 	import { branchesApi, type Branch } from '$lib/api/branches';
+	import { branchesApi, type Branch } from '$lib/api/branches';
 	import { notifications } from '$lib/stores/notifications';
+    import { isTenantAdmin } from '$lib/stores/auth';
 
 	let catalog: Catalog | null = null;
 	let branches: Branch[] = [];
@@ -90,12 +92,14 @@
 			<p class="mt-2 text-gray-600 dark:text-gray-400">Catalog details and configuration</p>
 		</div>
 		<div class="flex items-center gap-3">
+            {#if $isTenantAdmin}
 			<Button on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}/edit`)} disabled={loading}>
 				Edit Catalog
 			</Button>
 			<Button variant="error" on:click={() => (showDeleteDialog = true)} disabled={loading}>
 				Delete Catalog
 			</Button>
+            {/if}
 		</div>
 	</div>
 

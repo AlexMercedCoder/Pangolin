@@ -27,8 +27,8 @@
 	let loadingTenants = true;
 
 	const roleOptions = [
-		{ value: 'TenantUser', label: 'Tenant User - Basic access to assigned resources' },
-		{ value: 'TenantAdmin', label: 'Tenant Admin - Manage tenant resources and users' }
+		{ value: 'tenant-admin', label: 'Tenant Admin' },
+		{ value: 'tenant-user', label: 'Tenant User' }
 	];
 
 	// Add Root option only for Root users

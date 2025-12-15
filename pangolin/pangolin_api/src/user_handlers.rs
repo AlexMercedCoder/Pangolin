@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 /// Request to create a new user
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+// #[serde(rename_all = "kebab-case")] // Removed to match frontend snake_case payload
 pub struct CreateUserRequest {
     pub username: String,
     pub email: String,

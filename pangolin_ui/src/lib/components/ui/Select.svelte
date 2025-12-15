@@ -5,12 +5,15 @@
 	export let disabled = false;
 	export let error = '';
 	export let label = '';
+	export let id = '';
 	export let required = false;
+
+	const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
 </script>
 
 <div class="space-y-1">
 	{#if label}
-		<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+		<label for={selectId} class="block text-sm font-medium text-gray-700 dark:text-gray-300">
 			{label}
 			{#if required}
 				<span class="text-error-600">*</span>
@@ -18,6 +21,7 @@
 		</label>
 	{/if}
 	<select
+		id={selectId}
 		bind:value
 		{disabled}
 		class="w-full px-4 py-2 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white

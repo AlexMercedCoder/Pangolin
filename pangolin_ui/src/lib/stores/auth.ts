@@ -56,7 +56,7 @@ function createAuthStore() {
 				const mockUser: User = {
 					id: 'no-auth-user',
 					username: 'no-auth',
-					role: 'Root',
+					role: 'TenantAdmin',
 				};
 				
 				update(state => ({

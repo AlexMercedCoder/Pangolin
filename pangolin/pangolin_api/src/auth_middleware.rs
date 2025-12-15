@@ -112,21 +112,19 @@ pub async fn auth_middleware(
         .unwrap_or(false);
     
     if no_auth_enabled {
-        // In NO_AUTH mode, create a default root user session
+        // In NO_AUTH mode, create a default TenantAdmin user session
         let session = create_session(
             Uuid::nil(),
-            "root".to_string(),
+            "tenant_admin".to_string(),
             None,
-            UserRole::Root,
+            UserRole::TenantAdmin,
             86400,
         );
         req.extensions_mut().insert(session);
         // Also insert TenantId for NO_AUTH mode (default tenant)
         let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
         req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
-        // In NO_AUTH mode, we are effectively root
-        req.extensions_mut().insert(crate::auth::RootUser);
-        req.extensions_mut().insert(crate::auth::RootUser);
+        // In NO_AUTH mode, we are effectively a tenant admin
         return next.run(req).await;
     }
 
@@ -323,17 +321,18 @@ pub async fn auth_middleware_wrapper(
         .unwrap_or(false);
     
     if no_auth_enabled {
+        // In NO_AUTH mode, create a default TenantAdmin user session
         let session = create_session(
             Uuid::nil(),
-            "root".to_string(),
+            "tenant_admin".to_string(),
             None,
-            UserRole::Root,
+            UserRole::TenantAdmin,
             86400,
         );
         req.extensions_mut().insert(session);
+        // Insert default TenantId
         let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
         req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
-        req.extensions_mut().insert(crate::auth::RootUser);
         return next.run(req).await;
     }
 

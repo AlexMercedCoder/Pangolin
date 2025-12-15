@@ -122,10 +122,11 @@
 				/>
 
 				<div class="space-y-2">
-					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+					<label for="storage_type" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
 						Storage Type
 					</label>
 					<select
+						id="storage_type"
 						bind:value={storageType}
 						class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 dark:text-white"
 						disabled={loading}

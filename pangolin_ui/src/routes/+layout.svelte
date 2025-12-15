@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { authStore, isRoot } from '$lib/stores/auth';
+	import { authStore, isRoot, isTenantAdmin } from '$lib/stores/auth';
 	import { themeStore } from '$lib/stores/theme';
 	import { tenantStore } from '$lib/stores/tenant';
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
@@ -135,6 +135,7 @@
 								<span>Catalogs</span>
 							{/if}
 						</a>
+						{#if $isTenantAdmin}
 						<a
 							href="/warehouses"
 							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -153,6 +154,7 @@
 								<span>Users</span>
 							{/if}
 						</a>
+						{/if}
 						{/if}
 					</nav>
 
