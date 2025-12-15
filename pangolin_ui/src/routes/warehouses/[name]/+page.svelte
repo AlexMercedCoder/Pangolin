@@ -12,15 +12,20 @@
   let showDeleteDialog = false;
   let deleting = false;
 
-  const warehouseName = $page.params.name;
+  const warehouseName = $page.params.name ?? '';
 
   onMount(async () => {
-    await loadWarehouse();
+    if (warehouseName) {
+      await loadWarehouse();
+    } else {
+      goto('/warehouses');
+    }
   });
 
   async function loadWarehouse() {
     try {
       loading = true;
+      if (!warehouseName) return;
       warehouse = await warehousesApi.getWarehouse(warehouseName);
     } catch (error: any) {
       notifications.error(`Failed to load warehouse: ${error.message}`);
@@ -33,6 +38,7 @@
   async function handleDelete() {
     try {
       deleting = true;
+      if (!warehouseName) return;
       await warehousesApi.deleteWarehouse(warehouseName);
       notifications.success(`Warehouse "${warehouseName}" deleted successfully`);
       goto('/warehouses');
@@ -44,7 +50,7 @@
     }
   }
 
-  function getStorageType(config: Record<string, string>): string {
+  function getStorageType(config: any): string {
     return config.type?.toUpperCase() || 'Unknown';
   }
 

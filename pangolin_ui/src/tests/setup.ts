@@ -3,7 +3,7 @@ import { vi } from 'vitest';
 
 // Mock SvelteKit modules
 vi.mock('$app/environment', () => ({
-	browser: false,
+	browser: true,
 	dev: true,
 	building: false,
 	version: 'test'

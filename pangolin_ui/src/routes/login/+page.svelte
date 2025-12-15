@@ -24,9 +24,12 @@
 		loading = true;
 
 		try {
-			const response = await authApi.login({ username, password });
-			authStore.setUser(response.user, response.token);
-			goto('/');
+			const result = await authStore.login(username, password);
+			if (result.success) {
+				goto('/');
+			} else {
+				error = result.error || 'Login failed. Please check your credentials.';
+			}
 		} catch (e: any) {
 			error = e.message || 'Login failed. Please check your credentials.';
 		} finally {

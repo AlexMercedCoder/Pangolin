@@ -9,6 +9,15 @@ export interface StorageConfig {
 	account_name?: string;
 	account_key?: string;
 	service_account_json?: string;
+	// AWS
+	role_arn?: string;
+	external_id?: string;
+	// Azure
+	tenant_id?: string;
+	client_id?: string;
+	client_secret?: string;
+	// GCP
+	project_id?: string;
 }
 
 export interface Warehouse {
@@ -30,33 +39,32 @@ export interface UpdateWarehouseRequest {
 }
 
 export const warehousesApi = {
-	async list(): Promise<ApiResponse<Warehouse[]>> {
-		return apiClient.get<Warehouse[]>('/api/v1/warehouses');
+	async list(): Promise<Warehouse[]> {
+		const response = await apiClient.get<Warehouse[]>('/api/v1/warehouses');
+		if (response.error) throw new Error(response.error.message);
+		return response.data || [];
 	},
 
-	async get(name: string): Promise<ApiResponse<Warehouse>> {
-		return apiClient.get<Warehouse>(`/api/v1/warehouses/${encodeURIComponent(name)}`);
+	async get(name: string): Promise<Warehouse> {
+		const response = await apiClient.get<Warehouse>(`/api/v1/warehouses/${encodeURIComponent(name)}`);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
-	async create(data: CreateWarehouseRequest): Promise<ApiResponse<Warehouse>> {
-		return apiClient.post<Warehouse>('/api/v1/warehouses', data);
+	async create(data: CreateWarehouseRequest): Promise<Warehouse> {
+		const response = await apiClient.post<Warehouse>('/api/v1/warehouses', data);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
-	async update(name: string, data: UpdateWarehouseRequest): Promise<ApiResponse<Warehouse>> {
-		return apiClient.put<Warehouse>(`/api/v1/warehouses/${encodeURIComponent(name)}`, data);
+	async update(name: string, data: UpdateWarehouseRequest): Promise<Warehouse> {
+		const response = await apiClient.put<Warehouse>(`/api/v1/warehouses/${encodeURIComponent(name)}`, data);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
-	async delete(name: string): Promise<ApiResponse<void>> {
-		return apiClient.delete<void>(`/api/v1/warehouses/${encodeURIComponent(name)}`);
-	},
-
-	// Convenience methods that unwrap ApiResponse
-	async getWarehouse(name: string): Promise<Warehouse> {
-		const response = await this.get(name);
-		return response.data;
-	},
-
-	async deleteWarehouse(name: string): Promise<void> {
-		await this.delete(name);
+	async delete(name: string): Promise<void> {
+		const response = await apiClient.delete<void>(`/api/v1/warehouses/${encodeURIComponent(name)}`);
+		if (response.error) throw new Error(response.error.message);
 	},
 };

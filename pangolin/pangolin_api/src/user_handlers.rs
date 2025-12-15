@@ -182,20 +182,48 @@ pub async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Response {
     // Fetch user by username
+    // Fetch user by username
     let user_opt = store.get_user_by_username(&req.username).await.unwrap_or(None);
     let user = match user_opt {
-        Some(u) => u,
-        None => return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response(),
-    };
+        Some(u) => {
+            // Verify password for DB user
+            if let Some(hash) = &u.password_hash {
+                match crate::auth_middleware::verify_password(&req.password, hash) {
+                    Ok(true) => u,
+                    _ => return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response(),
+                }
+            } else {
+                return (StatusCode::UNAUTHORIZED, "Account uses external authentication").into_response();
+            }
+        },
+        None => {
+            // Check for Root User via Environment Variables
+            let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_default();
+            let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_default();
 
-    if let Some(hash) = &user.password_hash {
-        match crate::auth_middleware::verify_password(&req.password, hash) {
-            Ok(true) => (),
-            _ => return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response(),
+            if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
+                // Create a temporary User object for the root user session
+                // Use a deterministic UUID for root to ensure consistency across restarts
+                let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap(); 
+                User {
+                    id: root_id,
+                    username: root_user,
+                    email: "root@pangolin.local".to_string(), // Dummy email
+                    password_hash: None, // No hash needed since we verified plaintext
+                    tenant_id: None, // Root has no tenant
+                    role: UserRole::Root,
+                    oauth_provider: None,
+                    oauth_subject: None,
+                    created_at: chrono::Utc::now(),
+                    updated_at: chrono::Utc::now(),
+                    last_login: None,
+                    active: true,
+                }
+            } else {
+                return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response();
+            }
         }
-    } else {
-        return (StatusCode::UNAUTHORIZED, "Account uses external authentication").into_response();
-    }
+    };
 
     // Create session
     let session = crate::auth_middleware::create_session(

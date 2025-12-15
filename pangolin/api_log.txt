@@ -1,0 +1,417 @@
+warning: unused import: `std::collections::HashMap`
+  --> pangolin_store/src/postgres.rs:10:5
+   |
+10 | use std::collections::HashMap;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `target`
+   --> pangolin_store/src/postgres.rs:637:13
+    |
+637 |         let target = self.get_branch(tenant_id, catalog_name, target_branch.clone()).await?
+    |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_target`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `location`
+   --> pangolin_store/src/postgres.rs:697:31
+    |
+697 |     async fn read_file(&self, location: &str) -> Result<Vec<u8>> {
+    |                               ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_location`
+
+warning: unused variable: `bytes`
+   --> pangolin_store/src/postgres.rs:703:48
+    |
+703 |     async fn write_file(&self, location: &str, bytes: Vec<u8>) -> Result<()> {
+    |                                                ^^^^^ help: if this is intentional, prefix it with an underscore: `_bytes`
+
+warning: unused variable: `location`
+   --> pangolin_store/src/postgres.rs:703:32
+    |
+703 |     async fn write_file(&self, location: &str, bytes: Vec<u8>) -> Result<()> {
+    |                                ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_location`
+
+warning: unused variable: `branch`
+   --> pangolin_store/src/postgres.rs:820:83
+    |
+820 | ...d: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_loc...
+    |                                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_branch`
+
+warning: unused variable: `tenant_id`
+   --> pangolin_store/src/mongo.rs:121:38
+    |
+121 |     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
+    |                                      ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tenant_id`
+
+warning: variable does not need to be mutable
+   --> pangolin_store/src/mongo.rs:284:13
+    |
+284 |         let mut filter = doc! {
+    |             ----^^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `p`
+   --> pangolin_store/src/mongo.rs:289:21
+    |
+289 |         if let Some(p) = parent {
+    |                     ^ help: if this is intentional, prefix it with an underscore: `_p`
+
+warning: unused variable: `branch`
+   --> pangolin_store/src/mongo.rs:364:68
+    |
+364 | ...d: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
+    |                                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_branch`
+
+warning: unused variable: `branch`
+   --> pangolin_store/src/mongo.rs:401:70
+    |
+401 |     async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+    |                                                                      ^^^^^^ help: if this is intentional, prefix it with an underscore: `_branch`
+
+warning: unused variable: `branch`
+   --> pangolin_store/src/mongo.rs:432:71
+    |
+432 | ...d: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
+    |                                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_branch`
+
+warning: unused variable: `branch`
+   --> pangolin_store/src/mongo.rs:443:71
+    |
+443 | ...d: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, ...
+    |                                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_branch`
+
+warning: unused variable: `branch`
+   --> pangolin_store/src/mongo.rs:714:83
+    |
+714 | ...d: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_loc...
+    |                                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_branch`
+
+warning: field `signer` is never read
+  --> pangolin_store/src/memory.rs:32:5
+   |
+17 | pub struct MemoryStore {
+   |            ----------- field in this struct
+...
+32 |     signer: crate::signer::SignerImpl,
+   |     ^^^^^^
+   |
+   = note: `MemoryStore` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `key` is never read
+  --> pangolin_store/src/signer.rs:25:5
+   |
+24 | pub struct SignerImpl {
+   |            ---------- field in this struct
+25 |     key: String,
+   |     ^^^
+   |
+   = note: `SignerImpl` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: field `client` is never read
+  --> pangolin_store/src/mongo.rs:18:5
+   |
+17 | pub struct MongoStore {
+   |            ---------- field in this struct
+18 |     client: Client,
+   |     ^^^^^^
+   |
+   = note: `MongoStore` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: multiple methods are never used
+  --> pangolin_store/src/mongo.rs:38:8
+   |
+22 | impl MongoStore {
+   | --------------- methods in this implementation
+...
+38 |     fn catalogs(&self) -> Collection<Catalog> {
+   |        ^^^^^^^^
+...
+42 |     fn namespaces(&self) -> Collection<Namespace> {
+   |        ^^^^^^^^^^
+...
+46 |     fn assets(&self) -> Collection<Asset> {
+   |        ^^^^^^
+...
+50 |     fn branches(&self) -> Collection<Branch> {
+   |        ^^^^^^^^
+...
+54 |     fn tags(&self) -> Collection<Tag> {
+   |        ^^^^
+...
+58 |     fn commits(&self) -> Collection<Commit> {
+   |        ^^^^^^^
+...
+62 |     fn audit_logs(&self) -> Collection<AuditLogEntry> {
+   |        ^^^^^^^^^^
+
+warning: `pangolin_store` (lib) generated 18 warnings (run `cargo fix --lib -p pangolin_store` to apply 14 suggestions)
+warning: unused import: `pangolin_store::memory::MemoryStore`
+ --> pangolin_api/src/lib.rs:4:5
+  |
+4 | use pangolin_store::memory::MemoryStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Any`
+ --> pangolin_api/src/lib.rs:6:35
+  |
+6 | use tower_http::cors::{CorsLayer, Any};
+  |                                   ^^^
+
+warning: unused imports: `Request` and `body::Body`
+ --> pangolin_api/src/iceberg_handlers.rs:5:43
+  |
+5 |     http::{StatusCode, HeaderMap, Method, Request},
+  |                                           ^^^^^^^
+6 |     body::Body,
+  |     ^^^^^^^^^^
+
+warning: unused import: `pangolin_store::memory::MemoryStore`
+  --> pangolin_api/src/iceberg_handlers.rs:12:5
+   |
+12 | use pangolin_store::memory::MemoryStore;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `UserRole`
+    --> pangolin_api/src/iceberg_handlers.rs:1021:27
+     |
+1021 | use pangolin_core::user::{UserRole, UserSession};
+     |                           ^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/tenant_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> pangolin_api/src/tenant_handlers.rs:9:5
+  |
+9 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/warehouse_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/asset_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `HeaderMap`
+ --> pangolin_api/src/auth.rs:3:24
+  |
+3 |     http::{StatusCode, HeaderMap},
+  |                        ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/signing_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `Json`
+ --> pangolin_api/src/oauth_handlers.rs:5:5
+  |
+5 |     Json,
+  |     ^^^^
+
+warning: unused import: `Serialize`
+ --> pangolin_api/src/oauth_handlers.rs:7:26
+  |
+7 | use serde::{Deserialize, Serialize};
+  |                          ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/business_metadata_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused imports: `MergeConflict` and `MergeOperation`
+ --> pangolin_api/src/merge_handlers.rs:7:48
+  |
+7 | use pangolin_core::model::{ConflictResolution, MergeConflict, MergeOperation, ResolutionStrategy};
+  |                                                ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `Serialize`
+ --> pangolin_api/src/permission_handlers.rs:8:26
+  |
+8 | use serde::{Deserialize, Serialize};
+  |                          ^^^^^^^^^
+
+warning: unused import: `Serialize`
+  --> pangolin_api/src/service_user_handlers.rs:10:26
+   |
+10 | use serde::{Deserialize, Serialize};
+   |                          ^^^^^^^^^
+
+warning: variable does not need to be mutable
+  --> pangolin_api/src/auth.rs:92:21
+   |
+92 |                 let mut validation = Validation::new(Algorithm::HS256);
+   |                     ----^^^^^^^^^^
+   |                     |
+   |                     help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> pangolin_api/src/oauth_handlers.rs:110:14
+    |
+110 |         Some(mut u) => {
+    |              ----^
+    |              |
+    |              help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> pangolin_api/src/permission_handlers.rs:100:10
+    |
+100 |     Json(mut role): Json<Role>,
+    |          ----^^^^
+    |          |
+    |          help: remove this `mut`
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/business_metadata_handlers.rs:9:5
+  |
+9 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+  --> pangolin_api/src/tenant_handlers.rs:10:5
+   |
+10 | use pangolin_store::CatalogStore;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/warehouse_handlers.rs:9:5
+  |
+9 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/asset_handlers.rs:9:5
+  |
+9 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/signing_handlers.rs:9:5
+  |
+9 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `prefix`
+   --> pangolin_api/src/iceberg_handlers.rs:286:5
+    |
+286 |     prefix: Option<Path<String>>,
+    |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_prefix`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `timestamp`
+   --> pangolin_api/src/iceberg_handlers.rs:656:24
+    |
+656 |              if let Ok(timestamp) = timestamp_str.parse::<i64>() {
+    |                        ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_timestamp`
+
+warning: unused variable: `session`
+   --> pangolin_api/src/iceberg_handlers.rs:854:15
+    |
+854 |     Extension(session): Extension<UserSession>,
+    |               ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `session`
+   --> pangolin_api/src/iceberg_handlers.rs:982:15
+    |
+982 |     Extension(session): Extension<UserSession>,
+    |               ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `params`
+  --> pangolin_api/src/pangolin_handlers.rs:66:11
+   |
+66 |     Query(params): Query<ListBranchParams>,
+   |           ^^^^^^ help: if this is intentional, prefix it with an underscore: `_params`
+
+warning: unused variable: `tenant_uuid`
+  --> pangolin_api/src/token_handlers.rs:34:9
+   |
+34 |     let tenant_uuid = match Uuid::parse_str(&payload.tenant_id) {
+   |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tenant_uuid`
+
+warning: fields `identifier` and `requirements` are never read
+   --> pangolin_api/src/iceberg_handlers.rs:175:5
+    |
+174 | pub struct CommitTableRequest {
+    |            ------------------ fields in this struct
+175 |     identifier: Option<TableIdentifier>,
+    |     ^^^^^^^^^^
+176 |     requirements: Vec<CommitRequirement>,
+    |     ^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `removals` is never read
+   --> pangolin_api/src/iceberg_handlers.rs:968:5
+    |
+967 | pub struct UpdateNamespacePropertiesRequest {
+    |            -------------------------------- field in this struct
+968 |     removals: Option<Vec<String>>,
+    |     ^^^^^^^^
+
+warning: fields `name` and `catalog` are never read
+  --> pangolin_api/src/pangolin_handlers.rs:30:5
+   |
+29 | pub struct ListBranchParams {
+   |            ---------------- fields in this struct
+30 |     name: Option<String>,
+   |     ^^^^
+31 |     catalog: Option<String>,
+   |     ^^^^^^^
+
+warning: `pangolin_api` (lib) generated 34 warnings (run `cargo fix --lib -p pangolin_api` to apply 26 suggestions)
+warning: unused import: `std::env`
+ --> pangolin_api/src/main.rs:3:5
+  |
+3 | use std::env;
+  |     ^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Any` and `CorsLayer`
+ --> pangolin_api/src/main.rs:4:24
+  |
+4 | use tower_http::cors::{CorsLayer, Any};
+  |                        ^^^^^^^^^  ^^^
+
+warning: unused imports: `HeaderValue` and `Method`
+ --> pangolin_api/src/main.rs:5:18
+  |
+5 | use axum::http::{HeaderValue, Method};
+  |                  ^^^^^^^^^^^  ^^^^^^
+
+warning: unused variable: `storage_type`
+  --> pangolin_api/src/main.rs:17:9
+   |
+17 |     let storage_type = std::env::var("PANGOLIN_STORAGE_TYPE").unwrap_or_else(|_| "memory".to_string());
+   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_storage_type`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `pangolin_api` (bin "pangolin_api") generated 4 warnings (run `cargo fix --bin "pangolin_api" -p pangolin_api` to apply 4 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running `target/debug/pangolin_api`
+[2m2025-12-14T22:11:31.649619Z[0m [32m INFO[0m [2mpangolin_api[0m[2m:[0m Using Memory Storage
+[2m2025-12-14T22:11:31.650363Z[0m [32m INFO[0m [2mpangolin_api[0m[2m:[0m Created default tenant for testing: 00000000-0000-0000-0000-000000000000
+[2m2025-12-14T22:11:31.653384Z[0m [32m INFO[0m [2mpangolin_api[0m[2m:[0m listening on 0.0.0.0:8080

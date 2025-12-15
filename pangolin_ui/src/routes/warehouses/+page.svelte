@@ -4,13 +4,11 @@
 	import DataTable from '$lib/components/ui/DataTable.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
-	import CreateWarehouseModal from '$lib/components/warehouses/CreateWarehouseModal.svelte';
 	import { warehousesApi, type Warehouse } from '$lib/api/warehouses';
 	import { notifications } from '$lib/stores/notifications';
 
 	let warehouses: Warehouse[] = [];
 	let loading = true;
-	let showCreateModal = false;
 
 	const columns = [
 		{ key: 'name', label: 'Name', sortable: true },
@@ -26,16 +24,14 @@
 
 	async function loadWarehouses() {
 		loading = true;
-		const response = await warehousesApi.list();
-		
-		if (response.error) {
-			notifications.error(`Failed to load warehouses: ${response.error.message}`);
+		try {
+			warehouses = await warehousesApi.list();
+		} catch (error: any) {
+			notifications.error(`Failed to load warehouses: ${error.message}`);
 			warehouses = [];
-		} else {
-			warehouses = response.data || [];
+		} finally {
+			loading = false;
 		}
-		
-		loading = false;
 	}
 
 	function handleRowClick(event: CustomEvent) {
@@ -69,7 +65,7 @@
 				Manage storage warehouses for your Iceberg catalogs
 			</p>
 		</div>
-		<Button on:click={() => (showCreateModal = true)}>
+		<Button on:click={() => goto('/warehouses/new')}>
 			<span class="text-lg mr-2">+</span>
 			Create Warehouse
 		</Button>
@@ -116,6 +112,3 @@
 		</DataTable>
 	</Card>
 </div>
-
-<!-- Create Warehouse Modal -->
-<CreateWarehouseModal bind:open={showCreateModal} onSuccess={loadWarehouses} />

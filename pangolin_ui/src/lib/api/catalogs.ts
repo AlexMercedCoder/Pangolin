@@ -22,23 +22,32 @@ export interface UpdateCatalogRequest {
 }
 
 export const catalogsApi = {
-	async list(): Promise<ApiResponse<Catalog[]>> {
-		return apiClient.get<Catalog[]>('/api/v1/catalogs');
+	async list(): Promise<Catalog[]> {
+		const response = await apiClient.get<Catalog[]>('/api/v1/catalogs');
+		if (response.error) throw new Error(response.error.message);
+		return response.data || [];
 	},
 
-	async get(name: string): Promise<ApiResponse<Catalog>> {
-		return apiClient.get<Catalog>(`/api/v1/catalogs/${encodeURIComponent(name)}`);
+	async get(name: string): Promise<Catalog> {
+		const response = await apiClient.get<Catalog>(`/api/v1/catalogs/${encodeURIComponent(name)}`);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
-	async create(data: CreateCatalogRequest): Promise<ApiResponse<Catalog>> {
-		return apiClient.post<Catalog>('/api/v1/catalogs', data);
+	async create(data: CreateCatalogRequest): Promise<Catalog> {
+		const response = await apiClient.post<Catalog>('/api/v1/catalogs', data);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
-	async update(name: string, data: UpdateCatalogRequest): Promise<ApiResponse<Catalog>> {
-		return apiClient.put<Catalog>(`/api/v1/catalogs/${encodeURIComponent(name)}`, data);
+	async update(name: string, data: UpdateCatalogRequest): Promise<Catalog> {
+		const response = await apiClient.put<Catalog>(`/api/v1/catalogs/${encodeURIComponent(name)}`, data);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
-	async delete(name: string): Promise<ApiResponse<void>> {
-		return apiClient.delete<void>(`/api/v1/catalogs/${encodeURIComponent(name)}`);
+	async delete(name: string): Promise<void> {
+		const response = await apiClient.delete<void>(`/api/v1/catalogs/${encodeURIComponent(name)}`);
+		if (response.error) throw new Error(response.error.message);
 	},
 };

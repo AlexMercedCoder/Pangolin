@@ -29,26 +29,38 @@ export interface AppConfig {
 
 export const authApi = {
 	async getAppConfig(): Promise<AppConfig> {
-		return apiClient.get<AppConfig>('/api/v1/app-config');
+		const response = await apiClient.get<AppConfig>('/api/v1/app-config');
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
 	async login(credentials: LoginRequest): Promise<LoginResponse> {
-		return apiClient.post<LoginResponse>('/api/v1/users/login', credentials);
+		const response = await apiClient.post<LoginResponse>('/api/v1/users/login', credentials);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
 	async logout(): Promise<void> {
-		return apiClient.post<void>('/api/v1/logout');
+		const response = await apiClient.post<void>('/api/v1/users/logout');
+		if (response.error) throw new Error(response.error.message);
+		return response.data;
 	},
 
 	async getCurrentUser(): Promise<User> {
-		return apiClient.get<User>('/api/v1/me');
+		const response = await apiClient.get<User>('/api/v1/users/me');
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 
 	async getOAuthProviders(): Promise<OAuthProvider[]> {
-		return apiClient.get<OAuthProvider[]>('/api/v1/oauth/providers');
+		const response = await apiClient.get<OAuthProvider[]>('/api/v1/oauth/providers');
+		if (response.error) throw new Error(response.error.message);
+		return response.data || [];
 	},
 
 	async initiateOAuth(provider: string): Promise<{ url: string }> {
-		return apiClient.get<{ url: string }>(`/api/v1/oauth/${provider}`);
+		const response = await apiClient.get<{ url: string }>(`/api/v1/oauth/${provider}`);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 };

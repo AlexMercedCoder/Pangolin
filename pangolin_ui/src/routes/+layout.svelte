@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { authStore } from '$lib/stores/auth';
+	import { authStore, isRoot } from '$lib/stores/auth';
 	import { themeStore } from '$lib/stores/theme';
 	import Notification from '$lib/components/ui/Notification.svelte';
 	import '../app.css';
@@ -35,7 +35,12 @@
 </script>
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-	{#if $authStore.isAuthenticated}
+	{#if $authStore.isLoading}
+		<!-- Loading state -->
+		<div class="flex items-center justify-center h-screen bg-gray-50 dark:bg-gray-900">
+			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+		</div>
+	{:else if $authStore.isAuthenticated}
 		<!-- Authenticated layout with sidebar -->
 		<div class="flex h-screen overflow-hidden">
 			<!-- Sidebar -->
@@ -66,7 +71,7 @@
 								<span>Dashboard</span>
 							{/if}
 						</a>
-						{#if $authStore.user?.role === 'Root'}
+						{#if $isRoot}
 						<a
 							href="/tenants"
 							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -161,7 +166,7 @@
 								</div>
 								<button
 									on:click={() => {
-										authStore.clearUser();
+										authStore.logout();
 										goto('/login');
 									}}
 									class="px-3 py-1.5 text-sm bg-error-600 text-white rounded-lg hover:bg-error-700 transition-colors"
@@ -179,7 +184,7 @@
 				</main>
 			</div>
 		</div>
-	{:else}
+	{:else if $page.url.pathname === '/login'}
 		<!-- Unauthenticated layout (login page) -->
 		<slot />
 	{/if}

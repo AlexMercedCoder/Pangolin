@@ -1,0 +1,7 @@
+
+> pangolin-ui@0.0.1 preview
+> vite preview
+
+  ➜  Local:   http://localhost:4173/
+  ➜  Network: use --host to expose
+  ➜  press h + enter to show help

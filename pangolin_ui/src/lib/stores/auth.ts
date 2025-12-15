@@ -57,8 +57,23 @@ function createAuthStore() {
 			update(state => ({ ...state, authEnabled: true }));
 			
 			if (browser) {
-				const token = localStorage.getItem('auth_token');
+				let token = localStorage.getItem('auth_token');
 				const userStr = localStorage.getItem('auth_user');
+
+				// If we have a no-auth-mode token but auth is enabled, clear it
+				if (token === 'no-auth-mode') {
+					localStorage.removeItem('auth_token');
+					localStorage.removeItem('auth_user');
+					token = null;
+					update(state => ({ 
+						...state, 
+						token: null, 
+						user: null, 
+						isAuthenticated: false, 
+						isLoading: false 
+					}));
+					return;
+				}
 
 				if (token && userStr) {
 					const user = JSON.parse(userStr);
@@ -127,9 +142,11 @@ function createAuthStore() {
 export const authStore = createAuthStore();
 
 // Derived stores for convenience
+// Derived stores for convenience
 export const isAuthenticated = derived(authStore, $auth => $auth.isAuthenticated);
 export const currentUser = derived(authStore, $auth => $auth.user);
-export const isRoot = derived(authStore, $auth => $auth.user?.role === 'Root');
-export const isTenantAdmin = derived(authStore, $auth => 
-	$auth.user?.role === 'Root' || $auth.user?.role === 'TenantAdmin'
-);
+export const isRoot = derived(authStore, $auth => $auth.user?.role?.toLowerCase() === 'root');
+export const isTenantAdmin = derived(authStore, $auth => {
+	const role = $auth.user?.role?.toLowerCase();
+	return role === 'root' || role === 'tenantadmin' || role === 'tenant_admin'; // Handle potential variations
+});

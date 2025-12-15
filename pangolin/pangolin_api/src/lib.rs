@@ -43,16 +43,15 @@ mod iceberg_handlers_test;
 mod signing_handlers_test;
 
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
-    // Configure CORS to allow UI requests
     let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        //.allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+        .allow_origin(Any)
         .allow_headers([
             axum::http::header::CONTENT_TYPE,
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
-        ])
-        .allow_credentials(true);
+        ]);
+        //.allow_credentials(true);
 
     Router::new()
         .route("/health", get(|| async { "OK" }))
