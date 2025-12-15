@@ -42,8 +42,12 @@ pub mod service_user_handlers; // Service user management
 mod iceberg_handlers_test;
 
 #[cfg(test)]
+#[cfg(test)]
 #[path = "signing_handlers_test.rs"]
 mod signing_handlers_test;
+
+#[cfg(test)]
+mod root_auth_tests;
 
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
     let cors = CorsLayer::new()
