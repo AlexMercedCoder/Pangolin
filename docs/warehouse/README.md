@@ -207,9 +207,9 @@ When a catalog has no warehouse, clients must configure storage themselves.
 **PySpark**: Configure Hadoop filesystem properties
 
 See individual storage guides for details:
-- [S3 Client Configuration](s3.md#client-configuration)
-- [Azure Client Configuration](azure.md#client-configuration)
-- [GCS Client Configuration](gcs.md#client-configuration)
+- [S3 Client Configuration](s3.md)
+- [Azure Client Configuration](azure.md)
+- [GCS Client Configuration](gcs.md)
 
 ## Best Practices
 

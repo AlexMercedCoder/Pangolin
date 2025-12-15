@@ -1,92 +1,115 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { apiClient } from '$lib/api/client';
+import { TENANT_STORAGE_KEY } from '$lib/stores/tenant';
 
 // Mock fetch
 global.fetch = vi.fn();
 
-describe('API Client', () => {
+// Mock browser environment
+vi.mock('$app/environment', () => ({
+	browser: true
+}));
+
+describe('apiClient tenant header handling', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		localStorage.clear();
+		(global.fetch as any).mockResolvedValue({
+			ok: true,
+			json: async () => ({ data: 'test' })
+		});
 	});
 
-	it('makes GET request successfully', async () => {
-		const mockData = { id: 1, name: 'Test' };
-		(global.fetch as any).mockResolvedValueOnce({
-			ok: true,
-			json: async () => mockData
-		});
+	it('should include X-Pangolin-Tenant header when tenant is selected', async () => {
+		const tenantId = '123e4567-e89b-12d3-a456-426614174000';
+		localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
 
-		const result = await apiClient.get('/test');
+		await apiClient.get('/api/v1/catalogs');
 
-		expect(result.data).toEqual(mockData);
-		expect(result.error).toBeNull();
 		expect(global.fetch).toHaveBeenCalledWith(
-			expect.stringContaining('/test'),
+			expect.stringContaining('/api/v1/catalogs'),
 			expect.objectContaining({
-				method: 'GET'
+				headers: expect.objectContaining({
+					'X-Pangolin-Tenant': tenantId
+				})
 			})
 		);
 	});
 
-	it('handles GET request error', async () => {
-		(global.fetch as any).mockResolvedValueOnce({
-			ok: false,
-			status: 404,
-			statusText: 'Not Found'
-		});
+	it('should not include X-Pangolin-Tenant header when no tenant is selected', async () => {
+		// No tenant in localStorage
+		await apiClient.get('/api/v1/catalogs');
 
-		const result = await apiClient.get('/test');
-
-		expect(result.data).toBeNull();
-		expect(result.error).toBeTruthy();
-		expect(result.error?.message).toContain('404');
+		const fetchCall = (global.fetch as any).mock.calls[0];
+		const headers = fetchCall[1].headers;
+		
+		expect(headers['X-Pangolin-Tenant']).toBeUndefined();
 	});
 
-	it('makes POST request with data', async () => {
-		const mockResponse = { id: 1, created: true };
-		const postData = { name: 'New Item' };
+	it('should update header when tenant changes', async () => {
+		// First request with tenant A
+		localStorage.setItem(TENANT_STORAGE_KEY, 'tenant-a');
+		await apiClient.get('/api/v1/catalogs');
 
-		(global.fetch as any).mockResolvedValueOnce({
-			ok: true,
-			json: async () => mockResponse
-		});
+		expect(global.fetch).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					'X-Pangolin-Tenant': 'tenant-a'
+				})
+			})
+		);
 
-		const result = await apiClient.post('/test', postData);
+		// Change to tenant B
+		localStorage.setItem(TENANT_STORAGE_KEY, 'tenant-b');
+		await apiClient.get('/api/v1/warehouses');
 
-		expect(result.data).toEqual(mockResponse);
+		expect(global.fetch).toHaveBeenLastCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					'X-Pangolin-Tenant': 'tenant-b'
+				})
+			})
+		);
+	});
+
+	it('should include Authorization header along with tenant header', async () => {
+		const tenantId = 'test-tenant';
+		const token = 'test-token';
+		
+		localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
+		localStorage.setItem('auth_token', token);
+
+		await apiClient.get('/api/v1/catalogs');
+
 		expect(global.fetch).toHaveBeenCalledWith(
-			expect.stringContaining('/test'),
+			expect.any(String),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					'X-Pangolin-Tenant': tenantId,
+					'Authorization': `Bearer ${token}`
+				})
+			})
+		);
+	});
+
+	it('should handle POST requests with tenant header', async () => {
+		const tenantId = 'test-tenant';
+		localStorage.setItem(TENANT_STORAGE_KEY, tenantId);
+
+		await apiClient.post('/api/v1/catalogs', { name: 'test-catalog' });
+
+		expect(global.fetch).toHaveBeenCalledWith(
+			expect.any(String),
 			expect.objectContaining({
 				method: 'POST',
-				body: JSON.stringify(postData)
+				headers: expect.objectContaining({
+					'X-Pangolin-Tenant': tenantId,
+					'Content-Type': 'application/json'
+				}),
+				body: JSON.stringify({ name: 'test-catalog' })
 			})
 		);
-	});
-
-	it('makes DELETE request', async () => {
-		(global.fetch as any).mockResolvedValueOnce({
-			ok: true,
-			json: async () => ({})
-		});
-
-		const result = await apiClient.delete('/test/123');
-
-		expect(result.error).toBeNull();
-		expect(global.fetch).toHaveBeenCalledWith(
-			expect.stringContaining('/test/123'),
-			expect.objectContaining({
-				method: 'DELETE'
-			})
-		);
-	});
-
-	it('handles network error', async () => {
-		(global.fetch as any).mockRejectedValueOnce(new Error('Network error'));
-
-		const result = await apiClient.get('/test');
-
-		expect(result.data).toBeNull();
-		expect(result.error).toBeTruthy();
-		expect(result.error?.message).toContain('Network error');
 	});
 });

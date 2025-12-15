@@ -33,6 +33,6 @@ This directory contains guides to help you get started with Pangolin.
 ## Next Steps
 
 After getting started, explore:
-- [Storage Options](../storage/) - Configure S3, Azure, or GCS storage
+- [Storage Options](../warehouse/) - Configure S3, Azure, or GCS storage
 - [API Documentation](../api/) - REST API reference
 - [Features](../features/) - Advanced features like branching and time travel

@@ -374,7 +374,7 @@ df.show()
 ## Related Documentation
 
 - [Warehouse Management](warehouse_management.md)
-- [S3 Storage Configuration](../storage/storage_s3.md)
-- [Azure Storage Configuration](../storage/storage_azure.md)
-- [GCS Storage Configuration](../storage/storage_gcs.md)
+- [S3 Storage Configuration](../warehouse/s3.md)
+- [Azure Storage Configuration](../warehouse/azure.md)
+- [GCS Storage Configuration](../warehouse/gcs.md)
 - [Security & Credential Vending](security_vending.md)

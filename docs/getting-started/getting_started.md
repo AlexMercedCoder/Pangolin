@@ -107,7 +107,7 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
     }
   }'
 ```
-*Note: We use `use_sts: false` for this quick start. For production with STS credential vending, see [Warehouse Management](../features/warehouse_management.md).*
+*Note: We use `use_sts: false` for this quick start. For production with STS credential vending, see [Warehouse Management](../features/../features/warehouse_management.md).*
 
 ### 3. Create a Catalog
 A catalog references a warehouse and specifies a storage location. The catalog name is what clients use in their connection URIs.
@@ -215,9 +215,9 @@ Now, `main` will contain the schema updates made in `dev`.
 
 ## Next Steps
 
-- Explore [Branch Management](branch_management.md) for advanced strategies.
-- Configure [S3 Storage](storage_s3.md) for production data.
-- Learn about [Warehouse Management](warehouse_management.md) and credential vending.
+- Explore [Branch Management](../features/branch_management.md) for advanced strategies.
+- Configure [S3 Storage](../warehouse/s3.md) for production data.
+- Learn about [Warehouse Management](../features/warehouse_management.md) and credential vending.
 - Set up [Client Configuration](client_configuration.md) for PyIceberg, PySpark, Trino, or Dremio.
 
 ## Production Setup
@@ -289,7 +289,7 @@ Response (403 Forbidden):
 
 ## Next Steps
 
-- [PyIceberg Testing Guide](./pyiceberg_testing.md) - Comprehensive PyIceberg testing
+- [PyIceberg Testing Guide](../features/pyiceberg_testing.md) - Comprehensive PyIceberg testing
 - [Client Configuration](./client_configuration.md) - Configure various Iceberg clients
-- [Warehouse Management](./warehouse_management.md) - Manage warehouses and catalogs
-- [API Reference](./api/) - Complete API documentation
+- [Warehouse Management](./../features/warehouse_management.md) - Manage warehouses and catalogs
+- [API Reference](../api/) - Complete API documentation

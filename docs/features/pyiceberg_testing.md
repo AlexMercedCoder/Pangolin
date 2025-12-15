@@ -397,6 +397,6 @@ After successful testing:
 
 ## Additional Resources
 
-- [Client Configuration](./client_configuration.md) - Detailed client setup
-- [Getting Started](./getting_started.md) - Quick start guide
+- [Client Configuration](../getting-started/client_configuration.md) - Detailed client setup
+- [Getting Started](../getting-started/getting_started.md) - Quick start guide
 - [Warehouse Management](./warehouse_management.md) - Warehouse and catalog setup

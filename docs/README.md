@@ -7,7 +7,7 @@ Welcome to the Pangolin documentation!
 ### [Getting Started](getting-started/)
 Setup, configuration, and deployment guides.
 
-### [Storage](storage/)
+### [Storage](warehouse/)
 Multi-cloud storage configuration (S3, Azure, GCS).
 
 ### [API](api/)
@@ -16,14 +16,14 @@ REST API reference and authentication.
 ### [Features](features/)
 Advanced features like branching, time travel, and credential vending.
 
-### [Research](research/)
+### [Research](../planning/research/)
 Implementation plans and research notes.
 
 ## Quick Navigation
 
 **New to Pangolin?** Start with the [Getting Started Guide](getting-started/getting_started.md)
 
-**Setting up storage?** Check the [Storage Documentation](storage/)
+**Setting up storage?** Check the [Storage Documentation](warehouse/)
 
 **Using PyIceberg?** See [PyIceberg Integration](features/pyiceberg_testing.md)
 
@@ -34,7 +34,7 @@ Implementation plans and research notes.
 | Category | Description | Key Documents |
 |----------|-------------|---------------|
 | **Getting Started** | Setup and deployment | [Quick Start](getting-started/getting_started.md), [Deployment](getting-started/deployment.md) |
-| **Storage** | Cloud storage configuration | [S3](storage/storage_s3.md), [Azure](storage/storage_azure.md), [GCS](storage/storage_gcs.md) |
+| **Storage** | Cloud storage configuration | [S3](warehouse/s3.md), [Azure](warehouse/azure.md), [GCS](warehouse/gcs.md) |
 | **API** | REST API reference | [API Overview](api/api_overview.md), [Authentication](api/authentication.md) |
 | **Features** | Advanced capabilities | [Branching](features/branch_management.md), [Time Travel](features/time_travel.md), [PyIceberg](features/pyiceberg_testing.md) |
 

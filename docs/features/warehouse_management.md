@@ -167,5 +167,5 @@ curl -X POST http://localhost:8080/api/v1/catalogs \
 ## Related Documentation
 
 - [Security & Credential Vending](./security_vending.md) - Detailed credential vending guide
-- [AWS S3 Storage](../storage/storage_s3.md) - S3 backend configuration
+- [AWS S3 Storage](../warehouse/s3.md) - S3 backend configuration
 - [Client Configuration](../getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup

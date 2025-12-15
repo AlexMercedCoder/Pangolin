@@ -353,4 +353,4 @@ AWS_STS_REGIONAL_ENDPOINTS=regional
 - [Warehouse Management](./warehouse_management.md) - Creating and configuring warehouses
 - [Authentication](../authentication.md) - User authentication and tokens
 - [Client Configuration](../getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup
-- [AWS S3 Storage](../storage/storage_s3.md) - S3 storage backend configuration
+- [AWS S3 Storage](../warehouse/s3.md) - S3 storage backend configuration

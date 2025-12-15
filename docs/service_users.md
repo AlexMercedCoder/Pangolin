@@ -271,5 +271,5 @@ pub struct ServiceUser {
 ## Related Documentation
 
 - [Authentication & Authorization](./authentication.md)
-- [Role-Based Access Control](./rbac.md)
-- [API Reference](./api_reference.md)
+- [Role-Based Access Control](./features/rbac.md)
+- [API Reference](./api/api_overview.md)

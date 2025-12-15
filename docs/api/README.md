@@ -107,4 +107,4 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
 
 - [Getting Started](../getting-started/) - Setup and configuration
 - [Features](../features/) - Advanced features
-- [Storage](../storage/) - Storage configuration
+- [Storage](../warehouse/) - Storage configuration

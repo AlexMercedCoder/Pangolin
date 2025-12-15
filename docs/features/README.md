@@ -102,5 +102,5 @@ Advanced features and capabilities of Pangolin catalog.
 ## See Also
 
 - [Getting Started](../getting-started/) - Setup guide
-- [Storage](../storage/) - Storage configuration
+- [Storage](../warehouse/) - Storage configuration
 - [API](../api/) - REST API reference

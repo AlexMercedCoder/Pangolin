@@ -36,4 +36,4 @@ The API is protected by authentication middleware that:
 
 ## S3 Credential Vending
 
-For direct S3 access (e.g., from engines like Spark or Trino), Pangolin provides a credential vending mechanism. See [Security & Vending](security_vending.md) for details.
+For direct S3 access (e.g., from engines like Spark or Trino), Pangolin provides a credential vending mechanism. See [Security & Vending](../features/security_vending.md) for details.
