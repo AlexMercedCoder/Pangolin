@@ -156,6 +156,10 @@ pub async fn grant_permission(
     Extension(session): Extension<UserSession>,
     Json(req): Json<GrantPermissionRequest>,
 ) -> Response {
+    if session.role == pangolin_core::user::UserRole::Root {
+        return (StatusCode::FORBIDDEN, "Root user cannot grant granular permissions. Please login as Tenant Admin.").into_response();
+    }
+
     let permission = Permission::new(
         req.user_id,
         req.scope,

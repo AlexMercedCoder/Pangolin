@@ -82,9 +82,10 @@ pub struct AppConfig {
 /// Create a new user
 pub async fn create_user(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
     Json(req): Json<CreateUserRequest>,
 ) -> Response {
-    // TODO: Check permissions - only root or tenant admin can create users
+    // Check permissions - only root or tenant admin can create users
     
     // Hash password if provided
     let password_hash = if let Some(password) = req.password {
@@ -98,12 +99,14 @@ pub async fn create_user(
     
     let user = match req.role {
         UserRole::Root => {
-            if password_hash.is_none() {
-                return (StatusCode::BAD_REQUEST, "Root user requires password").into_response();
-            }
-            User::new_root(req.username, req.email, password_hash.unwrap())
+            return (StatusCode::FORBIDDEN, "Cannot create another Root user").into_response();
         }
         UserRole::TenantAdmin => {
+            // Root can create Tenant Admin
+            if session.role != UserRole::Root && session.role != UserRole::TenantAdmin {
+                 return (StatusCode::FORBIDDEN, "Only Root or Tenant Admin can create Tenant Admins").into_response();
+            }
+
             let tenant_id = match req.tenant_id {
                 Some(id) => id,
                 None => return (StatusCode::BAD_REQUEST, "Tenant admin requires tenant_id").into_response(),
@@ -114,10 +117,23 @@ pub async fn create_user(
             User::new_tenant_admin(req.username, req.email, password_hash.unwrap(), tenant_id)
         }
         UserRole::TenantUser => {
+            // Root cannot create Tenant User
+            if session.role == UserRole::Root {
+                return (StatusCode::FORBIDDEN, "Root user cannot create Tenant Users. Login as Tenant Admin.").into_response();
+            }
+
             let tenant_id = match req.tenant_id {
                 Some(id) => id,
                 None => return (StatusCode::BAD_REQUEST, "Tenant user requires tenant_id").into_response(),
             };
+            
+            // Ensure Tenant Admin is creating user for THEIR tenant
+            if let Some(session_tid) = session.tenant_id {
+                if session_tid != tenant_id {
+                     return (StatusCode::FORBIDDEN, "Cannot create user for another tenant").into_response();
+                }
+            }
+
             if password_hash.is_none() {
                 return (StatusCode::BAD_REQUEST, "Tenant user requires password").into_response();
             }
@@ -208,12 +224,15 @@ pub async fn login(
         },
         None => {
             // Check for Root User via Environment Variables
-            let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_default();
-            let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_default();
+            let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_else(|_| "admin".to_string());
+            let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
+            
+            println!("Debug Login: Request user='{}', pass='{}'", req.username, req.password);
+            println!("Debug Login: Root user='{}', pass='{}'", root_user, root_pass);
 
             if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
                 // Create a temporary User object for the root user session
-                // Use a deterministic UUID for root to ensure consistency across restarts
+                println!("Debug Login: Root credentials matched.");
                 let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap(); 
                 User {
                     id: root_id,

@@ -35,8 +35,10 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Load saved config
-    let config_manager = ConfigManager::new(args.profile.as_deref())?;
-    let mut config = config_manager.load()?;
+    let config_manager = ConfigManager::new(args.profile.as_deref()).unwrap();
+    println!("Debug: Config Path: {:?}", config_manager.config_path);
+    let mut config = config_manager.load().unwrap_or_default();
+    println!("Debug: Loaded Config Base URL: {}", config.base_url);
     
     // Override URL if provided via Args or Env
     if let Some(url) = args.url {
@@ -55,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::Login { username, password } => {
                 if let Err(e) = handlers::handle_login(&mut client, username, password).await { eprintln!("Error: {}", e); }
                 else {
+                    println!("Debug: Login successful. Token present: {}", client.config.auth_token.is_some());
                     if let Err(e) = config_manager.save(&client.config) {
                         eprintln!("Error saving config: {}", e);
                     }

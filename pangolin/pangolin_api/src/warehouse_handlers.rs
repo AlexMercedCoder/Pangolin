@@ -11,6 +11,7 @@ use pangolin_core::model::Warehouse;
 use uuid::Uuid;
 use crate::auth::TenantId;
 use crate::iceberg_handlers::AppState;
+use pangolin_core::user::UserRole;
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateWarehouseRequest {
@@ -63,8 +64,13 @@ pub async fn list_warehouses(
 pub async fn create_warehouse(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<pangolin_core::user::UserSession>,
     Json(payload): Json<CreateWarehouseRequest>,
 ) -> impl IntoResponse {
+    if session.role == pangolin_core::user::UserRole::Root {
+        return (StatusCode::FORBIDDEN, "Root user cannot create warehouses. Please login as Tenant Admin.").into_response();
+    }
+
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
         name: payload.name,

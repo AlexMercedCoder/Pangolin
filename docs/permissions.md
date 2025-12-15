@@ -2,6 +2,24 @@
 
 Pangolin implements a flexible Role-Based Access Control (RBAC) system enhanced with Tag-Based Access Control (TBAC) and specific logic for Branching strategies.
 
+## 0. User Roles & The Root User
+
+Pangolin strictly separates **Platform Administration** from **Data Governance**.
+
+### Root User
+The `Root` user is a pure **Platform Administrator**. Their capabilities are strictly limited to multi-tenancy management.
+
+-   **Allowed**: Create Tenant, Create Initial Tenant Admin.
+-   **Forbidden**: Create Warehouse, Create Catalog, Manage Data, Grant Granular Permissions, Create regular Tenant Users.
+-   **Context**: The Root user cannot "switch context" to a tenant to view or modify data.
+
+### Tenant Admin
+The `TenantAdmin` is the **Data Governor** for their specific tenant.
+
+-   **Allowed**: Create Warehouses, Catalogs, Namespaces, Tenant Users.
+-   **Responsibility**: Manage all data assets and permissions within their tenant.
+
+
 ## 1. Role-Based Access Control (RBAC)
 
 Permissions are assigned to **Users** directly or via **Roles** (which group permissions for easier management).

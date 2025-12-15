@@ -124,6 +124,8 @@
 							{/if}
 						</a>
 						{/if}
+						
+						{#if !$isRoot}
 						<a
 							href="/catalogs"
 							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -151,6 +153,7 @@
 								<span>Users</span>
 							{/if}
 						</a>
+						{/if}
 					</nav>
 
 					<!-- Toggle button -->
@@ -177,21 +180,7 @@
 						</div>
 
 						<div class="flex items-center gap-4">
-							{#if $isRoot}
-								<div class="flex items-center gap-2">
-									<span class="text-sm text-gray-500 dark:text-gray-400">Context:</span>
-									<select
-										class="bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block p-2"
-										value={$tenantStore.selectedTenantId || ''}
-										on:change={handleTenantChange}
-									>
-										<option value="">Global (System)</option>
-										{#each tenants as tenant}
-											<option value={tenant.id}>{tenant.name}</option>
-										{/each}
-									</select>
-								</div>
-							{/if}
+							<!-- Context Switcher Removed for Root -->
 
 							<!-- Theme toggle -->
 							<button

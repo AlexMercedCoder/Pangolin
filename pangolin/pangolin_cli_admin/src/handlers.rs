@@ -200,6 +200,11 @@ pub async fn handle_create_warehouse(
     region_opt: Option<String>,
     endpoint_opt: Option<String>
 ) -> Result<(), CliError> {
+    // Check if root
+    if client.config.tenant_id.is_none() {
+        return Err(CliError::ApiError("Root user cannot create warehouses. Please login as Tenant Admin.".to_string()));
+    }
+
     // Interactive config based on type
     let mut config = serde_json::Map::new();
     if type_ == "s3" {
@@ -278,6 +283,10 @@ pub async fn handle_list_catalogs(client: &PangolinClient) -> Result<(), CliErro
 }
 
 pub async fn handle_create_catalog(client: &PangolinClient, name: String, warehouse: String) -> Result<(), CliError> {
+    if client.config.tenant_id.is_none() {
+        return Err(CliError::ApiError("Root user cannot create catalogs. Please login as Tenant Admin.".to_string()));
+    }
+
     let body = serde_json::json!({
         "name": name,
         "warehouse": warehouse,
@@ -436,6 +445,10 @@ async fn resolve_scope(client: &PangolinClient, resource: &str) -> Result<serde_
 }
 
 pub async fn handle_grant_permission(client: &PangolinClient, username: String, action: String, resource: String) -> Result<(), CliError> {
+    if client.config.tenant_id.is_none() {
+        return Err(CliError::ApiError("Root user cannot grant granular permissions. Please login as Tenant Admin.".to_string()));
+    }
+
     // 1. Resolve User ID
     let user_id = resolve_user_id(client, &username).await?;
     

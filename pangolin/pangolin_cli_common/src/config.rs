@@ -26,7 +26,7 @@ impl Default for CliConfig {
 }
 
 pub struct ConfigManager {
-    config_path: PathBuf,
+    pub config_path: PathBuf,
 }
 
 impl ConfigManager {

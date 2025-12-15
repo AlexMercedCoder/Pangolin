@@ -11,7 +11,7 @@ use pangolin_core::model::{Branch, BranchType};
 use uuid::Uuid;
 use crate::auth::TenantId;
 use pangolin_core::permission::{PermissionScope, Action};
-use pangolin_core::user::UserSession;
+use pangolin_core::user::{UserSession, UserRole};
 
 // Placeholder for AppState
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
@@ -465,8 +465,13 @@ pub async fn list_catalogs(
 pub async fn create_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Json(payload): Json<CreateCatalogRequest>,
 ) -> impl IntoResponse {
+    if session.role == UserRole::Root {
+         return (StatusCode::FORBIDDEN, "Root user cannot create catalogs. Please login as Tenant Admin.").into_response();
+    }
+
     let tenant_id = tenant.0;
     tracing::info!("create_catalog: tenant_id={}, catalog_name={}", tenant_id, payload.name);
     

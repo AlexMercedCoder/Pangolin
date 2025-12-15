@@ -15,6 +15,10 @@ pangolin-admin list-warehouses
 ### Create Warehouse
 Configure a new storage location. The CLI may prompt for additional configuration depending on the type.
 
+> [!IMPORTANT]
+> This command requires **Tenant Admin** privileges. The Root User cannot create warehouses.
+
+
 **Syntax**:
 ```bash
 pangolin-admin create-warehouse --name <name> --type <type>

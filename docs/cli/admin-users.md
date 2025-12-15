@@ -15,6 +15,10 @@ pangolin-admin list-users
 ### Create User
 Create a new user account. You will be prompted for a password securely.
 
+> [!WARNING]
+> The **Root User** can ONLY create a `tenant-admin` for a new tenant. They cannot create regular `tenant-user` accounts. Regular user management is the responsibility of the Tenant Admin.
+
+
 **Syntax**:
 ```bash
 pangolin-admin create-user <username> [--role <role>]

@@ -15,6 +15,10 @@ pangolin-admin list-catalogs
 ### Create Catalog
 Create a new catalog backed by an existing warehouse.
 
+> [!IMPORTANT]
+> This command requires **Tenant Admin** privileges. The Root User cannot create catalogs.
+
+
 **Syntax**:
 ```bash
 pangolin-admin create-catalog <name> --warehouse <warehouse_name>
