@@ -1,0 +1,22 @@
+[package]
+name = "pangolin_cli_user"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pangolin_cli_common = { path = "../pangolin_cli_common" }
+clap = { version = "4.4", features = ["derive", "env"] }
+tokio = { version = "1.0", features = ["full"] }
+rustyline = "14.0"
+shell-words = "1.1"
+anyhow = "1.0"
+console = "0.15"
+dialoguer = "0.11"
+log = "0.4"
+env_logger = "0.10"
+serde_json = "1.0"
+syntect = "5.0" # Syntax highlighting
+
+[[bin]]
+name = "pangolin-user"
+path = "src/main.rs"

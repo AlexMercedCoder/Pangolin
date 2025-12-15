@@ -18,6 +18,7 @@ use crate::tests_common::EnvGuard;
 #[tokio::test]
 #[serial]
 async fn test_auth_flow() {
+    let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "default_secret_for_dev");
     // 1. Setup Store
     let store_impl = MemoryStore::new();
     let store: Arc<dyn CatalogStore + Send + Sync> = Arc::new(store_impl);
@@ -102,7 +103,8 @@ async fn test_auth_flow() {
         
     // Set JWT secret for test
     // Set JWT secret for test
-    let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "default_secret_for_dev");
+    // Environment variable set at top of function
+    // let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "default_secret_for_dev");
 
     let req = Request::builder()
         .method("GET")

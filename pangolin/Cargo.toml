@@ -4,6 +4,9 @@ members = [
     "pangolin_core",
     "pangolin_store",
     "pangolin_api",
+    "pangolin_cli_common",
+    "pangolin_cli_admin",
+    "pangolin_cli_user",
 ]
 
 [workspace.dependencies]

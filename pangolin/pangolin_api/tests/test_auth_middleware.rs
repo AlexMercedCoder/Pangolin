@@ -19,7 +19,7 @@ mod tests {
     #[serial]
     async fn test_no_auth_mode_bypasses_authentication() {
         // Set NO_AUTH environment variable
-        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "1");
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
         let store = Arc::new(MemoryStore::new());
         // Create default tenant and analytics catalog
@@ -35,6 +35,7 @@ mod tests {
             name: "analytics".to_string(),
             warehouse_name: None,
             storage_location: None,
+            federated_config: None,
             properties: std::collections::HashMap::new(),
         }).await.unwrap();
 
@@ -92,6 +93,7 @@ mod tests {
             name: "analytics".to_string(),
             warehouse_name: None,
             storage_location: None,
+            federated_config: None,
             properties: std::collections::HashMap::new(),
         }).await.unwrap();
 
@@ -187,7 +189,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_no_auth_uses_default_tenant() {
-        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "1");
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
         let store = Arc::new(MemoryStore::new());
         
@@ -204,6 +206,7 @@ mod tests {
             name: "analytics".to_string(),
             warehouse_name: None,
             storage_location: None,
+            federated_config: None,
             properties: std::collections::HashMap::new(),
         }).await.unwrap();
 

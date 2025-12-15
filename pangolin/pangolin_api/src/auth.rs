@@ -115,6 +115,12 @@ pub async fn auth_middleware(
                         if let Some(tid) = final_tenant_id {
                              request.extensions_mut().insert(TenantId(tid));
                         }
+                        
+                        // If token has Root role, also insert RootUser extension
+                        if token_data.claims.roles.contains(&Role::Root) {
+                            request.extensions_mut().insert(RootUser);
+                        }
+                        
                         request.extensions_mut().insert(token_data.claims.roles);
                         return Ok(next.run(request).await);
                     },
@@ -148,14 +154,9 @@ pub async fn auth_middleware(
         tracing::debug!("No X-Pangolin-Tenant header found. Available headers: {:?}", headers.keys().collect::<Vec<_>>());
     }
     
-    // 3. Fallback: Default Tenant (Testing/Development)
-    // Use default tenant (all zeros) when no authentication is provided
-    // This allows testing without authentication while maintaining tenant isolation in production
+    // 3. Fallback: No Auth provided
     if request.extensions().get::<RootUser>().is_none() && request.extensions().get::<TenantId>().is_none() {
-        let default_tenant_id = Uuid::parse_str("00000000-0000-0000-0000-000000000000")
-            .expect("Failed to parse default tenant UUID");
-        tracing::info!("No authentication provided, using default tenant: {}", default_tenant_id);
-        request.extensions_mut().insert(TenantId(default_tenant_id));
+        return Err(StatusCode::UNAUTHORIZED);
     }
 
     Ok(next.run(request).await)

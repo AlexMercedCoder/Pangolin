@@ -134,6 +134,10 @@ impl ConflictDetector {
         }
 
         // Check for assets deleted in target but present in source
+        // In a true 3-way merge, we would check if it was in Base. 
+        // Lacking Base, we assume "Present in Source, Missing in Target" is an ADDITION, not a conflict.
+        // So we skip flagging this as a conflict.
+        /*
         for source_asset in source_assets {
             if !target_assets.iter().any(|a| a.name == source_asset.name) {
                 let conflict = MergeConflict::new(
@@ -152,6 +156,7 @@ impl ConflictDetector {
                 conflicts.push(conflict);
             }
         }
+        */
 
         Ok(conflicts)
     }

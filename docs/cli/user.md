@@ -1,0 +1,36 @@
+# Pangolin User CLI (`pangolin-user`)
+
+The `pangolin-user` tool is for data engineers and analysts to discover data, manage branches, and request access.
+
+## Usage Modes
+
+### Interactive Mode (REPL)
+```bash
+pangolin-user
+pangolin-user --profile dev
+```
+
+### Non-Interactive Mode
+```bash
+pangolin-user list-catalogs
+pangolin-user search "sales_data"
+```
+
+## Data Discovery
+- `list-catalogs`: View available catalogs.
+- `search <query>`: Search for tables and views.
+- `generate-code --language <pyiceberg|pyspark|dremio|sql> --table <table_name>`: Generate connection snippets with syntax highlighting.
+
+## Data Engineering
+### Branching
+- `list-branches --catalog <catalog>`: View branches.
+- `create-branch --catalog <catalog> --name <name> --from <source_branch>`: Create a new branch.
+- `merge-branch --catalog <catalog> --source <src> --target <tgt>`: Merge branches.
+
+### Tags
+- `list-tags --catalog <catalog>`: View commit tags.
+- `create-tag --catalog <catalog> --name <name> --commit-id <id>`: Tag a specific commit.
+
+## Access Management
+- `request-access --resource <res> --role <role> --reason <text>`: Submit an access request.
+- `list-requests`: View status of your access requests.

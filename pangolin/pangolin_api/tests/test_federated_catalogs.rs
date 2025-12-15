@@ -83,7 +83,7 @@ async fn test_cross_tenant_federation() {
 
     // Verify federated catalog configuration
     let retrieved_federated = store
-        .get_catalog(tenant_a.id, "partner_production")
+        .get_catalog(tenant_a.id, "partner_production".to_string())
         .await
         .unwrap()
         .unwrap();
@@ -142,7 +142,7 @@ async fn test_federated_catalog_crud() {
 
     // Read
     let retrieved = store
-        .get_catalog(tenant_id, "external_catalog")
+        .get_catalog(tenant_id, "external_catalog".to_string())
         .await
         .unwrap()
         .unwrap();
@@ -156,11 +156,11 @@ async fn test_federated_catalog_crud() {
 
     // Delete
     store
-        .delete_catalog(tenant_id, "external_catalog")
+        .delete_catalog(tenant_id, "external_catalog".to_string())
         .await
         .unwrap();
     let deleted = store
-        .get_catalog(tenant_id, "external_catalog")
+        .get_catalog(tenant_id, "external_catalog".to_string())
         .await
         .unwrap();
     assert!(deleted.is_none());

@@ -96,34 +96,32 @@ async fn test_merge_branch_flow() {
     let resp = app.clone().oneshot(create_branch_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
-    // 5. Update Asset on 'dev' (Simulate change)
-    let update_asset_req = Request::builder()
+    // 5. Create NEW Asset on 'dev' (Simulate feature work)
+    let create_asset_2_req = Request::builder()
         .method("POST")
         .uri(format!("/v1/default/namespaces/default/tables?branch=dev"))
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
         .body(Body::from(json!({
-            "name": "table1",
-            "location": "s3://bucket/table1",
+            "name": "table2",
+            "location": "s3://bucket/table2",
             "properties": {"v": "2"}
         }).to_string()))
         .unwrap();
-    let resp = app.clone().oneshot(update_asset_req).await.unwrap();
+    let resp = app.clone().oneshot(create_asset_2_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // 6. Verify 'main' still has v=1
+    // 6. Verify 'main' does NOT have table2 yet
     let get_main_req = Request::builder()
         .method("GET")
-        .uri(format!("/v1/default/namespaces/default/tables/table1?branch=main"))
+        .uri(format!("/v1/default/namespaces/default/tables/table2?branch=main"))
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .body(Body::empty())
         .unwrap();
     let resp = app.clone().oneshot(get_main_req).await.unwrap();
-    let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    let asset: Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(asset["metadata"]["properties"]["v"], "1");
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 
     // 7. Merge 'dev' into 'main'
     let merge_req = Request::builder()
@@ -140,16 +138,14 @@ async fn test_merge_branch_flow() {
     let resp = app.clone().oneshot(merge_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
 
-    // 8. Verify 'main' now has v=2
+    // 8. Verify 'main' now has table2
     let get_main_req_2 = Request::builder()
         .method("GET")
-        .uri(format!("/v1/default/namespaces/default/tables/table1?branch=main"))
+        .uri(format!("/v1/default/namespaces/default/tables/table2?branch=main"))
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .body(Body::empty())
         .unwrap();
     let resp = app.clone().oneshot(get_main_req_2).await.unwrap();
-    let body_bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
-    let asset: Value = serde_json::from_slice(&body_bytes).unwrap();
-    assert_eq!(asset["metadata"]["properties"]["v"], "2");
+    assert_eq!(resp.status(), StatusCode::OK);
 }

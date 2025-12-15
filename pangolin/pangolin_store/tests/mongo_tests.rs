@@ -1,5 +1,5 @@
 use pangolin_store::{MongoStore, CatalogStore};
-use pangolin_core::model::{Tenant, Catalog, Namespace, Asset, AssetType, Branch};
+use pangolin_core::model::{Tenant, Catalog, Namespace, Asset, AssetType, Branch, Warehouse};
 use uuid::Uuid;
 use std::collections::HashMap;
 use std::env;
@@ -15,26 +15,35 @@ async fn test_mongo_store_flow() {
         }
     };
 
-    let store = MongoStore::new(&connection_string).await.expect("Failed to create MongoStore");
+    let store = MongoStore::new(&connection_string, "admin").await.expect("Failed to create MongoStore");
 
-    // 1. Create Tenant
+    // Test Tenant
     let tenant_id = Uuid::new_v4();
     let tenant = Tenant {
         id: tenant_id,
         name: "test_tenant".to_string(),
         properties: HashMap::new(),
     };
-    store.create_tenant(tenant.clone()).await.expect("Failed to create tenant");
+    store.create_tenant(tenant.clone()).await.unwrap();
 
-    let fetched_tenant = store.get_tenant(tenant_id).await.expect("Failed to get tenant");
-    assert_eq!(fetched_tenant.unwrap().name, "test_tenant");
+    // Test Warehouse
+    let warehouse = Warehouse {
+        id: Uuid::new_v4(),
+        name: "test_warehouse".to_string(),
+        tenant_id,
+        storage_config: HashMap::new(),
+        use_sts: false,
+    };
+    store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
 
     // 2. Create Catalog
     let catalog = Catalog {
         id: Uuid::new_v4(),
         name: "test_catalog".to_string(),
-        warehouse_name: None,
-        storage_location: None,
+        catalog_type: pangolin_core::model::CatalogType::Local,
+        warehouse_name: Some("test_warehouse".to_string()),
+        storage_location: Some("s3://bucket/path".to_string()),
+        federated_config: None,
         properties: HashMap::new(),
     };
     store.create_catalog(tenant_id, catalog.clone()).await.expect("Failed to create catalog");

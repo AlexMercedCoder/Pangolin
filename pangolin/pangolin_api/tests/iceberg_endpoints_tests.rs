@@ -15,7 +15,7 @@ mod iceberg_endpoint_tests {
     use pangolin_api::tests_common::EnvGuard;
 
     async fn setup_test_env() -> (Arc<dyn pangolin_store::CatalogStore + Send + Sync>, Uuid, EnvGuard) {
-        let guard = EnvGuard::new("PANGOLIN_NO_AUTH", "1");
+        let guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
         let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let tenant_id = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
         
@@ -45,6 +45,7 @@ mod iceberg_endpoint_tests {
             name: "test_warehouse".to_string(), // Name matches the prefix used in tests
             warehouse_name: Some("test_warehouse".to_string()),
             storage_location: None,
+            federated_config: None,
             properties: std::collections::HashMap::new(),
         }).await.unwrap();
 

@@ -60,12 +60,13 @@ mod tests {
         store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
 
         let catalog = pangolin_core::model::Catalog {
-            catalog_type: pangolin_core::model::CatalogType::Local,
             id: Uuid::new_v4(),
-            name: "default".to_string(),
+            name: "test_catalog".to_string(),
+            catalog_type: pangolin_core::model::CatalogType::Local,
             warehouse_name: Some("test_wh".to_string()),
-            storage_location: Some("s3://bucket/test".to_string()),
-            properties: std::collections::HashMap::new(),
+            storage_location: Some("s3://bucket".to_string()),
+            federated_config: None,
+            properties: HashMap::new(),
         };
         store.create_catalog(tenant_id, catalog).await.unwrap();
 

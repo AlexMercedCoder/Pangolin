@@ -62,7 +62,9 @@ async fn main() {
     let app = app(store);
 
     // Run it
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8080));
+    // Run it
+    let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string()).parse::<u16>().unwrap_or(8080);
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     tracing::info!("listening on {}", addr);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

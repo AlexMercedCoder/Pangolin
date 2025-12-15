@@ -222,6 +222,10 @@ pub enum CommitUpdate {
         #[serde(rename = "type")]
         ref_type: String,
     },
+    #[serde(rename = "set-properties")]
+    SetProperties {
+        updates: HashMap<String, String>,
+    },
     // Add others as needed
 }
 

@@ -32,8 +32,10 @@ async fn test_postgres_store_flow() {
     let catalog = Catalog {
         id: Uuid::new_v4(),
         name: "test_catalog".to_string(),
-        warehouse_name: None,
-        storage_location: None,
+        catalog_type: pangolin_core::model::CatalogType::Local,
+        warehouse_name: Some("test_warehouse".to_string()),
+        storage_location: Some("s3://bucket/path".to_string()),
+        federated_config: None,
         properties: HashMap::new(),
     };
     store.create_catalog(tenant_id, catalog.clone()).await.expect("Failed to create catalog");
