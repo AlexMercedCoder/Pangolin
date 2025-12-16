@@ -28,6 +28,10 @@ pub enum AdminCommand {
         /// Name of the tenant
         #[arg(short, long)]
         name: String,
+        #[arg(long)]
+        admin_username: Option<String>,
+        #[arg(long)]
+        admin_password: Option<String>,
     },
     /// Delete a tenant
     DeleteTenant {

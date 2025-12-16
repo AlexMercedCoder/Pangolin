@@ -70,7 +70,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             },
             AdminCommand::ListTenants => handlers::handle_list_tenants(&client).await?,
-            AdminCommand::CreateTenant { name } => handlers::handle_create_tenant(&client, name).await?,
+            AdminCommand::CreateTenant { name, admin_username, admin_password } => handlers::handle_create_tenant(&client, name, admin_username, admin_password).await?,
             AdminCommand::DeleteTenant { id } => handlers::handle_delete_tenant(&client, id).await?,
             AdminCommand::ListUsers => handlers::handle_list_users(&client).await?,
             AdminCommand::CreateUser { username, email, role, password, tenant_id } => handlers::handle_create_user(&client, username, email, role, password, tenant_id).await?,
@@ -163,11 +163,7 @@ async fn main() -> anyhow::Result<()> {
                                             eprintln!("Error: {}", e);
                                         }
                                     },
-                                    AdminCommand::CreateTenant { name } => {
-                                         if let Err(e) = handlers::handle_create_tenant(&client, name).await {
-                                            eprintln!("Error: {}", e);
-                                        }
-                                    },
+            AdminCommand::CreateTenant { name, admin_username, admin_password } => handlers::handle_create_tenant(&client, name, admin_username, admin_password).await?,
                                     AdminCommand::DeleteTenant { id } => {
                                         if let Err(e) = handlers::handle_delete_tenant(&client, id).await { eprintln!("Error: {}", e); }
                                     },

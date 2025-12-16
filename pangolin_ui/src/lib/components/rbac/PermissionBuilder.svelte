@@ -11,12 +11,15 @@
   // We don't need to re-define types but we need variables using them.
 
 
+  import { isRoot } from '$lib/stores/auth';
+
   export let scope: { type: ScopeType; id?: string } = { type: 'Tenant' };
   export let actions: ActionType[] = [];
   
   const dispatch = createEventDispatcher();
 
-  const scopeOptions: ScopeType[] = ['System', 'Tenant', 'Catalog', 'Namespace', 'Table', 'View'];
+  const allScopeOptions: ScopeType[] = ['System', 'Tenant', 'Catalog', 'Namespace', 'Table', 'View'];
+  $: scopeOptions = $isRoot ? allScopeOptions : allScopeOptions.filter(s => s !== 'System');
   const actionOptions: ActionType[] = ['READ', 'WRITE', 'CREATE', 'DELETE', 'ADMIN', 'MANAGE_ACCESS', 'MANAGE_DISCOVERY'];
 
   function toggleAction(action: ActionType) {

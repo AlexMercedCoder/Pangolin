@@ -731,6 +731,7 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>)>> {
+        tracing::info!("MemoryStore: search_assets: tenant={}, query={}, total_assets={}", tenant_id, query, self.assets.len());
         let mut results = Vec::new();
         let query_lower = query.to_lowercase();
 

@@ -98,11 +98,19 @@ pub async fn handle_list_tenants(client: &PangolinClient) -> Result<(), CliError
     Ok(())
 }
 
-pub async fn handle_create_tenant(client: &PangolinClient, name: String) -> Result<(), CliError> {
-    let body = serde_json::json!({
-        "name": name,
-        "properties": {}
-    });
+pub async fn handle_create_tenant(client: &PangolinClient, name: String, admin_username: Option<String>, admin_password: Option<String>) -> Result<(), CliError> {
+    let mut payload = serde_json::Map::new();
+    payload.insert("name".to_string(), Value::String(name.clone()));
+    payload.insert("properties".to_string(), serde_json::json!({}));
+    
+    if let Some(u) = admin_username {
+        payload.insert("admin_username".to_string(), Value::String(u));
+    }
+    if let Some(p) = admin_password {
+        payload.insert("admin_password".to_string(), Value::String(p));
+    }
+    
+    let body = Value::Object(payload);
 
     let res = client.post("/api/v1/tenants", &body).await?;
 
