@@ -33,7 +33,9 @@ async fn test_merge_branch_flow() {
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=") // admin:password
         .body(Body::from(json!({
             "name": "MergeTestTenant",
-            "id": tenant_id.to_string()
+            "id": tenant_id.to_string(),
+            "admin_username": "merge_admin",
+            "admin_password": "password"
         }).to_string()))
         .unwrap();
     let resp = app.clone().oneshot(create_tenant_req).await.unwrap();

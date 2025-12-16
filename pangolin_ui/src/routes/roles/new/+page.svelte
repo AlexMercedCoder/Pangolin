@@ -65,16 +65,13 @@
 
 		loading = true;
 		try {
-			const request: CreateRoleRequest = {
+			const data: CreateRoleRequest = {
 				name: name.trim(),
-				tenant_id: tenantId,
+				description: description.trim() || undefined,
+				'tenant-id': tenantId,
 			};
 
-			if (description && description.trim()) {
-				request.description = description.trim();
-			}
-
-			await rolesApi.create(request);
+			await rolesApi.create(data);
 			notifications.success(`Role "${name}" created successfully`);
 			goto('/roles');
 		} catch (error: any) {

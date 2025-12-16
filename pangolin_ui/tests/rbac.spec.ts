@@ -143,8 +143,7 @@ test.describe('RBAC & Role Enforcement Tests', () => {
         await page.click('button:has-text("Add Permission")');
         
         // Now Click "Create Role" (primary button at bottom)
-        await page.click('button:has-text("Create Role")', { exact: false }); // might match multiple, but playwight clicks first visible? 
-        // Actually, "Create Role" is also the header text? No, header is h1.
+        await page.getByRole('button', { name: 'Create Role', exact: true }).click();
         // There is a button with Text "Create Role".
         // Use a more specific selector if needed: button.variant-primary? 
         // Or just last button?

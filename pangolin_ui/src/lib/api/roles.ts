@@ -20,6 +20,12 @@ export interface CreateRoleRequest {
 	'tenant-id': string; // Required (kebab-case for backend)
 }
 
+export interface UpdateRoleRequest {
+    name?: string;
+    description?: string;
+    permissions?: any[];
+}
+
 // Ensure update accepts Role
 export const rolesApi = {
     // ... list, get ...
@@ -41,7 +47,7 @@ export const rolesApi = {
 		return response.data!;
 	},
 
-	async update(id: string, data: Role): Promise<void> {
+	async update(id: string, data: UpdateRoleRequest): Promise<void> {
 		const response = await apiClient.put<void>(`/api/v1/roles/${id}`, data);
 		if (response.error) throw new Error(response.error.message);
 	},

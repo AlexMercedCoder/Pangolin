@@ -24,10 +24,11 @@
 	});
 
 	async function loadData() {
-        roleId = $page.params.id;
+        roleId = $page.params.id || '';
         if (!roleId) {
-             goto('/roles');
-             return;
+            notifications.error("Role ID missing");
+            goto('/roles');
+            return;
         }
 
 		loading = true; // Keep loading state management

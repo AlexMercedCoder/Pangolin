@@ -38,8 +38,8 @@
             } else {
                 error = 'Search failed';
             }
-        } catch (e) {
-            error = e.message;
+        } catch (e: any) {
+            error = e.message || String(e);
         } finally {
             loading = false;
         }

@@ -93,7 +93,7 @@
 	{#if loading}
 		<Card>
 			<div class="flex items-center justify-center py-12">
-				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
 			</div>
 		</Card>
 	{:else if tenant}

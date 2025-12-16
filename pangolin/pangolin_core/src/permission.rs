@@ -14,6 +14,8 @@ pub enum PermissionScope {
     Asset { catalog_id: Uuid, namespace: String, asset_id: Uuid },
     /// Applies to all assets with specific tag
     Tag { tag_name: String },
+    /// Applies to everything in the tenant
+    Tenant,
 }
 
 impl PermissionScope {
@@ -21,6 +23,9 @@ impl PermissionScope {
         match (self, other) {
             // Exact match
             (a, b) if a == b => true,
+
+            // Tenant covers everything
+            (PermissionScope::Tenant, _) => true,
             
             // Catalog covers everything in it
             (PermissionScope::Catalog { catalog_id: id1 }, PermissionScope::Catalog { catalog_id: id2 }) => id1 == id2,

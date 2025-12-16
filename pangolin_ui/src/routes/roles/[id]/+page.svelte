@@ -60,13 +60,11 @@
               else if (rawType === 'namespace') scopeType = 'Namespace';
               else if (rawType === 'table') scopeType = 'Table';
               else if (rawType === 'view') scopeType = 'View';
-              else if (rawType === 'warehouse') scopeType = 'Warehouse';
               else if (rawType === 'tenant') scopeType = 'Tenant';
               else if (rawType === 'system') scopeType = 'System';
               
               // Map ID fields
               scopeId = p.scope['catalog-id'] || p.scope.catalog_id || 
-                        p.scope['warehouse-name'] || p.scope.warehouse_name ||
                         p.scope['namespace'] || 
                         p.scope['table'] || 
                         p.scope['view'] || '';
@@ -113,7 +111,7 @@
       await rolesApi.update(role.id, {
         name,
         description,
-        permissions: JSON.stringify(permissions)
+        permissions: permissions
       });
       notifications.success('Role updated successfully');
     } catch (error: any) {

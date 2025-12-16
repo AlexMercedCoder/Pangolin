@@ -17,6 +17,8 @@ use crate::iceberg_handlers::AppState;
 pub struct CreateTenantRequest {
     name: String,
     properties: Option<std::collections::HashMap<String, String>>,
+    pub admin_username: Option<String>,
+    pub admin_password: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -28,8 +30,8 @@ pub struct UpdateTenantRequest {
 #[derive(Serialize)]
 pub struct TenantResponse {
     id: Uuid,
-    name: String,
-    properties: std::collections::HashMap<String, String>,
+    pub name: String,
+    pub properties: Option<HashMap<String, String>>,
 }
 
 impl From<Tenant> for TenantResponse {
@@ -37,7 +39,7 @@ impl From<Tenant> for TenantResponse {
         Self {
             id: tenant.id,
             name: tenant.name,
-            properties: tenant.properties,
+            properties: Some(tenant.properties),
         }
     }
 }
@@ -84,7 +86,35 @@ pub async fn create_tenant(
     };
 
     match store.create_tenant(tenant.clone()).await {
-        Ok(_) => (StatusCode::CREATED, Json(TenantResponse::from(tenant))).into_response(),
+        Ok(_) => {
+            // Create initial admin if requested
+            if let (Some(username), Some(password)) = (payload.admin_username, payload.admin_password) {
+                 if let Ok(hash) = crate::auth_middleware::hash_password(&password) {
+                     let admin = pangolin_core::user::User::new_tenant_admin(
+                         username,
+                         "admin@pangolin.local".to_string(),
+                         hash,
+                         tenant.id
+                     );
+                     
+                     if let Ok(_) = store.create_user(admin.clone()).await {
+                         // Grant MANAGE_DISCOVERY on Tenant scope
+                         use pangolin_core::permission::{Permission, PermissionScope, Action};
+                         use std::collections::HashSet;
+                         
+                         let scope = PermissionScope::Tenant;
+                         let mut actions = HashSet::new();
+                         actions.insert(Action::ManageDiscovery);
+                         
+                         // Granted by Root (UUID::nil) for now as this is system action
+                         let perm = Permission::new(admin.id, scope, actions, Uuid::nil());
+                         let _ = store.create_permission(perm).await;
+                     }
+                 }
+            }
+            
+            (StatusCode::CREATED, Json(TenantResponse::from(tenant))).into_response()
+        },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
