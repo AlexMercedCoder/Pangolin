@@ -33,11 +33,13 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
     - `PostgresStore`: ✅ Production-ready relational storage with ACID guarantees.
     - `MongoStore`: ✅ Production-ready NoSQL document storage with horizontal scalability.
     - `SqliteStore`: ✅ Production-ready embedded storage for development and edge deployments.
+- **Optimization**:
+    - `assets_by_id`: Auxiliary direct index (O(1)) for fast asset authorization and lookup.
 - **Warehouse Storage (Data)**:
     - S3/GCS/Azure: Object storage for Iceberg table data files (via `object_store` crate).
     - **Credential Vending**: AWS STS AssumeRole, Azure OAuth2, GCP service account tokens.
     - **Cloud Features**: Optional feature flags (`aws-sts`, `azure-oauth`, `gcp-oauth`) for production credential vending.
-- **Merge Operations**: Tracks merge operations and conflicts with full lifecycle management.
+- **Merge Operations**: Tracks merge operations with automated 3-way base commit detection.
 
 ### 4. Security & Authentication
 - **Modes**:

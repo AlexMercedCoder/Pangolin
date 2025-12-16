@@ -212,13 +212,22 @@ pub async fn merge_branch(
     let tenant_id = tenant.0;
     let catalog_name = payload.catalog.as_deref().unwrap_or("default");
 
+    // Attempt to detect base commit
+    let base_commit_id = find_common_ancestor(
+        &store,
+        tenant, // Pass extension which wraps TenantId
+        catalog_name,
+        &payload.source_branch,
+        &payload.target_branch
+    ).await;
+
     // Create a merge operation
     let operation = pangolin_core::model::MergeOperation::new(
         tenant_id,
         catalog_name.to_string(),
         payload.source_branch.clone(),
         payload.target_branch.clone(),
-        None, // TODO: Implement base commit detection for 3-way merge
+        base_commit_id, 
         session.user_id,
     );
 
@@ -558,4 +567,51 @@ pub async fn update_catalog(
             }
         }
     }
+}
+
+/// Helper: Find the common ancestor commit between two branches
+async fn find_common_ancestor(
+    store: &Arc<dyn CatalogStore + Send + Sync>,
+    tenant_id: crate::auth::TenantId,
+    catalog_name: &str,
+    source_branch_name: &str,
+    target_branch_name: &str,
+) -> Option<uuid::Uuid> {
+    // Get branches
+    let source_branch = store.get_branch(tenant_id.0, catalog_name, source_branch_name.to_string()).await.ok()??;
+    let target_branch = store.get_branch(tenant_id.0, catalog_name, target_branch_name.to_string()).await.ok()??;
+
+    // Get commit chains
+    let source_chain = get_commit_chain(store, tenant_id, source_branch.head_commit_id).await;
+    let target_chain = get_commit_chain(store, tenant_id, target_branch.head_commit_id).await;
+
+    // Find first common commit
+    for commit_id in source_chain {
+        if target_chain.contains(&commit_id) {
+            return Some(commit_id);
+        }
+    }
+
+    None
+}
+
+/// Helper: Get the chain of commit IDs starting from a head commit
+async fn get_commit_chain(
+    store: &Arc<dyn CatalogStore + Send + Sync>,
+    tenant_id: crate::auth::TenantId,
+    start_commit_id: Option<uuid::Uuid>,
+) -> Vec<uuid::Uuid> {
+    let mut chain = Vec::new();
+    let mut current_id = start_commit_id;
+
+    while let Some(id) = current_id {
+        chain.push(id);
+        if let Ok(Some(commit)) = store.get_commit(tenant_id.0, id).await {
+            current_id = commit.parent_id;
+        } else {
+            break;
+        }
+    }
+
+    chain
 }

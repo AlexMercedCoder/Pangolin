@@ -217,8 +217,29 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
-        let key = (tenant_id, name);
+        let key = (tenant_id, name.clone());
         if self.catalogs.remove(&key).is_some() {
+            // Cascade delete: Remove all associated resources
+            // Note: In a real database, this would be handled by foreign keys.
+            // In MemoryStore, we must manually iterate and remove.
+            
+            // Remove Namespaces
+            self.namespaces.retain(|k, _| !(k.0 == tenant_id && k.1 == name));
+            
+            // Remove Assets
+            self.assets.retain(|k, _| !(k.0 == tenant_id && k.1 == name));
+            
+            // Remove Branches
+            self.branches.retain(|k, _| !(k.0 == tenant_id && k.1 == name));
+            
+            // Remove Tags
+            self.tags.retain(|k, _| !(k.0 == tenant_id && k.1 == name));
+
+            // Clean up assets_by_id index
+            // This is expensive O(N) since we have to scan the whole index
+            // But deletion is rare.
+            self.assets_by_id.retain(|_, v| v.0 != name);
+
             Ok(())
         } else {
             Err(anyhow::anyhow!("Catalog not found"))

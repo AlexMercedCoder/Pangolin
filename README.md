@@ -90,12 +90,17 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 
 ### ⚡ Core Features
 - [Branch Management](docs/features/branch_management.md) - Git-like branching for catalogs
-- [Merge Conflict Resolution](docs/merge_conflicts.md) - Intelligent conflict detection and resolution
+- [Merge & Conflict Resolution](docs/concepts/merging_and_conflicts.md) - **New:** 3-Way Merge with automated base commit detection
+- [Security & Permissions](docs/permissions.md) - **Updated:** Granular asset-level permissions and search filtering
 - [Federated Catalogs](docs/federated_catalogs.md) - Connect to external Iceberg catalogs
 - [Time Travel](docs/features/time_travel.md) - Query historical data states
 - [Warehouse Management](docs/features/warehouse_management.md) - Multi-cloud storage configuration
 - [Audit Logs](docs/features/audit_logs.md) - Track all catalog operations
 - [Entities & Models](docs/features/entities.md) - Core data models (Tenant, Branch, Asset)
+
+### 🚀 Performance
+- **O(1) Asset Lookups**: Optimized memory indexing for instant asset retrieval
+- **Zero-Copy Branching**: Efficient copy-on-write branching mechanism
 
 ### 💾 Backend Storage (Metadata Persistence)
 - [Overview & Comparison](docs/backend_storage/README.md) - Choose the right backend
