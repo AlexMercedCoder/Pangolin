@@ -69,6 +69,7 @@
         class="flex items-center py-1 px-2 rounded-lg cursor-pointer transition-colors duration-150
         {isActive ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/30 dark:text-primary-100' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'}"
         on:click={handleClick}
+        on:contextmenu|preventDefault={(e) => dispatch('contextmenu', { originalEvent: e, node: { label, type, href, icon } })}
         style="padding-left: 0.5rem"
     >
         {#if hasChildren}

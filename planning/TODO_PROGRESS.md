@@ -34,7 +34,21 @@ fn apply_root_tenant_override(req: &mut Request, default_tenant: Uuid) {
 ### High Priority (5 items)
 1. **Granular MANAGE_DISCOVERY Permission Check** - Requires permission system integration
 2. **Permission Filtering in Search** - Add user permission checks to search results
-3. **User CRUD Permission Checks** (3 items) - Get/Update/Delete user verification
+### 5. ✅ User CRUD Permission Checks
+**File**: `user_handlers.rs`
+**Change**: Implemented permission checks for `create_user`, `update_user`, `delete_user`
+**Impact**: Enforced RBAC security for user management
+
+### 6. ✅ RBAC Validation
+**File**: `rbac_integration_test.rs`
+**Change**: Added integration tests to verify permission enforcement for TenantUser
+**Impact**: Verified security constraints
+
+## Remaining Items (15/21) ⏳
+
+### High Priority (2 items)
+1. **Granular MANAGE_DISCOVERY Permission Check** - Requires permission system integration
+2. **Permission Filtering in Search** - Add user permission checks to search results
 
 ### Medium Priority (1 item)
 4. **Asset Lookup Optimization** - Add `get_asset_by_id` method to CatalogStore trait

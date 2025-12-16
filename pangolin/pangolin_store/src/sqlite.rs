@@ -280,11 +280,12 @@ impl CatalogStore for SqliteStore {
         q = q.bind(tenant_id.to_string()).bind(&name);
         
         q.execute(&self.pool).await?;
-        
+
         let new_name = updates.name.unwrap_or(name);
         self.get_warehouse(tenant_id, new_name).await?
             .ok_or_else(|| anyhow::anyhow!("Warehouse not found"))
     }
+        
 
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
         let result = sqlx::query("DELETE FROM warehouses WHERE tenant_id = ? AND name = ?")

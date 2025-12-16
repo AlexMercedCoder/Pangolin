@@ -5,19 +5,18 @@ The permissions system in Pangolin allows for fine-grained access control over r
 ## Concepts
 
 ### Roles
-Arbitrary strings representing a job function.
-- `admin`
-- `data_engineer`
-- `analyst`
-- `viewer`
+Pangolin uses a hybrid RBAC system:
+1.  **System Roles** (Fixed): `Root`, `TenantAdmin`, `TenantUser`.
+2.  **Dynamic Roles** (Custom): User-defined collections of permissions (e.g., `data_engineer`, `analyst`).
 
 ### Actions
-- `read`: View metadata and read data.
-- `write`: Modify metadata and write data (insert/update/delete).
-- `delete`: Delete resources.
-- `create_branch`: Create new branches.
-- `merge`: Merge branches.
-- `manage_users`: Create/Delete users (System level).
+- `READ`: View metadata and read data.
+- `WRITE`: Modify metadata and write data.
+- `DELETE`: Delete resources.
+- `CREATE`: Create new resources.
+- `LIST`: List resources.
+- `MANAGE_ACCESS`: Grant/Revoke permissions.
+- `MANAGE_DISCOVERY`: Manage business metadata.
 
 ### Resources
 Resources are hierarchical strings.

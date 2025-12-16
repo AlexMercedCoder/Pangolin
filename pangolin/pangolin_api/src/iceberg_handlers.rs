@@ -70,10 +70,10 @@ pub struct ListNamespacesResponse {
     namespaces: Vec<Vec<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct CreateNamespaceRequest {
-    namespace: Vec<String>,
-    properties: Option<HashMap<String, String>>,
+    pub namespace: Vec<String>,
+    pub properties: Option<HashMap<String, String>>,
 }
 
 #[derive(Serialize)]

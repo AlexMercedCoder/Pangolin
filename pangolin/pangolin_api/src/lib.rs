@@ -47,7 +47,11 @@ mod iceberg_handlers_test;
 mod signing_handlers_test;
 
 #[cfg(test)]
+#[cfg(test)]
 mod root_auth_tests;
+
+#[cfg(test)]
+mod rbac_integration_test;
 
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
     let cors = CorsLayer::new()

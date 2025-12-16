@@ -43,13 +43,14 @@ Implement full Create, Read, Update, Delete (CRUD) operations for the core entit
 - [ ] **Query**: Simple SQL query interface (Future).
 
 ## 6. Business Catalog & Discovery (New)
-**View**: `/discovery` (Pending)
+## 6. Business Catalog & Discovery (New)
+**View**: `/discovery` (Beta)
 - [x] **Backend**: Search API with discoverable filtering
 - [x] **Backend**: MANAGE_DISCOVERY permission enforcement
 - [x] **Metadata Management**: Business Info tab in Table Details
-- [ ] **Discovery Portal**: Search interface for discoverable datasets
-- [ ] **Access Requests**: User workflow to request access
-- [ ] **Admin Approval**: Tenant Admin approval interface (`/admin/requests`)
+- [x] **Discovery Portal**: Search interface for discoverable datasets
+- [x] **Access Requests**: User workflow to request access
+- [x] **Admin Approval**: Tenant Admin approval interface (`/admin/requests`)
 
 ## Technical Approach
 - Use SvelteKit Loaders for fetching lists.

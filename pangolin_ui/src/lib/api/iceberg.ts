@@ -85,7 +85,7 @@ export const icebergApi = {
     },
 
     async listTables(catalogName: string, namespace: string[]): Promise<TableIdentifier[]> {
-        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
+        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
         const nsPath = namespace.join('.');
         const response = await apiClient.get<ListTablesResponse>(`${baseUrl}/v1/namespaces/${nsPath}/tables`);
         if (response.error) throw new Error(response.error.message);
@@ -93,7 +93,7 @@ export const icebergApi = {
     },
 
     async loadTable(catalogName: string, namespace: string[], table: string): Promise<Table> {
-        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
+        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
         const nsPath = namespace.join('.');
         const response = await apiClient.get<Table>(`${baseUrl}/v1/namespaces/${nsPath}/tables/${table}`);
         if (response.error) throw new Error(response.error.message);
@@ -106,14 +106,14 @@ export const icebergApi = {
     },
 
     async createNamespace(catalogName: string, request: CreateNamespaceRequest): Promise<Namespace> {
-        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
+        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
         const response = await apiClient.post<Namespace>(`${baseUrl}/v1/namespaces`, request);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
     },
 
     async createTable(catalogName: string, namespace: string[], request: CreateTableRequest): Promise<Table> {
-        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
+        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
         const nsPath = namespace.join('.');
         const response = await apiClient.post<Table>(`${baseUrl}/v1/namespaces/${nsPath}/tables`, request);
         if (response.error) throw new Error(response.error.message);
