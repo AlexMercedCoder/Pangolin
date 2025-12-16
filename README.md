@@ -81,9 +81,7 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [Time Travel](docs/features/time_travel.md) - Query historical data states
 - [Warehouse Management](docs/features/warehouse_management.md) - Multi-cloud storage configuration
 - [Audit Logs](docs/features/audit_logs.md) - Track all catalog operations
-- [Audit Logs](docs/features/audit_logs.md) - Track all catalog operations
 - [Entities & Models](docs/features/entities.md) - Core data models (Tenant, Branch, Asset)
-- [Data Explorer](docs/features/data_explorer.md) - **New** Browsing and Creation interface
 
 ### 💾 Backend Storage (Metadata Persistence)
 - [Overview & Comparison](docs/backend_storage/README.md) - Choose the right backend
@@ -98,6 +96,12 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [AWS S3](docs/warehouse/s3.md) - ✅ Production Ready
 - [Azure Blob Storage](docs/warehouse/azure.md) - ✅ Production Ready
 - [Google Cloud Storage](docs/warehouse/gcs.md) - ✅ Production Ready
+
+### 🖥️ Management UI
+- [Overview](docs/ui/overview.md) - Layout, Navigation, and Auth
+- [Administration](docs/ui/administration.md) - Managing Tenants, Users, and Warehouses
+- [Data Explorer](docs/ui/explorer.md) - Browsing and Creating Data Assets
+- [RBAC Management](docs/ui/rbac.md) - Configuring Roles and Permissions
 
 ### 🔌 API Reference
 - [API Overview](docs/api/api_overview.md) - Complete API documentation
