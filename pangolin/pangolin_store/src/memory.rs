@@ -2,13 +2,16 @@ use crate::CatalogStore;
 use crate::signer::{Signer, Credentials};
 use async_trait::async_trait;
 use dashmap::DashMap;
-use pangolin_core::model::{Asset, Branch, Namespace, BranchType, Tenant, Catalog, Warehouse, Commit, Tag};
+use pangolin_core::model::{
+    Catalog, CatalogType, Namespace, Warehouse, Asset, Commit, Branch, Tag, BranchType, Tenant
+};
 use pangolin_core::user::User;
 use pangolin_core::permission::{Role, UserRole, Permission};
 use pangolin_core::audit::AuditLogEntry;
 use uuid::Uuid;
 use anyhow::Result;
 use std::sync::Arc;
+use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest};
 
 use tracing;
 
@@ -763,16 +766,16 @@ impl CatalogStore for MemoryStore {
     }
 
     // Access Request Operations
-    async fn create_access_request(&self, request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+    async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
         self.access_requests.insert(request.id, request);
         Ok(())
     }
 
-    async fn get_access_request(&self, id: Uuid) -> Result<Option<pangolin_core::business_metadata::AccessRequest>> {
+    async fn get_access_request(&self, id: Uuid) -> Result<Option<AccessRequest>> {
         Ok(self.access_requests.get(&id).map(|r| r.value().clone()))
     }
 
-    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
+    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
         let mut requests = Vec::new();
         // Inefficient scan to filter by tenant via asset ownership
         // Ideally AccessRequest should have tenant_id or we should look up differently
@@ -797,7 +800,7 @@ impl CatalogStore for MemoryStore {
         Ok(requests)
     }
 
-    async fn update_access_request(&self, request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+    async fn update_access_request(&self, request: AccessRequest) -> Result<()> {
         self.access_requests.insert(request.id, request);
         Ok(())
     }

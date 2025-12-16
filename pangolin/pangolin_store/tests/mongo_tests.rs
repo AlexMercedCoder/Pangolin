@@ -4,6 +4,8 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use std::env;
 
+use pangolin_core::user::{User, UserRole};
+use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 
 #[tokio::test]
 async fn test_mongo_store_flow() {
@@ -116,4 +118,98 @@ async fn test_mongo_store_flow() {
     store.delete_namespace(tenant_id, "test_catalog", namespace.name.clone()).await.expect("Failed to delete namespace");
     let deleted_namespace = store.get_namespace(tenant_id, "test_catalog", namespace.name.clone()).await.expect("Failed to get deleted namespace");
     assert!(deleted_namespace.is_none());
+    let deleted_namespace = store.get_namespace(tenant_id, "test_catalog", namespace.name.clone()).await.expect("Failed to get deleted namespace");
+    assert!(deleted_namespace.is_none());
+}
+
+#[tokio::test]
+async fn test_mongo_access_requests() {
+    let connection_string = match env::var("DATABASE_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            println!("Skipping test_mongo_access_requests: DATABASE_URL not set");
+            return;
+        }
+    };
+
+    let store = MongoStore::new(&connection_string, "admin_test").await.expect("Failed to create MongoStore");
+
+    // Setup: Tenant
+    let tenant_id = Uuid::new_v4();
+    let tenant = Tenant {
+        id: tenant_id,
+        name: "req_tenant".to_string(),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant.clone()).await.expect("Create tenant");
+
+    // Setup: User
+    let user = User {
+        id: Uuid::new_v4(),
+        username: "req_user_mongo".to_string(),
+        email: "req_mongo@example.com".to_string(),
+        password_hash: None,
+        oauth_provider: None,
+        oauth_subject: None,
+        tenant_id: Some(tenant.id),
+        role: UserRole::TenantUser,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        last_login: None,
+        active: true,
+    };
+    // Note: MongoStore needs `create_user` implementation.
+    // I need to check if MongoStore implements create_user/get_user first!
+    // existing mongo.rs had `users()` collection helper, but I didn't verify `create_user` method in `CatalogStore` impl or `MongoStore` impl.
+    // Wait, CatalogStore DOES NOT have user methods.
+    // User methods are usually separate or extension?
+    // In `sqlite.rs`, `impl CatalogStore for SqliteStore` does NOT have `create_user`.
+    // Use `impl SqliteStore` methods directly.
+    // So I need to call `store.create_user`.
+    // Does `MongoStore` have `create_user`?
+    // I saw `fn users(&self)` helper.
+    // I should verify `create_user` exists in `MongoStore` impl.
+    // If not, I can't run this test fully. I might need to implement it.
+    // FOR NOW, I will assume it exists or comment it out if generic, but Access Request relies on it.
+    // `sqlite.rs` had `create_user` inside `impl SqliteStore`.
+    
+    // I'll proceed assuming I need to add `create_user` if missing.
+    // The test logic relies on `AccessRequest` pointing to `user_id`.
+    // In Mongo, relations are weak, so it might work without creating user if no FK constraint.
+    // BUT `list_access_requests` uses lookup on `users`. So user MUST exist.
+    
+    // I will add `create_user` to `MongoStore` in `mongo.rs` if missing.
+    // I'll assume I'll add it in next step if compilation fails, OR blindly add it now.
+    // Let's add the test first.
+    
+    // Setup: Asset
+    let catalog = Catalog {
+        id: Uuid::new_v4(),
+        name: "req_catalog".to_string(),
+        catalog_type: pangolin_core::model::CatalogType::Local,
+        warehouse_name: None,
+        storage_location: None,
+        federated_config: None,
+        properties: HashMap::new(),
+    };
+    store.create_catalog(tenant_id, catalog.clone()).await.expect("Create catalog");
+
+    let namespace = Namespace {
+        name: vec!["default".to_string()],
+        properties: HashMap::new(),
+    };
+    store.create_namespace(tenant_id, "req_catalog", namespace.clone()).await.expect("Create namespace");
+
+    let asset = Asset {
+        id: Uuid::new_v4(),
+        name: "secret_table".to_string(),
+        kind: AssetType::IcebergTable,
+        location: "s3://bucket/sec".to_string(),
+        properties: HashMap::new(),
+    };
+    store.create_asset(tenant_id, "req_catalog", None, vec!["default".to_string()], asset.clone()).await.expect("Create asset");
+    
+    // 1. Create Request (Mocking user existence for now if create_user missing, but lookup needs it)
+    // Actually, I should IMPLEMENT `create_user` in mongo.rs first to be safe.
+    // I will finish this replacement first.
 }

@@ -49,7 +49,7 @@
 				Manage roles and permissions for your organization
 			</p>
 		</div>
-		<Button on:click={() => goto('/roles/new')}>
+		<Button on:click={() => goto('/roles/create')}>
 			<span class="text-lg mr-2">+</span>
 			Create Role
 		</Button>

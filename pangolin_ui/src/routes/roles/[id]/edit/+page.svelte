@@ -17,25 +17,30 @@
 	let description = '';
 	let errors: Record<string, string> = {};
 
-	$: roleId = $page.params.id;
+	let roleId: string; // Changed to be assigned in loadData
 
 	onMount(async () => {
-		await loadRole();
+		await loadData();
 	});
 
-	async function loadRole() {
-		if (!roleId) return;
+	async function loadData() {
+        roleId = $page.params.id;
+        if (!roleId) {
+             goto('/roles');
+             return;
+        }
 
-		loading = true;
-		try {
-			role = await rolesApi.get(roleId);
+		loading = true; // Keep loading state management
+        try {
+            const fetchedRole = await rolesApi.get(roleId); // Use a temporary variable for the fetched role
+			role = fetchedRole; // Assign to the global 'role' variable
 			name = role.name;
 			description = role.description || '';
 		} catch (error: any) {
 			notifications.error(`Failed to load role: ${error.message}`);
 			goto('/roles');
 		}
-		loading = false;
+		loading = false; // Keep loading state management
 	}
 
 	function validateForm(): boolean {
@@ -69,6 +74,8 @@
 		}
 		submitting = false;
 	}
+
+
 </script>
 
 <svelte:head>

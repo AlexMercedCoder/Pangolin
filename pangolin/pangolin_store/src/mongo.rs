@@ -9,6 +9,9 @@ use mongodb::options::{ClientOptions, ReplaceOptions};
 use pangolin_core::model::{
     Asset, AssetType, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse,
 };
+use pangolin_core::user::{User, UserRole as CoreUserRole, OAuthProvider};
+use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
+use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 use pangolin_core::audit::AuditLogEntry;
 use uuid::Uuid;
 use std::collections::HashMap;
@@ -61,6 +64,26 @@ impl MongoStore {
 
     fn audit_logs(&self) -> Collection<AuditLogEntry> {
         self.db.collection("audit_logs")
+    }
+    
+    fn users(&self) -> Collection<User> {
+        self.db.collection("users")
+    }
+    
+    fn roles(&self) -> Collection<Role> {
+        self.db.collection("roles")
+    }
+    
+    fn user_roles(&self) -> Collection<UserRoleAssignment> {
+        self.db.collection("user_roles")
+    }
+    
+    fn permissions(&self) -> Collection<Permission> {
+        self.db.collection("permissions")
+    }
+
+    fn access_requests(&self) -> Collection<AccessRequest> {
+        self.db.collection("access_requests")
     }
 }
 
@@ -249,7 +272,20 @@ impl CatalogStore for MongoStore {
     }
 
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
-        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": &name };
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": &name }; // For catalog
+        // For children, filter is slightly different (catalog_name property) or similar
+        let child_filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "catalog_name": &name };
+
+        // 1. Tags
+        self.db.collection::<Document>("tags").delete_many(child_filter.clone()).await?;
+        // 2. Branches
+        self.db.collection::<Document>("branches").delete_many(child_filter.clone()).await?;
+        // 3. Assets
+        self.db.collection::<Document>("assets").delete_many(child_filter.clone()).await?;
+        // 4. Namespaces
+        self.db.collection::<Document>("namespaces").delete_many(child_filter.clone()).await?;
+
+        // 5. Catalog
         let result = self.db.collection::<Document>("catalogs").delete_one(filter).await?;
         
         if result.deleted_count == 0 {
@@ -350,6 +386,7 @@ impl CatalogStore for MongoStore {
             "catalog_name": catalog_name,
             "namespace": namespace,
             "branch": branch,
+            "id": to_bson_uuid(asset.id),
             "name": &asset.name,
             "kind": format!("{:?}", asset.kind),
             "location": &asset.location,
@@ -386,11 +423,14 @@ impl CatalogStore for MongoStore {
             
             let properties: HashMap<String, String> = mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;
 
+            let id_bson = d.get("id").ok_or(anyhow::anyhow!("Missing id"))?;
+            let id = from_bson_uuid(id_bson)?;
+
             Ok(Some(Asset {
-                id: Uuid::new_v4(), // Placeholder until schema update
+                id,
                 name: d.get_str("name")?.to_string(),
                 kind,
-                location: d.get_str("location")?.to_string(),
+                location: d.get_str("location").unwrap_or("").to_string(),
                 properties,
             }))
         } else {
@@ -417,16 +457,53 @@ impl CatalogStore for MongoStore {
             };
             
             let properties: HashMap<String, String> = mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;
+            let id = if let Ok(i) = d.get("id").ok_or(anyhow::anyhow!("Missing id")).and_then(|b| from_bson_uuid(b)) {
+                i
+            } else {
+                Uuid::new_v4() // Fallback if old data
+            };
 
             assets.push(Asset {
-                id: Uuid::new_v4(), // Placeholder until schema update
+                id,
                 name: d.get_str("name")?.to_string(),
                 kind,
-                location: d.get_str("location")?.to_string(),
+                location: d.get_str("location").unwrap_or("").to_string(),
                 properties,
             });
         }
         Ok(assets)
+    }
+
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String)>> {
+        let filter = doc! {
+            "tenant_id": to_bson_uuid(tenant_id),
+            "id": to_bson_uuid(asset_id)
+        };
+        let d = self.db.collection::<Document>("assets").find_one(filter).await?;
+        
+        if let Some(d) = d {
+            let catalog_name = d.get_str("catalog_name")?.to_string();
+             let kind_str = d.get_str("kind")?;
+            let kind = match kind_str {
+                "IcebergTable" => AssetType::IcebergTable,
+                "View" => AssetType::View,
+                _ => AssetType::IcebergTable,
+            };
+            
+            let properties: HashMap<String, String> = mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;
+
+            let asset = Asset {
+                id: asset_id,
+                name: d.get_str("name")?.to_string(),
+                kind,
+                location: d.get_str("location").unwrap_or("").to_string(),
+                properties,
+            };
+            
+            Ok(Some((asset, catalog_name)))
+        } else {
+            Ok(None)
+        }
     }
 
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
@@ -691,8 +768,181 @@ impl CatalogStore for MongoStore {
         Ok(events)
     }
 
+     // User Operations
+    async fn create_user(&self, user: User) -> Result<()> {
+        self.users().insert_one(user).await?;
+        Ok(())
+    }
+
+    async fn get_user(&self, user_id: Uuid) -> Result<Option<User>> {
+        let filter = doc! { "id": to_bson_uuid(user_id) };
+        let user = self.users().find_one(filter).await?;
+        Ok(user)
+    }
+
+    async fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
+        let filter = doc! { "username": username };
+        let user = self.users().find_one(filter).await?;
+        Ok(user)
+    }
+
+    async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
+        let filter = if let Some(tid) = tenant_id {
+            doc! { "tenant_id": to_bson_uuid(tid) }
+        } else {
+            doc! {}
+        };
+        let cursor = self.users().find(filter).await?;
+        let users: Vec<User> = cursor.try_collect().await?;
+        Ok(users)
+    }
+
+    async fn update_user(&self, user: User) -> Result<()> {
+        let filter = doc! { "id": to_bson_uuid(user.id) };
+        let update = doc! { "$set": mongodb::bson::to_document(&user)? };
+        self.users().update_one(filter, update).await?;
+        Ok(())
+    }
+
+    async fn delete_user(&self, user_id: Uuid) -> Result<()> {
+        let filter = doc! { "id": to_bson_uuid(user_id) };
+        self.users().delete_one(filter).await?;
+        Ok(())
+    }
+
+    // Role Operations
+    async fn create_role(&self, role: Role) -> Result<()> {
+        self.roles().insert_one(role).await?;
+        Ok(())
+    }
+
+    async fn get_role(&self, role_id: Uuid) -> Result<Option<Role>> {
+        let filter = doc! { "id": to_bson_uuid(role_id) };
+        let role = self.roles().find_one(filter).await?;
+        Ok(role)
+    }
+
+    async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<Role>> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let cursor = self.roles().find(filter).await?;
+        let roles: Vec<Role> = cursor.try_collect().await?;
+        Ok(roles)
+    }
+
+    async fn delete_role(&self, role_id: Uuid) -> Result<()> {
+        let filter = doc! { "id": to_bson_uuid(role_id) };
+        self.roles().delete_one(filter).await?;
+        Ok(())
+    }
+
+    async fn update_role(&self, role: Role) -> Result<()> {
+        let filter = doc! { "id": to_bson_uuid(role.id) };
+        let update = doc! { "$set": mongodb::bson::to_document(&role)? };
+        self.roles().update_one(filter, update).await?;
+        Ok(())
+    }
+
+    async fn assign_role(&self, user_role: UserRoleAssignment) -> Result<()> {
+        self.user_roles().insert_one(user_role).await?;
+        Ok(())
+    }
+
+    async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()> {
+        let filter = doc! { 
+            "user_id": to_bson_uuid(user_id),
+            "role_id": to_bson_uuid(role_id)
+        };
+        self.user_roles().delete_one(filter).await?;
+        Ok(())
+    }
+
+    async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<UserRoleAssignment>> {
+        let filter = doc! { "user_id": to_bson_uuid(user_id) };
+        let cursor = self.user_roles().find(filter).await?;
+        let roles: Vec<UserRoleAssignment> = cursor.try_collect().await?;
+        Ok(roles)
+    }
+
+    // Permission Operations
+    async fn create_permission(&self, permission: Permission) -> Result<()> {
+        self.permissions().insert_one(permission).await?;
+        Ok(())
+    }
+
+    async fn revoke_permission(&self, permission_id: Uuid) -> Result<()> {
+        let filter = doc! { "id": to_bson_uuid(permission_id) };
+        self.permissions().delete_one(filter).await?;
+        Ok(())
+    }
+
+    async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+        let filter = doc! { "user_id": to_bson_uuid(user_id) };
+        let cursor = self.permissions().find(filter).await?;
+        let perms: Vec<Permission> = cursor.try_collect().await?;
+        Ok(perms)
+    }
+
     // Maintenance Operations
     async fn expire_snapshots(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _retention_ms: i64) -> Result<()> {
+        Ok(())
+    }
+
+    // Access Request Operations
+    async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
+        self.access_requests().insert_one(request).await?;
+        Ok(())
+    }
+
+    async fn get_access_request(&self, id: Uuid) -> Result<Option<AccessRequest>> {
+        let filter = doc! { "id": to_bson_uuid(id) };
+        let req = self.access_requests().find_one(filter).await?;
+        Ok(req)
+    }
+
+    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
+        // AccessRequests stored with UserID/AssetID but not TenantID directly?
+        // Struct has: id, user_id, asset_id...
+        // User has tenant_id.
+        // To filter by tenant_id, we need a join (lookup) or we store tenant_id denormalized on AccessRequest?
+        // SQL implementation joins Users.
+        // Mongo: $lookup.
+        
+        // Creating aggregation pipeline:
+        let pipeline = vec![
+            doc! {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "user_id",
+                    "foreignField": "id",
+                    "as": "user"
+                }
+            },
+            doc! { "$unwind": "$user" },
+            doc! { "$match": { "user.tenant_id": to_bson_uuid(tenant_id) } },
+            // Project back to AccessRequest root fields only?
+            // "replaceRoot"? Or simple map.
+            doc! {
+                "$project": {
+                    "user": 0 // remove joined field to match struct
+                }
+            }
+        ];
+
+        let cursor = self.access_requests().aggregate(pipeline).await?;
+        // Cursor returns Documents, need to deserialize.
+        // aggregate returns Cursor<Document>.
+        let docs: Vec<Document> = cursor.try_collect().await?;
+        
+        let mut reqs = Vec::new();
+        for d in docs {
+             reqs.push(mongodb::bson::from_document(d)?);
+        }
+        Ok(reqs)
+    }
+
+    async fn update_access_request(&self, request: AccessRequest) -> Result<()> {
+        let filter = doc! { "id": to_bson_uuid(request.id) };
+        self.access_requests().replace_one(filter, request).await?;
         Ok(())
     }
 
@@ -764,4 +1014,37 @@ fn to_bson_uuid(id: Uuid) -> Bson {
         subtype: BinarySubtype::Generic,
         bytes: id.as_bytes().to_vec(),
     })
+}
+
+fn from_bson_uuid(bson: &Bson) -> Result<Uuid> {
+    match bson {
+        Bson::Binary(Binary { subtype: BinarySubtype::Generic, bytes }) => {
+            Ok(Uuid::from_slice(bytes)?)
+        },
+        _ => Err(anyhow::anyhow!("Invalid UUID bson")),
+    }
+}
+
+impl MongoStore {
+    pub async fn create_user(&self, user: User) -> Result<()> {
+        self.users().insert_one(user).await?;
+        Ok(())
+    }
+
+    pub async fn get_user(&self, id: Uuid) -> Result<Option<User>> {
+        let filter = doc! { "id": to_bson_uuid(id) };
+        let user = self.users().find_one(filter).await?;
+        Ok(user)
+    }
+
+    pub async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
+        let filter = if let Some(tid) = tenant_id {
+            doc! { "tenant_id": to_bson_uuid(tid) }
+        } else {
+            doc! {}
+        };
+        let cursor = self.users().find(filter).await?;
+        let users: Vec<User> = cursor.try_collect().await?;
+        Ok(users)
+    }
 }

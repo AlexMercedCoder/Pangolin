@@ -1,182 +1,132 @@
-```
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { usersApi, type User } from '$lib/api/users';
-  import { permissionsApi, type Permission } from '$lib/api/permissions';
+  import { rolesApi, type Role } from '$lib/api/roles';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
-  import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
-  import EditPermissionsDialog from '$lib/components/dialogs/EditPermissionsDialog.svelte';
-  import EditRolesDialog from '$lib/components/dialogs/EditRolesDialog.svelte';
   import { notifications } from '$lib/stores/notifications';
-  import { getScopeDisplay } from '$lib/api/permissions';
+  import RoleAssignment from '$lib/components/rbac/RoleAssignment.svelte';
 
   let user: User | null = null;
-  let permissions: Permission[] = [];
-  let userRoles: string[] = []; // Role IDs
+  let allRoles: Role[] = [];
+  let assignedRoleIds: string[] = [];
   let loading = true;
-  let showDeleteDialog = false;
-  let showPermissionsDialog = false;
-  let showRolesDialog = false;
-  let deleting = false;
+  let submitting = false;
 
-  const userId = $page.params.id!;
+  onMount(async () => {
+    await loadData();
+  });
 
-  async function loadUser() {
+  async function loadData() {
     loading = true;
     try {
-      user = await usersApi.get(userId);
-      // Load user permissions
-      permissions = await permissionsApi.getUserPermissions(userId);
-      // Note: User roles would need backend support to list
+      const userId = $page.params.id;
+      if (!userId) {
+           goto('/users');
+           return;
+      }
+      // Parallel fetch
+      const [userData, rolesData, userRolesData] = await Promise.all([
+        usersApi.get(userId),
+        rolesApi.list(),
+        rolesApi.getUserRoles(userId)
+      ]);
+      
+      user = userData;
+      allRoles = rolesData;
+      assignedRoleIds = userRolesData.map(r => r.id);
+
     } catch (error: any) {
-      notifications.error('Failed to load user: ' + error.message);
+      notifications.error(`Failed to load data: ${error.message}`);
       goto('/users');
-    } finally {
-      loading = false;
     }
+    loading = false;
+  }
+  
+  async function handleRoleChange(event: CustomEvent) {
+      // Optimistic or manual save?
+      // Since assign/revoke are atomic operations in backend (usually), 
+      // we might want to handle them one by one or batch save.
+      // The component gives us the NEW list of IDs.
+      // We need to calculate diff.
+      const newIds = event.detail.assignedRoleIds as string[];
+      
+      // Calculate added and removed
+      const added = newIds.filter(id => !assignedRoleIds.includes(id));
+      const removed = assignedRoleIds.filter(id => !newIds.includes(id));
+      
+      // Perform updates
+      try {
+          for (const id of added) {
+              await rolesApi.assignToUser(user!.id, id);
+          }
+          for (const id of removed) {
+              await rolesApi.revokeFromUser(user!.id, id);
+          }
+          assignedRoleIds = newIds;
+          notifications.success('Roles updated');
+      } catch (e: any) {
+          notifications.error('Failed to update roles: ' + e.message);
+          // Revert UI? simpler to reload
+          await loadData();
+      }
   }
 
-  function handleEdit() {
-    goto(`/users/${userId}/edit`);
-  }
-
-  async function handleDelete() {
-    deleting = true;
-    try {
-      await usersApi.delete(userId);
-      notifications.success(`User "${user?.username}" deleted successfully`);
-      goto('/users');
-    } catch (error: any) {
-      notifications.error('Failed to delete user: ' + error.message);
-      showDeleteDialog = false;
-    } finally {
-      deleting = false;
-    }
-  }
-
-  onMount(loadUser);
 </script>
 
-<div class="p-6">
-  <div class="max-w-4xl mx-auto">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
-      <div class="flex items-center gap-4">
-        <Button variant="ghost" on:click={() => goto('/users')}>
-          <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Users
-        </Button>
-        {#if user}
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-            {user.username}
-          </h1>
-        {/if}
-      </div>
+<svelte:head>
+  <title>User Details - Pangolin</title>
+</svelte:head>
 
-      {#if user}
-        <div class="flex gap-2">
-          <Button variant="secondary" on:click={handleEdit}>
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Edit
-          </Button>
-          <Button variant="danger" on:click={() => showDeleteDialog = true}>
-            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            Delete
-          </Button>
+<div class="max-w-6xl mx-auto space-y-6">
+  <div class="flex items-center justify-between">
+    <h1 class="text-3xl font-bold">User Details</h1>
+    {#if user}
+        <div>
+            <span class="badge variant-filled-primary mr-2">{user.role}</span>
         </div>
-      {/if}
-    </div>
-
-    {#if loading}
-      <div class="flex justify-center py-12">
-        <div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    {:else if user}
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Account Details</h3>
-            <dl class="space-y-4">
-              <div>
-                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Username</dt>
-                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{user.username}</dd>
-              </div>
-              <div>
-                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Email</dt>
-                <dd class="mt-1 text-sm text-gray-900 dark:text-white">{user.email}</dd>
-              </div>
-              <div>
-                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Role</dt>
-                <dd class="mt-1">
-                  <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                    {user.role === 'Root' ? 'bg-purple-100 text-purple-800' : 
-                     user.role === 'TenantAdmin' ? 'bg-blue-100 text-blue-800' : 
-                     'bg-green-100 text-green-800'}">
-                    {user.role}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">User ID</dt>
-                <dd class="mt-1 text-sm font-mono text-gray-900 dark:text-white">{user.id}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <!-- Tenant & System Info -->
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Organization & System</h3>
-            <dl class="space-y-4">
-              <div>
-                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Tenant</dt>
-                <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                  {#if user.tenant_name}
-                    <a href="/tenants/{user.tenant_id}" class="text-primary-600 hover:underline">
-                      {user.tenant_name}
-                    </a>
-                  {:else}
-                    <span class="text-gray-400">System / N/A</span>
-                  {/if}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Created At</dt>
-                <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                  {new Date(user.created_at).toLocaleString()}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Last Login</dt>
-                <dd class="mt-1 text-sm text-gray-900 dark:text-white">
-                  {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-      </div>
-    {:else}
-      <div class="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-        <p class="text-gray-500 dark:text-gray-400">User not found</p>
-      </div>
     {/if}
   </div>
-</div>
 
-<ConfirmDialog
-  bind:open={showDeleteDialog}
-  title="Delete User"
-  message="Are you sure you want to delete this user? This action cannot be undone."
-  variant="danger"
-  confirmText="Delete User"
-  loading={deleting}
-  on:confirm={handleDelete}
-  on:cancel={() => showDeleteDialog = false}
-/>
+  {#if loading}
+    <div class="flex justify-center p-8">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+    </div>
+  {:else if user}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Sidebar / Info Tests -->
+        <div class="lg:col-span-1 space-y-6">
+            <Card title="Profile">
+                <div class="space-y-4">
+                    <div>
+                        <label class="label text-sm text-surface-400">Username</label>
+                        <div class="font-medium">{user.username}</div>
+                    </div>
+                    <div>
+                        <label class="label text-sm text-surface-400">Email</label>
+                        <div class="font-medium">{user.email}</div>
+                    </div>
+                </div>
+            </Card>
+        </div>
+
+        <!-- Main Content / Roles -->
+        <div class="lg:col-span-2 space-y-6">
+            <Card title="Role Assignment">
+                <p class="text-sm text-surface-400 mb-4">
+                    Assign custom roles to this user. System roles (e.g. TenantAdmin) carry implied permissions.
+                </p>
+                <RoleAssignment 
+                    availableRoles={allRoles} 
+                    assignedRoleIds={assignedRoleIds}
+                    on:change={handleRoleChange}
+                />
+            </Card>
+        </div>
+    </div>
+  {:else}
+    <div class="alert variant-soft-error">User not found</div>
+  {/if}
+</div>

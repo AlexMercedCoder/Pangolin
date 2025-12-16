@@ -9,9 +9,11 @@ export interface StorageConfig {
 	account_name?: string;
 	account_key?: string;
 	service_account_json?: string;
-	// AWS
+	// AWS / MinIO
 	role_arn?: string;
 	external_id?: string;
+	access_key_id?: string;
+	secret_access_key?: string;
 	// Azure
 	tenant_id?: string;
 	client_id?: string;

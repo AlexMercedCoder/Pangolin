@@ -1,192 +1,203 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import Card from '$lib/components/ui/Card.svelte';
-	import Button from '$lib/components/ui/Button.svelte';
-	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
-	import EditPermissionsDialog from '$lib/components/dialogs/EditPermissionsDialog.svelte';
-	import { rolesApi, type Role } from '$lib/api/roles';
-	import { permissionsApi, type Permission, getScopeDisplay } from '$lib/api/permissions';
-	import { usersApi } from '$lib/api/users';
-	import { notifications } from '$lib/stores/notifications';
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  import { rolesApi, type Role } from '$lib/api/roles';
+  import Button from '$lib/components/ui/Button.svelte';
+  import Card from '$lib/components/ui/Card.svelte';
+  import { notifications } from '$lib/stores/notifications';
+  import PermissionBuilder from '$lib/components/rbac/PermissionBuilder.svelte';
+  import type { ScopeType, ActionType } from '$lib/components/rbac/PermissionBuilder.svelte';
 
-	let role: Role | null = null;
-	let permissions: Permission[] = [];
-	let users: any[] = [];
-	let loading = true;
-	let showDeleteDialog = false;
-	let showPermissionsDialog = false;
-	let deleting = false;
+  let role: Role | null = null;
+  let loading = true;
+  let submitting = false;
 
-	$: roleId = $page.params.id;
+  // Edit State
+  let name = '';
+  let description = '';
+  let permissions: { scope: { type: ScopeType, id?: string }, actions: ActionType[] }[] = [];
 
-	onMount(async () => {
-		await loadRole();
-		await loadUsers();
-	});
+  // Builder State
+  let currentScope: { type: ScopeType, id?: string } = { type: 'Tenant' };
+  let currentActions: ActionType[] = [];
 
-	async function loadRole() {
-		if (!roleId) return;
+  onMount(async () => {
+    await loadRole();
+  });
 
-		loading = true;
-		try {
-			role = await rolesApi.get(roleId);
-			// Note: Backend doesn't have role-specific permissions endpoint
-			// For now, we'll show this is a placeholder for future enhancement
-		} catch (error: any) {
-			notifications.error(`Failed to load role: ${error.message}`);
-			goto('/roles');
-		}
-		loading = false;
-	}
+  async function loadRole() {
+    loading = true;
+    try {
+      const id = $page.params.id;
+      role = await rolesApi.get(id);
+      name = role.name;
+      description = role.description || '';
+      // Parse permissions if they come as object from API (Role interface has any[])
+      // In create we sent JSON string. The API get likely returns objects or the string.
+      // Assuming API returns parsed JSON array of objects matching our structure.
+      if (Array.isArray(role.permissions)) {
+        permissions = role.permissions;
+      } else if (typeof role.permissions === 'string') {
+          try {
+              permissions = JSON.parse(role.permissions);
+          } catch (e) {
+              permissions = [];
+          }
+      }
+    } catch (error: any) {
+      notifications.error(`Failed to load role: ${error.message}`);
+      goto('/roles');
+    }
+    loading = false;
+  }
 
-	async function loadUsers() {
-		try {
-			const allUsers = await usersApi.list();
-			// Filter users by role (this would need backend support)
-			users = allUsers; // Placeholder
-		} catch (error: any) {
-			console.error('Failed to load users:', error);
-		}
-	}
+  function handlePermissionChange(event: CustomEvent) {
+    currentScope = event.detail.scope;
+    currentActions = event.detail.actions;
+  }
 
-	async function handleDelete() {
-		if (!roleId) return;
+  function addPermission() {
+    if (currentActions.length === 0) {
+      notifications.error('Please select at least one action.');
+      return;
+    }
+    permissions = [...permissions, {
+      scope: { ...currentScope },
+      actions: [...currentActions]
+    }];
+    currentActions = [];
+    notifications.success('Permission added');
+  }
 
-		deleting = true;
-		try {
-			await rolesApi.delete(roleId);
-			notifications.success(`Role "${role?.name}" deleted successfully`);
-			goto('/roles');
-		} catch (error: any) {
-			notifications.error(`Failed to delete role: ${error.message}`);
-		}
-		deleting = false;
-	}
+  function removePermission(index: number) {
+    permissions = permissions.filter((_, i) => i !== index);
+  }
 
-	function handlePermissionsUpdated() {
-		showPermissionsDialog = false;
-		notifications.success('Permissions updated successfully');
-	}
+  async function handleSave() {
+    if (!role) return;
+    submitting = true;
+    try {
+      await rolesApi.update(role.id, {
+        name,
+        description,
+        permissions: JSON.stringify(permissions)
+      });
+      notifications.success('Role updated successfully');
+    } catch (error: any) {
+      notifications.error(`Failed to update role: ${error.message}`);
+    }
+    submitting = false;
+  }
+
+  async function handleDelete() {
+      if (!role) return;
+      if (!confirm('Are you sure you want to delete this role? This cannot be undone.')) return;
+      
+      try {
+          await rolesApi.delete(role.id);
+          notifications.success('Role deleted');
+          goto('/roles');
+      } catch (error: any) {
+          notifications.error(`Failed to delete role: ${error.message}`);
+      }
+  }
 </script>
 
 <svelte:head>
-	<title>{role?.name || 'Role'} - Pangolin</title>
+  <title>Edit Role - Pangolin</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<!-- Header -->
-	<div class="flex items-center justify-between">
-		<div>
-			<div class="flex items-center gap-3">
-				<button
-					on:click={() => goto('/roles')}
-					class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-				>
-					← Back
-				</button>
-				<h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-					{role?.name || 'Loading...'}
-				</h1>
-			</div>
-			<p class="mt-2 text-gray-600 dark:text-gray-400">Role details and permissions</p>
-		</div>
-		<div class="flex items-center gap-3">
-			<Button on:click={() => (showPermissionsDialog = true)} disabled={loading}>
-				Edit Permissions
-			</Button>
-			<Button on:click={() => goto(`/roles/${roleId}/edit`)} disabled={loading}>
-				Edit Role
-			</Button>
-			<Button variant="error" on:click={() => (showDeleteDialog = true)} disabled={loading}>
-				Delete Role
-			</Button>
-		</div>
-	</div>
+<div class="max-w-4xl mx-auto space-y-6">
+  <div class="flex items-center justify-between">
+    <h1 class="text-3xl font-bold">Edit Role</h1>
+    {#if role}
+      <p class="text-surface-400 font-mono text-sm">ID: {role.id}</p>
+    {/if}
+  </div>
 
-	{#if loading}
-		<Card>
-			<div class="flex items-center justify-center py-12">
-				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
-			</div>
-		</Card>
-	{:else if role}
-		<!-- Details Card -->
-		<Card>
-			<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Details</h3>
-			<dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-				<div>
-					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">ID</dt>
-					<dd class="mt-1 text-sm text-gray-900 dark:text-white font-mono">{role.id}</dd>
-				</div>
-				<div>
-					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Name</dt>
-					<dd class="mt-1 text-sm text-gray-900 dark:text-white">{role.name}</dd>
-				</div>
-				{#if role.description}
-					<div class="md:col-span-2">
-						<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</dt>
-						<dd class="mt-1 text-sm text-gray-900 dark:text-white">{role.description}</dd>
-					</div>
-				{/if}
-				<div>
-					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Created</dt>
-					<dd class="mt-1 text-sm text-gray-900 dark:text-white">
-						{new Date(role.created_at).toLocaleString()}
-					</dd>
-				</div>
-			</dl>
-		</Card>
+  {#if loading}
+    <div class="flex justify-center p-8">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+    </div>
+  {:else if role}
+    <Card title="Role Details">
+      <div class="space-y-4">
+        <div>
+          <label class="label mb-1">Role Name</label>
+          <input 
+              type="text" 
+              class="input w-full" 
+              bind:value={name} 
+          />
+        </div>
+        <div>
+          <label class="label mb-1">Description</label>
+          <textarea 
+              class="textarea w-full" 
+              bind:value={description} 
+          ></textarea>
+        </div>
+      </div>
+    </Card>
 
-		<!-- Permissions Card -->
-		<Card>
-			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Permissions</h3>
-				<Button size="sm" on:click={() => (showPermissionsDialog = true)}>
-					Add Permission
-				</Button>
-			</div>
-			<div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-				<p class="text-sm text-blue-800 dark:text-blue-200">
-					<strong>Note:</strong> Role-based permissions are managed through the permission matrix.
-					Click "Edit Permissions" to grant or revoke permissions for this role.
-				</p>
-			</div>
-		</Card>
+    <Card title="Manage Permissions">
+      <div class="space-y-6">
+        <PermissionBuilder 
+          scope={currentScope} 
+          actions={currentActions} 
+          on:change={handlePermissionChange} 
+        />
+        <div class="flex justify-end">
+          <Button variant="secondary" on:click={addPermission}>
+            Add Permission
+          </Button>
+        </div>
 
-		<!-- Users with this Role -->
-		<Card>
-			<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-				Users with this Role
-			</h3>
-			<div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
-				<p class="text-sm text-yellow-800 dark:text-yellow-200">
-					User-role assignment tracking will be available in a future update.
-				</p>
-			</div>
-		</Card>
-	{/if}
+        <div class="border-t border-surface-600 pt-4">
+          <h3 class="font-bold mb-2">Current Permissions</h3>
+          {#if permissions.length === 0}
+              <p class="text-surface-400 italic text-sm">No permissions assigned.</p>
+          {:else}
+              <div class="space-y-2">
+                  {#each permissions as perm, i}
+                      <div class="p-3 bg-surface-700 rounded flex justify-between items-center">
+                          <div>
+                              <span class="font-mono font-bold text-primary-400">{perm.scope.type}</span>
+                              {#if perm.scope.id} 
+                                  <span class="mx-1 text-surface-400">/</span> 
+                                  <span class="font-mono text-secondary-400">{perm.scope.id}</span> 
+                              {/if}
+                              <div class="flex flex-wrap gap-1 mt-1">
+                                  {#each perm.actions as action}
+                                      <span class="badge variant-soft-secondary text-xs">{action}</span>
+                                  {/each}
+                              </div>
+                          </div>
+                          <button 
+                              class="btn-icon btn-icon-sm variant-soft-error"
+                              on:click={() => removePermission(i)}
+                          >
+                              ✕
+                          </button>
+                      </div>
+                  {/each}
+              </div>
+          {/if}
+        </div>
+      </div>
+    </Card>
+
+    <div class="flex justify-between">
+        <Button variant="error" on:click={handleDelete}>Delete Role</Button>
+        <div class="flex gap-2">
+            <Button variant="secondary" on:click={() => goto('/roles')}>Cancel</Button>
+            <Button on:click={handleSave} disabled={submitting}>
+                {submitting ? 'Saving...' : 'Save Changes'}
+            </Button>
+        </div>
+    </div>
+  {:else}
+    <div class="alert variant-soft-error">Role not found</div>
+  {/if}
 </div>
-
-<!-- Delete Confirmation Dialog -->
-<ConfirmDialog
-	bind:open={showDeleteDialog}
-	title="Delete Role"
-	message="Are you sure you want to delete this role? This will remove all associated permissions and user assignments."
-	confirmText={deleting ? 'Deleting...' : 'Delete'}
-	variant="danger"
-	onConfirm={handleDelete}
-	loading={deleting}
-/>
-
-<!-- Edit Permissions Dialog -->
-{#if role}
-	<EditPermissionsDialog
-		bind:open={showPermissionsDialog}
-		entityType="role"
-		entityId={role.id}
-		entityName={role.name}
-		on:updated={handlePermissionsUpdated}
-	/>
-{/if}

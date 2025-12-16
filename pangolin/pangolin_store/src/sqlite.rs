@@ -1,12 +1,16 @@
 use async_trait::async_trait;
 use crate::CatalogStore;
 use pangolin_core::model::*;
+use pangolin_core::user::{User, UserRole, OAuthProvider};
+use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
 use pangolin_core::audit::AuditLogEntry;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
 use std::collections::HashMap;
 use uuid::Uuid;
 use anyhow::Result;
+use chrono::{DateTime, Utc, TimeZone};
+use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 
 use crate::signer::Signer;
 
@@ -409,8 +413,35 @@ impl CatalogStore for SqliteStore {
     }
 
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        // SQLite supports ON DELETE CASCADE if Foreign Keys are enabled.
+        // I enabled them in `new()`, so standard deletion should actually work for children.
+        // BUT my schema for `tags`, `branches`, etc. relies on keys.
+        // Schema: FOREIGN KEY (tenant_id) REFERENCES tenants(id) -> This cascades tenant deletion.
+        // Wait, `catalogs` doesn't have child referencing it by FK in `branches` implementation in schema?
+        // In schema: `branches` PK (tenant_id, catalog_name, name). No direct FK to `catalogs`.
+        // So I must delete cascadingly manually.
+        
+        let tid = tenant_id.to_string();
+        
+        // 1. Tags
+        sqlx::query("DELETE FROM tags WHERE tenant_id = ? AND catalog_name = ?")
+            .bind(&tid).bind(&name).execute(&self.pool).await?;
+            
+        // 2. Branches
+        sqlx::query("DELETE FROM branches WHERE tenant_id = ? AND catalog_name = ?")
+            .bind(&tid).bind(&name).execute(&self.pool).await?;
+
+        // 3. Assets
+        sqlx::query("DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ?")
+            .bind(&tid).bind(&name).execute(&self.pool).await?;
+
+        // 4. Namespaces
+        sqlx::query("DELETE FROM namespaces WHERE tenant_id = ? AND catalog_name = ?")
+            .bind(&tid).bind(&name).execute(&self.pool).await?;
+
+        // 5. Catalog
         let result = sqlx::query("DELETE FROM catalogs WHERE tenant_id = ? AND name = ?")
-            .bind(tenant_id.to_string())
+            .bind(&tid)
             .bind(&name)
             .execute(&self.pool)
             .await?;
@@ -502,7 +533,7 @@ impl CatalogStore for SqliteStore {
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
         let namespace_path = serde_json::to_string(&namespace)?;
         sqlx::query("INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, asset_type, metadata_location, properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-            .bind(Uuid::new_v4().to_string())
+            .bind(asset.id.to_string())
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
@@ -540,6 +571,36 @@ impl CatalogStore for SqliteStore {
                 location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
                 properties: serde_json::from_str(&row.get::<String, _>("properties")).unwrap_or_default(),
             }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String)>> {
+        let row = sqlx::query("SELECT id, name, catalog_name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND id = ?")
+            .bind(tenant_id.to_string())
+            .bind(asset_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            let catalog_name: String = row.get("catalog_name");
+            let asset_type_str: String = row.get("asset_type");
+            let kind = match asset_type_str.as_str() {
+                "IcebergTable" => AssetType::IcebergTable,
+                "View" => AssetType::View,
+                _ => AssetType::IcebergTable,
+            };
+            
+            let asset = Asset {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                name: row.get("name"),
+                kind,
+                location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
+                properties: serde_json::from_str(&row.get::<String, _>("properties")).unwrap_or_default(),
+            };
+            
+            Ok(Some((asset, catalog_name)))
         } else {
             Ok(None)
         }
@@ -655,8 +716,259 @@ impl CatalogStore for SqliteStore {
         Ok(())
     }
 
-    async fn list_audit_events(&self, _tenant_id: Uuid) -> Result<Vec<AuditLogEntry>> {
-        Ok(Vec::new())
+    async fn list_audit_events(&self, tenant_id: Uuid) -> Result<Vec<AuditLogEntry>> {
+        let rows = sqlx::query("SELECT id, tenant_id, timestamp, actor, action, resource, details FROM audit_logs WHERE tenant_id = ? ORDER BY timestamp DESC LIMIT 100")
+            .bind(tenant_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+            
+        let mut events = Vec::new();
+        for row in rows {
+            let ts_millis: i64 = row.get("timestamp");
+            events.push(AuditLogEntry {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                tenant_id,
+                timestamp: Utc.timestamp_millis_opt(ts_millis).single().unwrap_or_default(),
+                actor: row.get("actor"),
+                action: row.get("action"),
+                resource: row.get("resource"),
+                details: serde_json::from_str(&row.get::<String, _>("details")).unwrap_or_default(),
+            });
+        }
+        Ok(events)
+    }
+
+    // User Operations
+    async fn create_user(&self, user: User) -> Result<()> {
+        sqlx::query("INSERT INTO users (id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            .bind(user.id.to_string())
+            .bind(user.username)
+            .bind(user.email)
+            .bind(user.password_hash)
+            .bind(user.oauth_provider.map(|p| format!("{:?}", p).to_lowercase()))
+            .bind(user.oauth_subject)
+            .bind(user.tenant_id.map(|u| u.to_string()))
+            .bind(format!("{:?}", user.role))
+            .bind(user.created_at.timestamp_millis())
+            .bind(user.updated_at.timestamp_millis())
+            .bind(user.last_login.map(|t| t.timestamp_millis()))
+            .bind(if user.active { 1 } else { 0 })
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_user(&self, user_id: Uuid) -> Result<Option<User>> {
+        let row = sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE id = ?")
+            .bind(user_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
+            
+        self.row_to_user(row)
+    }
+
+    async fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
+        let row = sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE username = ?")
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await?;
+            
+        self.row_to_user(row)
+    }
+
+    async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
+        let rows = if let Some(tid) = tenant_id {
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE tenant_id = ?")
+                .bind(tid.to_string())
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users")
+                .fetch_all(&self.pool)
+                .await?
+        };
+        
+        let mut users = Vec::new();
+        for row in rows {
+            if let Some(user) = self.row_to_user(Some(row))? {
+                users.push(user);
+            }
+        }
+        Ok(users)
+    }
+
+    async fn update_user(&self, user: User) -> Result<()> {
+        sqlx::query("UPDATE users SET username = ?, email = ?, password_hash = ?, role = ?, active = ?, updated_at = ?, last_login = ? WHERE id = ?")
+            .bind(user.username)
+            .bind(user.email)
+            .bind(user.password_hash)
+            .bind(format!("{:?}", user.role))
+            .bind(if user.active { 1 } else { 0 })
+            .bind(Utc::now().timestamp_millis())
+            .bind(user.last_login.map(|t| t.timestamp_millis()))
+            .bind(user.id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn delete_user(&self, user_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM users WHERE id = ?").bind(user_id.to_string()).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    // Role Operations
+    async fn create_role(&self, role: Role) -> Result<()> {
+        sqlx::query("INSERT INTO roles (id, tenant_id, name, description, permissions, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+            .bind(role.id.to_string())
+            .bind(role.tenant_id.to_string())
+            .bind(role.name)
+            .bind(role.description)
+            .bind(serde_json::to_string(&role.permissions)?)
+            .bind(role.created_by.to_string())
+            .bind(role.created_at.timestamp_millis())
+            .bind(role.updated_at.timestamp_millis())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_role(&self, role_id: Uuid) -> Result<Option<Role>> {
+        let row = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE id = ?")
+            .bind(role_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
+        
+        if let Some(row) = row {
+            Ok(Some(Role {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
+                name: row.get("name"),
+                description: row.get("description"),
+                permissions: serde_json::from_str(&row.get::<String, _>("permissions"))?,
+                created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
+                created_at: Utc.timestamp_millis_opt(row.get("created_at")).single().unwrap_or_default(),
+                updated_at: Utc.timestamp_millis_opt(row.get("updated_at")).single().unwrap_or_default(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<Role>> {
+        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = ?")
+            .bind(tenant_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+            
+        let mut roles = Vec::new();
+        for row in rows {
+            roles.push(Role {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
+                name: row.get("name"),
+                description: row.get("description"),
+                permissions: serde_json::from_str(&row.get::<String, _>("permissions"))?,
+                created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
+                created_at: Utc.timestamp_millis_opt(row.get("created_at")).single().unwrap_or_default(),
+                updated_at: Utc.timestamp_millis_opt(row.get("updated_at")).single().unwrap_or_default(),
+            });
+        }
+        Ok(roles)
+    }
+
+    async fn delete_role(&self, role_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM roles WHERE id = ?").bind(role_id.to_string()).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    async fn update_role(&self, role: Role) -> Result<()> {
+        sqlx::query("UPDATE roles SET name = ?, description = ?, permissions = ?, updated_at = ? WHERE id = ?")
+            .bind(role.name)
+            .bind(role.description)
+            .bind(serde_json::to_string(&role.permissions)?)
+            .bind(Utc::now().timestamp_millis())
+            .bind(role.id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn assign_role(&self, user_role: UserRoleAssignment) -> Result<()> {
+        sqlx::query("INSERT INTO user_roles (user_id, role_id, assigned_by, assigned_at) VALUES (?, ?, ?, ?)")
+            .bind(user_role.user_id.to_string())
+            .bind(user_role.role_id.to_string())
+            .bind(user_role.assigned_by.to_string())
+            .bind(user_role.assigned_at.timestamp_millis())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?")
+            .bind(user_id.to_string())
+            .bind(role_id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<UserRoleAssignment>> {
+        let rows = sqlx::query("SELECT user_id, role_id, assigned_by, assigned_at FROM user_roles WHERE user_id = ?")
+            .bind(user_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+        
+        let mut roles = Vec::new();
+        for row in rows {
+            roles.push(UserRoleAssignment {
+                user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
+                role_id: Uuid::parse_str(&row.get::<String, _>("role_id"))?,
+                assigned_by: Uuid::parse_str(&row.get::<String, _>("assigned_by"))?,
+                assigned_at: Utc.timestamp_millis_opt(row.get("assigned_at")).single().unwrap_or_default(),
+            });
+        }
+        Ok(roles)
+    }
+
+    // Permission Operations
+    async fn create_permission(&self, permission: Permission) -> Result<()> {
+        sqlx::query("INSERT INTO permissions (id, user_id, scope, actions, granted_by, granted_at) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(permission.id.to_string())
+            .bind(permission.user_id.to_string())
+            .bind(serde_json::to_string(&permission.scope)?)
+            .bind(serde_json::to_string(&permission.actions)?)
+            .bind(permission.granted_by.to_string())
+            .bind(permission.granted_at.timestamp_millis())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn revoke_permission(&self, permission_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM permissions WHERE id = ?").bind(permission_id.to_string()).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+        let rows = sqlx::query("SELECT id, user_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = ?")
+            .bind(user_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+            
+        let mut perms = Vec::new();
+        for row in rows {
+            perms.push(Permission {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
+                scope: serde_json::from_str(&row.get::<String, _>("scope"))?,
+                actions: serde_json::from_str(&row.get::<String, _>("actions"))?,
+                granted_by: Uuid::parse_str(&row.get::<String, _>("granted_by"))?,
+                granted_at: Utc.timestamp_millis_opt(row.get("granted_at")).single().unwrap_or_default(),
+            });
+        }
+        Ok(perms)
     }
 
     async fn read_file(&self, _path: &str) -> Result<Vec<u8>> {
@@ -674,4 +986,134 @@ impl CatalogStore for SqliteStore {
     async fn remove_orphan_files(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _older_than_ms: i64) -> Result<()> {
         Ok(())
     }
+
+    // Access Request Operations
+    async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO access_requests (id, user_id, asset_id, reason, requested_at, status, reviewed_by, reviewed_at, review_comment) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        )
+        .bind(request.id.to_string())
+        .bind(request.user_id.to_string())
+        .bind(request.asset_id.to_string())
+        .bind(request.reason)
+        .bind(request.requested_at.timestamp_millis())
+        .bind(format!("{:?}", request.status)) // Enum to string
+        .bind(request.reviewed_by.map(|u| u.to_string()))
+        .bind(request.reviewed_at.map(|t| t.timestamp_millis()))
+        .bind(request.review_comment)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_access_request(&self, id: Uuid) -> Result<Option<AccessRequest>> {
+        let row = sqlx::query("SELECT * FROM access_requests WHERE id = ?")
+            .bind(id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            Ok(Some(self.row_to_access_request(row)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
+        // Access requests link to assets which link to catalogs/namespaces/tenants.
+        // Or users which link to tenants.
+        // Since schema doesn't have tenant_id on access_requests directly, we join via user_id or asset_id.
+        // User links to tenant_id.
+        let rows = sqlx::query(
+            "SELECT ar.* FROM access_requests ar
+             JOIN users u ON ar.user_id = u.id
+             WHERE u.tenant_id = ?"
+        )
+        .bind(tenant_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let mut requests = Vec::new();
+        for row in rows {
+            requests.push(self.row_to_access_request(row)?);
+        }
+        Ok(requests)
+    }
+
+    async fn update_access_request(&self, request: AccessRequest) -> Result<()> {
+        sqlx::query(
+            "UPDATE access_requests SET status = ?, reviewed_by = ?, reviewed_at = ?, review_comment = ? WHERE id = ?"
+        )
+        .bind(format!("{:?}", request.status))
+        .bind(request.reviewed_by.map(|u| u.to_string()))
+        .bind(request.reviewed_at.map(|t| t.timestamp_millis()))
+        .bind(request.review_comment)
+        .bind(request.id.to_string())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
+
+impl SqliteStore {
+    fn row_to_access_request(&self, row: sqlx::sqlite::SqliteRow) -> Result<AccessRequest> {
+        let status_str: String = row.get("status");
+        let status = match status_str.as_str() {
+            "Pending" => RequestStatus::Pending,
+            "Approved" => RequestStatus::Approved,
+            "Rejected" => RequestStatus::Rejected,
+            _ => RequestStatus::Pending, 
+        };
+
+        Ok(AccessRequest {
+            id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+            user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
+            asset_id: Uuid::parse_str(&row.get::<String, _>("asset_id"))?,
+            reason: row.get("reason"),
+            requested_at: Utc.timestamp_millis_opt(row.get("requested_at")).single().unwrap_or_default(),
+            status,
+            reviewed_by: row.get::<Option<String>, _>("reviewed_by").map(|s| Uuid::parse_str(&s)).transpose()?,
+            reviewed_at: row.get::<Option<i64>, _>("reviewed_at").map(|t| Utc.timestamp_millis_opt(t).single().unwrap_or_default()),
+            review_comment: row.get("review_comment"),
+        })
+    }
+
+    fn row_to_user(&self, row: Option<sqlx::sqlite::SqliteRow>) -> Result<Option<User>> {
+        if let Some(row) = row {
+            let role_str: String = row.get("role");
+            let role = match role_str.as_str() {
+                "Root" => UserRole::Root,
+                "TenantAdmin" => UserRole::TenantAdmin,
+                _ => UserRole::TenantUser,
+            };
+
+            let oauth_provider_str: Option<String> = row.get("oauth_provider");
+            let oauth_provider = match oauth_provider_str.as_deref() {
+                Some("google") => Some(OAuthProvider::Google),
+                Some("microsoft") => Some(OAuthProvider::Microsoft),
+                Some("github") => Some(OAuthProvider::GitHub),
+                Some("okta") => Some(OAuthProvider::Okta),
+                _ => None,
+            };
+
+            Ok(Some(User {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                username: row.get("username"),
+                email: row.get("email"),
+                password_hash: row.get("password_hash"),
+                oauth_provider,
+                oauth_subject: row.get("oauth_subject"),
+                tenant_id: row.get::<Option<String>, _>("tenant_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                role,
+                created_at: Utc.timestamp_millis_opt(row.get("created_at")).single().unwrap_or_default(),
+                updated_at: Utc.timestamp_millis_opt(row.get("updated_at")).single().unwrap_or_default(),
+                last_login: row.get::<Option<i64>, _>("last_login").map(|t| Utc.timestamp_millis_opt(t).single().unwrap_or_default()),
+                active: row.get::<i32, _>("active") != 0,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+}
+

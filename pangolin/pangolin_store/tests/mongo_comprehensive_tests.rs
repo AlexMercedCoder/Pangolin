@@ -216,3 +216,135 @@ async fn test_mongo_multi_tenant_isolation() {
     let tenant1_warehouses = store.list_warehouses(tenant1_id).await.unwrap();
     assert_eq!(tenant1_warehouses.len(), 1);
 }
+
+#[tokio::test]
+async fn test_mongo_catalog_delete_cascade() {
+    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME).await.expect("Failed to create MongoStore");
+    let tenant_id = Uuid::new_v4();
+    let tenant = Tenant {
+        id: tenant_id,
+        name: format!("test_tenant_{}", Uuid::new_v4()),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant.clone()).await.expect("Failed to create tenant");
+
+    // Create Catalog
+    let catalog_name = format!("test_catalog_{}", Uuid::new_v4());
+    let catalog = Catalog {
+        id: Uuid::new_v4(),
+        name: catalog_name.clone(),
+        catalog_type: CatalogType::Local,
+        warehouse_name: None,
+        storage_location: None,
+        federated_config: None,
+        properties: HashMap::new(),
+    };
+    store.create_catalog(tenant_id, catalog.clone()).await.expect("Failed");
+
+    // Create Namespace
+    let ns = Namespace { name: vec!["db".to_string()], properties: HashMap::new() };
+    store.create_namespace(tenant_id, &catalog_name, ns.clone()).await.expect("Failed");
+
+    // Create Asset
+    let asset = Asset {
+        id: Uuid::new_v4(),
+        name: "tbl".to_string(),
+        kind: AssetType::IcebergTable,
+        location: "s3://loc".to_string(),
+        properties: HashMap::new(),
+    };
+    store.create_asset(tenant_id, &catalog_name, None, vec!["db".to_string()], asset.clone()).await.expect("Failed");
+
+    // Verify existence
+    assert_eq!(store.list_namespaces(tenant_id, &catalog_name, None).await.unwrap().len(), 1);
+    assert_eq!(store.list_assets(tenant_id, &catalog_name, None, vec!["db".to_string()]).await.unwrap().len(), 1);
+
+    // Delete Catalog
+    store.delete_catalog(tenant_id, catalog_name.clone()).await.expect("Failed to delete catalog");
+
+    // Verify Cascading Delete
+    let assets = store.list_assets(tenant_id, &catalog_name, None, vec!["db".to_string()]).await.unwrap();
+    assert_eq!(assets.len(), 0);
+    
+    let namespaces = store.list_namespaces(tenant_id, &catalog_name, None).await.unwrap();
+    assert_eq!(namespaces.len(), 0);
+}
+
+#[tokio::test]
+async fn test_mongo_rbac_operations() {
+    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME).await.expect("Failed to create MongoStore");
+    let tenant_id = Uuid::new_v4();
+    let tenant = Tenant {
+        id: tenant_id,
+        name: format!("test_tenant_{}", Uuid::new_v4()),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant.clone()).await.expect("Failed to create tenant");
+
+    use pangolin_core::user::{User, UserRole, OAuthProvider};
+    
+    // Create User
+    let user_id = Uuid::new_v4();
+    let user = User {
+        id: user_id,
+        username: format!("alice_{}", Uuid::new_v4()),
+        email: format!("alice_{}@example.com", Uuid::new_v4()),
+        password_hash: None,
+        oauth_provider: None,
+        oauth_subject: None,
+        tenant_id: Some(tenant_id),
+        role: UserRole::TenantAdmin,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        last_login: None,
+        active: true,
+    };
+    store.create_user(user.clone()).await.expect("Failed to create user");
+
+    // Get User
+    let fetched = store.get_user(user_id).await.expect("Failed to get user");
+    assert!(fetched.is_some());
+    assert_eq!(fetched.unwrap().username, user.username);
+
+    // Update User
+    let mut updated_user = user.clone();
+    updated_user.role = UserRole::TenantUser;
+    store.update_user(updated_user.clone()).await.expect("Failed to update");
+    
+    let fetched_updated = store.get_user(user_id).await.unwrap().unwrap();
+    assert_eq!(fetched_updated.role, UserRole::TenantUser);
+
+    // Create Role
+    use pangolin_core::permission::{Role, Permission, Action, PermissionScope};
+    
+    let role_id = Uuid::new_v4();
+    let role = Role {
+        id: role_id,
+        tenant_id: tenant_id,
+        name: "DataEngineer".to_string(),
+        description: Some("Manage tables".to_string()),
+        permissions: vec![],
+        created_by: user_id,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    store.create_role(role.clone()).await.expect("Failed to create role");
+    
+    // Assign Role
+    let assignment = pangolin_core::permission::UserRole {
+        user_id: user_id,
+        role_id: role_id,
+        assigned_by: user_id,
+        assigned_at: chrono::Utc::now(),
+    };
+    store.assign_role(assignment).await.expect("Failed to assign role");
+    
+    // Verify Assignment
+    let roles = store.get_user_roles(user_id).await.unwrap();
+    assert_eq!(roles.len(), 1);
+    assert_eq!(roles[0].role_id, role_id);
+    
+    // Delete User
+    store.delete_user(user_id).await.expect("Failed to delete user");
+    assert!(store.get_user(user_id).await.unwrap().is_none());
+}

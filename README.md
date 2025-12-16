@@ -120,6 +120,7 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [Overview](docs/ui/overview.md) - Layout, Navigation, and Auth
 - [Administration](docs/ui/administration.md) - Managing Tenants, Users, and Warehouses
 - [Data Explorer](docs/ui/explorer.md) - Browsing and Creating Data Assets
+- [Discovery Portal](docs/ui/discovery.md) - **New:** Searching and Requesting Access
 - [RBAC Management](docs/ui/rbac.md) - Configuring Roles and Permissions
 
 ### 🔌 API Reference
@@ -200,9 +201,9 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - ✅ AWS STS, Azure OAuth2, GCP credential vending
 - ✅ Complete CRUD operations (all entities)
 
-**In Development**:
-- 🚧 Management UI
-- 🚧 Advanced RBAC features
+- ✅ Management UI (Discovery Portal, Access Requests, Admin)
+- ✅ Advanced RBAC features (Granular Permissions, Service Users)
+- ✅ Access Request Workflows
 
 ---
 
@@ -257,6 +258,14 @@ catalog = load_catalog(
 
 table = catalog.load_table("namespace.table")
 df = table.scan().to_pandas()
+```
+
+### Request Access to Data
+```bash
+POST /api/v1/assets/:id/request-access
+{
+  "reason": "Need for quarterly reporting"
+}
 ```
 
 ---

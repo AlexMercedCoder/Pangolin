@@ -4,11 +4,15 @@ use async_trait::async_trait;
 use pangolin_core::model::{
     Asset, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse,
 };
+use pangolin_core::user::{User, UserRole, OAuthProvider};
+use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
 use pangolin_core::audit::AuditLogEntry;
+use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::Row;
 use std::collections::HashMap;
 use uuid::Uuid;
+use chrono::{DateTime, Utc, TimeZone};
 
 #[derive(Clone)]
 pub struct PostgresStore {
@@ -378,6 +382,36 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        // Manually cascade delete dependent resources
+        // 1. Tags
+        sqlx::query("DELETE FROM tags WHERE tenant_id = $1 AND catalog_name = $2")
+            .bind(tenant_id)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+
+        // 2. Branches
+        sqlx::query("DELETE FROM branches WHERE tenant_id = $1 AND catalog_name = $2")
+            .bind(tenant_id)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+
+        // 3. Assets
+        sqlx::query("DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2")
+            .bind(tenant_id)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+
+        // 4. Namespaces
+        sqlx::query("DELETE FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2")
+            .bind(tenant_id)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+
+        // 5. Catalog
         let result = sqlx::query("DELETE FROM catalogs WHERE tenant_id = $1 AND name = $2")
             .bind(tenant_id)
             .bind(&name)
@@ -466,7 +500,7 @@ impl CatalogStore for PostgresStore {
     // Asset Operations
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
         sqlx::query("INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, asset_type, metadata_location, properties) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
-            .bind(Uuid::new_v4())
+            .bind(asset.id)
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(&namespace)
@@ -503,6 +537,36 @@ impl CatalogStore for PostgresStore {
                 location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String)>> {
+        let row = sqlx::query("SELECT id, name, catalog_name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND id = $2")
+            .bind(tenant_id)
+            .bind(asset_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            let catalog_name: String = row.get("catalog_name");
+            let asset_type_str: String = row.get("asset_type");
+            let kind = match asset_type_str.as_str() {
+                "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
+                "View" => pangolin_core::model::AssetType::View,
+                _ => pangolin_core::model::AssetType::IcebergTable,
+            };
+            
+            let asset = Asset {
+                id: row.get("id"),
+                name: row.get("name"),
+                kind,
+                location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
+                properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
+            };
+            
+            Ok(Some((asset, catalog_name)))
         } else {
             Ok(None)
         }
@@ -806,6 +870,70 @@ impl CatalogStore for PostgresStore {
         Ok(())
     }
 
+    // Access Request Operations
+    async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO access_requests (id, user_id, asset_id, reason, requested_at, status, reviewed_by, reviewed_at, review_comment) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+        )
+        .bind(request.id)
+        .bind(request.user_id)
+        .bind(request.asset_id)
+        .bind(request.reason)
+        .bind(request.requested_at)
+        .bind(format!("{:?}", request.status))
+        .bind(request.reviewed_by)
+        .bind(request.reviewed_at)
+        .bind(request.review_comment)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_access_request(&self, id: Uuid) -> Result<Option<AccessRequest>> {
+        let row = sqlx::query("SELECT id, user_id, asset_id, reason, requested_at, status, reviewed_by, reviewed_at, review_comment FROM access_requests WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            Ok(Some(self.row_to_access_request(row)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
+        let rows = sqlx::query(
+            "SELECT ar.id, ar.user_id, ar.asset_id, ar.reason, ar.requested_at, ar.status, ar.reviewed_by, ar.reviewed_at, ar.review_comment FROM access_requests ar
+             JOIN users u ON ar.user_id = u.id
+             WHERE u.tenant_id = $1"
+        )
+        .bind(tenant_id)
+        .fetch_all(&self.pool)
+        .await?;
+        
+        let mut requests = Vec::new();
+        for row in rows {
+            requests.push(self.row_to_access_request(row)?);
+        }
+        Ok(requests)
+    }
+
+    async fn update_access_request(&self, request: AccessRequest) -> Result<()> {
+        sqlx::query(
+            "UPDATE access_requests SET status = $1, reviewed_by = $2, reviewed_at = $3, review_comment = $4 WHERE id = $5"
+        )
+        .bind(format!("{:?}", request.status))
+        .bind(request.reviewed_by)
+        .bind(request.reviewed_at)
+        .bind(request.review_comment)
+        .bind(request.id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     // Metadata IO
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>> {
         let asset = self.get_asset(tenant_id, catalog_name, branch, namespace, table).await?;
@@ -860,6 +988,310 @@ impl CatalogStore for PostgresStore {
         Ok(())
     }
 
+
+
+    // User Operations
+    async fn create_user(&self, user: User) -> Result<()> {
+        sqlx::query("INSERT INTO users (id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)")
+            .bind(user.id)
+            .bind(user.username)
+            .bind(user.email)
+            .bind(user.password_hash)
+            .bind(user.oauth_provider.map(|p| format!("{:?}", p).to_lowercase()))
+            .bind(user.oauth_subject)
+            .bind(user.tenant_id)
+            .bind(format!("{:?}", user.role))
+            .bind(user.active)
+            .bind(user.created_at)
+            .bind(user.updated_at)
+            .bind(user.last_login)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_user(&self, user_id: Uuid) -> Result<Option<User>> {
+        let row = sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users WHERE id = $1")
+            .bind(user_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        
+        if let Some(row) = row {
+            self.row_to_user(row)
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
+        let row = sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users WHERE username = $1")
+            .bind(username)
+            .fetch_optional(&self.pool)
+            .await?;
+        
+        if let Some(row) = row {
+            self.row_to_user(row)
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
+        let rows = if let Some(tid) = tenant_id {
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users WHERE tenant_id = $1")
+                .bind(tid)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users")
+                .fetch_all(&self.pool)
+                .await?
+        };
+
+        let mut users = Vec::new();
+        for row in rows {
+            if let Ok(Some(user)) = self.row_to_user(row) {
+                users.push(user);
+            }
+        }
+        Ok(users)
+    }
+
+    async fn update_user(&self, user: User) -> Result<()> {
+        sqlx::query("UPDATE users SET username = $1, email = $2, password_hash = $3, role = $4, active = $5, updated_at = $6, last_login = $7 WHERE id = $8")
+            .bind(user.username)
+            .bind(user.email)
+            .bind(user.password_hash)
+            .bind(format!("{:?}", user.role))
+            .bind(user.active)
+            .bind(chrono::Utc::now())
+            .bind(user.last_login)
+            .bind(user.id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn delete_user(&self, user_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM users WHERE id = $1").bind(user_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    // Role Operations
+    async fn create_role(&self, role: Role) -> Result<()> {
+        sqlx::query("INSERT INTO roles (id, tenant_id, name, description, permissions, created_by, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+            .bind(role.id)
+            .bind(role.tenant_id)
+            .bind(role.name)
+            .bind(role.description)
+            .bind(serde_json::to_value(&role.permissions)?)
+            .bind(role.created_by)
+            .bind(role.created_at)
+            .bind(role.updated_at)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_role(&self, role_id: Uuid) -> Result<Option<Role>> {
+        let row = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE id = $1")
+            .bind(role_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        
+        if let Some(row) = row {
+            Ok(Some(Role {
+                id: row.get("id"),
+                tenant_id: row.get("tenant_id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                permissions: serde_json::from_value(row.get("permissions"))?,
+                created_by: row.get("created_by"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<Role>> {
+        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .fetch_all(&self.pool)
+            .await?;
+        
+        let mut roles = Vec::new();
+        for row in rows {
+            roles.push(Role {
+                id: row.get("id"),
+                tenant_id: row.get("tenant_id"),
+                name: row.get("name"),
+                description: row.get("description"),
+                permissions: serde_json::from_value(row.get("permissions"))?,
+                created_by: row.get("created_by"),
+                created_at: row.get("created_at"),
+                updated_at: row.get("updated_at"),
+            });
+        }
+        Ok(roles)
+    }
+
+    async fn delete_role(&self, role_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM roles WHERE id = $1").bind(role_id).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    async fn update_role(&self, role: Role) -> Result<()> {
+        sqlx::query("UPDATE roles SET name = $1, description = $2, permissions = $3, updated_at = $4 WHERE id = $5")
+            .bind(role.name)
+            .bind(role.description)
+            .bind(serde_json::to_value(&role.permissions)?)
+            .bind(chrono::Utc::now())
+            .bind(role.id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn assign_role(&self, user_role: UserRoleAssignment) -> Result<()> {
+        sqlx::query("INSERT INTO user_roles (user_id, role_id, assigned_by, assigned_at) VALUES ($1, $2, $3, $4)")
+            .bind(user_role.user_id)
+            .bind(user_role.role_id)
+            .bind(user_role.assigned_by)
+            .bind(user_role.assigned_at)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM user_roles WHERE user_id = $1 AND role_id = $2")
+            .bind(user_id)
+            .bind(role_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<UserRoleAssignment>> {
+        let rows = sqlx::query("SELECT user_id, role_id, assigned_by, assigned_at FROM user_roles WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        
+        let mut roles = Vec::new();
+        for row in rows {
+            roles.push(UserRoleAssignment {
+                user_id: row.get("user_id"),
+                role_id: row.get("role_id"),
+                assigned_by: row.get("assigned_by"),
+                assigned_at: row.get("assigned_at"),
+            });
+        }
+        Ok(roles)
+    }
+
+    // Direct Permission Operations
+    async fn create_permission(&self, permission: Permission) -> Result<()> {
+        sqlx::query("INSERT INTO permissions (id, user_id, scope, actions, granted_by, granted_at) VALUES ($1, $2, $3, $4, $5, $6)")
+            .bind(permission.id)
+            .bind(permission.user_id)
+            .bind(serde_json::to_value(&permission.scope)?)
+            .bind(serde_json::to_value(&permission.actions)?)
+            .bind(permission.granted_by)
+            .bind(permission.granted_at)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn revoke_permission(&self, permission_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM permissions WHERE id = $1")
+            .bind(permission_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+        let rows = sqlx::query("SELECT id, user_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = $1")
+            .bind(user_id)
+            .fetch_all(&self.pool)
+            .await?;
+        
+        let mut perms = Vec::new();
+        for row in rows {
+            perms.push(Permission {
+                id: row.get("id"),
+                user_id: row.get("user_id"),
+                scope: serde_json::from_value(row.get("scope"))?,
+                actions: serde_json::from_value(row.get("actions"))?,
+                granted_by: row.get("granted_by"),
+                granted_at: row.get("granted_at"),
+            });
+        }
+        Ok(perms)
+    }
+
+}
+
+impl PostgresStore {
+    fn row_to_access_request(&self, row: sqlx::postgres::PgRow) -> Result<AccessRequest> {
+        let status_str: String = row.get("status");
+        let status = match status_str.as_str() {
+            "Pending" => RequestStatus::Pending,
+            "Approved" => RequestStatus::Approved,
+            "Rejected" => RequestStatus::Rejected,
+            _ => RequestStatus::Pending,
+        };
+
+        Ok(AccessRequest {
+            id: row.get("id"),
+            user_id: row.get("user_id"),
+            asset_id: row.get("asset_id"),
+            reason: row.get("reason"),
+            requested_at: row.get("requested_at"),
+            status,
+            reviewed_by: row.get("reviewed_by"),
+            reviewed_at: row.get("reviewed_at"),
+            review_comment: row.get("review_comment"),
+        })
+    }
+
+    // Helper to Convert Row to User
+    fn row_to_user(&self, row: sqlx::postgres::PgRow) -> Result<Option<User>> {
+        let role_str: String = row.get("role");
+        let role = match role_str.as_str() {
+            "Root" => UserRole::Root,
+            "TenantAdmin" => UserRole::TenantAdmin,
+            _ => UserRole::TenantUser,
+        };
+
+        let oauth_provider_str: Option<String> = row.get("oauth_provider");
+        let oauth_provider = match oauth_provider_str.as_deref() {
+            Some("google") => Some(OAuthProvider::Google),
+            Some("microsoft") => Some(OAuthProvider::Microsoft),
+            Some("github") => Some(OAuthProvider::GitHub),
+            Some("okta") => Some(OAuthProvider::Okta),
+            _ => None,
+        };
+
+        Ok(Some(User {
+            id: row.get("id"),
+            username: row.get("username"),
+            email: row.get("email"),
+            password_hash: row.get("password_hash"),
+            oauth_provider,
+            oauth_subject: row.get("oauth_subject"),
+            tenant_id: row.get("tenant_id"),
+            role,
+            created_at: row.get("created_at"),
+            updated_at: row.get("updated_at"),
+            last_login: row.get("last_login"),
+            active: row.get("active"),
+        }))
+    }
 }
 
 use crate::signer::Signer;

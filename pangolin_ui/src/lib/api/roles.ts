@@ -7,17 +7,20 @@ export interface Role {
 	tenant_id: string;
 	created_by: string;
 	created_at: string;
+	permissions: any[]; // Or specific permission type if available
 }
 
 export interface CreateRoleRequest {
 	name: string;
 	description?: string;
-	tenant_id: string;
+	tenant_id?: string; // Optional if inferred from context
+    permissions?: string; // JSON string as per my previous create page logic
 }
 
 export interface UpdateRoleRequest {
 	name?: string;
 	description?: string;
+    permissions?: string;
 }
 
 export interface AssignRoleRequest {
@@ -62,4 +65,10 @@ export const rolesApi = {
 		const response = await apiClient.delete<void>(`/api/v1/users/${userId}/roles/${roleId}`);
 		if (response.error) throw new Error(response.error.message);
 	},
+
+    async getUserRoles(userId: string): Promise<Role[]> {
+        const response = await apiClient.get<Role[]>(`/api/v1/users/${userId}/roles`);
+        if (response.error) throw new Error(response.error.message);
+        return response.data || [];
+    }
 };

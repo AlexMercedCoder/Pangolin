@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use uuid::Uuid;
 use crate::business_metadata_handlers::{
-    add_business_metadata, get_business_metadata, request_access, list_access_requests, update_access_request,
+    add_business_metadata, get_business_metadata, request_access, list_access_requests, update_access_request, get_access_request,
     AddMetadataRequest, CreateAccessRequestPayload, UpdateRequestStatus
 };
 use crate::auth_middleware::{auth_middleware, hash_password};
@@ -34,7 +34,7 @@ async fn test_business_metadata_flow() {
         .route("/api/v1/assets/:id/metadata", post(add_business_metadata).get(get_business_metadata))
         .route("/api/v1/assets/:id/request-access", post(request_access))
         .route("/api/v1/access-requests", get(list_access_requests))
-        .route("/api/v1/access-requests/:id", put(update_access_request))
+        .route("/api/v1/access-requests/:id", put(update_access_request).get(get_access_request))
         .layer(axum::middleware::from_fn(crate::auth_middleware::auth_middleware_wrapper))
         .with_state(store.clone());
 
@@ -57,7 +57,28 @@ async fn test_business_metadata_flow() {
     );
     store.create_user(user.clone()).await.unwrap();
 
-    // 4. Create Asset
+    store.create_user(user.clone()).await.unwrap();
+
+    // 4. Create Catalog
+    let catalog = pangolin_core::model::Catalog {
+        id: Uuid::new_v4(),
+        name: "default".to_string(),
+        catalog_type: pangolin_core::model::CatalogType::Local,
+        warehouse_name: None,
+        storage_location: None,
+        federated_config: None,
+        properties: HashMap::new(),
+    };
+    store.create_catalog(tenant_id, catalog.clone()).await.unwrap();
+
+    // 4.1 Create Namespace
+    let namespace = pangolin_core::model::Namespace {
+        name: vec!["ns".to_string()],
+        properties: HashMap::new(),    
+    };
+    store.create_namespace(tenant_id, "default", namespace).await.unwrap();
+
+    // 5. Create Asset
     let asset_id = Uuid::new_v4();
     let asset = Asset {
         id: asset_id,
@@ -149,6 +170,17 @@ async fn test_business_metadata_flow() {
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     
+    // 9.5 Test GET Request Details
+    let req = Request::builder()
+        .method("GET")
+        .uri(format!("/api/v1/access-requests/{}", request_id))
+        .header("Authorization", &auth_header)
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
     // 10. Test Approve Request
     let update_req = UpdateRequestStatus {
         status: RequestStatus::Approved,

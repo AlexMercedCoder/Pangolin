@@ -6,7 +6,9 @@
 	export let error = '';
 	export let disabled = false;
 	export let required = false;
+	export let required = false;
 	export let id = '';
+	export let helpText = '';
 
 	const inputId = id || `input-${Math.random().toString(36).substr(2, 9)}`;
 </script>
@@ -38,5 +40,7 @@
 	/>
 	{#if error}
 		<p class="mt-1 text-sm text-error-600 dark:text-error-400">{error}</p>
+	{:else if helpText}
+		<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{helpText}</p>
 	{/if}
 </div>

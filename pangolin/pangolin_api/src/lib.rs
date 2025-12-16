@@ -127,7 +127,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/assets/:id", get(business_metadata_handlers::get_asset_details))
         .route("/api/v1/assets/:id/request-access", post(business_metadata_handlers::request_access))
         .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
-        .route("/api/v1/access-requests/:id", put(business_metadata_handlers::update_access_request))
+        .route("/api/v1/access-requests/:id", put(business_metadata_handlers::update_access_request).get(business_metadata_handlers::get_access_request))
         // User Management
         .route("/api/v1/users", post(user_handlers::create_user).get(user_handlers::list_users))
         .route("/api/v1/users/:id", get(user_handlers::get_user).put(user_handlers::update_user).delete(user_handlers::delete_user))

@@ -212,6 +212,24 @@ pub async fn update_access_request(
     }
 }
 
+pub async fn get_access_request(
+    State(store): State<AppState>,
+    Extension(session): Extension<UserSession>,
+    Path(request_id): Path<Uuid>,
+) -> impl IntoResponse {
+    match store.get_access_request(request_id).await {
+        Ok(Some(request)) => {
+            // Check visibility: Admin or requester
+            if session.role != UserRole::TenantAdmin && session.role != UserRole::Root && request.user_id != session.user_id {
+                return (StatusCode::FORBIDDEN, "Access denied").into_response();
+            }
+            (StatusCode::OK, Json(request)).into_response()
+        },
+        Ok(None) => (StatusCode::NOT_FOUND, "Request not found").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal error: {}", e)).into_response(),
+    }
+}
+
 pub async fn get_asset_details(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
