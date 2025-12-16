@@ -43,19 +43,19 @@ export interface AddMetadataRequest {
 export const businessMetadataApi = {
     // Metadata Operations
     addMetadata: async (assetId: string, metadata: AddMetadataRequest): Promise<void> => {
-        const response = await apiClient.post<void>(`/assets/${assetId}/metadata`, metadata);
+        const response = await apiClient.post<void>(`/api/v1/assets/${assetId}/metadata`, metadata);
         if (response.error) throw new Error(response.error.message);
     },
 
     getMetadata: async (assetId: string): Promise<BusinessMetadata> => {
-        const response = await apiClient.get<BusinessMetadata>(`/assets/${assetId}/metadata`);
+        const response = await apiClient.get<BusinessMetadata>(`/api/v1/assets/${assetId}/metadata`);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
     },
 
     // Access Request Operations
     requestAccess: async (assetId: string, payload: CreateAccessRequestPayload): Promise<AccessRequest> => {
-        const response = await apiClient.post<AccessRequest>(`/assets/${assetId}/request-access`, payload);
+        const response = await apiClient.post<AccessRequest>(`/api/v1/assets/${assetId}/request-access`, payload);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
     },
@@ -80,7 +80,7 @@ export const businessMetadataApi = {
     
     // Search
     searchAssets: async (query: string): Promise<any[]> => {
-        const response = await apiClient.get<any[]>(`/api/v1/assets/search?q=${encodeURIComponent(query)}`);
+        const response = await apiClient.get<any[]>(`/api/v1/assets/search?query=${encodeURIComponent(query)}`);
         if (response.error) throw new Error(response.error.message);
         return response.data || [];
     }

@@ -70,11 +70,7 @@
 
 	<!-- Results -->
 	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {#each results as result}
-            <!-- result is [Asset, Metadata?] -->
-            {@const asset = result[0]}
-            {@const metadata = result[1]}
-            
+        {#each results as asset}
             <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 flex flex-col">
                 <div class="flex items-start justify-between mb-4">
                     <div>
@@ -87,12 +83,12 @@
                 </div>
                 
                 <p class="text-gray-600 dark:text-gray-300 mb-4 flex-1">
-                    {metadata?.description || 'No description provided.'}
+                    {asset.description || 'No description provided.'}
                 </p>
                 
-                {#if metadata?.tags && metadata.tags.length > 0}
+                {#if asset.tags && asset.tags.length > 0}
                 <div class="flex flex-wrap gap-2 mb-6">
-                    {#each metadata.tags as tag}
+                    {#each asset.tags as tag}
                         <span class="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
                             #{tag}
                         </span>

@@ -120,6 +120,8 @@ pub async fn search_assets(
                     serde_json::json!({
                         "id": asset.id,
                         "name": asset.name,
+                        "kind": asset.kind,
+                        "location": asset.location,
                         "description": metadata.as_ref().and_then(|m| m.description.clone()),
                         "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
                     })

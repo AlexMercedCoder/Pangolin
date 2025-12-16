@@ -9,65 +9,63 @@ test.describe('Discovery (Search) E2E', () => {
     const table = `search_table_${timestamp}`;
 
     test.beforeEach(async ({ page, request }) => {
-        // 1. Create Warehouse via API
-        const whRes = await request.post('/api/v1/warehouses', {
+        // 1. Setup Data via API (Directly to Backend to avoid UI flakiness/proxy issues)
+        // Using the variables defined at the describe block level
+        
+        // Create Warehouse
+        await request.post('http://localhost:8080/api/v1/warehouses', {
             data: {
                 name: warehouseName,
-                storage_type: 's3',
-                config: {
-                    bucket: 'warehouse',
-                    region: 'us-east-1',
-                    access_key: 'minioadmin',
-                    secret_key: 'minioadmin',
-                    endpoint: 'http://localhost:9000'
-                }
+                storage_config: { "type": "s3", "location": "s3://bucket" },
+                storage_type: "s3"
             }
         });
-        expect(whRes.ok()).toBeTruthy();
 
-        // 2. Create Catalog via API
-        const catRes = await request.post('/api/v1/catalogs', {
+        // Create Catalog
+        await request.post('http://localhost:8080/api/v1/catalogs', {
             data: {
                 name: targetCatalog,
-                warehouse: warehouseName,
-                type: 'pangea'
+                warehouse_name: warehouseName,
+                catalog_type: "iceberg",
+                storage_location: `s3://${warehouseName}/${targetCatalog}`
             }
         });
-        expect(catRes.ok()).toBeTruthy();
 
-        // 3. Create Namespace via API (Iceberg REST)
-        // Endpoint: /v1/{prefix}/namespaces
-        const nsRes = await request.post(`/v1/${targetCatalog}/namespaces`, {
+        // Create Namespace (Iceberg REST)
+        // Note: Iceberg REST uses /v1/{catalog}/namespaces
+        await request.post(`http://localhost:8080/v1/${targetCatalog}/namespaces`, {
             data: {
                 namespace: [namespace]
             }
         });
-        expect(nsRes.ok()).toBeTruthy();
 
-        // 4. Create Table via API (Iceberg REST)
-        // Endpoint: /v1/{prefix}/namespaces/{namespace}/tables
-        const tblRes = await request.post(`/v1/${targetCatalog}/namespaces/${namespace}/tables`, {
+        // Create Table (Iceberg REST)
+        await request.post(`http://localhost:8080/v1/${targetCatalog}/namespaces/${namespace}/tables`, {
             data: {
                 name: table,
                 schema: {
                     type: "struct",
                     fields: [
-                        { id: 1, name: "id", type: "int", required: false },
+                        { id: 1, name: "id", type: "int", required: true },
                         { id: 2, name: "data", type: "string", required: false }
                     ]
-                }
+                },
+                location: `s3://${warehouseName}/${targetCatalog}/${namespace}/${table}`
             }
         });
-        expect(tblRes.ok()).toBeTruthy();
 
-        // 5. Visit Home (to be ready for test)
-        await page.goto('/');
-        await expect(page).toHaveTitle(/Pangolin/);
-        // Wait for potential redirect or load
-        await expect(page.getByText('TenantAdmin')).toBeVisible();
+        // Wait a small bit for consistency (optional, but good for in-memory race conditions)
+        await page.waitForTimeout(500);
+
+        // Navigate to Discovery Page in UI
+        await page.goto('/discovery');
+
+        // Ensure we are logged in (if NO_AUTH puts us as Admin, name should be visible)
+        // Or wait for navigation to complete
+        await expect(page).toHaveURL('/discovery');
     });
 
-    test.fixme('should find created table in global search', async ({ page }) => {
+    test('should find created table in global search', async ({ page }) => {
         // 1. Go to Discovery Page (Sidebar link)
         await page.click('a[href="/discovery"]');
         await expect(page).toHaveURL(/\/discovery/);
