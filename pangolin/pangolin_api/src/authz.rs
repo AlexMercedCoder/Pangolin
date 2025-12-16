@@ -96,6 +96,51 @@ pub async fn check_permission(
     Ok(false)
 }
 
+/// Helper to check if user is an admin (TenantAdmin or Root)
+pub fn is_admin(role: &pangolin_core::user::UserRole) -> bool {
+    use pangolin_core::user::UserRole as RoleEnum;
+    matches!(role, RoleEnum::TenantAdmin | RoleEnum::Root)
+}
+
+/// Get the catalog name for a given asset ID
+/// This is needed to check catalog-scoped permissions
+pub async fn get_catalog_for_asset(
+    store: &Arc<dyn CatalogStore + Send + Sync>,
+    tenant_id: uuid::Uuid,
+    asset_id: uuid::Uuid,
+) -> Result<String> {
+    
+    // Optimized path: Use O(1) direct lookup if available
+    match store.get_asset_by_id(tenant_id, asset_id).await {
+        Ok(Some((_, catalog_name))) => return Ok(catalog_name),
+        Ok(None) => {}, // Not found by ID, weird if store supports it but didn't find it.
+        Err(_) => {}, // Store might not support it (e.g., deprecated stores), fall back to scan
+    }
+
+    use uuid::Uuid;
+    
+    // Fallback: Iterate through catalogs to find the asset (O(N))
+    let catalogs = store.list_catalogs(tenant_id).await?;
+    
+    for catalog in catalogs {
+        // list_namespaces takes (tenant_id, catalog_name, parent: Option<String>)
+        let namespaces = store.list_namespaces(tenant_id, &catalog.name, None).await?;
+        
+        for namespace in namespaces {
+            // list_assets takes (tenant_id, catalog_name, branch: Option<String>, namespace: Vec<String>)
+            // key is already a Vec<String>
+            let namespace_vec = namespace.name; // assuming implementation details from previous steps
+            let assets = store.list_assets(tenant_id, &catalog.name, Some("main".to_string()), namespace_vec).await?;
+            
+            if assets.iter().any(|a| a.id == asset_id) {
+                return Ok(catalog.name);
+            }
+        }
+    }
+    
+    Err(anyhow::anyhow!("Asset not found"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

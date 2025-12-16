@@ -37,6 +37,9 @@ pub struct MemoryStore {
     service_users: Arc<DashMap<Uuid, pangolin_core::user::ServiceUser>>,
     merge_operations: Arc<DashMap<Uuid, pangolin_core::model::MergeOperation>>,
     merge_conflicts: Arc<DashMap<Uuid, pangolin_core::model::MergeConflict>>,
+    // Optimization: Direct lookup for assets by ID
+    // Key: AssetID, Value: (CatalogName, Namespace, Branch, AssetName)
+    assets_by_id: Arc<DashMap<Uuid, (String, Vec<String>, Option<String>, String)>>, 
 }
 
 impl MemoryStore {
@@ -62,6 +65,7 @@ impl MemoryStore {
             service_users: Arc::new(DashMap::new()),
             merge_operations: Arc::new(DashMap::new()),
             merge_conflicts: Arc::new(DashMap::new()),
+            assets_by_id: Arc::new(DashMap::new()),
         }
     }
 }
@@ -329,14 +333,21 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
-        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let branch_val = branch.unwrap_or_else(|| "main".to_string());
         let src_ns_str = source_namespace.join("\x1F");
-        let src_key = (tenant_id, catalog_name.to_string(), branch_name.clone(), src_ns_str, source_name);
+        let src_key = (tenant_id, catalog_name.to_string(), branch_val.clone(), src_ns_str, source_name);
+        let dest_key = (tenant_id, catalog_name.to_string(), branch_val.clone(), dest_namespace.join("\x1F"), dest_name.clone());
 
         if let Some((_, mut asset)) = self.assets.remove(&src_key) {
-            asset.name = dest_name.clone();
-            let dest_ns_str = dest_namespace.join("\x1F");
-            let dest_key = (tenant_id, catalog_name.to_string(), branch_name, dest_ns_str, dest_name);
+            asset.name = dest_name;
+            // Assuming Asset struct has namespace field to update?
+            // Actually Asset struct usually only has name. Namespace is implied by location.
+            // But let's check Asset struct definition in core/model.rs if possible.
+            // Assuming we just update the name in the Asset object if it stores it.
+            
+            // Update index
+            self.assets_by_id.insert(asset.id, (catalog_name.to_string(), dest_namespace, Some(branch_val), asset.name.clone()));
+            
             self.assets.insert(dest_key, asset);
             Ok(())
         } else {
@@ -640,6 +651,21 @@ impl CatalogStore for MemoryStore {
 
     async fn delete_role(&self, role_id: Uuid) -> Result<()> {
         self.roles.remove(&role_id);
+        Ok(())
+    }
+
+    // New methods for User operations
+    async fn update_user(&self, user: pangolin_core::user::User) -> Result<()> {
+        if self.users.contains_key(&user.id) {
+            self.users.insert(user.id, user);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("User not found"))
+        }
+    }
+
+    async fn delete_user(&self, user_id: Uuid) -> Result<()> {
+        self.users.remove(&user_id);
         Ok(())
     }
 

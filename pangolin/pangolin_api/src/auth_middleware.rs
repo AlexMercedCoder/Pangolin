@@ -1,6 +1,7 @@
 use axum::{
+    body::Body,
     extract::{Request, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -11,7 +12,7 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Duration, Utc};
-use pangolin_core::user::{UserRole, UserSession};
+use pangolin_core::user::{User, UserRole, UserSession};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 /// JWT claims
@@ -97,6 +98,22 @@ pub fn create_session(
         role,
         issued_at: now,
         expires_at,
+    }
+}
+
+/// Helper function to allow Root users to override tenant context via X-Pangolin-Tenant header
+fn apply_root_tenant_override(req: &mut Request, default_tenant: Uuid) {
+    tracing::debug!("Root user detected, checking for X-Pangolin-Tenant header");
+    if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
+        if let Ok(tenant_str) = tenant_header.to_str() {
+            tracing::debug!("X-Pangolin-Tenant header value: {}", tenant_str);
+            if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
+                tracing::info!("Root user overriding tenant context: {} -> {}", default_tenant, override_uuid);
+                req.extensions_mut().insert(crate::auth::TenantId(override_uuid));
+            } else {
+                tracing::warn!("Failed to parse X-Pangolin-Tenant header as UUID: {}", tenant_str);
+            }
+        }
     }
 }
 
@@ -220,20 +237,8 @@ pub async fn auth_middleware(
                             // Insert RootUser extension
                             req.extensions_mut().insert(crate::auth::RootUser);
                             
-                            // Allow Root to override tenant context via header (duplicate logic, TODO: cleanup)
-                            tracing::debug!("Root user (Basic Auth) detected, checking for X-Pangolin-Tenant header");
-                            if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
-                                if let Ok(tenant_str) = tenant_header.to_str() {
-                                    tracing::debug!("X-Pangolin-Tenant header value: {}", tenant_str);
-                                    if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
-                                        tracing::info!("Root user (Basic Auth) overriding tenant context: {} -> {}", default_tenant, override_uuid);
-                                        // Overwrite the TenantId extension
-                                        req.extensions_mut().insert(crate::auth::TenantId(override_uuid));
-                                    } else {
-                                        tracing::warn!("Failed to parse X-Pangolin-Tenant header as UUID: {}", tenant_str);
-                                    }
-                                }
-                            }
+                            // Allow Root to override tenant context via header
+                            apply_root_tenant_override(&mut req, default_tenant);
                             
                             return next.run(req).await;
                         }
@@ -376,17 +381,8 @@ pub async fn auth_middleware_wrapper(
                             req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
                             req.extensions_mut().insert(crate::auth::RootUser);
                             
-                            // Allow Root to override tenant context via header (duplicate logic, TODO: cleanup)
-                            tracing::debug!("Root user (Basic Auth) detected in wrapper, checking for X-Pangolin-Tenant header");
-                            if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
-                                if let Ok(tenant_str) = tenant_header.to_str() {
-                                    if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
-                                        tracing::info!("Root user (Basic Auth) overriding tenant context in wrapper: {} -> {}", default_tenant, override_uuid);
-                                        // Overwrite the TenantId extension
-                                        req.extensions_mut().insert(crate::auth::TenantId(override_uuid));
-                                    }
-                                }
-                            }
+                            // Allow Root to override tenant context via header
+                            apply_root_tenant_override(&mut req, default_tenant);
 
                             return next.run(req).await;
                         }

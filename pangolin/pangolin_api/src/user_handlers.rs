@@ -173,33 +173,88 @@ pub async fn list_users(
 
 /// Get user by ID
 pub async fn get_user(
-    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    Path(_user_id): Path<Uuid>,
-) -> Response {
-    // TODO: Check permissions and fetch user
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
+    Path(user_id): Path<Uuid>,
+) -> impl IntoResponse {
+    // Permission check: Users can view themselves, or admins can view anyone
+    if session.user_id != user_id && !crate::authz::is_admin(&session.role) {
+        return (StatusCode::FORBIDDEN, "Cannot view other users").into_response();
+    }
     
-    (StatusCode::NOT_IMPLEMENTED, "Not implemented yet").into_response()
+    match store.get_user(user_id).await {
+        Ok(Some(user)) => (StatusCode::OK, Json(UserInfo::from(user))).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, "User not found").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get user: {}", e)).into_response(),
+    }
 }
 
 /// Update user
 pub async fn update_user(
-    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    Path(_user_id): Path<Uuid>,
-    Json(_req): Json<UpdateUserRequest>,
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
+    Path(user_id): Path<Uuid>,
+    Json(req): Json<UpdateUserRequest>,
 ) -> Response {
-    // TODO: Check permissions and update user
+    // Permission check: Users can update themselves (limited fields), admins can update anyone
+    let is_self = session.user_id == user_id;
+    let is_admin = crate::authz::is_admin(&session.role);
     
-    (StatusCode::NOT_IMPLEMENTED, "Not implemented yet").into_response()
+    if !is_self && !is_admin {
+        return (StatusCode::FORBIDDEN, "Cannot update other users").into_response();
+    }
+    
+    // Check if user exists
+    let existing_user = match store.get_user(user_id).await {
+         Ok(Some(u)) => u,
+         Ok(None) => return (StatusCode::NOT_FOUND, "User not found").into_response(),
+         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch user: {}", e)).into_response(),
+    };
+    
+    let mut updated_user = existing_user;
+    
+    if let Some(email) = req.email {
+        updated_user.email = email;
+    }
+    if let Some(password) = req.password {
+        match crate::auth_middleware::hash_password(&password) {
+            Ok(hash) => updated_user.password_hash = Some(hash),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password").into_response(),
+        }
+    }
+    if let Some(active) = req.active {
+        if !is_admin {
+             return (StatusCode::FORBIDDEN, "Only admins can change user status").into_response();
+        }
+        updated_user.active = active;
+    }
+    
+    match store.update_user(updated_user).await {
+        Ok(_) => (StatusCode::OK, "User updated").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update user: {}", e)).into_response(),
+    }
 }
 
 /// Delete user
 pub async fn delete_user(
-    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    Path(_user_id): Path<Uuid>,
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
+    Path(user_id): Path<Uuid>,
 ) -> Response {
-    // TODO: Check permissions and delete user
+    // Permission check: Only admins can delete users
+    if !crate::authz::is_admin(&session.role) {
+        return (StatusCode::FORBIDDEN, "Only admins can delete users").into_response();
+    }
     
-    (StatusCode::NO_CONTENT).into_response()
+    // Cannot delete yourself
+    if session.user_id == user_id {
+        return (StatusCode::BAD_REQUEST, "Cannot delete yourself").into_response();
+    }
+    
+    match store.delete_user(user_id).await {
+        Ok(_) => (StatusCode::NO_CONTENT).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete user: {}", e)).into_response(),
+    }
 }
 
 /// User login

@@ -2,12 +2,16 @@
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
     import { user, token } from '$lib/auth';
+    import Card from '$lib/components/ui/Card.svelte';
+    import type { Asset } from '$lib/api/iceberg';
+    import SchemaField from '$lib/components/explorer/SchemaField.svelte';
 
-    let assetPath = $page.params.asset; // e.g. "namespace/table"
-    let catalogName = "default"; // TODO: Get from context or URL
-    let branchName = "main"; // TODO: Get from context or URL
+    // Extract from URL or use defaults
+    let catalogName = $page.params.catalog || "default";
+    let branchName = $page.params.branch || "main";
+    let assetPath = $page.params.asset || "";
     
-    let asset = null;
+    let asset: Asset | null = null;
     let error = "";
     let activeTab = "schema"; // schema | properties
 
@@ -66,11 +70,15 @@
 
             {#if activeTab === 'schema'}
                 <div class="space-y-2">
-                    <!-- TODO: Render schema recursively if complex -->
-                    <p class="text-gray-400 italic">Schema visualization coming soon. (Requires parsing Iceberg schema JSON)</p>
-                    <pre class="bg-gray-900 p-4 rounded overflow-auto text-sm text-green-400">
-{JSON.stringify(asset.schema || {}, null, 2)}
-                    </pre>
+                    {#if asset.schema && asset.schema.fields}
+                        <div class="bg-gray-900 p-4 rounded">
+                            {#each asset.schema.fields as field}
+                                <SchemaField {field} depth={0} />
+                            {/each}
+                        </div>
+                    {:else}
+                        <p class="text-gray-400 italic">No schema available</p>
+                    {/if}
                 </div>
             {:else}
                 <div class="grid grid-cols-1 gap-4">

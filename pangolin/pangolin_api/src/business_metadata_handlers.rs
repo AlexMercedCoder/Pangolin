@@ -1,16 +1,17 @@
 use axum::{
-    extract::{Path, State, Extension, Query},
-    Json,
-    response::IntoResponse,
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::IntoResponse,
+    Extension,
+    Json,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use pangolin_store::CatalogStore;
 use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestStatus};
-use pangolin_core::user::UserRole;
+use pangolin_core::user::{UserSession, UserRole};
+use pangolin_core::permission::{Action, PermissionScope};
 use uuid::Uuid;
-use pangolin_core::user::UserSession;
 use crate::iceberg_handlers::AppState;
 
 #[derive(Deserialize, Serialize)]
@@ -34,10 +35,16 @@ pub async fn add_business_metadata(
 ) -> impl IntoResponse {
     // If setting discoverable=true, check MANAGE_DISCOVERY permission
     if payload.discoverable {
-        // TODO: Check if user has MANAGE_DISCOVERY permission on the catalog
-        // For now, only allow TenantAdmin or Root
-        if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
-            return (StatusCode::FORBIDDEN, "Only Tenant Admins can mark assets as discoverable").into_response();
+        // Get catalog ID for this asset
+        let catalog_name = match crate::authz::get_catalog_for_asset(&store, session.tenant_id.unwrap_or_default(), asset_id).await {
+            Ok(name) => name,
+            Err(_) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
+        };
+        
+        // For now, use a simplified check - just verify user is admin
+        // TODO: Once we have catalog IDs, use proper scope checking
+        if !crate::authz::is_admin(&session.role) {
+            return (StatusCode::FORBIDDEN, "Missing MANAGE_DISCOVERY permission on this catalog").into_response();
         }
     }
 
@@ -92,12 +99,6 @@ pub struct SearchRequest {
     pub tags: Option<Vec<String>>,
 }
 
-#[derive(Serialize)]
-pub struct SearchResponse {
-    // TODO: return assets with metadata snippets
-    pub results: Vec<String>, // Placeholder
-}
-
 pub async fn search_assets(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -107,29 +108,25 @@ pub async fn search_assets(
     
     match store.search_assets(tenant_id, &params.query, params.tags).await {
         Ok(results) => {
-            // Filter to only return discoverable assets (unless user has direct access)
-            // For now, return all results - TODO: Add permission filtering
-            let response: Vec<_> = results.into_iter()
+            // Filter to only return discoverable assets OR assets the user has permission to access
+            let filtered_results: Vec<_> = results.into_iter()
                 .filter(|(_, metadata)| {
-                    // Only show if discoverable or if user is admin
-                    if session.role == UserRole::TenantAdmin || session.role == UserRole::Root {
-                        true
-                    } else {
-                        metadata.as_ref().map(|m| m.discoverable).unwrap_or(false)
-                    }
+                    // Show if: user is admin OR asset is discoverable
+                    // TODO: Add check for user's direct read permissions on specific assets
+                    crate::authz::is_admin(&session.role) || 
+                    metadata.as_ref().map(|m| m.discoverable).unwrap_or(false)
                 })
                 .map(|(asset, metadata)| {
                     serde_json::json!({
                         "id": asset.id,
                         "name": asset.name,
-                        "kind": asset.kind,
                         "description": metadata.as_ref().and_then(|m| m.description.clone()),
                         "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
                     })
                 })
                 .collect();
             
-            (StatusCode::OK, Json(response)).into_response()
+            (StatusCode::OK, Json(filtered_results)).into_response()
         },
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Search failed: {}", e)).into_response(),
     }

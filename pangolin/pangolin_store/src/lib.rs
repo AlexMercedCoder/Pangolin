@@ -51,6 +51,10 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Asset Operations
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()>;
     async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>>;
+    async fn get_asset_by_id(&self, _tenant_id: Uuid, _asset_id: Uuid) -> Result<Option<(Asset, String)>> {
+         // Return (Asset, CatalogName) tuple to help with permission checks
+         Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
     async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>>;
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()>;
     async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()>;
@@ -98,6 +102,14 @@ pub trait CatalogStore: Send + Sync + Signer {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     async fn list_users(&self, _tenant_id: Option<Uuid>) -> Result<Vec<pangolin_core::user::User>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn update_user(&self, _user: pangolin_core::user::User) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn delete_user(&self, _user_id: Uuid) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     
