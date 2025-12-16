@@ -6,7 +6,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
 	import { tenantStore } from '$lib/stores/tenant';
-	import { tenantStore } from '$lib/stores/tenant';
+
 	import { notifications } from '$lib/stores/notifications';
     import { isTenantAdmin } from '$lib/stores/auth';
 

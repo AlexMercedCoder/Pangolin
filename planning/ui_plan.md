@@ -34,8 +34,16 @@ Implement full Create, Read, Update, Delete (CRUD) operations for the core entit
 - [ ] **Create**: Form to link a Catalog Name to a Warehouse.
 - [ ] **Delete**: Remove catalog.
 
+## 5. Data Explorer (Tenant Admin / User)
+**View**: `/explorer`
+- [x] **Hierarchy**: Browse Catalogs -> Namespaces -> Tables.
+- [x] **Create Namespace**: Modal to create nested namespaces.
+- [x] **Create Table**: Modal with Schema Builder (Columns, Types).
+- [ ] **Table Details**: View Schema, Snapshots, Metadata.
+- [ ] **Query**: Simple SQL query interface (Future).
+
 ## Technical Approach
 - Use SvelteKit Loaders for fetching lists.
-- Use Form Actions for Create/Delete operations.
+- Use Form Actions or API calls for Create/Delete operations.
 - Implement shared `ConfirmModal.svelte` component.
-- Ensure error handling (403 Forbidden) wraps UI elements or redirects appropriately.
+- Ensure error handling (403 Forbidden, 500 Error) wraps UI elements or redirects appropriately.

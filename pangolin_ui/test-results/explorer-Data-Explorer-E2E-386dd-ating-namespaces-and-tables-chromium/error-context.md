@@ -1,0 +1,63 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - complementary [ref=e5]:
+        - generic [ref=e6]:
+          - generic [ref=e8]:
+            - generic [ref=e9]: P
+            - generic [ref=e10]: Pangolin
+          - navigation [ref=e11]:
+            - link "📊 Dashboard" [ref=e12] [cursor=pointer]:
+              - /url: /
+              - generic [ref=e13]: 📊
+              - generic [ref=e14]: Dashboard
+            - link "🔍 Data Explorer" [ref=e15] [cursor=pointer]:
+              - /url: /explorer
+              - generic [ref=e16]: 🔍
+              - generic [ref=e17]: Data Explorer
+            - link "📚 Catalogs" [ref=e18] [cursor=pointer]:
+              - /url: /catalogs
+              - generic [ref=e19]: 📚
+              - generic [ref=e20]: Catalogs
+            - link "🏢 Warehouses" [ref=e21] [cursor=pointer]:
+              - /url: /warehouses
+              - generic [ref=e22]: 🏢
+              - generic [ref=e23]: Warehouses
+            - link "👥 Users" [ref=e24] [cursor=pointer]:
+              - /url: /users
+              - generic [ref=e25]: 👥
+              - generic [ref=e26]: Users
+          - button "◀" [ref=e28] [cursor=pointer]:
+            - generic [ref=e29]: ◀
+      - generic [ref=e30]:
+        - banner [ref=e31]:
+          - generic [ref=e32]:
+            - heading "explorer" [level=2] [ref=e34]
+            - generic [ref=e35]:
+              - button "💻" [ref=e36] [cursor=pointer]
+              - generic [ref=e37]:
+                - generic [ref=e38]:
+                  - paragraph [ref=e39]: no-auth
+                  - paragraph [ref=e40]: TenantAdmin
+                - button "Logout" [ref=e41] [cursor=pointer]
+        - main [ref=e42]:
+          - heading "500" [level=1] [ref=e43]
+          - paragraph [ref=e44]: Internal Error
+    - generic [ref=e45]: Catalogs - Pangolin
+  - generic [ref=e48]:
+    - generic [ref=e49]: "[plugin:vite-plugin-svelte:compile] /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerTree.svelte:7:0 `</script>` attempted to close an element that was not open https://svelte.dev/e/element_invalid_closing_tag"
+    - generic [ref=e50]: ExplorerTree.svelte:7:0
+    - generic [ref=e51]: 5 | // ... logic ... 6 | 7 | </script> ^ 8 | 9 | <div class="h-full flex flex-col">
+    - generic [ref=e52]:
+      - text: Click outside, press Esc key, or fix the code to dismiss.
+      - text: You can also disable this overlay by setting
+      - code [ref=e53]: server.hmr.overlay
+      - text: to
+      - code [ref=e54]: "false"
+      - text: in
+      - code [ref=e55]: vite.config.ts
+      - text: .
+```
