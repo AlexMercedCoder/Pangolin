@@ -36,7 +36,7 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - **Security**: JWT authentication, OAuth 2.0, RBAC, and credential vending
 - **Multi-Cloud Storage**: S3, Azure Blob, Google Cloud Storage support
 - **Multiple Backend Options**: PostgreSQL, MongoDB, SQLite for metadata storage
-- **Management UI**: SvelteKit-based web interface (in development)
+- **Management UI**: SvelteKit-based web interface (Explorer, Auth, Admin)
 - **Cloud Credential Vending**: AWS STS, Azure OAuth2, GCP service account tokens
 - **Complete CRUD Operations**: Full create, read, update, delete for all entities
 
@@ -81,7 +81,9 @@ See [Getting Started Guide](docs/getting-started/getting_started.md) for detaile
 - [Time Travel](docs/features/time_travel.md) - Query historical data states
 - [Warehouse Management](docs/features/warehouse_management.md) - Multi-cloud storage configuration
 - [Audit Logs](docs/features/audit_logs.md) - Track all catalog operations
+- [Audit Logs](docs/features/audit_logs.md) - Track all catalog operations
 - [Entities & Models](docs/features/entities.md) - Core data models (Tenant, Branch, Asset)
+- [Data Explorer](docs/features/data_explorer.md) - **New** Browsing and Creation interface
 
 ### 💾 Backend Storage (Metadata Persistence)
 - [Overview & Comparison](docs/backend_storage/README.md) - Choose the right backend

@@ -39,7 +39,7 @@ Implement full Create, Read, Update, Delete (CRUD) operations for the core entit
 - [x] **Hierarchy**: Browse Catalogs -> Namespaces -> Tables.
 - [x] **Create Namespace**: Modal to create nested namespaces.
 - [x] **Create Table**: Modal with Schema Builder (Columns, Types).
-- [ ] **Table Details**: View Schema, Snapshots, Metadata.
+- [x] **Table Details**: View Schema, Snapshots, Metadata.
 - [ ] **Query**: Simple SQL query interface (Future).
 
 ## Technical Approach

@@ -65,7 +65,7 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 - **RBAC Integration**: Pangolin permissions apply to federated catalogs.
 - **Management API**: 5 endpoints for creating, listing, testing, and deleting federated catalogs.
 
-### 8. Complete CRUD Operations
+### 7. Federated Catalogs
 - **All Entities**: Full create, read, update, delete operations for:
     - Tenants: 5 endpoints (list, create, get, update, delete)
     - Warehouses: 5 endpoints (list, create, get, update, delete)
@@ -75,11 +75,12 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is de
 - **Backend Support**: All operations implemented across Memory, SQLite, PostgreSQL, and MongoDB stores.
 - **Production Ready**: Comprehensive error handling, validation, and logging.
 
-### 9. Management UI (`pangolin_ui`)
-- **Framework**: SvelteKit + TailwindCSS (planned).
+### 8. Management UI (`pangolin_ui`)
+- **Framework**: SvelteKit + TailwindCSS.
 - **Goal**: Provide a modern visual interface for catalog management, RBAC, and data discovery.
+- **Status**: Alpha (Data Explorer, Auth, and Basic Administration implemented).
 
-### 10. CLI Tools
+### 9. CLI Tools
 - **Pangolin Admin (`pangolin-admin`)**: Administrative CLI for managing tenants, warehouses, catalogs, users, and permissions.
 - **Pangolin User (`pangolin-user`)**: User-facing CLI for discovery, branching, and access requests.
 - **Architecture**:
