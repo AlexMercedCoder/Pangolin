@@ -1,7 +1,9 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
-    import { token, user } from '$lib/auth';
+    import { authStore } from '$lib/stores/auth';
+    
+    $: token = $authStore.token;
     import { fade } from 'svelte/transition';
 
     let assetId = $page.params.id;
@@ -26,7 +28,7 @@
         loading = true;
         try {
             const res = await fetch(`/api/v1/assets/${assetId}`, {
-                headers: { 'Authorization': `Bearer ${$token}` }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 const data = await res.json();
@@ -43,7 +45,7 @@
             } else {
                 error = 'Asset not found or access denied';
             }
-        } catch (e) { error = e.message; }
+        } catch (e: any) { error = e.message; }
         finally { loading = false; }
     }
 
@@ -62,7 +64,7 @@
             const res = await fetch(`/api/v1/assets/${assetId}/metadata`, {
                 method: 'POST',
                 headers: { 
-                    'Authorization': `Bearer ${$token}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json' 
                 },
                 body: JSON.stringify(payload)

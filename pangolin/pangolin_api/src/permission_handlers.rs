@@ -139,6 +139,28 @@ pub async fn assign_role(
     }
 }
 
+/// Get user roles
+pub async fn get_user_roles(
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Path(target_user_id): Path<Uuid>,
+) -> Response {
+    match store.get_user_roles(target_user_id).await {
+        // We probably want to return full Role objects, but store returns UserRole (mapping).
+        // The frontend expects Role[].
+        // So we need to fetch the roles from the store for each UserRole.
+        Ok(user_roles) => {
+             let mut roles = Vec::new();
+             for ur in user_roles {
+                 if let Ok(Some(role)) = store.get_role(ur.role_id).await {
+                     roles.push(role);
+                 }
+             }
+             (StatusCode::OK, Json(roles)).into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get user roles: {}", e)).into_response(),
+    }
+}
+
 /// Revoke role from user
 pub async fn revoke_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,

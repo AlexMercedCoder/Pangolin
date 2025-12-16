@@ -1,0 +1,988 @@
+
+> pangolin-ui@0.0.1 check
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui
+Getting Svelte diagnostics...
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/Modal.svelte:30:2
+Warn: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+{#if open}
+	<div
+		class="fixed inset-0 z-50 overflow-y-auto"
+		on:click={handleBackdropClick}
+		on:keydown={(e) => e.key === 'Escape' && close()}
+		role="dialog"
+		aria-modal="true"
+	>
+		<div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+			<!-- Backdrop -->
+			<div class="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 transition-opacity"></div>
+
+			<!-- Modal panel -->
+			<div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle w-full {sizeClasses[size]}">
+				<!-- Header -->
+				{#if title}
+					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+						<h3 class="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+					</div>
+				{/if}
+
+				<!-- Content -->
+				<div class="px-6 py-4">
+					<slot />
+				</div>
+
+				<!-- Footer -->
+				<div class="px-6 py-4 bg-gray-50 dark:bg-gray-900 flex justify-end gap-3">
+					<slot name="footer">
+						<Button variant="ghost" on:click={close}>Cancel</Button>
+					</slot>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/DataTable.svelte:105:9
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+							<div class="flex items-center justify-center gap-3">
+								<div
+									class="w-6 h-6 border-3 border-primary-600 border-t-transparent rounded-full animate-spin"
+								/>
+								<span class="text-gray-600 dark:text-gray-400">Loading...</span>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/DataTable.test.ts:82:13
+Error: This expression is not callable.
+  Type 'never' has no call signatures. 
+		const rowClickHandler = vi.fn();
+		component.$on('rowClick', rowClickHandler);
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/Textarea.svelte:18:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+  {#if label}
+    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      {label}
+      {#if required}
+        <span class="text-red-500">*</span>
+      {/if}
+    </label>
+  {/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/+page.svelte:97:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+			<div class="mb-4">
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+					Filter by Catalog
+				</label>
+				<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/new/+page.svelte:126:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+			<div class="space-y-2">
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+					Catalog
+					<span class="text-error-500">*</span>
+				</label>
+				<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/new/+page.svelte:161:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+			<div class="space-y-2">
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+					Branch Type
+				</label>
+				<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/new/+page.svelte:182:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+			<div class="space-y-2">
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+					Assets (Optional)
+				</label>
+				<textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/+page.svelte:117:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/[id]/edit/+page.svelte:99:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/[id]/edit/+page.svelte:128:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div class="space-y-2">
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+						Description
+					</label>
+					<textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/edit/+page.svelte:111:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/edit/+page.svelte:140:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div class="space-y-2">
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+						Role
+					</label>
+					<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/[name]/edit/+page.svelte:144:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/[name]/edit/+page.svelte:171:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div class="space-y-2">
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Storage Type
+						</label>
+						<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/[name]/edit/+page.svelte:279:10
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+								<div>
+									<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+										Service Account JSON
+									</label>
+									<textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:171:8
+Error: `</label>` attempted to close an element that was not open
+https://svelte.dev/e/element_invalid_closing_tag (svelte)
+								Catalog
+							</label>
+							<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:171:8
+Error: `</label>` attempted to close an element that was not open
+https://svelte.dev/e/element_invalid_closing_tag (ts)
+								Catalog
+							</label>
+							<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditRolesDialog.svelte:95:7
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+					<div class="flex items-center justify-center py-8">
+						<div class="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+					</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/CreateTableDialog.svelte:78:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+            <div class="flex items-center justify-between mb-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Schema Definition
+                </label>
+                <Button size="xs" variant="secondary" on:click={addField}>+ Add Column</Button>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/CreateTableDialog.svelte:81:25
+Error: Type '"xs"' is not assignable to type '"sm" | "md" | "lg" | undefined'. (ts)
+                </label>
+                <Button size="xs" variant="secondary" on:click={addField}>+ Add Column</Button>
+            </div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerNode.svelte:68:5
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+<div class="select-none">
+    <div 
+        class="flex items-center py-1 px-2 rounded-lg cursor-pointer transition-colors duration-150
+        {isActive ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/30 dark:text-primary-100' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'}"
+        on:click={handleClick}
+        style="padding-left: 0.5rem"
+    >
+        {#if hasChildren}
+            <button 
+                class="mr-1 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 focus:outline-none"
+                on:click|stopPropagation={toggleExpand}
+            >
+                <span class="transform transition-transform duration-200 inline-block {expanded ? 'rotate-90' : ''}" style="font-size: 0.7rem;">
+                    ▶
+                </span>
+            </button>
+        {:else}
+            <span class="w-4 mr-1"></span>
+        {/if}
+
+        <span class="mr-2 text-lg opacity-80">{icon}</span>
+        <span class="truncate text-sm font-medium">{label}</span>
+        
+        {#if loading}
+            <div class="ml-auto animate-spin h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+        {/if}
+    </div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerNode.svelte:68:5
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+<div class="select-none">
+    <div 
+        class="flex items-center py-1 px-2 rounded-lg cursor-pointer transition-colors duration-150
+        {isActive ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/30 dark:text-primary-100' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'}"
+        on:click={handleClick}
+        style="padding-left: 0.5rem"
+    >
+        {#if hasChildren}
+            <button 
+                class="mr-1 p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 focus:outline-none"
+                on:click|stopPropagation={toggleExpand}
+            >
+                <span class="transform transition-transform duration-200 inline-block {expanded ? 'rotate-90' : ''}" style="font-size: 0.7rem;">
+                    ▶
+                </span>
+            </button>
+        {:else}
+            <span class="w-4 mr-1"></span>
+        {/if}
+
+        <span class="mr-2 text-lg opacity-80">{icon}</span>
+        <span class="truncate text-sm font-medium">{label}</span>
+        
+        {#if loading}
+            <div class="ml-auto animate-spin h-3 w-3 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+        {/if}
+    </div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerNode.svelte:10:16
+Warn: Component has unused export property 'type'. If it is for external reference only, please consider using `export const type`
+https://svelte.dev/e/export_let_unused (svelte)
+    export let label: string;
+    export let type: 'catalog' | 'namespace' | 'table';
+    export let icon: string = '📁';
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:239:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Description</label>
+                        <textarea bind:value={description} class="w-full px-3 py-2 border rounded-md dark:bg-gray-800" rows="3" />
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:240:25
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<textarea ...></textarea>` rather than `<textarea ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+                        <label class="block text-sm font-medium mb-1">Description</label>
+                        <textarea bind:value={description} class="w-full px-3 py-2 border rounded-md dark:bg-gray-800" rows="3" />
+                    </div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:243:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Tags</label>
+                        <div class="flex gap-2 mb-2">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/rbac/PermissionBuilder.svelte:50:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+    <div>
+      <label class="label text-sm font-medium mb-1">Scope</label>
+      <select class="select w-full" value={scope.type} on:change={updateScopeType}>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/rbac/PermissionBuilder.svelte:61:9
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+      <div>
+        <label class="label text-sm font-medium mb-1">Resource ID / Name</label>
+        <input
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/rbac/PermissionBuilder.svelte:76:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+  <div>
+    <label class="label text-sm font-medium mb-2">Actions</label>
+    <div class="flex flex-wrap gap-2">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:260:8
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+						{#if stepNum < 4}
+							<div
+								class="w-16 h-1 mx-2
+								{step > stepNum ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-700'}"
+							/>
+						{/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:373:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+						Authentication Method <span class="text-error-600">*</span>
+					</label>
+					<div class="grid grid-cols-2 gap-4">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:445:8
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+								Service Account Key (JSON) <span class="text-error-600">*</span>
+							</label>
+							<textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:448:8
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<textarea ...></textarea>` rather than `<textarea ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+							</label>
+							<textarea
+								bind:value={formData.gcsServiceAccountKey}
+								placeholder={`{"type": "service_account", "project_id": "...", ...}`}
+								rows="6"
+								class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-mono text-sm"
+							/>
+							{#if formErrors.gcsServiceAccountKey}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:243:18
+Error: Type '"large"' is not assignable to type '"sm" | "md" | "lg" | undefined'. (ts)
+
+<Modal bind:open size="large">
+	<div class="space-y-6">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/+layout.svelte:16:10
+Error: Argument of type '() => Promise<Unsubscriber>' is not assignable to parameter of type '() => (() => any) | Promise<never>'.
+  Type 'Promise<Unsubscriber>' is not assignable to type '(() => any) | Promise<never>'.
+    Type 'Promise<Unsubscriber>' is not assignable to type 'Promise<never>'.
+      Type 'Unsubscriber' is not assignable to type 'never'. (ts)
+
+	onMount(async () => {
+		// Initialize auth - checks server config and auto-authenticates if NO_AUTH mode
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/access-requests/+page.svelte:29:31
+Error: 'e' is of type 'unknown'. (ts)
+            }
+        } catch (e) { error = e.message; }
+        finally { loading = false; }
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/requests/+page.svelte:176:13
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Comment (Optional)
+            </label>
+            <textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/+page.svelte:26:21
+Error: 'e' is of type 'unknown'. (ts)
+        } catch (e) {
+            error = e.message;
+        }
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[...asset]/+page.svelte:14:35
+Error: Property 'branch' does not exist on type '{ id?: string | undefined; asset?: string | undefined; catalog?: string | undefined; name?: string | undefined; namespace?: string | undefined; table?: string | undefined; }'. (ts)
+    let catalogName = $page.params.catalog || "default";
+    let branchName = $page.params.branch || "main";
+    let assetPath = $page.params.asset || "";
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[...asset]/+page.svelte:76:32
+Error: Property 'schema' does not exist on type 'Asset'. Did you mean 'schemas'? (ts)
+                <div class="space-y-2">
+                    {#if asset.schema && asset.schema.fields}
+                        <div class="bg-gray-900 p-4 rounded">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[...asset]/+page.svelte:76:48
+Error: Property 'schema' does not exist on type 'Asset'. Did you mean 'schemas'? (ts)
+                <div class="space-y-2">
+                    {#if asset.schema && asset.schema.fields}
+                        <div class="bg-gray-900 p-4 rounded">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[...asset]/+page.svelte:78:42
+Error: Property 'schema' does not exist on type 'Asset'. Did you mean 'schemas'? (ts)
+                        <div class="bg-gray-900 p-4 rounded">
+                            {#each asset.schema.fields as field}
+                                <SchemaField {field} depth={0} />
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:160:37
+Warn: `<tr>` cannot be a child of `<table>`. `<table>` only allows these children: `<caption>`, `<colgroup>`, `<tbody>`, `<thead>`, `<tfoot>`, `<style>`, `<script>`, `<template>`. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a `hydration_mismatch` warning
+https://svelte.dev/e/node_invalid_placement_ssr (svelte)
+                                {#each Object.entries(asset.properties) as [k, v]}
+                                    <tr>
+                                        <td><strong>{k}</strong></td>
+                                        <td>{v}</td>
+                                    </tr>
+                                {/each}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:190:33
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                            <div class="form-group">
+                                <label>Description (Markdown)</label>
+                                <textarea bind:value={editForm.description} rows="5"></textarea>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:194:33
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                            <div class="form-group">
+                                <label>Tags (comma separated)</label>
+                                <input bind:value={editForm.tags} />
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:204:33
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                            <div class="form-group">
+                                <label>Custom Properties (JSON)</label>
+                                <textarea bind:value={editForm.properties} rows="5" class="code-font"></textarea>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/[catalog]/[name]/+page.svelte:114:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:108:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:189:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div class="space-y-2">
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Active Branch
+						</label>
+						<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:95:65
+Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
+  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
+            {#if $isTenantAdmin}
+			<Button on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}/edit`)} disabled={loading}>
+				Edit Catalog
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/discovery/+page.svelte:130:13
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Reason for Access
+            </label>
+            <textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:157:34
+Error: Type '"xs"' is not assignable to type '"sm" | "md" | "lg" | undefined'. (ts)
+                    {:else}
+                         <Button size="xs" variant="ghost" on:click={() => showCreateTable = true}>+ Create Table</Button>
+                    {/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/login/+page.svelte:76:19
+Error: Argument of type '(e: KeyboardEvent) => void' is not assignable to parameter of type '(e: CustomEvent<any>) => void'.
+  Types of parameters 'e' and 'e' are incompatible.
+    Type 'CustomEvent<any>' is missing the following properties from type 'KeyboardEvent': altKey, charCode, code, ctrlKey, and 16 more. (ts)
+					disabled={loading}
+					on:keypress={handleKeyPress}
+				/>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/login/+page.svelte:86:19
+Error: Argument of type '(e: KeyboardEvent) => void' is not assignable to parameter of type '(e: CustomEvent<any>) => void'.
+  Types of parameters 'e' and 'e' are incompatible.
+    Type 'CustomEvent<any>' is missing the following properties from type 'KeyboardEvent': altKey, charCode, code, ctrlKey, and 16 more. (ts)
+					disabled={loading}
+					on:keypress={handleKeyPress}
+				/>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:149:65
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                            <div class="scope-details">
+                                {#if perm.scope.catalog_id}<div><label>Catalog:</label> {perm.scope.catalog_id.slice(0,8)}...</div>{/if}
+                                {#if perm.scope.namespace}<div><label>Namespace:</label> {perm.scope.namespace}</div>{/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:150:64
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                                {#if perm.scope.catalog_id}<div><label>Catalog:</label> {perm.scope.catalog_id.slice(0,8)}...</div>{/if}
+                                {#if perm.scope.namespace}<div><label>Namespace:</label> {perm.scope.namespace}</div>{/if}
+                                {#if perm.scope.asset_id}<div><label>Asset:</label> {perm.scope.asset_id.slice(0,8)}...</div>{/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:151:63
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                                {#if perm.scope.namespace}<div><label>Namespace:</label> {perm.scope.namespace}</div>{/if}
+                                {#if perm.scope.asset_id}<div><label>Asset:</label> {perm.scope.asset_id.slice(0,8)}...</div>{/if}
+                                {#if perm.scope.tag_name}<div><label>Tag:</label> {perm.scope.tag_name}</div>{/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:152:63
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                                {#if perm.scope.asset_id}<div><label>Asset:</label> {perm.scope.asset_id.slice(0,8)}...</div>{/if}
+                                {#if perm.scope.tag_name}<div><label>Tag:</label> {perm.scope.tag_name}</div>{/if}
+                            </div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:180:5
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+{#if showGrant}
+    <div class="modal-backdrop" transition:fade on:click={() => showGrant = false}>
+        <div class="modal" on:click|stopPropagation transition:scale>
+            <h2>Grant Permission</h2>
+            
+             <div class="builder">
+                <div class="form-group">
+                    <label>Scope Type</label>
+                    <select bind:value={newPerm.scopeType}>
+                        {#each SCOPES as scope}
+                            <option value={scope}>{scope}</option>
+                        {/each}
+                    </select>
+                </div>
+                
+                {#if newPerm.scopeType === 'Catalog' || newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Catalog ID</label>
+                        <input bind:value={newPerm.catalogId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Namespace</label>
+                        <input bind:value={newPerm.namespace} placeholder="marketing.sales" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Asset ID</label>
+                        <input bind:value={newPerm.assetId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Tag'}
+                     <div class="form-group">
+                        <label>Tag Name</label>
+                        <input bind:value={newPerm.tagName} placeholder="pii" />
+                    </div>
+                {/if}
+                
+                <div class="form-group">
+                    <label>Actions</label>
+                    <div class="actions-select">
+                        {#each ACTIONS as action}
+                            <button 
+                                class="chip {newPerm.actions.includes(action) ? 'active' : ''}" 
+                                on:click={() => toggleAction(action)}
+                            >
+                                {action}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="text-btn" on:click={() => showGrant = false}>Cancel</button>
+                <button class="primary-btn" on:click={handleGrant} disabled={newPerm.actions.length === 0}>Grant</button>
+            </div>
+        </div>
+    </div>
+{/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:180:5
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+{#if showGrant}
+    <div class="modal-backdrop" transition:fade on:click={() => showGrant = false}>
+        <div class="modal" on:click|stopPropagation transition:scale>
+            <h2>Grant Permission</h2>
+            
+             <div class="builder">
+                <div class="form-group">
+                    <label>Scope Type</label>
+                    <select bind:value={newPerm.scopeType}>
+                        {#each SCOPES as scope}
+                            <option value={scope}>{scope}</option>
+                        {/each}
+                    </select>
+                </div>
+                
+                {#if newPerm.scopeType === 'Catalog' || newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Catalog ID</label>
+                        <input bind:value={newPerm.catalogId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Namespace</label>
+                        <input bind:value={newPerm.namespace} placeholder="marketing.sales" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Asset ID</label>
+                        <input bind:value={newPerm.assetId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Tag'}
+                     <div class="form-group">
+                        <label>Tag Name</label>
+                        <input bind:value={newPerm.tagName} placeholder="pii" />
+                    </div>
+                {/if}
+                
+                <div class="form-group">
+                    <label>Actions</label>
+                    <div class="actions-select">
+                        {#each ACTIONS as action}
+                            <button 
+                                class="chip {newPerm.actions.includes(action) ? 'active' : ''}" 
+                                on:click={() => toggleAction(action)}
+                            >
+                                {action}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="text-btn" on:click={() => showGrant = false}>Cancel</button>
+                <button class="primary-btn" on:click={handleGrant} disabled={newPerm.actions.length === 0}>Grant</button>
+            </div>
+        </div>
+    </div>
+{/if}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:181:9
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+    <div class="modal-backdrop" transition:fade on:click={() => showGrant = false}>
+        <div class="modal" on:click|stopPropagation transition:scale>
+            <h2>Grant Permission</h2>
+            
+             <div class="builder">
+                <div class="form-group">
+                    <label>Scope Type</label>
+                    <select bind:value={newPerm.scopeType}>
+                        {#each SCOPES as scope}
+                            <option value={scope}>{scope}</option>
+                        {/each}
+                    </select>
+                </div>
+                
+                {#if newPerm.scopeType === 'Catalog' || newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Catalog ID</label>
+                        <input bind:value={newPerm.catalogId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Namespace</label>
+                        <input bind:value={newPerm.namespace} placeholder="marketing.sales" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Asset ID</label>
+                        <input bind:value={newPerm.assetId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Tag'}
+                     <div class="form-group">
+                        <label>Tag Name</label>
+                        <input bind:value={newPerm.tagName} placeholder="pii" />
+                    </div>
+                {/if}
+                
+                <div class="form-group">
+                    <label>Actions</label>
+                    <div class="actions-select">
+                        {#each ACTIONS as action}
+                            <button 
+                                class="chip {newPerm.actions.includes(action) ? 'active' : ''}" 
+                                on:click={() => toggleAction(action)}
+                            >
+                                {action}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="text-btn" on:click={() => showGrant = false}>Cancel</button>
+                <button class="primary-btn" on:click={handleGrant} disabled={newPerm.actions.length === 0}>Grant</button>
+            </div>
+        </div>
+    </div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:181:9
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+    <div class="modal-backdrop" transition:fade on:click={() => showGrant = false}>
+        <div class="modal" on:click|stopPropagation transition:scale>
+            <h2>Grant Permission</h2>
+            
+             <div class="builder">
+                <div class="form-group">
+                    <label>Scope Type</label>
+                    <select bind:value={newPerm.scopeType}>
+                        {#each SCOPES as scope}
+                            <option value={scope}>{scope}</option>
+                        {/each}
+                    </select>
+                </div>
+                
+                {#if newPerm.scopeType === 'Catalog' || newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Catalog ID</label>
+                        <input bind:value={newPerm.catalogId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Namespace</label>
+                        <input bind:value={newPerm.namespace} placeholder="marketing.sales" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Asset'}
+                    <div class="form-group">
+                        <label>Asset ID</label>
+                        <input bind:value={newPerm.assetId} placeholder="UUID" />
+                    </div>
+                {/if}
+                {#if newPerm.scopeType === 'Tag'}
+                     <div class="form-group">
+                        <label>Tag Name</label>
+                        <input bind:value={newPerm.tagName} placeholder="pii" />
+                    </div>
+                {/if}
+                
+                <div class="form-group">
+                    <label>Actions</label>
+                    <div class="actions-select">
+                        {#each ACTIONS as action}
+                            <button 
+                                class="chip {newPerm.actions.includes(action) ? 'active' : ''}" 
+                                on:click={() => toggleAction(action)}
+                            >
+                                {action}
+                            </button>
+                        {/each}
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="text-btn" on:click={() => showGrant = false}>Cancel</button>
+                <button class="primary-btn" on:click={handleGrant} disabled={newPerm.actions.length === 0}>Grant</button>
+            </div>
+        </div>
+    </div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:186:21
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                <div class="form-group">
+                    <label>Scope Type</label>
+                    <select bind:value={newPerm.scopeType}>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:196:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                    <div class="form-group">
+                        <label>Catalog ID</label>
+                        <input bind:value={newPerm.catalogId} placeholder="UUID" />
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:202:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                    <div class="form-group">
+                        <label>Namespace</label>
+                        <input bind:value={newPerm.namespace} placeholder="marketing.sales" />
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:208:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                    <div class="form-group">
+                        <label>Asset ID</label>
+                        <input bind:value={newPerm.assetId} placeholder="UUID" />
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:214:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                     <div class="form-group">
+                        <label>Tag Name</label>
+                        <input bind:value={newPerm.tagName} placeholder="pii" />
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:220:21
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                <div class="form-group">
+                    <label>Actions</label>
+                    <div class="actions-select">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/+page.svelte:127:11
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+        <div>
+          <label class="label mb-1">Role Name</label>
+          <input
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/+page.svelte:135:11
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+        <div>
+          <label class="label mb-1">Description</label>
+          <textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/+page.svelte:33:33
+Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'. (ts)
+      const id = $page.params.id;
+      role = await rolesApi.get(id);
+      name = role.name;
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:104:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:120:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div class="space-y-2">
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+						Description
+					</label>
+					<textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:27:9
+Error: Type 'string | undefined' is not assignable to type 'string'.
+  Type 'undefined' is not assignable to type 'string'. (ts)
+	async function loadData() {
+        roleId = $page.params.id;
+        if (!roleId) {
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/create/+page.svelte:79:9
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+      <div>
+        <label class="label mb-1">Role Name</label>
+        <input
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/create/+page.svelte:88:9
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+      <div>
+        <label class="label mb-1">Description (Optional)</label>
+        <textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/new/+page.svelte:129:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+			<div class="space-y-2">
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+					Description
+				</label>
+				<textarea
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/new/+page.svelte:143:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div class="space-y-2">
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+						Tenant
+						<span class="text-error-500">*</span>
+					</label>
+					<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/search/+page.svelte:141:9
+Warn: Also define the standard property 'background-clip' for compatibility (css)
+        background: linear-gradient(45deg, var(--md-sys-color-primary), var(--md-sys-color-secondary));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/search/+page.svelte:224:103
+Warn: Also define the standard property 'line-clamp' for compatibility (css)
+    
+    .desc { font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 1rem; }
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/search/+page.svelte:42:21
+Error: 'e' is of type 'unknown'. (ts)
+        } catch (e) {
+            error = e.message;
+        } finally {
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/[id]/+page.svelte:96:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/+page.svelte:134:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+			<div>
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+					Search
+				</label>
+				<input
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/+page.svelte:148:5
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+			<div>
+				<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+					Filter by Role
+				</label>
+				<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/+page.svelte:104:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                    <div>
+                        <label class="label text-sm text-surface-400">Username</label>
+                        <div class="font-medium">{user.username}</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/+page.svelte:108:25
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+                    <div>
+                        <label class="label text-sm text-surface-400">Email</label>
+                        <div class="font-medium">{user.email}</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/new/+page.svelte:313:9
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+							<div>
+								<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+									Service Account JSON (Optional)
+								</label>
+								<textarea
+
+====================================
+svelte-check found 19 errors and 69 warnings in 38 files

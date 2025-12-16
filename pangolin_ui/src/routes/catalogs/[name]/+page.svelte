@@ -7,7 +7,6 @@
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
 	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { branchesApi, type Branch } from '$lib/api/branches';
 	import { notifications } from '$lib/stores/notifications';
     import { isTenantAdmin } from '$lib/stores/auth';
 
@@ -18,7 +17,7 @@
 	let showDeleteDialog = false;
 	let deleting = false;
 
-	$: catalogName = $page.params.name;
+	$: catalogName = $page.params.name || '';
 
 	onMount(async () => {
 		await loadCatalog();

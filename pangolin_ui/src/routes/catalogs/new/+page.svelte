@@ -23,12 +23,14 @@
 	onMount(async () => {
 		try {
 			const wList = await warehousesApi.list();
+            console.log('Fetched Warehouses:', wList);
 			warehouses = wList.map(w => ({ 
 				value: w.name, 
 				label: w.name,
 				full: w
 			}));
 		} catch (e: any) {
+            console.error('Error fetching warehouses:', e);
 			notifications.error('Failed to load warehouses');
 		} finally {
 			loadingWarehouses = false;

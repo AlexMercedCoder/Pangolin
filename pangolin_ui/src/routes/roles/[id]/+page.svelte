@@ -29,22 +29,54 @@
   async function loadRole() {
     loading = true;
     try {
-      const id = $page.params.id;
+      const id = $page.params.id || '';
+      if (!id) return;
       role = await rolesApi.get(id);
       name = role.name;
       description = role.description || '';
       // Parse permissions if they come as object from API (Role interface has any[])
       // In create we sent JSON string. The API get likely returns objects or the string.
       // Assuming API returns parsed JSON array of objects matching our structure.
+      let rawPermissions: any[] = [];
       if (Array.isArray(role.permissions)) {
-        permissions = role.permissions;
+        rawPermissions = role.permissions;
       } else if (typeof role.permissions === 'string') {
           try {
-              permissions = JSON.parse(role.permissions);
+              rawPermissions = JSON.parse(role.permissions);
           } catch (e) {
-              permissions = [];
+              rawPermissions = [];
           }
       }
+      
+      // Normalize permissions for UI (backend kebab-case -> frontend view model)
+      permissions = rawPermissions.map((p: any) => {
+          let scopeType: ScopeType = 'Catalog'; // Default
+          let scopeId = '';
+          
+          if (p.scope) {
+              // Handle backend type casing (catalog -> Catalog)
+              const rawType = p.scope.type?.toLowerCase();
+              if (rawType === 'catalog') scopeType = 'Catalog';
+              else if (rawType === 'namespace') scopeType = 'Namespace';
+              else if (rawType === 'table') scopeType = 'Table';
+              else if (rawType === 'view') scopeType = 'View';
+              else if (rawType === 'warehouse') scopeType = 'Warehouse';
+              else if (rawType === 'tenant') scopeType = 'Tenant';
+              else if (rawType === 'system') scopeType = 'System';
+              
+              // Map ID fields
+              scopeId = p.scope['catalog-id'] || p.scope.catalog_id || 
+                        p.scope['warehouse-name'] || p.scope.warehouse_name ||
+                        p.scope['namespace'] || 
+                        p.scope['table'] || 
+                        p.scope['view'] || '';
+          }
+          
+          return {
+              scope: { type: scopeType, id: scopeId },
+              actions: p.actions || [] // Actions likely "read", display as is or capitalize?
+          };
+      });
     } catch (error: any) {
       notifications.error(`Failed to load role: ${error.message}`);
       goto('/roles');
@@ -124,16 +156,18 @@
     <Card title="Role Details">
       <div class="space-y-4">
         <div>
-          <label class="label mb-1">Role Name</label>
+          <label for="role-name" class="label mb-1">Role Name</label>
           <input 
+              id="role-name"
               type="text" 
               class="input w-full" 
               bind:value={name} 
           />
         </div>
         <div>
-          <label class="label mb-1">Description</label>
+          <label for="role-description" class="label mb-1">Description</label>
           <textarea 
+              id="role-description"
               class="textarea w-full" 
               bind:value={description} 
           ></textarea>

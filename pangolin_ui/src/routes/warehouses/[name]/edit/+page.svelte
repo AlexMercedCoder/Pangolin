@@ -33,7 +33,7 @@
 	let projectId = '';
 	let serviceAccountJson = '';
 
-	$: warehouseName = $page.params.name;
+	$: warehouseName = $page.params.name || '';
 
 	onMount(async () => {
 		await loadWarehouse();

@@ -62,8 +62,19 @@ class ApiClient {
 				return { data: undefined as T };
 			}
 
-			const responseData = await response.json();
-			return { data: responseData };
+			const text = await response.text();
+            if (!text) {
+                return { data: undefined as T };
+            }
+
+            try {
+			    const responseData = JSON.parse(text);
+			    return { data: responseData };
+            } catch (e) {
+                // If parsing fails but we have text, return error or raw text?
+                // Usually API returns JSON. If it's not JSON, it's an error.
+                throw new Error('Invalid JSON response: ' + text.substring(0, 100));
+            }
 		} catch (error: any) {
 			return {
 				error: {

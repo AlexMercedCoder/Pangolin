@@ -7,8 +7,8 @@
     import CreateTableDialog from '$lib/components/explorer/CreateTableDialog.svelte';
     import { notifications } from '$lib/stores/notifications';
 
-	$: catalogName = $page.params.catalog;
-    $: namespaceParam = $page.params.namespace;
+	$: catalogName = $page.params.catalog || '';
+    $: namespaceParam = $page.params.namespace || '';
     $: namespaceParts = namespaceParam ? namespaceParam.split('.') : [];
 
     let namespaces: string[][] = [];
@@ -154,7 +154,7 @@
                     {#if namespaces.length === 0 && tables.length === 0}
                          <!-- Empty state handled below -->
                     {:else}
-                         <Button size="xs" variant="ghost" on:click={() => showCreateTable = true}>+ Create Table</Button>
+                         <Button size="sm" variant="ghost" on:click={() => showCreateTable = true}>+ Create Table</Button>
                     {/if}
                 </div>
                 

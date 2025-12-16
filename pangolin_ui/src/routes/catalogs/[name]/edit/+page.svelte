@@ -20,7 +20,7 @@
 	let storageLocation = '';
 	let errors: Record<string, string> = {};
 
-	$: catalogName = $page.params.name;
+	$: catalogName = $page.params.name || '';
 	
 	$: warehouseOptions = [
 		{ value: '', label: 'None (No warehouse)' },

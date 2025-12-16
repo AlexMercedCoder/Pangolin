@@ -14,9 +14,19 @@ export interface Table {
     identifier: TableIdentifier;
     // We can expand this with full schema/snapshot types as needed
     schemas?: any[];
+    schema?: any;
     current_snapshot_id?: number;
     snapshots?: any[];
+    history?: any[];
     properties?: Record<string, string>;
+    location?: string;
+    "format-version"?: number;
+}
+
+export interface Asset extends Table {
+    // Asset can have more metadata if needed, but for now it's compatible with Table
+    description?: string;
+    tags?: string[];
 }
 
 export interface ListNamespacesResponse {

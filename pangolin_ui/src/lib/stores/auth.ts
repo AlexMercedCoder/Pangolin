@@ -57,6 +57,7 @@ function createAuthStore() {
 					id: 'no-auth-user',
 					username: 'no-auth',
 					role: 'TenantAdmin',
+					tenant_id: '00000000-0000-0000-0000-000000000000' // Default tenant
 				};
 				
 				update(state => ({

@@ -6,7 +6,6 @@
 	export let error = '';
 	export let disabled = false;
 	export let required = false;
-	export let required = false;
 	export let id = '';
 	export let helpText = '';
 

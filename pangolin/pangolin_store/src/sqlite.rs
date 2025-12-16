@@ -990,10 +990,11 @@ impl CatalogStore for SqliteStore {
     // Access Request Operations
     async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
         sqlx::query(
-            "INSERT INTO access_requests (id, user_id, asset_id, reason, requested_at, status, reviewed_by, reviewed_at, review_comment) 
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO access_requests (id, tenant_id, user_id, asset_id, reason, requested_at, status, reviewed_by, reviewed_at, review_comment) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(request.id.to_string())
+        .bind(request.tenant_id.to_string())
         .bind(request.user_id.to_string())
         .bind(request.asset_id.to_string())
         .bind(request.reason)
@@ -1021,14 +1022,8 @@ impl CatalogStore for SqliteStore {
     }
 
     async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
-        // Access requests link to assets which link to catalogs/namespaces/tenants.
-        // Or users which link to tenants.
-        // Since schema doesn't have tenant_id on access_requests directly, we join via user_id or asset_id.
-        // User links to tenant_id.
         let rows = sqlx::query(
-            "SELECT ar.* FROM access_requests ar
-             JOIN users u ON ar.user_id = u.id
-             WHERE u.tenant_id = ?"
+            "SELECT * FROM access_requests WHERE tenant_id = ?"
         )
         .bind(tenant_id.to_string())
         .fetch_all(&self.pool)
@@ -1068,6 +1063,7 @@ impl SqliteStore {
 
         Ok(AccessRequest {
             id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+            tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
             user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
             asset_id: Uuid::parse_str(&row.get::<String, _>("asset_id"))?,
             reason: row.get("reason"),

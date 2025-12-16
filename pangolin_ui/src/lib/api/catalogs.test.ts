@@ -17,12 +17,12 @@ describe('Catalogs API', () => {
 
 		vi.mocked(apiClient.get).mockResolvedValueOnce({
 			data: mockCatalogs,
-			error: null
+			error: undefined
 		});
 
 		const result = await catalogsApi.list();
 
-		expect(result.data).toEqual(mockCatalogs);
+		expect(result).toEqual(mockCatalogs);
 		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/catalogs');
 	});
 
@@ -36,12 +36,12 @@ describe('Catalogs API', () => {
 
 		vi.mocked(apiClient.get).mockResolvedValueOnce({
 			data: mockCatalog,
-			error: null
+			error: undefined
 		});
 
 		const result = await catalogsApi.get('test-catalog');
 
-		expect(result.data).toEqual(mockCatalog);
+		expect(result).toEqual(mockCatalog);
 		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/catalogs/test-catalog');
 	});
 
@@ -56,24 +56,24 @@ describe('Catalogs API', () => {
 
 		vi.mocked(apiClient.post).mockResolvedValueOnce({
 			data: createdCatalog,
-			error: null
+			error: undefined
 		});
 
 		const result = await catalogsApi.create(newCatalog);
 
-		expect(result.data).toEqual(createdCatalog);
+		expect(result).toEqual(createdCatalog);
 		expect(apiClient.post).toHaveBeenCalledWith('/api/v1/catalogs', newCatalog);
 	});
 
 	it('deletes catalog', async () => {
 		vi.mocked(apiClient.delete).mockResolvedValueOnce({
 			data: null,
-			error: null
+			error: undefined
 		});
 
 		const result = await catalogsApi.delete('test-catalog');
 
-		expect(result.error).toBeNull();
+		expect(result).toBeUndefined();
 		expect(apiClient.delete).toHaveBeenCalledWith('/api/v1/catalogs/test-catalog');
 	});
 
@@ -87,10 +87,10 @@ describe('Catalogs API', () => {
 
 		vi.mocked(apiClient.get).mockResolvedValueOnce({
 			data: mockCatalog,
-			error: null
+			error: undefined
 		});
 
-		const result = await catalogsApi.getCatalog('test');
+		const result = await catalogsApi.get('test');
 
 		expect(result).toEqual(mockCatalog);
 	});
@@ -98,10 +98,10 @@ describe('Catalogs API', () => {
 	it('deleteCatalog convenience method calls delete', async () => {
 		vi.mocked(apiClient.delete).mockResolvedValueOnce({
 			data: null,
-			error: null
+			error: undefined
 		});
 
-		await catalogsApi.deleteCatalog('test');
+		await catalogsApi.delete('test');
 
 		expect(apiClient.delete).toHaveBeenCalledWith('/api/v1/catalogs/test');
 	});

@@ -13,9 +13,12 @@
 	let tenants: Tenant[] = [];
 	let loadingTenants = false;
 
-	onMount(async () => {
+	onMount(() => {
 		// Initialize auth - checks server config and auto-authenticates if NO_AUTH mode
-		await authStore.initialize();
+		const init = async () => {
+			await authStore.initialize();
+		};
+		init();
 		
 		// Load theme
 		themeStore.loadTheme();
@@ -169,7 +172,17 @@
 						>
 							<span class="text-xl">👥</span>
 							{#if sidebarOpen}
+
 								<span>Users</span>
+							{/if}
+						</a>
+						<a
+							href="/roles"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">🛡️</span>
+							{#if sidebarOpen}
+								<span>Roles</span>
 							{/if}
 						</a>
 						<a

@@ -3,7 +3,7 @@
     import { page } from '$app/stores';
     import { user, token } from '$lib/auth';
 
-    let commits = [];
+    let commits: any[] = [];
     let branchName = $page.url.searchParams.get('branch');
     let catalogName = $page.url.searchParams.get('catalog') || 'default';
     let error = "";

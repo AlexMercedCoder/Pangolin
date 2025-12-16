@@ -4,6 +4,7 @@
 	export let placeholder = 'Select an option';
 	export let disabled = false;
 	export let error = '';
+	export let helpText = '';
 	export let label = '';
 	export let id = '';
 	export let required = false;
@@ -37,6 +38,9 @@
 			<option value={option.value}>{option.label}</option>
 		{/each}
 	</select>
+	{#if helpText}
+		<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{helpText}</p>
+	{/if}
 	{#if error}
 		<p class="text-sm text-error-600">{error}</p>
 	{/if}

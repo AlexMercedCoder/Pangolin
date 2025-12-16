@@ -49,10 +49,15 @@ function createNotificationStore() {
 		return add({ type: 'info', message, timeout });
 	}
 
+	function clear() {
+		update(() => []);
+	}
+
 	return {
 		subscribe,
 		add,
 		remove,
+		clear,
 		success,
 		error,
 		warning,

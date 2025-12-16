@@ -60,7 +60,7 @@
     $: currentTenantName = tenants.find(t => t.id === $selectedTenant)?.name || 'All Tenants';
 </script>
 
-{#if $user?.role === 'Root' || $user?.roles?.includes('Root')}
+{#if $user?.role === 'Root'}
 <div class="tenant-selector" bind:this={menuRef}>
     <button class="selector-btn" on:click|stopPropagation={toggleMenu}>
         <span class="material-icons">business</span>

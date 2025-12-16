@@ -25,7 +25,7 @@
     let discoverable = false;
     let newTag = '';
 
-    $: canEdit = $authStore.user?.role === 'tenant-admin' || $authStore.user?.role === 'root';
+    $: canEdit = $authStore.user?.role === 'TenantAdmin' || $authStore.user?.role === 'Root';
 
     onMount(async () => {
         if (assetId) {

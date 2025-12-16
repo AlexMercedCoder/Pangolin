@@ -17,12 +17,12 @@ describe('Warehouses API', () => {
 
 		vi.mocked(apiClient.get).mockResolvedValueOnce({
 			data: mockWarehouses,
-			error: null
+			error: undefined
 		});
 
 		const result = await warehousesApi.list();
 
-		expect(result.data).toEqual(mockWarehouses);
+		expect(result).toEqual(mockWarehouses);
 		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/warehouses');
 	});
 
@@ -36,12 +36,12 @@ describe('Warehouses API', () => {
 
 		vi.mocked(apiClient.get).mockResolvedValueOnce({
 			data: mockWarehouse,
-			error: null
+			error: undefined
 		});
 
 		const result = await warehousesApi.get('test-warehouse');
 
-		expect(result.data).toEqual(mockWarehouse);
+		expect(result).toEqual(mockWarehouse);
 		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/warehouses/test-warehouse');
 	});
 
@@ -49,19 +49,19 @@ describe('Warehouses API', () => {
 		const newWarehouse = {
 			name: 'new-warehouse',
 			use_sts: false,
-			storage_config: { type: 's3', bucket: 'new-bucket' }
+			storage_config: { type: 's3' as const, bucket: 'bucket' }
 		};
 
 		const createdWarehouse = { id: '3', ...newWarehouse };
 
 		vi.mocked(apiClient.post).mockResolvedValueOnce({
 			data: createdWarehouse,
-			error: null
+			error: undefined
 		});
 
 		const result = await warehousesApi.create(newWarehouse);
 
-		expect(result.data).toEqual(createdWarehouse);
+		expect(result).toEqual(createdWarehouse);
 		expect(apiClient.post).toHaveBeenCalledWith('/api/v1/warehouses', newWarehouse);
 	});
 
@@ -75,10 +75,10 @@ describe('Warehouses API', () => {
 
 		vi.mocked(apiClient.get).mockResolvedValueOnce({
 			data: mockWarehouse,
-			error: null
+			error: undefined
 		});
 
-		const result = await warehousesApi.getWarehouse('test');
+		const result = await warehousesApi.get('test');
 
 		expect(result).toEqual(mockWarehouse);
 	});

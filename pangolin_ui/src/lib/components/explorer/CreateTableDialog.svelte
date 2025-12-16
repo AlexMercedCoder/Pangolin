@@ -78,7 +78,7 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Schema Definition
                 </label>
-                <Button size="xs" variant="secondary" on:click={addField}>+ Add Column</Button>
+                <Button size="sm" variant="secondary" on:click={addField}>+ Add Column</Button>
             </div>
             
             <div class="space-y-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-200 dark:border-gray-700">

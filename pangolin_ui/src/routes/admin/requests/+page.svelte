@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { businessMetadataApi, type AccessRequest } from '$lib/api/business_metadata';
-    import { notificationStore } from '$lib/stores/notification';
+    import { notifications } from '$lib/stores/notifications';
     import { authStore } from '$lib/stores/auth';
 
     let requests: AccessRequest[] = [];
@@ -24,7 +24,7 @@
             requests = await businessMetadataApi.listRequests();
         } catch (e) {
             console.error(e);
-            notificationStore.error('Failed to load access requests');
+            notifications.error('Failed to load access requests');
         } finally {
             loading = false;
             // TODO: In a real app we might fetch user names and asset names here
@@ -51,12 +51,12 @@
                 status: reviewAction,
                 comment: reviewComment
             });
-            notificationStore.success(`Request ${reviewAction.toLowerCase()}`);
+            notifications.success(`Request ${reviewAction.toLowerCase()}`);
             showReviewModal = false;
             loadRequests();
         } catch (e) {
             console.error(e);
-            notificationStore.error('Failed to update request');
+            notifications.error('Failed to update request');
         }
     }
 </script>

@@ -79,7 +79,7 @@ describe('DataTable Component', () => {
 		});
 
 		const rowClickHandler = vi.fn();
-		component.$on('rowClick', rowClickHandler);
+		(component as any).$on('rowClick', rowClickHandler);
 
 		// Click would need user-event library for proper testing
 		// This is a basic structure

@@ -2,9 +2,11 @@ import { writable } from 'svelte/store';
 import { browser } from '$app/environment';
 
 export interface User {
+    id: string;
     username: string;
-    roles: string[];
-    tenantId?: string;
+    role: 'Root' | 'TenantAdmin' | 'TenantUser';
+    tenant_id?: string;
+    tenant_name?: string;
 }
 
 // Initialize from localStorage if available

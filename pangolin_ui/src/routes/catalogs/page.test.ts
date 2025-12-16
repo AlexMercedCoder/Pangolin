@@ -38,7 +38,7 @@ describe('Catalogs Page - Tenant Isolation', () => {
 		});
 
 		// Change tenant
-		tenantStore.setTenant('tenant-123', 'Test Tenant');
+		tenantStore.selectTenant('tenant-123', 'Test Tenant');
 
 		// Should trigger reload
 		await waitFor(() => {
@@ -95,7 +95,7 @@ describe('Catalogs Page - Tenant Isolation', () => {
 
 		// Switch to tenant with no catalogs
 		(catalogsApi.list as any).mockResolvedValue([]);
-		tenantStore.setTenant('empty-tenant', 'Empty Tenant');
+		tenantStore.selectTenant('empty-tenant', 'Empty Tenant');
 
 		await waitFor(() => {
 			expect(screen.queryByText('catalog-1')).not.toBeInTheDocument();

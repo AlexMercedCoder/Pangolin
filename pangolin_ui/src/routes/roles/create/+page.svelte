@@ -1,11 +1,13 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { rolesApi, type Role } from '$lib/api/roles';
-  import Button from '$lib/components/ui/Button.svelte';
-  import Card from '$lib/components/ui/Card.svelte';
-  import { notifications } from '$lib/stores/notifications';
-  import PermissionBuilder from '$lib/components/rbac/PermissionBuilder.svelte';
-  import type { ScopeType, ActionType } from '$lib/components/rbac/PermissionBuilder.svelte';
+	import { rolesApi, type Role } from '$lib/api/roles';
+	import Button from '$lib/components/ui/Button.svelte';
+	import Card from '$lib/components/ui/Card.svelte';
+	import { notifications } from '$lib/stores/notifications';
+	import PermissionBuilder from '$lib/components/rbac/PermissionBuilder.svelte';
+	import type { ScopeType, ActionType } from '$lib/components/rbac/PermissionBuilder.svelte';
+    import { tenantStore } from '$lib/stores/tenant';
+    import { authStore } from '$lib/stores/auth';
   
   let name = '';
   let description = '';
@@ -48,16 +50,57 @@
 
     submitting = true;
     try {
-      // Construct Role object
-      // Note: Backend might expect specific JSON structure for permissions
-      await rolesApi.create({
+      // 1. Get Tenant ID
+      // Try tenantStore first, then authStore user context, then fail.
+      const tenantId = $tenantStore.selectedTenantId || $authStore.user?.tenant_id;
+      if (!tenantId) {
+          throw new Error('Tenant Context missing. Cannot create role.');
+      }
+
+      // 2. Create Role (permissions ignored by backend)
+      const role = await rolesApi.create({
         name,
         description,
-        permissions: JSON.stringify(permissions) // Assuming backend takes serialized JSON or similar
+        'tenant-id': tenantId
       });
+
+      // 3. Update Role with Permissions
+      // Map frontend permissions to backend structure
+      // Backend expects PermissionGrant: { scope: { type: 'Catalog', catalog_id: uuid }, actions: [] }
+      const backendPermissions = permissions.map(p => {
+          let backendScope: any;
+          
+          if (p.scope.type === 'Catalog') {
+              // Backend: kebab-case scope fields and lowercase type/variant?
+              // PermissionScope uses tag="type", rename_all="kebab-case".
+              // So type="catalog".
+              // BUT rename_all on enum only renames variants. Fields likely remain snake_case.
+              // So catalog_id.
+              backendScope = { type: 'catalog', 'catalog_id': p.scope.id };
+          } else if (p.scope.type === 'Namespace') {
+              // Not fully supported in UI yet, but for safety:
+             backendScope = { type: 'catalog', 'catalog_id': p.scope.id }; 
+          } else {
+              // Default
+               backendScope = { type: 'catalog', 'catalog_id': p.scope.id };
+          }
+
+          return {
+              scope: backendScope,
+              actions: p.actions.map(a => a.toLowerCase()) // Action enum is kebab-case (Read -> read)
+          };
+      });
+      
+      role.permissions = backendPermissions;
+      console.log('Sending Role Update with Permissions:', JSON.stringify(role, null, 2));
+
+      await rolesApi.update(role.id, role);
+
       notifications.success('Role created successfully');
       goto('/roles');
     } catch (error: any) {
+      console.error('Role Creation Error:', error);
+      console.error('Role Creation Error Message:', error.message);
       notifications.error(`Failed to create role: ${error.message}`);
     }
     submitting = false;
@@ -76,17 +119,19 @@
   <Card title="Role Details">
     <div class="space-y-4">
       <div>
-        <label class="label mb-1">Role Name</label>
+        <label class="label mb-1" for="role-name">Role Name</label>
         <input 
             type="text" 
+            id="role-name"
             class="input w-full" 
             bind:value={name} 
             placeholder="e.g. Data Analyst"
         />
       </div>
       <div>
-        <label class="label mb-1">Description (Optional)</label>
+        <label class="label mb-1" for="role-description">Description (Optional)</label>
         <textarea 
+            id="role-description"
             class="textarea w-full" 
             bind:value={description} 
             placeholder="Role description..."

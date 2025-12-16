@@ -777,23 +777,9 @@ impl CatalogStore for MemoryStore {
 
     async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
         let mut requests = Vec::new();
-        // Inefficient scan to filter by tenant via asset ownership
-        // Ideally AccessRequest should have tenant_id or we should look up differently
+        // Efficient scan filtering by tenant_id directly
         for req in self.access_requests.iter() {
-            let asset_id = req.value().asset_id;
-            let mut belongs_to_tenant = false;
-            // Scan assets to find the one this request is for
-            for asset_entry in self.assets.iter() {
-                if asset_entry.value().id == asset_id {
-                    let (tid, _, _, _, _) = asset_entry.key();
-                    if *tid == tenant_id {
-                        belongs_to_tenant = true;
-                    }
-                    break;
-                }
-            }
-            
-            if belongs_to_tenant {
+            if req.value().tenant_id == tenant_id {
                 requests.push(req.value().clone());
             }
         }

@@ -43,10 +43,10 @@
     {#if isOpen}
         <div class="menu-dropdown" transition:fade={{ duration: 100 }}>
             <div class="menu-header">
-                <span class="role-badge">{$user?.roles?.[0] || 'User'}</span>
-                {#if $user?.tenantId}
+                <span class="role-badge">{$user?.role || 'User'}</span>
+                {#if $user?.tenant_id}
                     <div class="tenant-info">
-                        Tenant ID: <span class="mono">{$user.tenantId.slice(0, 8)}...</span>
+                        Tenant ID: <span class="mono">{$user.tenant_id.slice(0, 8)}...</span>
                     </div>
                 {/if}
             </div>

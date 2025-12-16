@@ -167,6 +167,27 @@
 					<h3 class="text-lg font-medium text-gray-900 dark:text-white">Add Permission</h3>
 
 					<!-- Scope Type -->
+					<!-- Scope Type -->
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+							Scope Type
+						</label>
+						<select
+							bind:value={scopeType}
+							class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white"
+						>
+							<option value="Global">Global</option>
+							<option value="Catalog">Catalog</option>
+							<option value="Namespace">Namespace</option>
+							<option value="Table">Table</option>
+							<option value="Tag">Tag</option>
+						</select>
+					</div>
+
+					<!-- Catalog (for Catalog, Namespace, Table) -->
+					{#if scopeType === 'Catalog' || scopeType === 'Namespace' || scopeType === 'Table'}
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
 								Catalog
 							</label>
 							<select

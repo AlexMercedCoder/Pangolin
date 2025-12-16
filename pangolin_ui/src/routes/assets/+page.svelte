@@ -22,7 +22,7 @@
             } else {
                 error = "Failed to load assets";
             }
-        } catch (e) {
+        } catch (e: any) {
             error = e.message;
         }
     });

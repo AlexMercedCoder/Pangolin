@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { businessMetadataApi, type BusinessMetadata } from '$lib/api/business_metadata';
     import type { Asset } from '$lib/api/iceberg'; // Import Asset type
-    import { notificationStore } from '$lib/stores/notification';
+    import { notifications } from '$lib/stores/notifications';
 
 	let query = '';
 	let results: any[] = []; // Asset + Metadata combined
@@ -18,7 +18,7 @@
             results = await businessMetadataApi.searchAssets(query);
 		} catch (e) {
 			console.error(e);
-            notificationStore.error('Search failed');
+            notifications.error('Search failed');
 		} finally {
 			loading = false;
 		}
@@ -34,11 +34,11 @@
         if (!selectedAssetId) return;
         try {
             await businessMetadataApi.requestAccess(selectedAssetId, { reason: requestReason });
-            notificationStore.success('Access request submitted');
+            notifications.success('Access request submitted');
             showRequestModal = false;
         } catch (e) {
             console.error(e);
-            notificationStore.error('Failed to submit request');
+            notifications.error('Failed to submit request');
         }
     }
 </script>

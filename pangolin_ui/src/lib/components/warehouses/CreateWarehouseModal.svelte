@@ -152,7 +152,7 @@
 		creating = true;
 
 		// Build storage config based on type and auth method
-		const storage_config: Record<string, string> = {
+		const storage_config: any = {
 			type: formData.storageType,
 		};
 
@@ -196,18 +196,17 @@
 			storage_config,
 		};
 
-		const response = await warehousesApi.create(request);
-
-		if (response.error) {
-			notifications.error(`Failed to create warehouse: ${response.error.message}`);
-		} else {
+		try {
+			await warehousesApi.create(request);
 			notifications.success(`Warehouse "${formData.name}" created successfully`);
 			open = false;
 			resetForm();
 			onSuccess();
+		} catch (error: any) {
+			notifications.error(`Failed to create warehouse: ${error.message || 'Unknown error'}`);
+		} finally {
+			creating = false;
 		}
-
-		creating = false;
 	}
 
 	function resetForm() {
@@ -241,7 +240,7 @@
 	}
 </script>
 
-<Modal bind:open size="large">
+<Modal bind:open size="lg">
 	<div class="space-y-6">
 		<!-- Header with Steps -->
 		<div>

@@ -37,7 +37,7 @@
 		}
 	}
 
-	function handleKeyPress(e: KeyboardEvent) {
+	function handleKeyPress(e: any) {
 		if (e.key === 'Enter') {
 			handleLogin();
 		}

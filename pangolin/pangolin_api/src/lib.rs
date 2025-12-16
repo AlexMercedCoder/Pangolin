@@ -141,6 +141,9 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Permission Management
         .route("/api/v1/permissions", post(permission_handlers::grant_permission)) 
         .route("/api/v1/permissions/:id", delete(permission_handlers::revoke_permission))
+        // User Role Assignment
+        .route("/api/v1/users/:id/roles", post(permission_handlers::assign_role).get(permission_handlers::get_user_roles))
+        .route("/api/v1/users/:id/roles/:role_id", delete(permission_handlers::revoke_role))
         // .route("/api/v1/users/:user_id/permissions", get(permission_handlers::list_user_permissions))
         // Service User Management
         .route("/api/v1/service-users", get(service_user_handlers::list_service_users).post(service_user_handlers::create_service_user))

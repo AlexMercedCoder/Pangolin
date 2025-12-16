@@ -1,11 +1,12 @@
+```svelte
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { icebergApi, type Table } from '$lib/api/iceberg';
     import TableDetail from '$lib/components/explorer/TableDetail.svelte';
 
-	$: catalogName = $page.params.catalog;
-    $: namespaceParam = $page.params.namespace;
-    $: tableName = $page.params.table;
+	$: catalogName = $page.params.catalog || '';
+    $: namespaceParam = $page.params.namespace || '';
+    $: tableName = $page.params.table || '';
     $: namespaceParts = namespaceParam ? namespaceParam.split('.') : [];
 
     let table: Table | null = null;

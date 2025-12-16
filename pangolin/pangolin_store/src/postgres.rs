@@ -891,7 +891,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn get_access_request(&self, id: Uuid) -> Result<Option<AccessRequest>> {
-        let row = sqlx::query("SELECT id, user_id, asset_id, reason, requested_at, status, reviewed_by, reviewed_at, review_comment FROM access_requests WHERE id = $1")
+        let row = sqlx::query("SELECT id, tenant_id, user_id, asset_id, reason, requested_at, status, reviewed_by, reviewed_at, review_comment FROM access_requests WHERE id = $1")
             .bind(id)
             .fetch_optional(&self.pool)
             .await?;
@@ -1248,6 +1248,7 @@ impl PostgresStore {
 
         Ok(AccessRequest {
             id: row.get("id"),
+            tenant_id: row.get("tenant_id"),
             user_id: row.get("user_id"),
             asset_id: row.get("asset_id"),
             reason: row.get("reason"),

@@ -87,6 +87,7 @@ impl BusinessMetadata {
 #[serde(rename_all = "kebab-case")]
 pub struct AccessRequest {
     pub id: Uuid,
+    pub tenant_id: Uuid,
     pub user_id: Uuid,
     pub asset_id: Uuid,
     pub reason: Option<String>,
@@ -107,9 +108,10 @@ pub enum RequestStatus {
 }
 
 impl AccessRequest {
-    pub fn new(user_id: Uuid, asset_id: Uuid, reason: Option<String>) -> Self {
+    pub fn new(tenant_id: Uuid, user_id: Uuid, asset_id: Uuid, reason: Option<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
+            tenant_id,
             user_id,
             asset_id,
             reason,

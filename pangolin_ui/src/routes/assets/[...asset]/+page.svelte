@@ -1,14 +1,17 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
-    import { user, token } from '$lib/auth';
+    import { authStore } from '$lib/stores/auth';
+    
+    $: token = $authStore.token;
+    $: user = $authStore.user;
     import Card from '$lib/components/ui/Card.svelte';
     import type { Asset } from '$lib/api/iceberg';
     import SchemaField from '$lib/components/explorer/SchemaField.svelte';
 
     // Extract from URL or use defaults
     let catalogName = $page.params.catalog || "default";
-    let branchName = $page.params.branch || "main";
+    let branchName = ($page.params as any).branch || "main";
     let assetPath = $page.params.asset || "";
     
     let asset: Asset | null = null;
@@ -16,7 +19,7 @@
     let activeTab = "schema"; // schema | properties
 
     onMount(async () => {
-        if (!$user) return;
+        if (!user) return;
         
         // Construct API path: /v1/{prefix}/namespaces/{namespace}/tables/{table}
         // assetPath is "namespace/table" or "ns1/ns2/table"
@@ -32,7 +35,7 @@
         // Let's try to fetch table metadata.
         
         const res = await fetch(`/v1/${catalogName}/namespaces/${namespace}/tables/${tableName}`, {
-            headers: { 'Authorization': `Bearer ${$token}` }
+            headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (res.ok) {

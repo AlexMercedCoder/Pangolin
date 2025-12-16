@@ -143,7 +143,8 @@ pub async fn request_access(
     Path(asset_id): Path<Uuid>,
     Json(payload): Json<CreateAccessRequestPayload>,
 ) -> impl IntoResponse {
-    let request = AccessRequest::new(session.user_id, asset_id, payload.reason);
+    let tenant_id = session.tenant_id.unwrap_or_default();
+    let request = AccessRequest::new(tenant_id, session.user_id, asset_id, payload.reason);
 
     match store.create_access_request(request.clone()).await {
         Ok(_) => (StatusCode::CREATED, Json(request)).into_response(),

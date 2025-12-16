@@ -47,8 +47,8 @@
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <!-- Scope Selection -->
     <div>
-      <label class="label text-sm font-medium mb-1">Scope</label>
-      <select class="select w-full" value={scope.type} on:change={updateScopeType}>
+      <label class="label text-sm font-medium mb-1" for="scope-type">Scope</label>
+      <select id="scope-type" class="select w-full" value={scope.type} on:change={updateScopeType}>
         {#each scopeOptions as opt}
           <option value={opt}>{opt}</option>
         {/each}
@@ -58,9 +58,10 @@
     <!-- Resource ID (Optional depending on scope) -->
     {#if scope.type !== 'System' && scope.type !== 'Tenant'} 
       <div>
-        <label class="label text-sm font-medium mb-1">Resource ID / Name</label>
+        <label class="label text-sm font-medium mb-1" for="resource-id">Resource ID / Name</label>
         <input 
           type="text" 
+          id="resource-id"
           class="input w-full" 
           placeholder={`e.g. "finance_db" for Namespace`}
           value={scope.id || ''} 

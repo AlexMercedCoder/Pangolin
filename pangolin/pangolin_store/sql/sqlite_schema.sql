@@ -19,6 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_warehouses_tenant ON warehouses(tenant_id);
 
 CREATE TABLE access_requests (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     asset_id TEXT NOT NULL,
     reason TEXT,
@@ -27,9 +28,11 @@ CREATE TABLE access_requests (
     reviewed_by TEXT,
     reviewed_at TIMESTAMP,
     review_comment TEXT,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_access_requests_tenant ON access_requests(tenant_id);
 
 -- Catalogs (Added ID)
 CREATE TABLE IF NOT EXISTS catalogs (

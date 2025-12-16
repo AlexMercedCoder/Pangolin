@@ -6,7 +6,7 @@
     import CreateNamespaceDialog from '$lib/components/explorer/CreateNamespaceDialog.svelte';
     import { notifications } from '$lib/stores/notifications';
 
-	$: catalogName = $page.params.catalog;
+	$: catalogName = $page.params.catalog || '';
 
     let namespaces: string[][] = [];
     let loading = true;

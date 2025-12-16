@@ -1,7 +1,11 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
-    import { token, user } from '$lib/auth';
+    import { authStore } from '$lib/stores/auth';
+    
+    // Derived values for template compatibility
+    $: token = $authStore.token;
+    $: user = $authStore.user;
     import { fade } from 'svelte/transition';
 
     let requests: any[] = [];
@@ -15,14 +19,14 @@
         loading = true;
         try {
             const res = await fetch('/api/v1/access-requests', {
-                headers: { 'Authorization': `Bearer ${$token}` }
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
                 requests = await res.json();
             } else {
                 error = 'Failed to load requests';
             }
-        } catch (e) { error = e.message; }
+        } catch (e: any) { error = e.message; }
         finally { loading = false; }
     }
 
@@ -33,7 +37,7 @@
             const res = await fetch(`/api/v1/access-requests/${req.id}`, {
                 method: 'PUT',
                 headers: { 
-                    'Authorization': `Bearer ${$token}`,
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status: status === 'Approve' ? 'Approved' : 'Rejected', comment: `${status} by admin` })
@@ -42,7 +46,7 @@
             if (res.ok) {
                 fetchRequests();
             }
-        } catch (e) { alert('Action failed'); }
+        } catch (e: any) { alert('Action failed'); }
     }
 
     onMount(() => {
@@ -96,7 +100,7 @@
                     {/if}
                 </div>
 
-                {#if req.status === 'Pending' && ($user?.role === 'TenantAdmin' || $user?.role === 'Root')}
+                {#if req.status === 'Pending' && (user?.role === 'TenantAdmin' || user?.role === 'Root')}
                     <div class="req-actions">
                         <button class="action-btn approve" on:click={() => updateStatus(req, 'Approve')}>
                             <span class="material-icons">check</span>
