@@ -55,6 +55,8 @@ pub enum Action {
     IngestBranching,
     /// Can create experimental branches (cannot be merged back)
     ExperimentalBranching,
+    /// Can mark assets as discoverable in a catalog
+    ManageDiscovery,
 }
 
 impl Action {

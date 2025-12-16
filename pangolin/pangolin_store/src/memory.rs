@@ -680,6 +680,42 @@ impl CatalogStore for MemoryStore {
         Ok(())
     }
 
+    async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>)>> {
+        let mut results = Vec::new();
+        let query_lower = query.to_lowercase();
+
+        // Iterate through all assets for this tenant
+        for entry in self.assets.iter() {
+            let key = entry.key();
+            if key.0 != tenant_id {
+                continue;
+            }
+
+            let asset = entry.value().clone();
+            let metadata = self.business_metadata.get(&asset.id).map(|m| m.value().clone());
+
+            // Check if asset matches search criteria
+            let name_matches = asset.name.to_lowercase().contains(&query_lower);
+            
+            let tags_match = if let Some(ref search_tags) = tags {
+                if let Some(ref meta) = metadata {
+                    search_tags.iter().any(|tag| meta.tags.contains(tag))
+                } else {
+                    false
+                }
+            } else {
+                true // No tag filter
+            };
+
+            if name_matches && tags_match {
+                results.push((asset, metadata));
+            }
+        }
+
+        Ok(results)
+    }
+
+    // Access Request Operations
     async fn create_access_request(&self, request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
         self.access_requests.insert(request.id, request);
         Ok(())

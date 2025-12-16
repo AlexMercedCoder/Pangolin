@@ -1,17 +1,92 @@
 <script lang="ts">
     import type { Table } from '$lib/api/iceberg';
     import Card from '$lib/components/ui/Card.svelte';
+    import { onMount } from 'svelte';
+    import { authStore } from '$lib/stores/auth';
 
     export let table: Table;
+    export let assetId: string | undefined = undefined;
 
     // Helper to get schema fields safely
-    $: schema = table.schemas?.[0] || {}; // Use current schema (usually id matches current_schema_id)
+    $: schema = table.schemas?.[0] || {};
     $: fields = schema.fields || [];
     $: snapshots = table.snapshots || [];
     $: history = table.history || [];
     $: properties = table.properties || {};
 
-    let activeTab: 'schema' | 'snapshots' | 'metadata' = 'schema';
+    let activeTab: 'schema' | 'snapshots' | 'metadata' | 'business' = 'schema';
+    
+    // Business Metadata state
+    let businessMetadata: any = null;
+    let loadingMetadata = false;
+    let editMode = false;
+    let description = '';
+    let tags: string[] = [];
+    let discoverable = false;
+    let newTag = '';
+
+    $: canEdit = $authStore.user?.role === 'tenant-admin' || $authStore.user?.role === 'root';
+
+    onMount(async () => {
+        if (assetId) {
+            await loadMetadata();
+        }
+    });
+
+    async function loadMetadata() {
+        if (!assetId) return;
+        loadingMetadata = true;
+        try {
+            const res = await fetch(`/api/v1/business-metadata/${assetId}`, {
+                headers: { 'Authorization': `Bearer ${$authStore.token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                businessMetadata = data.metadata;
+                description = businessMetadata?.description || '';
+                tags = businessMetadata?.tags || [];
+                discoverable = businessMetadata?.discoverable || false;
+            }
+        } catch (e) {
+            console.error('Failed to load metadata:', e);
+        } finally {
+            loadingMetadata = false;
+        }
+    }
+
+    async function saveMetadata() {
+        if (!assetId) return;
+        try {
+            const res = await fetch(`/api/v1/business-metadata/${assetId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${$authStore.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ description, tags, discoverable, properties: {} })
+            });
+            if (res.ok) {
+                await loadMetadata();
+                editMode = false;
+            } else {
+                alert('Failed to save metadata: ' + await res.text());
+            }
+        } catch (e) {
+            alert('Failed to save metadata');
+        }
+    }
+
+    function addTag() {
+        if (newTag && !tags.includes(newTag)) {
+            tags = [...tags, newTag];
+            newTag = '';
+        }
+    }
+
+    function removeTag(tag: string) {
+        tags = tags.filter(t => t !== tag);
+    }
+
 </script>
 
 <div class="space-y-6">
@@ -57,6 +132,12 @@
                 on:click={() => activeTab = 'metadata'}
             >
                 Properties
+            </button>
+            <button
+                class="{activeTab === 'business' ? 'border-primary-500 text-primary-600 dark:text-primary-400' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm"
+                on:click={() => activeTab = 'business'}
+            >
+                Business Info
             </button>
         </nav>
     </div>
@@ -146,6 +227,74 @@
                      <div class="text-center text-gray-500 italic">No properties set</div>
                  {/if}
              </dl>
+         </Card>
+    {:else if activeTab === 'business'}
+        <Card>
+            {#if loadingMetadata}
+                <div class="text-center py-8 text-gray-500">Loading...</div>
+            {:else if editMode}
+                <div class="space-y-4">
+                    <h3 class="text-lg font-medium">Edit Business Metadata</h3>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Description</label>
+                        <textarea bind:value={description} class="w-full px-3 py-2 border rounded-md dark:bg-gray-800" rows="3" />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Tags</label>
+                        <div class="flex gap-2 mb-2">
+                            <input bind:value={newTag} on:keydown={(e) => e.key === 'Enter' && addTag()} class="flex-1 px-3 py-2 border rounded-md dark:bg-gray-800" placeholder="Add tag..." />
+                            <button on:click={addTag} class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded hover:bg-gray-300">Add</button>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            {#each tags as tag}
+                                <span class="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm">
+                                    {tag}
+                                    <button on:click={() => removeTag(tag)} class="hover:text-blue-600">×</button>
+                                </span>
+                            {/each}
+                        </div>
+                    </div>
+                    {#if canEdit}
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" bind:checked={discoverable} class="rounded" />
+                            <span class="text-sm">Make discoverable to other users</span>
+                        </label>
+                    {/if}
+                    <div class="flex gap-2">
+                        <button on:click={saveMetadata} class="px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700">Save</button>
+                        <button on:click={() => { editMode = false; loadMetadata(); }} class="px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded">Cancel</button>
+                    </div>
+                </div>
+            {:else}
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-medium">Business Metadata</h3>
+                        {#if canEdit}
+                            <button on:click={() => editMode = true} class="px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700">Edit</button>
+                        {/if}
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</div>
+                        <div class="mt-1">{businessMetadata?.description || 'No description'}</div>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Tags</div>
+                        <div class="mt-1 flex flex-wrap gap-2">
+                            {#if businessMetadata?.tags?.length > 0}
+                                {#each businessMetadata.tags as tag}
+                                    <span class="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-sm">{tag}</span>
+                                {/each}
+                            {:else}
+                                <span class="text-gray-500">No tags</span>
+                            {/if}
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-sm font-medium text-gray-500 dark:text-gray-400">Discoverable</div>
+                        <div class="mt-1">{businessMetadata?.discoverable ? 'Yes' : 'No'}</div>
+                    </div>
+                </div>
+            {/if}
         </Card>
     {/if}
 </div>

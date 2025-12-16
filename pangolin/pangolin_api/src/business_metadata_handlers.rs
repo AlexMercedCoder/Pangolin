@@ -32,9 +32,14 @@ pub async fn add_business_metadata(
     Path(asset_id): Path<Uuid>,
     Json(payload): Json<AddMetadataRequest>,
 ) -> impl IntoResponse {
-    // Check permission - assumed checking done by middleware or earlier, or we add check_permission here
-    // For now, let's assume any TenantUser with write access to asset can add metadata.
-    // TODO: proper RBAC check (update action on asset scope)
+    // If setting discoverable=true, check MANAGE_DISCOVERY permission
+    if payload.discoverable {
+        // TODO: Check if user has MANAGE_DISCOVERY permission on the catalog
+        // For now, only allow TenantAdmin or Root
+        if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
+            return (StatusCode::FORBIDDEN, "Only Tenant Admins can mark assets as discoverable").into_response();
+        }
+    }
 
     let mut metadata = BusinessMetadata::new(asset_id, session.user_id)
         .with_tags(payload.tags)
@@ -94,13 +99,40 @@ pub struct SearchResponse {
 }
 
 pub async fn search_assets(
-    State(_store): State<AppState>,
-    Extension(_session): Extension<UserSession>,
-    Query(_params): Query<SearchRequest>,
+    State(store): State<AppState>,
+    Extension(session): Extension<UserSession>,
+    Query(params): Query<SearchRequest>,
 ) -> impl IntoResponse {
-    // TODO: Implement search across assets and metadata
-    // Need a search method in CatalogStore
-    (StatusCode::NOT_IMPLEMENTED, "Search not implemented").into_response()
+    let tenant_id = session.tenant_id.unwrap_or_default();
+    
+    match store.search_assets(tenant_id, &params.query, params.tags).await {
+        Ok(results) => {
+            // Filter to only return discoverable assets (unless user has direct access)
+            // For now, return all results - TODO: Add permission filtering
+            let response: Vec<_> = results.into_iter()
+                .filter(|(_, metadata)| {
+                    // Only show if discoverable or if user is admin
+                    if session.role == UserRole::TenantAdmin || session.role == UserRole::Root {
+                        true
+                    } else {
+                        metadata.as_ref().map(|m| m.discoverable).unwrap_or(false)
+                    }
+                })
+                .map(|(asset, metadata)| {
+                    serde_json::json!({
+                        "id": asset.id,
+                        "name": asset.name,
+                        "kind": asset.kind,
+                        "description": metadata.as_ref().and_then(|m| m.description.clone()),
+                        "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
+                    })
+                })
+                .collect();
+            
+            (StatusCode::OK, Json(response)).into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Search failed: {}", e)).into_response(),
+    }
 }
 
 #[derive(Deserialize, Serialize)]

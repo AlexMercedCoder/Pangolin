@@ -149,6 +149,9 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn delete_business_metadata(&self, _asset_id: Uuid) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
+    async fn search_assets(&self, _tenant_id: Uuid, _query: &str, _tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>)>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 
     // Access Request Operations
     async fn create_access_request(&self, _request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
