@@ -266,12 +266,10 @@ db.runCommand({ compact: 'catalogs' })
 
 ## Test Results
 
-✅ **All 5 MongoDB tests passing**:
-- `test_mongo_tenant_crud`
-- `test_mongo_warehouse_crud`
-- `test_mongo_catalog_crud`
-- `test_mongo_namespace_operations`
-- `test_mongo_multi_tenant_isolation`
+✅ **Shared Regression Suite (store_tests.rs)** passing:
+- `test_mongo_store_compliance` (Covers CRUD, File IO, Metadata Logic)
+- Fully compliant with `CatalogStore` trait interface.
+- Verified with live integration (`test_mongo.py`) including `Signer` (credential vending) and S3 file storage.
 
 ## Additional Resources
 

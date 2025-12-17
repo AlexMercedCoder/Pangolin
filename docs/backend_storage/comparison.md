@@ -194,9 +194,9 @@ All backends have comprehensive test coverage:
 
 | Backend | Tests | Status |
 |---------|-------|--------|
-| PostgreSQL | 6 tests | ✅ All passing |
-| MongoDB | 5 tests | ✅ All passing |
-| SQLite | 6 tests | ✅ All passing |
+| PostgreSQL | Shared Regression Suite + Integration | ✅ All passing |
+| MongoDB | Shared Regression Suite + Integration | ✅ All passing |
+| SQLite | Shared Regression Suite + Integration | ✅ All passing |
 
 ## Recommendations by Use Case
 
