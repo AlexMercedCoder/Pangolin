@@ -96,12 +96,124 @@ impl SqliteStore {
 
 #[async_trait]
 impl Signer for SqliteStore {
-    async fn get_table_credentials(&self, _location: &str) -> anyhow::Result<crate::signer::Credentials> {
-        Err(anyhow::anyhow!("Credential vending not supported in SQLite store"))
+    async fn get_table_credentials(&self, location: &str) -> Result<crate::signer::Credentials> {
+        // 1. Find the warehouse that owns this location by querying all warehouses
+        let warehouses = sqlx::query("SELECT id, name, storage_config, use_sts FROM warehouses")
+            .fetch_all(&self.pool)
+            .await?;
+        
+        let mut target_warehouse = None;
+        
+        for row in warehouses {
+            let storage_config_str: String = row.get("storage_config");
+            let storage_config: HashMap<String, String> = serde_json::from_str(&storage_config_str)?;
+            
+            // Check if location contains this warehouse's bucket
+            if let Some(bucket) = storage_config.get("s3.bucket") {
+                if location.contains(bucket) {
+                    target_warehouse = Some((
+                        storage_config,
+                        row.get::<bool, _>("use_sts")
+                    ));
+                    break;
+                }
+            }
+        }
+        
+        let (storage_config, use_sts) = target_warehouse
+            .ok_or_else(|| anyhow::anyhow!("No warehouse found for location: {}", location))?;
+        
+        // 2. Extract credentials from storage_config
+        let access_key = storage_config.get("s3.access-key-id")
+            .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id in warehouse config"))?;
+            
+        let secret_key = storage_config.get("s3.secret-access-key")
+            .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key in warehouse config"))?;
+            
+        // 3. Check STS flag
+        if use_sts {
+            // STS Mode
+            let region = storage_config.get("s3.region")
+                .map(|s| s.as_str())
+                .unwrap_or("us-east-1");
+                
+            let endpoint = storage_config.get("s3.endpoint")
+                .map(|s| s.as_str());
+
+            let creds = aws_credential_types::Credentials::new(
+                access_key.to_string(),
+                secret_key.to_string(),
+                None,
+                None,
+                "static"
+            );
+
+            let config_loader = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region(aws_config::Region::new(region.to_string()))
+                .credentials_provider(creds);
+                
+            let config_loader = if let Some(ep) = endpoint {
+                 config_loader.endpoint_url(ep)
+            } else {
+                config_loader
+            };
+            
+            let config = config_loader.load().await;
+            let client = aws_sdk_sts::Client::new(&config);
+            
+            // Assume Role or GetSessionToken
+            let role_arn = storage_config.get("s3.role-arn").map(|s| s.as_str());
+            
+            let (temp_ak, temp_sk, temp_token, expiration) = if let Some(arn) = role_arn {
+                 let resp = client.assume_role()
+                    .role_arn(arn)
+                    .role_session_name("pangolin-vended-session")
+                    .send()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("STS AssumeRole failed: {}", e))?;
+                    
+                 let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in AssumeRole response"))?;
+                 (
+                     c.access_key_id, 
+                     c.secret_access_key, 
+                     c.session_token, 
+                     Some(c.expiration.to_string())
+                 )
+            } else {
+                 let resp = client.get_session_token()
+                    .send()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("STS GetSessionToken failed: {}", e))?;
+                    
+                 let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in GetSessionToken response"))?;
+                 (
+                     c.access_key_id, 
+                     c.secret_access_key, 
+                     c.session_token, 
+                     Some(c.expiration.to_string())
+                 )
+            };
+            
+            Ok(crate::signer::Credentials {
+                access_key_id: temp_ak,
+                secret_access_key: temp_sk,
+                session_token: Some(temp_token),
+                expiration,
+            })
+
+        } else {
+            // Static Mode
+            Ok(crate::signer::Credentials {
+                access_key_id: access_key.to_string(),
+                secret_access_key: secret_key.to_string(),
+                session_token: None,
+                expiration: None,
+            })
+        }
     }
 
-    async fn presign_get(&self, _location: &str) -> anyhow::Result<String> {
-        Err(anyhow::anyhow!("URL signing not supported in SQLite store"))
+    async fn presign_get(&self, _location: &str) -> Result<String> {
+        Err(anyhow::anyhow!("SqliteStore does not support presigning yet"))
     }
 }
 
@@ -669,23 +781,139 @@ impl CatalogStore for SqliteStore {
     }
 
     // Branch, Tag, Commit operations (placeholder implementations)
-    async fn create_branch(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Branch) -> Result<()> {
+    // Branch Operations
+    async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> {
+        sqlx::query("INSERT INTO branches (tenant_id, catalog_name, name, head_commit_id, branch_type, assets) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(branch.name)
+            .bind(branch.head_commit_id.map(|u| u.to_string()))
+            .bind(format!("{:?}", branch.branch_type))
+            .bind(serde_json::to_string(&branch.assets)?)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
-    async fn get_branch(&self, _tenant_id: Uuid, _catalog_name: &str, _name: String) -> Result<Option<Branch>> {
-        Ok(None)
+    async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>> {
+        let row = sqlx::query("SELECT * FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?")
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(name)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            let branch_type_str: String = row.get("branch_type");
+            let branch_type = match branch_type_str.as_str() {
+                "Ingest" => BranchType::Ingest,
+                _ => BranchType::Experimental,
+            };
+
+            Ok(Some(Branch {
+                name: row.get("name"),
+                head_commit_id: row.get::<Option<String>, _>("head_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                branch_type,
+                assets: serde_json::from_str(&row.get::<String, _>("assets"))?,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
-    async fn list_branches(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<Vec<Branch>> {
-        Ok(Vec::new())
+    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>> {
+        let rows = sqlx::query("SELECT * FROM branches WHERE tenant_id = ? AND catalog_name = ?")
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut branches = Vec::new();
+        for row in rows {
+            let branch_type_str: String = row.get("branch_type");
+            let branch_type = match branch_type_str.as_str() {
+                "Ingest" => BranchType::Ingest,
+                _ => BranchType::Experimental,
+            };
+
+            branches.push(Branch {
+                name: row.get("name"),
+                head_commit_id: row.get::<Option<String>, _>("head_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                branch_type,
+                assets: serde_json::from_str(&row.get::<String, _>("assets"))?,
+            });
+        }
+        Ok(branches)
     }
 
     async fn merge_branch(&self, _tenant_id: Uuid, _catalog_name: &str, _source: String, _target: String) -> Result<()> {
+        // Merge logic is complex (conflict detection), keeping stub for now but allowing the call.
         Ok(())
     }
 
-    async fn create_tag(&self, _tenant_id: Uuid, _catalog_name: &str, _tag: Tag) -> Result<()> {
+    async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()> {
+        sqlx::query("INSERT INTO tags (tenant_id, catalog_name, name, commit_id) VALUES (?, ?, ?, ?)")
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(tag.name)
+            .bind(tag.commit_id.to_string())
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+    
+    // Business Metadata Operations
+    async fn upsert_business_metadata(&self, metadata: pangolin_core::business_metadata::BusinessMetadata) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO business_metadata (id, asset_id, description, tags, properties, discoverable, created_by, created_at, updated_by, updated_at) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(asset_id) DO UPDATE SET
+             description=excluded.description, tags=excluded.tags, properties=excluded.properties, discoverable=excluded.discoverable, updated_by=excluded.updated_by, updated_at=excluded.updated_at"
+        )
+        .bind(metadata.id.to_string())
+        .bind(metadata.asset_id.to_string())
+        .bind(metadata.description)
+        .bind(serde_json::to_string(&metadata.tags)?)
+        .bind(serde_json::to_string(&metadata.properties)?)
+        .bind(if metadata.discoverable { 1 } else { 0 })
+        .bind(metadata.created_by.to_string())
+        .bind(metadata.created_at.timestamp_millis())
+        .bind(metadata.updated_by.to_string())
+        .bind(metadata.updated_at.timestamp_millis())
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_business_metadata(&self, asset_id: Uuid) -> Result<Option<pangolin_core::business_metadata::BusinessMetadata>> {
+        let row = sqlx::query("SELECT * FROM business_metadata WHERE asset_id = ?")
+            .bind(asset_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+             Ok(Some(pangolin_core::business_metadata::BusinessMetadata {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                asset_id: Uuid::parse_str(&row.get::<String, _>("asset_id"))?,
+                description: row.get("description"),
+                tags: serde_json::from_str(&row.get::<String, _>("tags"))?,
+                properties: serde_json::from_str(&row.get::<String, _>("properties"))?,
+                discoverable: row.get::<i32, _>("discoverable") != 0,
+                created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
+                created_at: Utc.timestamp_millis_opt(row.get("created_at")).single().unwrap_or_default(),
+                updated_by: Uuid::parse_str(&row.get::<String, _>("updated_by"))?,
+                updated_at: Utc.timestamp_millis_opt(row.get("updated_at")).single().unwrap_or_default(),
+             }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn delete_business_metadata(&self, asset_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM business_metadata WHERE asset_id = ?")
+            .bind(asset_id.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -711,7 +939,7 @@ impl CatalogStore for SqliteStore {
 
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>> {
         let namespace_path = serde_json::to_string(&namespace)?;
-        let row = sqlx::query("SELECT metadata_location FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+        let row = sqlx::query("SELECT metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
@@ -720,7 +948,11 @@ impl CatalogStore for SqliteStore {
             .await?;
 
         if let Some(row) = row {
-            Ok(row.get("metadata_location"))
+            let props_str: String = row.get("properties");
+            let props: std::collections::HashMap<String, String> = serde_json::from_str(&props_str).unwrap_or_default();
+            // Check property first, then column
+            let loc = props.get("metadata_location").cloned().or_else(|| row.get::<Option<String>, _>("metadata_location"));
+            Ok(loc)
         } else {
             Ok(None)
         }
@@ -729,60 +961,48 @@ impl CatalogStore for SqliteStore {
     async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
         let namespace_path = serde_json::to_string(&namespace)?;
         
-        // Optimistic Concurrency Control (CAS)
-        let result = if let Some(expected) = expected_location {
-            sqlx::query("UPDATE assets SET metadata_location = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND metadata_location = ?")
-                .bind(&new_location)
-                .bind(tenant_id.to_string())
-                .bind(catalog_name)
-                .bind(&namespace_path)
-                .bind(&table)
-                .bind(&expected)
-                .execute(&self.pool)
-                .await?
-        } else {
-            // If expected is None, we assume it was previously null or empty? 
-            // Or we just force update? Iceberg REST spec usually implies swap.
-            // If expected is None, maybe we check if it IS null?
-            sqlx::query("UPDATE assets SET metadata_location = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND (metadata_location IS NULL OR metadata_location = '')")
-                .bind(&new_location)
-                .bind(tenant_id.to_string())
-                .bind(catalog_name)
-                .bind(&namespace_path)
-                .bind(&table)
-                .execute(&self.pool)
-                .await?
-        };
-
-        if result.rows_affected() == 0 {
-            return Err(anyhow::anyhow!("Failed to update metadata location (CAS failure or table not found)"));
-        }
+        // Transaction for CAS
+        let mut tx = self.pool.begin().await?;
         
-        // Also update the property in the properties JSON blob
-        // This is a bit inefficient in SQLite (read-modify-write), but necessary if we duplicate state.
-        // Ideally we should DROP 'metadata_location' from properties and rely on the column, but for safety lets sync them.
-        let row = sqlx::query("SELECT properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
-             .bind(tenant_id.to_string())
-             .bind(catalog_name)
-             .bind(&namespace_path)
-             .bind(&table)
-             .fetch_one(&self.pool)
-             .await?;
-             
-        let props_str: String = row.get("properties");
-        let mut props: std::collections::HashMap<String, String> = serde_json::from_str(&props_str).unwrap_or_default();
-        props.insert("metadata_location".to_string(), new_location.clone());
-        
-        sqlx::query("UPDATE assets SET properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
-            .bind(serde_json::to_string(&props)?)
+        let row = sqlx::query("SELECT metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
             .bind(&table)
-            .execute(&self.pool)
+            .fetch_optional(&mut *tx)
             .await?;
-
-        Ok(())
+            
+        if let Some(row) = row {
+            let props_str: String = row.get("properties");
+            let mut props: std::collections::HashMap<String, String> = serde_json::from_str(&props_str).unwrap_or_default();
+            
+            let column_loc: Option<String> = row.get("metadata_location");
+            let current_loc = props.get("metadata_location").cloned().or(column_loc);
+            
+            if current_loc != expected_location {
+                return Err(anyhow::anyhow!("CAS failure: expected {:?} but found {:?}", expected_location, current_loc));
+            }
+            
+            props.insert("metadata_location".to_string(), new_location);
+            
+            let update_result = sqlx::query("UPDATE assets SET properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+                .bind(serde_json::to_string(&props)?)
+                .bind(tenant_id.to_string())
+                .bind(catalog_name)
+                .bind(&namespace_path)
+                .bind(&table)
+                .execute(&mut *tx)
+                .await?;
+                
+            if update_result.rows_affected() == 0 {
+                return Err(anyhow::anyhow!("Failed to update asset properties"));
+            }
+            
+            tx.commit().await?;
+            Ok(())
+        } else {
+             Err(anyhow::anyhow!("Table not found"))
+        }
     }
 
     async fn log_audit_event(&self, _tenant_id: Uuid, _event: AuditLogEntry) -> Result<()> {

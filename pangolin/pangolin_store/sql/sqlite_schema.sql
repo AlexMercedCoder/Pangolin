@@ -173,3 +173,18 @@ CREATE TABLE IF NOT EXISTS permissions (
     granted_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- Business Metadata
+CREATE TABLE IF NOT EXISTS business_metadata (
+    id TEXT PRIMARY KEY,
+    asset_id TEXT NOT NULL UNIQUE,
+    description TEXT,
+    tags TEXT NOT NULL, -- JSON
+    properties TEXT NOT NULL, -- JSON
+    discoverable INTEGER NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_by TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);

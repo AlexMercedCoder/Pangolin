@@ -72,12 +72,14 @@ async fn main() {
         let password_hash = pangolin_api::auth_middleware::hash_password(&admin_password)
             .expect("Failed to hash default admin password");
 
-        let admin_user = User::new_tenant_admin(
+        let mut admin_user = User::new_tenant_admin(
             admin_username.clone(),
             format!("{}@example.com", admin_username),
             password_hash,
             default_tenant_id // Create inside default tenant
         );
+        // Force ID to match auth_middleware's default NO_AUTH session ID (Uuid::nil())
+        admin_user.id = Uuid::nil();
 
         // Try to create the user
         let user_id = admin_user.id; // Copy ID before moving
