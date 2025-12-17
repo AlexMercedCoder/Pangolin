@@ -310,9 +310,11 @@ pub async fn list_commits(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Path(branch_name): Path<String>,
+    Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = "default"; // TODO: Support catalog in path
+    let catalog_name_string = params.catalog.unwrap_or_else(|| "default".to_string());
+    let catalog_name = catalog_name_string.as_str();
 
     // Get branch to find head commit
     let branch = match store.get_branch(tenant_id, catalog_name, branch_name.clone()).await {
@@ -341,6 +343,7 @@ pub async fn list_commits(
 #[derive(Deserialize)]
 pub struct CreateTagRequest {
     name: String,
+    catalog: Option<String>,
     commit_id: Uuid,
 }
 
@@ -362,9 +365,11 @@ impl From<pangolin_core::model::Tag> for TagResponse {
 pub async fn list_tags(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = "default"; // TODO: Support catalog in path
+    let catalog_name_string = params.catalog.unwrap_or_else(|| "default".to_string());
+    let catalog_name = catalog_name_string.as_str();
 
     match store.list_tags(tenant_id, catalog_name).await {
         Ok(tags) => {
@@ -381,7 +386,8 @@ pub async fn create_tag(
     Json(payload): Json<CreateTagRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = "default";
+    let catalog_name_string = payload.catalog.clone().unwrap_or_else(|| "default".to_string());
+    let catalog_name = catalog_name_string.as_str();
 
     let tag = pangolin_core::model::Tag {
         name: payload.name.clone(),
@@ -398,9 +404,11 @@ pub async fn delete_tag(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Path(name): Path<String>,
+    Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = "default";
+    let catalog_name_string = params.catalog.unwrap_or_else(|| "default".to_string());
+    let catalog_name = catalog_name_string.as_str();
 
     match store.delete_tag(tenant_id, catalog_name, name).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),

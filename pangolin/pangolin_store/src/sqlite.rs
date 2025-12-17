@@ -25,6 +25,23 @@ pub struct SqliteStore {
 
 impl SqliteStore {
     pub async fn new(database_url: &str) -> Result<Self> {
+        // Extract file path from database URL and ensure it exists
+        if database_url.starts_with("sqlite://") {
+            let file_path = database_url.strip_prefix("sqlite://").unwrap();
+            
+            // Create parent directories if they don't exist
+            if let Some(parent) = std::path::Path::new(file_path).parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)?;
+                }
+            }
+            
+            // Create the file if it doesn't exist
+            if !std::path::Path::new(file_path).exists() {
+                std::fs::File::create(file_path)?;
+            }
+        }
+        
         let pool = SqlitePoolOptions::new()
             .max_connections(5)
             .connect(database_url)
@@ -656,7 +673,7 @@ impl CatalogStore for SqliteStore {
             .bind(&namespace_path)
             .bind(&asset.name)
             .bind(format!("{:?}", asset.kind))
-            .bind(&asset.location)
+            .bind(asset.properties.get("metadata_location").unwrap_or(&asset.location))
             .bind(serde_json::to_string(&asset.properties)?)
             .execute(&self.pool)
             .await?;

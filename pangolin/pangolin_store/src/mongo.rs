@@ -12,6 +12,9 @@ use pangolin_core::model::{
 use pangolin_core::user::{User, UserRole as CoreUserRole, OAuthProvider};
 use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use crate::signer::{Signer, Credentials};
+use object_store::ObjectStore;
+use object_store::aws::AmazonS3Builder;
 use pangolin_core::audit::AuditLogEntry;
 use uuid::Uuid;
 use std::collections::HashMap;
@@ -665,12 +668,65 @@ impl CatalogStore for MongoStore {
     }
 
     // File Operations
-    async fn read_file(&self, _location: &str) -> Result<Vec<u8>> {
-        Err(anyhow::anyhow!("File storage not implemented in MongoStore"))
+    async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            let mut builder = AmazonS3Builder::from_env()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             let location = object_store::path::Path::from(key);
+             let result = store.get(&location).await?;
+             let bytes = result.bytes().await?;
+             Ok(bytes.to_vec())
+        } else {
+             Err(anyhow::anyhow!("Only s3:// paths are supported in Mongo store"))
+        }
     }
 
-    async fn write_file(&self, _location: &str, _bytes: Vec<u8>) -> Result<()> {
-        Err(anyhow::anyhow!("File storage not implemented in MongoStore"))
+    async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            let mut builder = AmazonS3Builder::from_env()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             let location = object_store::path::Path::from(key);
+             store.put(&location, data.into()).await?;
+             Ok(())
+        } else {
+             Err(anyhow::anyhow!("Only s3:// paths are supported in Mongo store"))
+        }
     }
 
 
@@ -995,13 +1051,87 @@ impl CatalogStore for MongoStore {
     }
 }
 
-use crate::signer::Signer;
-use crate::signer::Credentials;
 
 #[async_trait]
 impl Signer for MongoStore {
-    async fn get_table_credentials(&self, _location: &str) -> Result<Credentials> {
-        Err(anyhow::anyhow!("Credential vending not supported by MongoStore"))
+    async fn get_table_credentials(&self, location: &str) -> Result<Credentials> {
+        // Fix: find takes 1 argument in current driver version used here?
+        let cursor = self.warehouses().find(doc!{}).await?;
+        let warehouses: Vec<Warehouse> = cursor.try_collect().await?;
+        
+        let mut target_warehouse = None;
+        
+        for w in warehouses {
+            // Check if location contains this warehouse's bucket
+            if let Some(bucket) = w.storage_config.get("s3.bucket") {
+                if location.contains(bucket) {
+                    target_warehouse = Some(w);
+                    break;
+                }
+            }
+        }
+        
+        let warehouse = target_warehouse
+            .ok_or_else(|| anyhow::anyhow!("No warehouse found for location: {}", location))?;
+            
+        // Extract credentials
+        let access_key = warehouse.storage_config.get("s3.access-key-id")
+            .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id in warehouse config"))?;
+            
+        let secret_key = warehouse.storage_config.get("s3.secret-access-key")
+            .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key in warehouse config"))?;
+            
+        // Check STS flag
+        if warehouse.use_sts {
+            let region = warehouse.storage_config.get("s3.region")
+                .map(|s| s.as_str())
+                .unwrap_or("us-east-1");
+                
+            let endpoint = warehouse.storage_config.get("s3.endpoint")
+                .map(|s| s.as_str());
+
+            let creds = aws_credential_types::Credentials::new(
+                access_key.to_string(),
+                secret_key.to_string(),
+                None,
+                None,
+                "pangolin_provider"
+            );
+            
+            let config_loader = aws_config::from_env()
+                .region(aws_config::Region::new(region.to_string()))
+                .credentials_provider(creds);
+                
+            let config = if let Some(ep) = endpoint {
+                 config_loader.endpoint_url(ep).load().await
+            } else {
+                 config_loader.load().await
+            };
+            
+            let client = aws_sdk_sts::Client::new(&config);
+            
+            let output = client.get_session_token().send().await?;
+            
+            if let Some(creds) = output.credentials {
+                Ok(Credentials {
+                    access_key_id: creds.access_key_id,
+                    secret_access_key: creds.secret_access_key,
+                    session_token: Some(creds.session_token),
+                    expiration: Some(creds.expiration.to_string()),
+                })
+            } else {
+                Err(anyhow::anyhow!("STS GetSessionToken failed to return credentials"))
+            }
+
+        } else {
+            // Static Credentials
+            Ok(Credentials {
+                access_key_id: access_key.clone(),
+                secret_access_key: secret_key.clone(),
+                session_token: None,
+                expiration: None,
+            })
+        }
     }
 
     async fn presign_get(&self, _location: &str) -> Result<String> {

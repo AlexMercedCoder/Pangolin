@@ -13,6 +13,7 @@ use sqlx::Row;
 use std::collections::HashMap;
 use uuid::Uuid;
 use chrono::{DateTime, Utc, TimeZone};
+use object_store::{aws::AmazonS3Builder, ObjectStore, path::Path as ObjPath};
 
 #[derive(Clone)]
 pub struct PostgresStore {
@@ -506,7 +507,7 @@ impl CatalogStore for PostgresStore {
             .bind(&namespace)
             .bind(&asset.name)
             .bind(format!("{:?}", asset.kind))
-            .bind(&asset.location)
+            .bind(asset.properties.get("metadata_location").unwrap_or(&asset.location))
             .bind(serde_json::to_value(&asset.properties)?)
             .execute(&self.pool)
             .await?;
@@ -758,14 +759,65 @@ impl CatalogStore for PostgresStore {
     // But `CatalogStore` trait has `read_file`/`write_file`.
     // Let's implement a simple `files` table for small metadata files.
     
-    async fn read_file(&self, location: &str) -> Result<Vec<u8>> {
-        // TODO: Implement file storage in Postgres or delegate.
-        // For now, error.
-        Err(anyhow::anyhow!("File storage not implemented in PostgresStore yet"))
+    async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            let mut builder = AmazonS3Builder::from_env()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             let result = store.get(&ObjPath::from(key)).await?;
+             let bytes = result.bytes().await?;
+             Ok(bytes.to_vec())
+        } else {
+             Err(anyhow::anyhow!("Only s3:// paths are supported in Postgres store"))
+        }
     }
 
-    async fn write_file(&self, location: &str, bytes: Vec<u8>) -> Result<()> {
-         Err(anyhow::anyhow!("File storage not implemented in PostgresStore yet"))
+    async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            tracing::info!("write_file: s3 path='{}' bucket='{}' key='{}'", path, bucket, key);
+            
+            let mut builder = AmazonS3Builder::from_env()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             store.put(&ObjPath::from(key), data.into()).await?;
+             Ok(())
+        } else {
+             Err(anyhow::anyhow!("Only s3:// paths are supported in Postgres store"))
+        }
     }
 
     // Tag Operations
@@ -946,36 +998,32 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
-        let namespace_name = namespace.join("\x1F");
         
+        tracing::info!("update_metadata_location: tenant_id={}, catalog={}, namespace={:?}, table={}, expected={:?}, new={}", 
+            tenant_id, catalog_name, namespace, table, expected_location, new_location);
+
         // CAS Logic
         // We need to check if current metadata_location matches expected_location
         // In Postgres, we can do this in the UPDATE query WHERE clause
         
         let result = if let Some(expected) = expected_location {
             // Update only if current location matches expected
-            // We need to access the JSON property. 
-            // This is complex in SQL with JSONB. 
-            // "properties"->>'metadata_location' = expected
-            sqlx::query("UPDATE assets SET properties = jsonb_set(properties, '{metadata_location}', to_jsonb($1::text), true) WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_name = $4 AND name = $5 AND properties->>'metadata_location' = $6")
+            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_path = $4 AND name = $5 AND metadata_location = $6")
                 .bind(new_location)
                 .bind(tenant_id)
                 .bind(catalog_name)
-                .bind(namespace_name)
+                .bind(&namespace)
                 .bind(table)
                 .bind(expected)
                 .execute(&self.pool)
                 .await?
         } else {
-            // Update if no metadata_location exists (create or first commit) or force overwrite?
-            // Usually expected_location=None means "ensure it doesn't exist" or "I don't care".
-            // Iceberg CAS usually implies "ensure it matches this specific state".
-            // If expected is None, it might mean "it should be null".
-            sqlx::query("UPDATE assets SET properties = jsonb_set(properties, '{metadata_location}', to_jsonb($1::text), true) WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_name = $4 AND name = $5 AND (properties->>'metadata_location' IS NULL)")
+            // Update if no metadata_location exists (create or first commit)
+            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_path = $4 AND name = $5 AND metadata_location IS NULL")
                 .bind(new_location)
                 .bind(tenant_id)
                 .bind(catalog_name)
-                .bind(namespace_name)
+                .bind(&namespace)
                 .bind(table)
                 .execute(&self.pool)
                 .await?
@@ -1234,6 +1282,7 @@ impl CatalogStore for PostgresStore {
         Ok(perms)
     }
 
+
 }
 
 impl PostgresStore {
@@ -1300,13 +1349,125 @@ use crate::signer::Credentials;
 
 #[async_trait]
 impl Signer for PostgresStore {
-    async fn get_table_credentials(&self, _location: &str) -> Result<Credentials> {
-        // Placeholder: PostgresStore doesn't manage S3 creds yet.
-        // In a real scenario, we'd inject S3 config into PostgresStore or have a hybrid store.
-        Err(anyhow::anyhow!("Credential vending not supported by PostgresStore"))
+    async fn get_table_credentials(&self, location: &str) -> Result<crate::signer::Credentials> {
+        // 1. Find the warehouse that owns this location by querying all warehouses
+        let warehouses = sqlx::query("SELECT id, name, storage_config, use_sts FROM warehouses")
+            .fetch_all(&self.pool)
+            .await?;
+        
+        let mut target_warehouse = None;
+        
+        for row in warehouses {
+            let storage_config_json: serde_json::Value = row.get("storage_config");
+            let storage_config: HashMap<String, String> = serde_json::from_value(storage_config_json)?;
+            
+            // Check if location contains this warehouse's bucket
+            if let Some(bucket) = storage_config.get("s3.bucket") {
+                if location.contains(bucket) {
+                    target_warehouse = Some((
+                        storage_config,
+                        row.get::<bool, _>("use_sts")
+                    ));
+                    break;
+                }
+            }
+        }
+        
+        let (storage_config, use_sts) = target_warehouse
+            .ok_or_else(|| anyhow::anyhow!("No warehouse found for location: {}", location))?;
+        
+        // 2. Extract credentials from storage_config
+        let access_key = storage_config.get("s3.access-key-id")
+            .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id in warehouse config"))?;
+            
+        let secret_key = storage_config.get("s3.secret-access-key")
+            .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key in warehouse config"))?;
+            
+        // 3. Check STS flag
+        if use_sts {
+            // STS Mode
+            let region = storage_config.get("s3.region")
+                .map(|s| s.as_str())
+                .unwrap_or("us-east-1");
+                
+            let endpoint = storage_config.get("s3.endpoint")
+                .map(|s| s.as_str());
+
+            let creds = aws_credential_types::Credentials::new(
+                access_key.to_string(),
+                secret_key.to_string(),
+                None,
+                None,
+                "static"
+            );
+
+            let config_loader = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                .region(aws_config::Region::new(region.to_string()))
+                .credentials_provider(creds);
+                
+            let config_loader = if let Some(ep) = endpoint {
+                 config_loader.endpoint_url(ep)
+            } else {
+                config_loader
+            };
+            
+            let config = config_loader.load().await;
+            let client = aws_sdk_sts::Client::new(&config);
+            
+            // Assume Role or GetSessionToken
+            let role_arn = storage_config.get("s3.role-arn").map(|s| s.as_str());
+            
+            let (temp_ak, temp_sk, temp_token, expiration) = if let Some(arn) = role_arn {
+                 let resp = client.assume_role()
+                    .role_arn(arn)
+                    .role_session_name("pangolin-vended-session")
+                    .send()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("STS AssumeRole failed: {}", e))?;
+                    
+                 let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in AssumeRole response"))?;
+                 (
+                     c.access_key_id, 
+                     c.secret_access_key, 
+                     c.session_token, 
+                     Some(c.expiration.to_string())
+                 )
+            } else {
+                 let resp = client.get_session_token()
+                    .send()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("STS GetSessionToken failed: {}", e))?;
+                    
+                 let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in GetSessionToken response"))?;
+                 (
+                     c.access_key_id, 
+                     c.secret_access_key, 
+                     c.session_token, 
+                     Some(c.expiration.to_string())
+                 )
+            };
+            
+            Ok(crate::signer::Credentials {
+                access_key_id: temp_ak,
+                secret_access_key: temp_sk,
+                session_token: Some(temp_token),
+                expiration,
+            })
+
+        } else {
+            // Static Mode
+            Ok(crate::signer::Credentials {
+                access_key_id: access_key.to_string(),
+                secret_access_key: secret_key.to_string(),
+                session_token: None,
+                expiration: None,
+            })
+        }
     }
 
     async fn presign_get(&self, _location: &str) -> Result<String> {
-        Err(anyhow::anyhow!("Presigning not supported by PostgresStore"))
+        Err(anyhow::anyhow!("PostgresStore does not support presigning yet"))
     }
+
+
 }

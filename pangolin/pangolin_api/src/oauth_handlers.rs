@@ -200,29 +200,29 @@ fn get_oauth_config(provider: &str) -> Option<OAuthConfig> {
     // TODO: Load from environment variables or config file
     match provider {
         "google" => {
-            let client_id = std::env::var("OAUTH_GOOGLE_CLIENT_ID").ok()?;
-            let client_secret = std::env::var("OAUTH_GOOGLE_CLIENT_SECRET").ok()?;
-            let redirect_uri = std::env::var("OAUTH_GOOGLE_REDIRECT_URI").ok()?;
+            let client_id = std::env::var("PANGOLIN_GOOGLE_CLIENT_ID").ok()?;
+            let client_secret = std::env::var("PANGOLIN_GOOGLE_CLIENT_SECRET").ok()?;
+            let redirect_uri = std::env::var("PANGOLIN_GOOGLE_REDIRECT_URI").ok()?;
             Some(OAuthConfig::google(client_id, client_secret, redirect_uri))
         }
         "microsoft" => {
-            let client_id = std::env::var("OAUTH_MICROSOFT_CLIENT_ID").ok()?;
-            let client_secret = std::env::var("OAUTH_MICROSOFT_CLIENT_SECRET").ok()?;
-            let redirect_uri = std::env::var("OAUTH_MICROSOFT_REDIRECT_URI").ok()?;
-            let tenant_id = std::env::var("OAUTH_MICROSOFT_TENANT_ID").ok()?;
+            let client_id = std::env::var("PANGOLIN_MICROSOFT_CLIENT_ID").ok()?;
+            let client_secret = std::env::var("PANGOLIN_MICROSOFT_CLIENT_SECRET").ok()?;
+            let redirect_uri = std::env::var("PANGOLIN_MICROSOFT_REDIRECT_URI").ok()?;
+            let tenant_id = std::env::var("PANGOLIN_MICROSOFT_TENANT_ID").ok()?;
             Some(OAuthConfig::microsoft(client_id, client_secret, redirect_uri, tenant_id))
         }
         "github" => {
-            let client_id = std::env::var("OAUTH_GITHUB_CLIENT_ID").ok()?;
-            let client_secret = std::env::var("OAUTH_GITHUB_CLIENT_SECRET").ok()?;
-            let redirect_uri = std::env::var("OAUTH_GITHUB_REDIRECT_URI").ok()?;
+            let client_id = std::env::var("PANGOLIN_GITHUB_CLIENT_ID").ok()?;
+            let client_secret = std::env::var("PANGOLIN_GITHUB_CLIENT_SECRET").ok()?;
+            let redirect_uri = std::env::var("PANGOLIN_GITHUB_REDIRECT_URI").ok()?;
             Some(OAuthConfig::github(client_id, client_secret, redirect_uri))
         }
         "okta" => {
-            let client_id = std::env::var("OAUTH_OKTA_CLIENT_ID").ok()?;
-            let client_secret = std::env::var("OAUTH_OKTA_CLIENT_SECRET").ok()?;
-            let redirect_uri = std::env::var("OAUTH_OKTA_REDIRECT_URI").ok()?;
-            let domain = std::env::var("OAUTH_OKTA_DOMAIN").ok()?;
+            let client_id = std::env::var("PANGOLIN_OKTA_CLIENT_ID").ok()?;
+            let client_secret = std::env::var("PANGOLIN_OKTA_CLIENT_SECRET").ok()?;
+            let redirect_uri = std::env::var("PANGOLIN_OKTA_REDIRECT_URI").ok()?;
+            let domain = std::env::var("PANGOLIN_OKTA_DOMAIN").ok()?;
             Some(OAuthConfig::okta(client_id, client_secret, redirect_uri, domain))
         }
         _ => None,
@@ -322,4 +322,41 @@ async fn fetch_user_info(
         .map_err(|e| format!("Failed to parse user info: {}", e))?;
 
     Ok(user_info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_google_auth_url_builder() {
+        let config = OAuthConfig::google(
+            "client_id_val".to_string(), 
+            "client_secret_val".to_string(), 
+            "http://localhost/callback".to_string()
+        );
+        let url = build_auth_url(&config, Some("http://frontend/home".to_string()));
+         
+        assert!(url.contains("client_id=client_id_val"));
+        assert!(url.contains("redirect_uri=http%3A%2F%2Flocalhost%2Fcallback"));
+        assert!(url.contains("scope="));
+        assert!(url.contains("state="));
+    }
+    
+    #[test]
+    fn test_get_oauth_config_from_env() {
+        // Set env vars
+        std::env::set_var("PANGOLIN_GOOGLE_CLIENT_ID", "test_id");
+        std::env::set_var("PANGOLIN_GOOGLE_CLIENT_SECRET", "test_secret");
+        std::env::set_var("PANGOLIN_GOOGLE_REDIRECT_URI", "test_uri");
+        
+        let config = get_oauth_config("google").expect("Should return config");
+        assert_eq!(config.client_id, "test_id");
+        assert_eq!(config.client_secret, "test_secret");
+        assert_eq!(config.redirect_uri, "test_uri");
+        
+        std::env::remove_var("PANGOLIN_GOOGLE_CLIENT_ID");
+        std::env::remove_var("PANGOLIN_GOOGLE_CLIENT_SECRET");
+        std::env::remove_var("PANGOLIN_GOOGLE_REDIRECT_URI");
+    }
 }

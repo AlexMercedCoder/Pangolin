@@ -62,7 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_namespaces_path ON namespaces USING GIN(namespace
 
 -- Assets table (tables and views)
 CREATE TABLE IF NOT EXISTS assets (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID NOT NULL DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     catalog_name VARCHAR(255) NOT NULL,
     branch VARCHAR(255),
@@ -72,9 +72,11 @@ CREATE TABLE IF NOT EXISTS assets (
     metadata_location TEXT,
     properties JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (tenant_id, catalog_name, branch, namespace_path, name)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_id ON assets(id);
 CREATE INDEX IF NOT EXISTS idx_assets_tenant_catalog ON assets(tenant_id, catalog_name);
 CREATE INDEX IF NOT EXISTS idx_assets_namespace ON assets USING GIN(namespace_path);
 CREATE INDEX IF NOT EXISTS idx_assets_branch ON assets(branch) WHERE branch IS NOT NULL;

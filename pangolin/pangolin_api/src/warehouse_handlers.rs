@@ -81,7 +81,10 @@ pub async fn create_warehouse(
 
     match store.create_warehouse(tenant.0, warehouse.clone()).await {
         Ok(_) => (StatusCode::CREATED, Json(WarehouseResponse::from(warehouse))).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(e) => {
+            tracing::error!("Failed to create warehouse: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Server Error: {}", e)).into_response()
+        },
     }
 }
 

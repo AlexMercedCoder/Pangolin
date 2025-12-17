@@ -12,13 +12,10 @@ ALTER TABLE namespaces ADD COLUMN IF NOT EXISTS id UUID;
 UPDATE namespaces SET id = gen_random_uuid() WHERE id IS NULL;
 ALTER TABLE namespaces ALTER COLUMN id SET NOT NULL;
 
-ALTER TABLE assets ADD COLUMN IF NOT EXISTS id UUID;
-UPDATE assets SET id = gen_random_uuid() WHERE id IS NULL;
-ALTER TABLE assets ALTER COLUMN id SET NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_assets_id ON assets(tenant_id, id);
+-- Assets table already has id column and unique index in base schema
 
 -- Users
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
@@ -34,7 +31,7 @@ CREATE TABLE users (
 );
 
 -- Roles (RBAC)
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id UUID PRIMARY KEY,
     tenant_id UUID NOT NULL,
     name TEXT NOT NULL,
@@ -46,7 +43,7 @@ CREATE TABLE roles (
 );
 
 -- User Role Assignments
-CREATE TABLE user_roles (
+CREATE TABLE IF NOT EXISTS user_roles (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     assigned_by UUID NOT NULL,
@@ -55,7 +52,7 @@ CREATE TABLE user_roles (
 );
 
 -- Direct Permissions
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     scope JSONB NOT NULL, -- PermissionScope
@@ -65,11 +62,12 @@ CREATE TABLE permissions (
 );
 
 -- Indexes
-CREATE INDEX idx_users_tenant ON users(tenant_id);
-CREATE INDEX idx_roles_tenant ON roles(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_users_tenant ON users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_roles_tenant ON roles(tenant_id);
 
 -- Access Requests (Discovery)
-CREATE TABLE access_requests (
+-- IMPORTANT: This must come AFTER the unique index on assets(id) is created
+CREATE TABLE IF NOT EXISTS access_requests (
     id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     asset_id UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
@@ -80,5 +78,5 @@ CREATE TABLE access_requests (
     reviewed_at TIMESTAMPTZ,
     review_comment TEXT
 );
-CREATE INDEX idx_access_requests_user ON access_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_access_requests_user ON access_requests(user_id);
 
