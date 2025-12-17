@@ -10,7 +10,7 @@ use uuid::Uuid;
 use std::sync::Arc;
 use std::collections::HashSet;
 use pangolin_core::permission::{Role, Permission, PermissionScope, Action, UserRole};
-use pangolin_core::user::UserSession;
+use pangolin_core::user::{UserSession, UserRole as AuthRole};
 use pangolin_store::CatalogStore;
 
 /// Request to create a new role
@@ -44,8 +44,10 @@ pub async fn create_role(
     Extension(session): Extension<UserSession>,
     Json(req): Json<CreateRoleRequest>,
 ) -> Response {
-    // Check if user is Root or TenantAdmin of target tenant
-    // TODO: Strict permission check. For now assume admin.
+    // Strict permission check
+    if session.role != AuthRole::Root && session.role != AuthRole::TenantAdmin {
+        return (StatusCode::FORBIDDEN, "Only admins can create roles").into_response();
+    }
     
     let role = Role::new(
         req.name,
@@ -66,11 +68,7 @@ pub async fn list_roles(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
 ) -> Response {
-    // If Root, can list all? Or filter by query param?
-    // If TenantUser, only their tenant.
-    
-    let tenant_id = session.tenant_id.unwrap_or_default(); // What if Root?
-    // TODO: Handle Root listing logic properly (maybe query param for tenant_id)
+    let tenant_id = session.tenant_id.unwrap_or_default(); 
     
     // For now list for session tenant
     let roles = match store.list_roles(tenant_id).await {
@@ -96,9 +94,14 @@ pub async fn get_role(
 /// Update role
 pub async fn update_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
     Path(role_id): Path<Uuid>,
     Json(mut role): Json<Role>,
 ) -> Response {
+    if session.role != AuthRole::Root && session.role != AuthRole::TenantAdmin {
+        return (StatusCode::FORBIDDEN, "Only admins can update roles").into_response();
+    }
+
     if role.id != role_id {
          return (StatusCode::BAD_REQUEST, "Role ID mismatch").into_response();
     }
@@ -112,8 +115,13 @@ pub async fn update_role(
 /// Delete role
 pub async fn delete_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
     Path(role_id): Path<Uuid>,
 ) -> Response {
+    if session.role != AuthRole::Root && session.role != AuthRole::TenantAdmin {
+        return (StatusCode::FORBIDDEN, "Only admins can delete roles").into_response();
+    }
+
     match store.delete_role(role_id).await {
         Ok(_) => (StatusCode::NO_CONTENT).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete role: {}", e)).into_response(),
@@ -127,6 +135,10 @@ pub async fn assign_role(
     Path(target_user_id): Path<Uuid>,
     Json(req): Json<AssignRoleRequest>,
 ) -> Response {
+    if session.role != AuthRole::Root && session.role != AuthRole::TenantAdmin {
+        return (StatusCode::FORBIDDEN, "Only admins can assign roles").into_response();
+    }
+
     let user_role = UserRole::new(
         target_user_id,
         req.role_id,
@@ -164,8 +176,13 @@ pub async fn get_user_roles(
 /// Revoke role from user
 pub async fn revoke_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
     Path((target_user_id, role_id)): Path<(Uuid, Uuid)>,
 ) -> Response {
+    if session.role != AuthRole::Root && session.role != AuthRole::TenantAdmin {
+        return (StatusCode::FORBIDDEN, "Only admins can revoke roles").into_response();
+    }
+
     match store.revoke_role(target_user_id, role_id).await {
         Ok(_) => (StatusCode::NO_CONTENT).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to revoke role: {}", e)).into_response(),

@@ -203,9 +203,8 @@ pub async fn delete_federated_catalog(
         }
     }
 
-    // TODO: Implement delete_catalog in CatalogStore trait
-    // For now, return success
-    match Ok::<(), anyhow::Error>(()) {
+    // Implement delete_catalog in CatalogStore trait
+    match store.delete_catalog(tenant.0, catalog_name.clone()).await {
         Ok(_) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "deleted", "catalog": catalog_name})),

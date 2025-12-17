@@ -165,7 +165,7 @@ pub async fn create_branch(
             // Audit Log
             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
                 tenant_id,
-                "system".to_string(), // TODO: Get user from auth context
+                session.username.clone(), // Get user from auth context
                 "create_branch".to_string(),
                 format!("{}/{}", catalog_name, payload.name),
                 None

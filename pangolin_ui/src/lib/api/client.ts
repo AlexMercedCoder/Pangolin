@@ -1,6 +1,8 @@
 import { TENANT_STORAGE_KEY } from '$lib/stores/tenant';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080';
+import { env } from '$env/dynamic/public';
+
+const API_URL = env.PUBLIC_API_URL || 'http://127.0.0.1:8080';
 
 export interface ApiError {
 	message: string;

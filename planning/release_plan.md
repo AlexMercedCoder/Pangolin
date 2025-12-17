@@ -39,9 +39,10 @@ Target Platforms:
 - Base: `node:20-alpine`
 
 **Action Items**:
-- [ ] Create `Dockerfile.backend` in `pangolin_api`.
-- [ ] Create `Dockerfile.ui` in `pangolin_ui`.
-- [ ] Create `docker-compose.yml` for local full-stack run (Postgres + Pangolin API + UI).
+- [x] Create `Dockerfile.backend` in `pangolin_api` (Consolidated to `pangolin/Dockerfile`).
+- [x] Create `Dockerfile.ui` in `pangolin_ui`.
+- [x] Create `docker-compose.yml` for local full-stack run (Postgres + Pangolin API + UI).
+- [x] Verified full stack startup.
 
 ## 3. Infrastructure & Deployment
 
@@ -72,5 +73,5 @@ Create a Helm chart `charts/pangolin` with:
 - **PR Triggers**: `cargo test`, `npm test` (UI).
 - **Main Merge**:
     - Semantic Versioning check.
-    - Build Docker Images -> Push to DockerHub.
-    - Build Binaries -> Create GitHub Release.
+  - [x] Build Docker Images -> Push to DockerHub (v0.1.0 Released).
+- [ ] Build Binaries -> Create GitHub Release.

@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pangolin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-pangolin}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pangolin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pangolin-api:
+    image: alexmerced/pangolin-api:latest
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - PANGOLIN_STORE_TYPE=postgres
+      - DATABASE_URL=postgres://${POSTGRES_USER:-pangolin}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-pangolin}
+      - PANGOLIN_ROOT_USER=${PANGOLIN_ROOT_USER:-admin}
+      - PANGOLIN_ROOT_PASSWORD=${PANGOLIN_ROOT_PASSWORD:-change-me-in-prod}
+      - PANGOLIN_JWT_SECRET=${PANGOLIN_JWT_SECRET:-change-me-to-random-string}
+      # GCP Configuration
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-creds.json
+    volumes:
+      # Mount service account key
+      - ${GCP_CREDS_PATH}:/app/gcp-creds.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  pangolin-ui:
+    image: alexmerced/pangolin-ui:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
+      - ORIGIN=${ORIGIN:-http://localhost:3000}
+    depends_on:
+      - pangolin-api
+
+volumes:
+  postgres_data:

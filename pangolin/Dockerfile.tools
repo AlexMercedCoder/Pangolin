@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/li
 # Copy workspace definition
 COPY Cargo.toml Cargo.lock ./
 
-# Copy all workspace members to satisfy dependency graph
+# Copy all workspace members
 COPY pangolin_core ./pangolin_core
 COPY pangolin_store ./pangolin_store
 COPY pangolin_api ./pangolin_api
@@ -17,26 +17,21 @@ COPY pangolin_cli_common ./pangolin_cli_common
 COPY pangolin_cli_admin ./pangolin_cli_admin
 COPY pangolin_cli_user ./pangolin_cli_user
 
-# Build dependencies and application
-# We build specifically the api binary
-RUN cargo build --release --bin pangolin_api
+# Build CLI binaries
+RUN cargo build --release --bin pangolin-admin
+RUN cargo build --release --bin pangolin-user
 
 # Runtime Stage
 FROM debian:bookworm-slim
 
-# Install OpenSSL and CA certificates
+# Install OpenSSL and CA certificates (needed for remote connections)
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /usr/src/pangolin/target/release/pangolin_api ./pangolin_api
+# Copy binaries
+COPY --from=builder /usr/src/pangolin/target/release/pangolin-admin /usr/local/bin/pangolin-admin
+COPY --from=builder /usr/src/pangolin/target/release/pangolin-user /usr/local/bin/pangolin-user
 
-# Expose port
-EXPOSE 8080
-
-# Set environment variables
-ENV RUST_LOG=info
-
-# Run the application
-CMD ["./pangolin_api"]
+# Default command (help)
+CMD ["echo", "Available commands: pangolin-admin, pangolin-user"]
