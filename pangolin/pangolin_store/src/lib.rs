@@ -251,4 +251,20 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn add_conflict_to_operation(&self, _operation_id: Uuid, _conflict_id: Uuid) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
+
+    // Token Revocation Operations
+    /// Revoke a token by adding it to the blacklist
+    async fn revoke_token(&self, _token_id: Uuid, _expires_at: DateTime<Utc>, _reason: Option<String>) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    /// Check if a token has been revoked
+    async fn is_token_revoked(&self, _token_id: Uuid) -> Result<bool> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    /// Clean up expired revoked tokens and return count of cleaned tokens
+    async fn cleanup_expired_tokens(&self) -> Result<usize> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 }

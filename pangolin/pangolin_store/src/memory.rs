@@ -42,7 +42,9 @@ pub struct MemoryStore {
     merge_conflicts: Arc<DashMap<Uuid, pangolin_core::model::MergeConflict>>,
     // Optimization: Direct lookup for assets by ID
     // Key: AssetID, Value: (CatalogName, Namespace, Branch, AssetName)
-    assets_by_id: Arc<DashMap<Uuid, (String, Vec<String>, Option<String>, String)>>, 
+    assets_by_id: Arc<DashMap<Uuid, (String, Vec<String>, Option<String>, String)>>,
+    // Token revocation
+    revoked_tokens: Arc<DashMap<Uuid, pangolin_core::token::RevokedToken>>,
 }
 
 impl MemoryStore {
@@ -69,6 +71,7 @@ impl MemoryStore {
             merge_operations: Arc::new(DashMap::new()),
             merge_conflicts: Arc::new(DashMap::new()),
             assets_by_id: Arc::new(DashMap::new()),
+            revoked_tokens: Arc::new(DashMap::new()),
         }
     }
 }
@@ -953,7 +956,34 @@ impl CatalogStore for MemoryStore {
             Err(anyhow::anyhow!("Merge operation not found"))
         }
     }
+
+    // Token Revocation Operations
+    async fn revoke_token(&self, token_id: Uuid, expires_at: chrono::DateTime<chrono::Utc>, reason: Option<String>) -> Result<()> {
+        let revoked = pangolin_core::token::RevokedToken::new(token_id, expires_at, reason);
+        self.revoked_tokens.insert(token_id, revoked);
+        Ok(())
+    }
+
+    async fn is_token_revoked(&self, token_id: Uuid) -> Result<bool> {
+        Ok(self.revoked_tokens.contains_key(&token_id))
+    }
+
+    async fn cleanup_expired_tokens(&self) -> Result<usize> {
+        let now = chrono::Utc::now();
+        let to_remove: Vec<Uuid> = self.revoked_tokens
+            .iter()
+            .filter(|entry| entry.value().is_expired())
+            .map(|entry| *entry.key())
+            .collect();
+        
+        let count = to_remove.len();
+        for token_id in to_remove {
+            self.revoked_tokens.remove(&token_id);
+        }
+        Ok(count)
+    }
 }
+
 
 #[async_trait]
 impl Signer for MemoryStore {

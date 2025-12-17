@@ -36,6 +36,7 @@ pub mod business_metadata_test;
 
 pub mod permission_handlers; // Registered new module
 pub mod service_user_handlers; // Service user management
+pub mod cleanup_job; // Token cleanup background job
 
 #[cfg(test)]
 #[path = "iceberg_handlers_test.rs"]
@@ -139,6 +140,10 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/app-config", get(user_handlers::get_app_config))
         .route("/api/v1/users/me", get(user_handlers::get_current_user))
         .route("/api/v1/users/logout", post(user_handlers::logout))
+        // Token Revocation
+        .route("/api/v1/auth/revoke", post(token_handlers::revoke_current_token))
+        .route("/api/v1/auth/revoke/:token_id", post(token_handlers::revoke_token_by_id))
+        .route("/api/v1/auth/cleanup-tokens", post(token_handlers::cleanup_expired_tokens))
         // Role Management
         .route("/api/v1/roles", post(permission_handlers::create_role).get(permission_handlers::list_roles))
         .route("/api/v1/roles/:id", get(permission_handlers::get_role).put(permission_handlers::update_role).delete(permission_handlers::delete_role))

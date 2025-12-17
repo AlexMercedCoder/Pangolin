@@ -132,6 +132,7 @@ pub async fn search_assets(
             // Fetch User Permissions once
             // We need a helper to check permissions efficiently.
             // Or just list them all? `store.list_user_permissions(user_id)`
+            tracing::info!("SEARCH DEBUG: Session user_id: {}", session.user_id);
             let user_perms = store.list_user_permissions(session.user_id).await.unwrap_or_default();
             
             // Need mapping of Catalog Name -> Catalog ID for permission checks

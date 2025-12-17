@@ -1485,5 +1485,43 @@ impl SqliteStore {
             Ok(None)
         }
     }
-}
 
+    // Token Revocation Operations
+    async fn revoke_token(&self, token_id: Uuid, expires_at: chrono::DateTime<chrono::Utc>, reason: Option<String>) -> Result<()> {
+        let token_id_str = token_id.to_string();
+        let expires_at_ms = expires_at.timestamp_millis();
+        
+        sqlx::query(
+            "INSERT INTO revoked_tokens (token_id, expires_at, reason) VALUES (?, ?, ?)"
+        )
+        .bind(&token_id_str)
+        .bind(expires_at_ms)
+        .bind(reason)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn is_token_revoked(&self, token_id: Uuid) -> Result<bool> {
+        let token_id_str = token_id.to_string();
+        let exists: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM revoked_tokens WHERE token_id = ?"
+        )
+        .bind(&token_id_str)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(exists > 0)
+    }
+
+    async fn cleanup_expired_tokens(&self) -> Result<usize> {
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let rows_affected = sqlx::query(
+            "DELETE FROM revoked_tokens WHERE expires_at < ?"
+        )
+        .bind(now_ms)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        Ok(rows_affected as usize)
+    }
+}

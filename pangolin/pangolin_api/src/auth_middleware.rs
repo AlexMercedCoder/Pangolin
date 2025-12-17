@@ -19,6 +19,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     pub sub: String, // user_id
+    pub jti: Option<String>, // JWT ID for token revocation (optional for backward compatibility)
     pub username: String,
     pub tenant_id: Option<String>,
     pub role: UserRole,
@@ -30,6 +31,7 @@ impl From<UserSession> for Claims {
     fn from(session: UserSession) -> Self {
         Self {
             sub: session.user_id.to_string(),
+            jti: Some(uuid::Uuid::new_v4().to_string()), // Generate unique token ID
             username: session.username,
             tenant_id: session.tenant_id.map(|id| id.to_string()),
             role: session.role,
@@ -268,6 +270,25 @@ pub async fn auth_middleware(
             return (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e)).into_response();
         }
     };
+    
+    // Check if token has been revoked (if jti is present)
+    if let Some(ref jti_str) = claims.jti {
+        if let Ok(token_id) = uuid::Uuid::parse_str(jti_str) {
+            match store.is_token_revoked(token_id).await {
+                Ok(true) => {
+                    tracing::warn!("Revoked token attempted: {}", jti_str);
+                    return (StatusCode::UNAUTHORIZED, "Token has been revoked").into_response();
+                }
+                Ok(false) => {
+                    // Token is valid, continue
+                }
+                Err(e) => {
+                    tracing::error!("Error checking token revocation: {}", e);
+                    // Continue anyway - don't block on revocation check failure
+                }
+            }
+        }
+    }
     
     // Convert claims to session
     let session = match claims.to_session() {

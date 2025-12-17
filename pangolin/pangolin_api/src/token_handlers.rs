@@ -64,3 +64,126 @@ pub async fn generate_token(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Token generation failed: {}", e)).into_response(),
     }
 }
+
+// ===== Token Revocation Endpoints =====
+
+use axum::extract::Path;
+use axum::Extension;
+use pangolin_core::user::{UserSession, UserRole};
+use pangolin_store::CatalogStore;
+use std::sync::Arc;
+use chrono::{Utc, Duration};
+
+#[derive(Debug, Deserialize)]
+pub struct RevokeTokenRequest {
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RevokeTokenResponse {
+    pub message: String,
+}
+
+/// Revoke the current user's token (logout)
+pub async fn revoke_current_token(
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
+    Json(payload): Json<RevokeTokenRequest>,
+) -> impl IntoResponse {
+    // Generate an expiration time (tokens typically expire in 24 hours)
+    let expires_at = Utc::now() + Duration::hours(24);
+    
+    // Use the user_id as the token_id for revocation
+    let token_id = session.user_id;
+    
+    match store.revoke_token(token_id, expires_at, payload.reason).await {
+        Ok(_) => {
+            tracing::info!("Token revoked for user: {}", session.username);
+            (
+                StatusCode::OK,
+                Json(RevokeTokenResponse {
+                    message: "Token revoked successfully. Please log in again.".to_string(),
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to revoke token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to revoke token: {}", e),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Admin endpoint to revoke any token by ID
+pub async fn revoke_token_by_id(
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
+    Path(token_id): Path<Uuid>,
+    Json(payload): Json<RevokeTokenRequest>,
+) -> impl IntoResponse {
+    // Check if user is admin
+    if !matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
+        return (StatusCode::FORBIDDEN, "Admin access required").into_response();
+    }
+    
+    // Set a default expiration (tokens typically expire in 24h)
+    let expires_at = Utc::now() + Duration::hours(24);
+    
+    match store.revoke_token(token_id, expires_at, payload.reason).await {
+        Ok(_) => {
+            tracing::info!("Token {} revoked by admin: {}", token_id, session.username);
+            (
+                StatusCode::OK,
+                Json(RevokeTokenResponse {
+                    message: format!("Token {} revoked successfully", token_id),
+                }),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to revoke token {}: {}", token_id, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to revoke token: {}", e),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Admin endpoint to clean up expired tokens
+pub async fn cleanup_expired_tokens(
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    Extension(session): Extension<UserSession>,
+) -> impl IntoResponse {
+    // Check if user is admin
+    if !matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
+        return (StatusCode::FORBIDDEN, "Admin access required").into_response();
+    }
+    
+    match store.cleanup_expired_tokens().await {
+        Ok(count) => {
+            tracing::info!("Cleaned up {} expired tokens by admin: {}", count, session.username);
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({
+                    "message": format!("Cleaned up {} expired tokens", count),
+                    "count": count
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            tracing::error!("Failed to cleanup expired tokens: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to cleanup expired tokens: {}", e),
+            )
+                .into_response()
+        }
+    }
+}

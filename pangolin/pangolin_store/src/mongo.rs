@@ -1050,6 +1050,30 @@ impl CatalogStore for MongoStore {
         
         Ok(())
     }
+
+    // Token Revocation Operations
+    async fn revoke_token(&self, token_id: Uuid, expires_at: chrono::DateTime<chrono::Utc>, reason: Option<String>) -> Result<()> {
+        let revoked = pangolin_core::token::RevokedToken::new(token_id, expires_at, reason);
+        self.db.collection("revoked_tokens").insert_one(revoked).await?;
+        Ok(())
+    }
+
+    async fn is_token_revoked(&self, token_id: Uuid) -> Result<bool> {
+        let filter = doc! { "token_id": to_bson_uuid(token_id) };
+        let result = self.db.collection::<pangolin_core::token::RevokedToken>("revoked_tokens")
+            .find_one(filter)
+            .await?;
+        Ok(result.is_some())
+    }
+
+    async fn cleanup_expired_tokens(&self) -> Result<usize> {
+        let now = chrono::Utc::now();
+        let filter = doc! { "expires_at": { "$lt": now } };
+        let result = self.db.collection::<pangolin_core::token::RevokedToken>("revoked_tokens")
+            .delete_many(filter)
+            .await?;
+        Ok(result.deleted_count as usize)
+    }
 }
 
 
