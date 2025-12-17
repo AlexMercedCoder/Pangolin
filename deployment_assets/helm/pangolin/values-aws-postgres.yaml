@@ -1,0 +1,11 @@
+env:
+  PANGOLIN_STORAGE_TYPE: "postgres"
+  AWS_REGION: "us-east-1"
+  # S3_ENDPOINT not needed for real AWS S3 usually, unless using VPC endpoint
+
+secrets:
+  DATABASE_URL: "postgresql://user:password@rds-endpoint:5432/pangolin"
+  AWS_ACCESS_KEY_ID: "AKI...Placeholder"
+  AWS_SECRET_ACCESS_KEY: "Secret...Placeholder"
+  PANGOLIN_JWT_SECRET: "strong-random-secret"
+  PANGOLIN_ROOT_PASSWORD: "strong-password"

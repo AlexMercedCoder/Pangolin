@@ -532,46 +532,39 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>> {
-        // For memory store, we can store metadata location in the Asset properties or a separate map.
-        // Let's assume it's in Asset properties for now, key "metadata_location".
-        if let Some(asset) = self.get_asset(tenant_id, catalog_name, branch, namespace, table).await? {
-            Ok(asset.properties.get("metadata_location").cloned())
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("\x1F"), table);
+        
+        if let Some(asset) = self.assets.get(&key) {
+            let loc = asset.properties.get("metadata_location").cloned().unwrap_or(asset.location.clone());
+            Ok(Some(loc))
         } else {
             Ok(None)
         }
     }
 
     async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
-        // CAS implementation for MemoryStore
-        // We need to lock or use atomic operations. DashMap provides some atomicity.
-        // We will fetch, check, and update.
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let key = (tenant_id, catalog_name.to_string(), branch_name, namespace.join("\x1F"), table);
         
-        // Note: This is not strictly atomic in this implementation because we do get then insert.
-        // For a real memory store, we'd need a mutex around the specific asset or use `entry` API carefully.
-        // Since we are using DashMap, we can use `entry` but our key structure is complex.
-        
-        // Simplified CAS:
-        let current_asset = self.get_asset(tenant_id, catalog_name, branch.clone(), namespace.clone(), table.clone()).await?;
-        
-        if let Some(mut asset) = current_asset {
-            let current_loc = asset.properties.get("metadata_location").cloned();
+        if let Some(mut asset) = self.assets.get_mut(&key) {
+            let current_loc = asset.properties.get("metadata_location").cloned().unwrap_or(asset.location.clone());
             
-            if current_loc != expected_location {
-                return Err(anyhow::anyhow!("Commit failed: Metadata location mismatch. Expected {:?}, found {:?}", expected_location, current_loc));
+            // CAS Check
+            if let Some(expected) = expected_location {
+                if current_loc != expected {
+                    return Err(anyhow::anyhow!("CAS failure: expected {} but found {}", expected, current_loc));
+                }
             }
             
+            asset.location = new_location.clone();
             asset.properties.insert("metadata_location".to_string(), new_location);
-            
-            // Update the asset
-            // In a real implementation, we'd want to ensure no one else updated it in between.
-            // For MemoryStore (dev/test), this race condition is acceptable-ish, or we can improve.
-            // Let's just overwrite for now.
-            self.create_asset(tenant_id, catalog_name, branch, namespace, asset).await?;
             Ok(())
         } else {
-             Err(anyhow::anyhow!("Table not found"))
+            Err(anyhow::anyhow!("Table not found"))
         }
     }
+
 
     async fn read_file(&self, location: &str) -> Result<Vec<u8>> {
         if let Some(data) = self.files.get(location) {
@@ -1027,9 +1020,14 @@ mod tests {
         let new = store.get_asset(tenant_id, catalog, None, namespace.clone(), "tbl2".to_string()).await.unwrap();
         assert!(new.is_some());
 
-        // Delete
         store.delete_asset(tenant_id, catalog, None, namespace.clone(), "tbl2".to_string()).await.unwrap();
         let deleted = store.get_asset(tenant_id, catalog, None, namespace.clone(), "tbl2".to_string()).await.unwrap();
         assert!(deleted.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_asset_update_consistency() {
+        let store = MemoryStore::new();
+        crate::tests::test_asset_update_consistency(&store).await;
     }
 }

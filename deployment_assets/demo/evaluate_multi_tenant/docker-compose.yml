@@ -33,6 +33,9 @@ services:
 
   pangolin-api:
     image: alexmerced/pangolin-api:latest
+    build:
+      context: ../../../pangolin
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
     environment:

@@ -1,0 +1,14 @@
+env:
+  PANGOLIN_STORAGE_TYPE: "mongodb"
+  # Pangolin S3 support can work with Azure Blob via S3 Gateway or specific Azure configuration if implemented
+  # Assuming generic S3 compatibility or that user will configure endpoint
+  S3_ENDPOINT: "https://<account>.blob.core.windows.net" 
+  # Note: Pangolin current S3 implementation might require specific Azure handling or use of MinIO gateway.
+  # This is a template.
+
+secrets:
+  DATABASE_URL: "mongodb://user:pass@cosmosdb-endpoint:10255/pangolin?ssl=true"
+  AWS_ACCESS_KEY_ID: "AzureStorageAccountName"
+  AWS_SECRET_ACCESS_KEY: "AzureStorageAccountKey"
+  PANGOLIN_JWT_SECRET: "strong-random-secret"
+  PANGOLIN_ROOT_PASSWORD: "strong-password"

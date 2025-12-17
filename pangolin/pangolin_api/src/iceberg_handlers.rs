@@ -723,12 +723,23 @@ pub async fn update_table(
     let branch = branch_from_name.unwrap_or("main".to_string());
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
     
+    tracing::info!("update_table: catalog={} ns={:?} table={}", catalog_name, namespace_parts, table_name);
+
     // Check Permissions (Update Table requires Write on Asset)
     // Need asset ID
     let asset = match store.get_asset(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone()).await {
-        Ok(Some(a)) => a,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Ok(Some(a)) => {
+            tracing::info!("update_table: Asset found: {}", a.id);
+            a
+        },
+        Ok(None) => {
+            tracing::error!("update_table: Table not found in store");
+            return (StatusCode::NOT_FOUND, "Table not found").into_response()
+        },
+        Err(e) => {
+            tracing::error!("update_table: DB Error: {}", e);
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        },
     };
     
     let scope = PermissionScope::Asset { 
@@ -738,8 +749,11 @@ pub async fn update_table(
     };
     
     if let Err(e) = check_permission(&store, &session, &scope, Action::Write).await {
+         tracing::error!("update_table: Permission denied");
          return (e, "Forbidden").into_response();
     }
+    
+    tracing::info!("update_table: Permission granted, starting retry loop");
 
     // Retry loop for OCC
     let mut retries = 0;
@@ -747,25 +761,31 @@ pub async fn update_table(
 
     while retries < MAX_RETRIES {
         // 1. Load current metadata location
-        // We already have asset from above check, but for correctness in CAS loop we might want to re-fetch if location changes?
-        // update_metadata_location takes old location.
-        // Actually, we can reuse `asset` for the first try, but if it loops we need to reload.
-        // Or simpler: just use get_metadata_location as before.
-        let current_metadata_location = match store.get_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone()).await {
-            Ok(Some(loc)) => loc,
-            Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
-        };
-
-        // 2. Read current metadata file
-        let metadata_bytes = match store.read_file(&current_metadata_location).await {
-            Ok(bytes) => bytes,
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read metadata file").into_response(),
+        let current_metadata_location = asset.properties.get("metadata_location").cloned();
+        tracing::info!("update_table: Current metadata location: {:?}", current_metadata_location);
+        
+        let metadata_bytes = if let Some(loc) = &current_metadata_location {
+             match store.read_file(loc).await {
+                 Ok(bytes) => {
+                     tracing::info!("update_table: Read {} bytes from metadata file", bytes.len());
+                     bytes
+                 },
+                 Err(e) => {
+                     tracing::error!("update_table: Failed to read metadata file: {}", e);
+                     return (StatusCode::NOT_FOUND, format!("Failed to read metadata file: {}", e)).into_response()
+                 }
+             }
+        } else {
+             tracing::error!("update_table: No metadata location in asset properties");
+             return (StatusCode::INTERNAL_SERVER_ERROR, "Table corrupted (no metadata)").into_response()
         };
         
         let mut metadata: TableMetadata = match serde_json::from_slice(&metadata_bytes) {
             Ok(m) => m,
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
+            Err(e) => {
+                tracing::error!("update_table: Failed to parse metadata: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response()
+            }
         };
 
         // 3. Apply updates
@@ -825,7 +845,7 @@ pub async fn update_table(
         }
 
         // 5. Update catalog pointer (CAS)
-        match store.update_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone(), Some(current_metadata_location.clone()), new_metadata_location.clone()).await {
+        match store.update_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone(), current_metadata_location.clone(), new_metadata_location.clone()).await {
             Ok(_) => {
                 // Success!
                 return (StatusCode::OK, Json(TableResponse::new(

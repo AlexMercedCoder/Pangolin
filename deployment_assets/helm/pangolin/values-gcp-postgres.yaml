@@ -1,0 +1,12 @@
+env:
+  PANGOLIN_STORAGE_TYPE: "postgres"
+  # GCP GCS S3 Interop
+  S3_ENDPOINT: "https://storage.googleapis.com"
+  AWS_REGION: "auto"
+
+secrets:
+  DATABASE_URL: "postgresql://user:pass@cloudsql-instance:5432/pangolin"
+  AWS_ACCESS_KEY_ID: "GOOG...HMACKey"
+  AWS_SECRET_ACCESS_KEY: "Secret...HMACKey"
+  PANGOLIN_JWT_SECRET: "strong-random-secret"
+  PANGOLIN_ROOT_PASSWORD: "strong-password"

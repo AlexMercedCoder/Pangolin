@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
 );
 CREATE INDEX IF NOT EXISTS idx_warehouses_tenant ON warehouses(tenant_id);
 
-CREATE TABLE access_requests (
+CREATE TABLE IF NOT EXISTS access_requests (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,
     user_id TEXT NOT NULL,

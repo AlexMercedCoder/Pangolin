@@ -12,7 +12,11 @@ use anyhow::Result;
 use chrono::{DateTime, Utc, TimeZone};
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 
+
 use crate::signer::Signer;
+use object_store::{ObjectStore, path::Path as ObjPath};
+use object_store::aws::AmazonS3Builder;
+
 
 #[derive(Clone)]
 pub struct SqliteStore {
@@ -705,11 +709,79 @@ impl CatalogStore for SqliteStore {
         Ok(None)
     }
 
-    async fn get_metadata_location(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String) -> Result<Option<String>> {
-        Ok(None)
+    async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>> {
+        let namespace_path = serde_json::to_string(&namespace)?;
+        let row = sqlx::query("SELECT metadata_location FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(&namespace_path)
+            .bind(&table)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            Ok(row.get("metadata_location"))
+        } else {
+            Ok(None)
+        }
     }
 
-    async fn update_metadata_location(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _expected_location: Option<String>, _new_location: String) -> Result<()> {
+    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
+        let namespace_path = serde_json::to_string(&namespace)?;
+        
+        // Optimistic Concurrency Control (CAS)
+        let result = if let Some(expected) = expected_location {
+            sqlx::query("UPDATE assets SET metadata_location = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND metadata_location = ?")
+                .bind(&new_location)
+                .bind(tenant_id.to_string())
+                .bind(catalog_name)
+                .bind(&namespace_path)
+                .bind(&table)
+                .bind(&expected)
+                .execute(&self.pool)
+                .await?
+        } else {
+            // If expected is None, we assume it was previously null or empty? 
+            // Or we just force update? Iceberg REST spec usually implies swap.
+            // If expected is None, maybe we check if it IS null?
+            sqlx::query("UPDATE assets SET metadata_location = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND (metadata_location IS NULL OR metadata_location = '')")
+                .bind(&new_location)
+                .bind(tenant_id.to_string())
+                .bind(catalog_name)
+                .bind(&namespace_path)
+                .bind(&table)
+                .execute(&self.pool)
+                .await?
+        };
+
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Failed to update metadata location (CAS failure or table not found)"));
+        }
+        
+        // Also update the property in the properties JSON blob
+        // This is a bit inefficient in SQLite (read-modify-write), but necessary if we duplicate state.
+        // Ideally we should DROP 'metadata_location' from properties and rely on the column, but for safety lets sync them.
+        let row = sqlx::query("SELECT properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+             .bind(tenant_id.to_string())
+             .bind(catalog_name)
+             .bind(&namespace_path)
+             .bind(&table)
+             .fetch_one(&self.pool)
+             .await?;
+             
+        let props_str: String = row.get("properties");
+        let mut props: std::collections::HashMap<String, String> = serde_json::from_str(&props_str).unwrap_or_default();
+        props.insert("metadata_location".to_string(), new_location.clone());
+        
+        sqlx::query("UPDATE assets SET properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+            .bind(serde_json::to_string(&props)?)
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(&namespace_path)
+            .bind(&table)
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
     }
 
@@ -972,12 +1044,73 @@ impl CatalogStore for SqliteStore {
         Ok(perms)
     }
 
-    async fn read_file(&self, _path: &str) -> Result<Vec<u8>> {
-        Err(anyhow::anyhow!("File operations not supported in SQLite store"))
+    async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            let mut builder = AmazonS3Builder::from_env()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             let result = store.get(&ObjPath::from(key)).await?;
+             let bytes = result.bytes().await?;
+             Ok(bytes.to_vec())
+        } else {
+             Err(anyhow::anyhow!("Only s3:// paths are supported in SQLite store"))
+        }
     }
 
-    async fn write_file(&self, _path: &str, _data: Vec<u8>) -> Result<()> {
-        Err(anyhow::anyhow!("File operations not supported in SQLite store"))
+    async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            tracing::info!("write_file: s3 path='{}' bucket='{}' key='{}'", path, bucket, key);
+            
+            let mut builder = AmazonS3Builder::from_env()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             match store.put(&ObjPath::from(key), data.into()).await {
+                 Ok(_) => {
+                     tracing::info!("write_file: Successfully wrote to S3: {}/{}", bucket, key);
+                     Ok(())
+                 },
+                 Err(e) => {
+                     tracing::error!("write_file: Failed to write to S3: {}", e);
+                     Err(anyhow::anyhow!(e))
+                 }
+             }
+        } else {
+             Err(anyhow::anyhow!("Only s3:// paths are supported in SQLite store"))
+        }
     }
 
     async fn expire_snapshots(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _retention_ms: i64) -> Result<()> {

@@ -3,6 +3,7 @@ pub mod signer;
 pub mod postgres;
 pub mod mongo;
 pub mod sqlite;
+pub mod tests;
 
 pub use memory::MemoryStore;
 pub use postgres::PostgresStore;

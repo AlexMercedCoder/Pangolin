@@ -1,0 +1,13 @@
+apiVersion: v2
+name: pangolin
+description: A Helm chart for deploying the Pangolin Lakehouse Catalog
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - iceberg
+  - lakehouse
+  - catalog
+  - rust
+maintainers:
+  - name: alexmerced
