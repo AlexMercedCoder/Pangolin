@@ -45,6 +45,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_REGION=us-east-1
       - S3_ENDPOINT=http://minio:9000
+      - AWS_ALLOW_HTTP=true
     volumes:
       - sqlite_data:/data
     depends_on:

@@ -24,6 +24,7 @@ async fn main() {
             Arc::new(PostgresStore::new(&db_url).await.expect("Failed to connect to PostgreSQL"))
         } else if db_url.starts_with("mongodb://") || db_url.starts_with("mongodb+srv://") {
             tracing::info!("Using MongoDB storage backend");
+            let db_name = std::env::var("MONGO_DB_NAME").unwrap_or_else(|_| "pangolin".to_string());
             Arc::new(MongoStore::new(&db_url, &db_name).await.expect("Failed to connect to MongoDB"))
         } else if db_url.starts_with("sqlite://") || db_url.ends_with(".db") {
             tracing::info!("Using SQLite storage backend");
