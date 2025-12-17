@@ -543,8 +543,8 @@ impl CatalogStore for PostgresStore {
         }
     }
 
-    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String)>> {
-        let row = sqlx::query("SELECT id, name, catalog_name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND id = $2")
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>> {
+        let row = sqlx::query("SELECT id, name, catalog_name, namespace_path, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND id = $2")
             .bind(tenant_id)
             .bind(asset_id)
             .fetch_optional(&self.pool)
@@ -552,6 +552,7 @@ impl CatalogStore for PostgresStore {
 
         if let Some(row) = row {
             let catalog_name: String = row.get("catalog_name");
+            let namespace_path: Vec<String> = row.get("namespace_path");
             let asset_type_str: String = row.get("asset_type");
             let kind = match asset_type_str.as_str() {
                 "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
@@ -567,7 +568,7 @@ impl CatalogStore for PostgresStore {
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             };
             
-            Ok(Some((asset, catalog_name)))
+            Ok(Some((asset, catalog_name, namespace_path)))
         } else {
             Ok(None)
         }

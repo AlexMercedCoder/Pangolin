@@ -304,7 +304,10 @@ impl CatalogStore for MemoryStore {
         // 1. Insert Asset
         let asset_full_name = format!("{}.{}", namespace.join("."), asset.name);
         let key = (tenant_id, catalog_name.to_string(), branch_name.clone(), namespace.join("\x1F"), asset.name.clone());
-        self.assets.insert(key, asset);
+        self.assets.insert(key, asset.clone());
+
+        // 2. Update optimized lookups
+        self.assets_by_id.insert(asset.id, (catalog_name.to_string(), namespace.clone(), Some(branch_name.clone()), asset.name.clone()));
 
         // 2. Ensure Branch Exists and Update Asset List
         let mut branch_obj = self.get_branch(tenant_id, catalog_name, branch_name.clone()).await?
@@ -323,6 +326,20 @@ impl CatalogStore for MemoryStore {
         }
 
         Ok(())
+    }
+
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>> {
+        if let Some(entry) = self.assets_by_id.get(&asset_id) {
+            let (catalog_name, namespace, branch, name) = entry.value().clone();
+            // Verify tenant ownership (implicit via proper key lookup) purely for safety
+            let branch_name = branch.unwrap_or_else(|| "main".to_string());
+            let key = (tenant_id, catalog_name.clone(), branch_name, namespace.join("\x1F"), name);
+            
+            if let Some(asset) = self.assets.get(&key) {
+               return Ok(Some((asset.value().clone(), catalog_name, namespace)));
+            }
+        }
+        Ok(None)
     }
 
     async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
@@ -352,7 +369,9 @@ impl CatalogStore for MemoryStore {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let ns_str = namespace.join("\x1F");
         let key = (tenant_id, catalog_name.to_string(), branch_name, ns_str, name);
-        self.assets.remove(&key);
+        if let Some((_, asset)) = self.assets.remove(&key) {
+            self.assets_by_id.remove(&asset.id);
+        }
         Ok(())
     }
 

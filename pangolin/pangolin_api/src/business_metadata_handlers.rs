@@ -35,16 +35,37 @@ pub async fn add_business_metadata(
 ) -> impl IntoResponse {
     // If setting discoverable=true, check MANAGE_DISCOVERY permission
     if payload.discoverable {
-        // Get catalog ID for this asset
-        let catalog_name = match crate::authz::get_catalog_for_asset(&store, session.tenant_id.unwrap_or_default(), asset_id).await {
-            Ok(name) => name,
-            Err(_) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
+        let tenant_id = session.tenant_id.unwrap_or_default();
+        // New Optimized O(1) Lookup
+        let (catalog_name, _namespace) = match store.get_asset_by_id(tenant_id, asset_id).await {
+            Ok(Some((_, cat, ns))) => (cat, ns),
+            Ok(None) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Store error: {}", e)).into_response(),
         };
         
-        // For now, use a simplified check - just verify user is admin
-        // TODO: Once we have catalog IDs, use proper scope checking
-        if !crate::authz::is_admin(&session.role) {
-            return (StatusCode::FORBIDDEN, "Missing MANAGE_DISCOVERY permission on this catalog").into_response();
+        // Granular Check: MANAGE_DISCOVERY on specific Catalog
+        // Need to find catalog_id from name first? Or use name in scope if supported?
+        // PermissionScope uses Catalog options.
+        // Let's Resolve Catalog ID from Name
+        let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
+        let catalog_id = catalogs.iter().find(|c| c.name == catalog_name).map(|c| c.id);
+
+        let has_perm = if let Some(cid) = catalog_id {
+            match crate::authz::check_permission(
+                &store, 
+                &session, 
+                &Action::ManageDiscovery, 
+                &PermissionScope::Catalog { catalog_id: cid }
+            ).await {
+                Ok(v) => v,
+                Err(_) => false,
+            }
+        } else {
+            false
+        };
+
+        if !has_perm && !crate::authz::is_admin(&session.role) {
+             return (StatusCode::FORBIDDEN, "Missing MANAGE_DISCOVERY permission on this catalog").into_response();
         }
     }
 
@@ -108,27 +129,61 @@ pub async fn search_assets(
     
     match store.search_assets(tenant_id, &params.query, params.tags).await {
         Ok(results) => {
-            // Filter to only return discoverable assets OR assets the user has permission to access
-            let filtered_results: Vec<_> = results.into_iter()
-                .filter(|(_, metadata)| {
-                    // Show if: user is admin OR asset is discoverable
-                    // TODO: Add check for user's direct read permissions on specific assets
-                    crate::authz::is_admin(&session.role) || 
-                    metadata.as_ref().map(|m| m.discoverable).unwrap_or(false)
-                })
-                .map(|(asset, metadata)| {
-                    serde_json::json!({
-                        "id": asset.id,
-                        "name": asset.name,
-                        "kind": asset.kind,
-                        "location": asset.location,
-                        "description": metadata.as_ref().and_then(|m| m.description.clone()),
-                        "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
-                    })
-                })
-                .collect();
+            // Fetch User Permissions once
+            // We need a helper to check permissions efficiently.
+            // Or just list them all? `store.list_user_permissions(user_id)`
+            let user_perms = store.list_user_permissions(session.user_id).await.unwrap_or_default();
             
-            (StatusCode::OK, Json(filtered_results)).into_response()
+            // Need mapping of Catalog Name -> Catalog ID for permission checks
+            let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
+            let catalog_map: std::collections::HashMap<_, _> = catalogs.iter().map(|c| (c.name.clone(), c.id)).collect();
+
+            // ASYNC FILTERING WORKAROUND
+            tracing::info!("SEARCH DEBUG: User perms: {:?}", user_perms);
+            tracing::info!("SEARCH DEBUG: Catalog map: {:?}", catalog_map);
+            
+            let mut final_results: Vec<(pangolin_core::model::Asset, Option<BusinessMetadata>)> = Vec::new();
+            for (asset, metadata) in results {
+                let is_discoverable = metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
+                if is_discoverable || crate::authz::is_admin(&session.role) {
+                    final_results.push((asset, metadata));
+                    continue;
+                }
+                
+                // Check Read Permission
+                if let Ok(Some((_, catalog_name, _))) = store.get_asset_by_id(tenant_id, asset.id).await {
+                     if let Some(catalog_id) = catalog_map.get(&catalog_name) {
+                         // Check permissions
+                         // Simple check: Does user have READ on this catalog?
+                         // (Namespace scope checking would require parsing namespace from asset properties or similar)
+                         // Let's assume Catalog-Level READ for now as phase 1 step.
+                         
+                         let has_read = user_perms.iter().any(|p| 
+                             p.actions.contains(&Action::Read) && 
+                             matches!(&p.scope, PermissionScope::Catalog { catalog_id: cid } if cid == catalog_id)
+                         );
+                         
+                         tracing::info!("SEARCH DEBUG: Asset {} in Catalog {} (ID: {:?}). Has Read: {}", asset.name, catalog_name, catalog_id, has_read);
+                         
+                         if has_read {
+                             final_results.push((asset, metadata));
+                         }
+                     }
+                }
+            }
+
+            let mapped_results: Vec<_> = final_results.into_iter().map(|(asset, metadata)| {
+                serde_json::json!({
+                    "id": asset.id,
+                    "name": asset.name,
+                    "kind": asset.kind,
+                    "location": asset.location,
+                    "description": metadata.as_ref().and_then(|m| m.description.clone()),
+                    "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
+                })
+            }).collect();
+            
+            (StatusCode::OK, Json(mapped_results)).into_response()
         },
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Search failed: {}", e)).into_response(),
     }
@@ -240,39 +295,46 @@ pub async fn get_asset_details(
 ) -> impl IntoResponse {
     let tenant_id = session.tenant_id.unwrap_or_default();
     
-    // Scan all assets to find the one with this ID
-    // TODO: Optimize this with an index in CatalogStore or direct lookup if supported
-    
-    let catalogs = match store.list_catalogs(tenant_id).await {
-        Ok(c) => c,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list catalogs: {}", e)).into_response(),
+    // O(1) Lookup
+    let (asset, catalog_name, namespace) = match store.get_asset_by_id(tenant_id, asset_id).await {
+        Ok(Some(t)) => t,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Store error: {}", e)).into_response(),
     };
 
-    for catalog in catalogs {
-        let namespaces = match store.list_namespaces(tenant_id, &catalog.name, None).await {
-             Ok(n) => n,
-             Err(_) => continue,
-        };
+    // Metadata
+    let metadata = store.get_business_metadata(asset_id).await.unwrap_or(None);
+    let is_discoverable = metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
+
+    // Permission Check
+    // If not admin and not discoverable, check catalog read permission
+    if !crate::authz::is_admin(&session.role) && !is_discoverable {
+        let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
+        let catalog_id = catalogs.iter().find(|c| c.name == catalog_name).map(|c| c.id);
         
-        for ns in namespaces {
-            let ns_parts = ns.name.clone(); 
-            if let Ok(assets) = store.list_assets(tenant_id, &catalog.name, None, ns_parts).await {
-                for asset in assets {
-                    if asset.id == asset_id {
-                        // Found it!
-                        let metadata = store.get_business_metadata(asset_id).await.unwrap_or(None);
-                        
-                        return (StatusCode::OK, Json(serde_json::json!({
-                            "asset": asset,
-                            "metadata": metadata,
-                            "catalog": catalog.name,
-                            "namespace": ns.name
-                        }))).into_response();
-                    }
-                }
+        let has_perm = if let Some(cid) = catalog_id {
+            match crate::authz::check_permission(
+                &store, 
+                &session, 
+                &Action::Read, 
+                &PermissionScope::Catalog { catalog_id: cid }
+            ).await {
+                Ok(v) => v,
+                Err(_) => false,
             }
+        } else {
+            false
+        };
+
+        if !has_perm {
+            return (StatusCode::FORBIDDEN, "Access denied").into_response();
         }
     }
     
-    (StatusCode::NOT_FOUND, "Asset not found").into_response()
+    (StatusCode::OK, Json(serde_json::json!({
+        "asset": asset,
+        "metadata": metadata,
+        "catalog": catalog_name,
+        "namespace": namespace
+    }))).into_response()
 }

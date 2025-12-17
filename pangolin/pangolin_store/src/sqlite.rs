@@ -710,8 +710,8 @@ impl CatalogStore for SqliteStore {
         }
     }
 
-    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String)>> {
-        let row = sqlx::query("SELECT id, name, catalog_name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND id = ?")
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>> {
+        let row = sqlx::query("SELECT id, name, catalog_name, namespace_path, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND id = ?")
             .bind(tenant_id.to_string())
             .bind(asset_id.to_string())
             .fetch_optional(&self.pool)
@@ -719,6 +719,9 @@ impl CatalogStore for SqliteStore {
 
         if let Some(row) = row {
             let catalog_name: String = row.get("catalog_name");
+            let namespace_json: String = row.get("namespace_path");
+            let namespace_path: Vec<String> = serde_json::from_str(&namespace_json).unwrap_or_default();
+            
             let asset_type_str: String = row.get("asset_type");
             let kind = match asset_type_str.as_str() {
                 "IcebergTable" => AssetType::IcebergTable,
@@ -734,7 +737,7 @@ impl CatalogStore for SqliteStore {
                 properties: serde_json::from_str(&row.get::<String, _>("properties")).unwrap_or_default(),
             };
             
-            Ok(Some((asset, catalog_name)))
+            Ok(Some((asset, catalog_name, namespace_path)))
         } else {
             Ok(None)
         }

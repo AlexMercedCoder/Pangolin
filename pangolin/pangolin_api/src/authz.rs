@@ -112,7 +112,7 @@ pub async fn get_catalog_for_asset(
     
     // Optimized path: Use O(1) direct lookup if available
     match store.get_asset_by_id(tenant_id, asset_id).await {
-        Ok(Some((_, catalog_name))) => return Ok(catalog_name),
+        Ok(Some((_, catalog_name, _))) => return Ok(catalog_name),
         Ok(None) => {}, // Not found by ID, weird if store supports it but didn't find it.
         Err(_) => {}, // Store might not support it (e.g., deprecated stores), fall back to scan
     }

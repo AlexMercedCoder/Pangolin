@@ -477,7 +477,7 @@ impl CatalogStore for MongoStore {
         Ok(assets)
     }
 
-    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String)>> {
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>> {
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "id": to_bson_uuid(asset_id)
@@ -486,7 +486,8 @@ impl CatalogStore for MongoStore {
         
         if let Some(d) = d {
             let catalog_name = d.get_str("catalog_name")?.to_string();
-             let kind_str = d.get_str("kind")?;
+            let namespace = d.get_array("namespace")?.iter().map(|v| v.as_str().unwrap().to_string()).collect(); 
+            let kind_str = d.get_str("kind")?;
             let kind = match kind_str {
                 "IcebergTable" => AssetType::IcebergTable,
                 "View" => AssetType::View,
@@ -503,7 +504,7 @@ impl CatalogStore for MongoStore {
                 properties,
             };
             
-            Ok(Some((asset, catalog_name)))
+            Ok(Some((asset, catalog_name, namespace)))
         } else {
             Ok(None)
         }
