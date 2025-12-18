@@ -250,7 +250,10 @@ pub async fn list_namespaces(
     tracing::info!("list_namespaces: tenant_id={}, catalog_name={}", tenant_id, catalog_name);
     
     // Check if this is a federated catalog and forward if so
-    let path = format!("/v1/{}/namespaces", prefix);
+    // We pass relative path (suffix) because base_url includes the remote prefix
+    let path = "/namespaces".to_string(); 
+    // TODO: Append query params if needed (e.g. ?parent=...)
+    
     if let Some(response) = check_and_forward_if_federated(
         &store,
         tenant_id,
@@ -359,7 +362,21 @@ pub async fn list_tables(
     Path((prefix, namespace)): Path<(String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = prefix;
+    let catalog_name = prefix.clone();
+    
+    // Federated check
+    let path = format!("/namespaces/{}/tables", namespace);
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::GET,
+        &path,
+        None,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
     
     // Resolve catalog ID
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
@@ -421,8 +438,19 @@ pub async fn create_table(
     
     let ns_vec = vec![ns_name];
 
+    // Resolve warehouse bucket if possible
+    let mut bucket_name = "warehouse".to_string();
+    if let Some(warehouse_name) = &catalog.warehouse_name {
+        if let Ok(Some(wh)) = store.get_warehouse(tenant_id, warehouse_name.clone()).await {
+             if let Some(b) = wh.storage_config.get("bucket") {
+                 bucket_name = b.clone();
+             }
+        }
+    }
+
     let table_uuid = Uuid::new_v4();
-    let location = payload.location.unwrap_or_else(|| format!("s3://warehouse/{}/{}/{}", catalog_name, ns_vec.join("/"), tbl_name));
+    let location = payload.location.unwrap_or_else(|| format!("s3://{}/{}/{}/{}", bucket_name, catalog_name, ns_vec.join("/"), tbl_name));
+
     
     // Parse schema from payload if provided, otherwise create empty schema
     let schema_fields = if let Some(schema_value) = &payload.schema {

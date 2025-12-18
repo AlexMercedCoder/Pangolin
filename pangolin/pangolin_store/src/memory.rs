@@ -261,13 +261,16 @@ impl CatalogStore for MemoryStore {
 
     async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>) -> Result<Vec<Namespace>> {
         let parent_prefix = parent.unwrap_or_default();
+        tracing::info!("DEBUG_MEM: list_namespaces tid={} cat={} parent='{}'", tenant_id, catalog_name, parent_prefix);
         let mut namespaces = Vec::new();
         for entry in self.namespaces.iter() {
             let (tid, cat, ns_str) = entry.key();
+            tracing::info!("DEBUG_MEM: Checking entry tid={} cat={} ns={}", tid, cat, ns_str);
             if *tid == tenant_id && cat == catalog_name && (parent_prefix.is_empty() || ns_str.starts_with(&parent_prefix)) {
                 namespaces.push(entry.value().clone());
             }
         }
+        tracing::info!("DEBUG_MEM: Found {} namespaces", namespaces.len());
         Ok(namespaces)
     }
 

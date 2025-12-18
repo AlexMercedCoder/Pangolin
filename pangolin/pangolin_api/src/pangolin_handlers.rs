@@ -431,8 +431,10 @@ pub async fn list_audit_events(
 #[derive(Deserialize)]
 pub struct CreateCatalogRequest {
     name: String,
+    catalog_type: Option<pangolin_core::model::CatalogType>,
     warehouse_name: Option<String>, // Reference to warehouse for credential vending
     storage_location: Option<String>, // Base path for this catalog in the warehouse
+    federated_config: Option<pangolin_core::model::FederatedCatalogConfig>,
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
@@ -440,6 +442,7 @@ pub struct CreateCatalogRequest {
 pub struct UpdateCatalogRequest {
     warehouse_name: Option<String>,
     storage_location: Option<String>,
+    federated_config: Option<pangolin_core::model::FederatedCatalogConfig>,
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
@@ -447,8 +450,10 @@ pub struct UpdateCatalogRequest {
 pub struct CatalogResponse {
     id: Uuid,
     name: String,
+    catalog_type: pangolin_core::model::CatalogType,
     warehouse_name: Option<String>,
     storage_location: Option<String>,
+    federated_config: Option<pangolin_core::model::FederatedCatalogConfig>,
     properties: std::collections::HashMap<String, String>,
 }
 
@@ -457,8 +462,10 @@ impl From<pangolin_core::model::Catalog> for CatalogResponse {
         Self {
             id: c.id,
             name: c.name,
+            catalog_type: c.catalog_type,
             warehouse_name: c.warehouse_name,
             storage_location: c.storage_location,
+            federated_config: c.federated_config,
             properties: c.properties,
         }
     }
@@ -503,13 +510,20 @@ pub async fn create_catalog(
         }
     }
     
+    let catalog_type = payload.catalog_type.unwrap_or(pangolin_core::model::CatalogType::Local);
+    
+    // If Federate, check config
+    if catalog_type == pangolin_core::model::CatalogType::Federated && payload.federated_config.is_none() {
+         return (StatusCode::BAD_REQUEST, "Federated catalog requires configuration").into_response();
+    }
+    
     let catalog = pangolin_core::model::Catalog {
         id: Uuid::new_v4(),
         name: payload.name.clone(),
-        catalog_type: pangolin_core::model::CatalogType::Local,
+        catalog_type,
         warehouse_name: payload.warehouse_name.clone().filter(|n| !n.is_empty()), // Filter empty string to None
         storage_location: payload.storage_location.clone(),
-        federated_config: None,
+        federated_config: payload.federated_config,
         properties: payload.properties.clone().unwrap_or_default(),
     };
 

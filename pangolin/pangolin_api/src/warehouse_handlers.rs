@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use pangolin_store::CatalogStore;
-use pangolin_core::model::Warehouse;
+use pangolin_core::model::{Warehouse, VendingStrategy};
 use uuid::Uuid;
 use crate::auth::TenantId;
 use crate::iceberg_handlers::AppState;
@@ -18,6 +18,7 @@ pub struct CreateWarehouseRequest {
     pub name: String,
     pub use_sts: Option<bool>, // If true, use STS credential vending; if false, pass through static creds
     pub storage_config: Option<std::collections::HashMap<String, String>>,
+    pub vending_strategy: Option<VendingStrategy>,
 }
 
 #[derive(Deserialize)]
@@ -25,6 +26,7 @@ pub struct UpdateWarehouseRequest {
     name: Option<String>,
     use_sts: Option<bool>,
     storage_config: Option<std::collections::HashMap<String, String>>,
+    vending_strategy: Option<VendingStrategy>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -34,6 +36,7 @@ pub struct WarehouseResponse {
     pub tenant_id: Uuid,
     pub use_sts: bool,
     pub storage_config: std::collections::HashMap<String, String>,
+    pub vending_strategy: Option<VendingStrategy>,
 }
 
 impl From<Warehouse> for WarehouseResponse {
@@ -44,6 +47,7 @@ impl From<Warehouse> for WarehouseResponse {
             tenant_id: warehouse.tenant_id,
             use_sts: warehouse.use_sts,
             storage_config: warehouse.storage_config,
+            vending_strategy: warehouse.vending_strategy,
         }
     }
 }
@@ -77,6 +81,7 @@ pub async fn create_warehouse(
         tenant_id: tenant.0,
         use_sts: payload.use_sts.unwrap_or(false), // Default to false (static credentials)
         storage_config: payload.storage_config.unwrap_or_default(),
+        vending_strategy: payload.vending_strategy,
     };
 
     match store.create_warehouse(tenant.0, warehouse.clone()).await {
@@ -127,6 +132,7 @@ pub async fn update_warehouse(
         name: payload.name,
         use_sts: payload.use_sts,
         storage_config: payload.storage_config,
+        vending_strategy: payload.vending_strategy,
     };
     
     match store.update_warehouse(tenant.0, name, updates).await {

@@ -22,6 +22,7 @@ fn test_static_credentials_response_format() {
         tenant_id: uuid::Uuid::nil(),
         use_sts: false,
         storage_config,
+        vending_strategy: None,
     };
     
     // Simulate the credential vending logic
@@ -67,6 +68,7 @@ fn test_azure_credentials_response_format() {
         tenant_id: uuid::Uuid::nil(),
         use_sts: false,
         storage_config,
+        vending_strategy: None,
     };
     
     // Simulate Azure credential vending logic
@@ -108,6 +110,7 @@ fn test_gcs_credentials_response_format() {
         tenant_id: uuid::Uuid::nil(),
         use_sts: false,
         storage_config,
+        vending_strategy: None,
     };
     
     // Simulate GCS credential vending logic
@@ -147,6 +150,7 @@ fn test_sts_credentials_response_format() {
         tenant_id: uuid::Uuid::nil(),
         use_sts: true,
         storage_config,
+        vending_strategy: None,
     };
     
     // Simulate STS credential vending logic
