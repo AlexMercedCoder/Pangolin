@@ -1,212 +1,1216 @@
 openapi: 3.0.3
 info:
-  title: Pangolin Lakehouse Catalog API
-  description: |
-    Pangolin is a multi-tenant, branch-aware lakehouse catalog compatible with Apache Iceberg REST API.
-    
-    This API provides:
-    - Full Iceberg REST Catalog API compliance (see Apache Iceberg REST spec)
-    - Extended management endpoints for tenants, warehouses, catalogs
-    - Authentication and authorization (JWT, OAuth2, API keys)
-    - Credential vending for cloud storage (AWS STS, Azure OAuth2, GCP)
-    - Advanced features (federated catalogs, merge operations, RBAC)
-    
-  version: 0.1.0
+  title: Pangolin Catalog API
+  description: Multi-tenant Apache Iceberg REST Catalog with advanced features including federated catalogs, credential vending, and fine-grained permissions
   contact:
     name: Pangolin API Support
-    url: https://github.com/your-org/pangolin
-
-servers:
-  - url: http://localhost:8080
-    description: Local development server
-  - url: https://api.pangolin.example.com
-    description: Production server
-
-tags:
-  - name: Iceberg REST API
-    description: Standard Apache Iceberg REST Catalog endpoints (see Iceberg spec)
-  - name: Tenants
-    description: Multi-tenant management
-  - name: Warehouses
-    description: Storage warehouse configuration
-  - name: Catalogs
-    description: Catalog management
-  - name: Users
-    description: User management and authentication
-  - name: Roles & Permissions
-    description: Role-based access control
-  - name: Service Users
-    description: API key authentication for automation
-  - name: Federated Catalogs
-    description: External catalog integration
-  - name: Merge Operations
-    description: Branch merging and conflict resolution
-  - name: Business Metadata
-    description: Custom metadata and tagging
-  - name: Credentials
-    description: Cloud storage credential vending
-
-security:
-  - BearerAuth: []
-  - ApiKeyAuth: []
-  - NoAuth: []
-
-components:
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-Key
-    NoAuth:
-      type: http
-      scheme: none
-
-  schemas:
-    Tenant:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        properties:
-          type: object
-          additionalProperties: true
-        created_at:
-          type: string
-          format: date-time
-
-    Warehouse:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        tenant_id:
-          type: string
-          format: uuid
-        use_sts:
-          type: boolean
-          description: Enable cloud credential vending
-        storage_config:
-          type: object
-          additionalProperties: true
-          description: Cloud-specific configuration (bucket, region, role_arn, etc.)
-
-    Catalog:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        tenant_id:
-          type: string
-          format: uuid
-        warehouse_name:
-          type: string
-          nullable: true
-        storage_location:
-          type: string
-          nullable: true
-        properties:
-          type: object
-          additionalProperties: true
-
-    User:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        username:
-          type: string
-        email:
-          type: string
-          format: email
-        tenant_id:
-          type: string
-          format: uuid
-        roles:
-          type: array
-          items:
-            type: string
-
-    Error:
-      type: object
-      properties:
-        error:
-          type: string
-        message:
-          type: string
-        code:
-          type: integer
-
+    email: support@pangolin.dev
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
 paths:
-  # ============================================================================
-  # ICEBERG REST API
-  # ============================================================================
-  /v1/config:
+  /api/v1/access-requests:
     get:
-      tags: [Iceberg REST API]
-      summary: Get catalog configuration
-      description: See Apache Iceberg REST Catalog specification
+      tags:
+      - Business Metadata
+      operationId: list_access_requests
       responses:
         '200':
-          description: Configuration returned
-
-  /v1/{catalog}/namespaces:
+          description: List of access requests
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/access-requests/{request_id}:
     get:
-      tags: [Iceberg REST API]
-      summary: List namespaces
-      description: See Apache Iceberg REST Catalog specification
+      tags:
+      - Business Metadata
+      operationId: get_access_request
       parameters:
-        - name: catalog
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: request_id
+        in: path
+        description: Request ID
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
-          description: Namespaces listed
-
-  /v1/{catalog}/namespaces/{namespace}/tables:
-    get:
-      tags: [Iceberg REST API]
-      summary: List tables
-      description: See Apache Iceberg REST Catalog specification
+          description: Request details
+        '403':
+          description: Forbidden
+        '404':
+          description: Request not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - Business Metadata
+      operationId: update_access_request
       parameters:
-        - name: catalog
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: namespace
-          in: path
-          required: true
-          schema:
-            type: string
+      - name: request_id
+        in: path
+        description: Request ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRequestStatus'
+        required: true
       responses:
         '200':
-          description: Tables listed
-
-  # ============================================================================
-  # TENANT MANAGEMENT
-  # ============================================================================
+          description: Request updated
+        '400':
+          description: Bad request
+        '403':
+          description: Forbidden
+        '404':
+          description: Request not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/assets/search:
+    get:
+      tags:
+      - Business Metadata
+      operationId: search_assets
+      responses:
+        '200':
+          description: Search results
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/assets/{asset_id}:
+    get:
+      tags:
+      - Business Metadata
+      operationId: get_asset_details
+      parameters:
+      - name: asset_id
+        in: path
+        description: Asset ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Asset details with metadata
+        '403':
+          description: Forbidden
+        '404':
+          description: Asset not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/assets/{asset_id}/access-requests:
+    post:
+      tags:
+      - Business Metadata
+      operationId: request_access
+      parameters:
+      - name: asset_id
+        in: path
+        description: Asset ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccessRequestPayload'
+        required: true
+      responses:
+        '201':
+          description: Access request created
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/assets/{asset_id}/metadata:
+    get:
+      tags:
+      - Business Metadata
+      operationId: get_business_metadata
+      parameters:
+      - name: asset_id
+        in: path
+        description: Asset ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Metadata retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+        '404':
+          description: Metadata not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Business Metadata
+      operationId: add_business_metadata
+      parameters:
+      - name: asset_id
+        in: path
+        description: Asset ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMetadataRequest'
+        required: true
+      responses:
+        '200':
+          description: Metadata added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Asset not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - Business Metadata
+      operationId: delete_business_metadata
+      parameters:
+      - name: asset_id
+        in: path
+        description: Asset ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Metadata deleted
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/auth/revoke:
+    post:
+      tags:
+      - Tokens
+      summary: Revoke the current user's token (logout)
+      operationId: revoke_current_token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Token revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeTokenResponse'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/auth/revoke/{token_id}:
+    post:
+      tags:
+      - Tokens
+      summary: Admin endpoint to revoke any token by ID
+      operationId: revoke_token_by_id
+      parameters:
+      - name: token_id
+        in: path
+        description: Token ID to revoke
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevokeTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Token revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevokeTokenResponse'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/branches:
+    get:
+      tags:
+      - Branches
+      operationId: list_branches
+      responses:
+        '200':
+          description: List of branches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BranchResponse'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Branches
+      operationId: create_branch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBranchRequest'
+        required: true
+      responses:
+        '201':
+          description: Branch created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Catalog not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/branches/merge:
+    post:
+      tags:
+      - Branches
+      operationId: merge_branch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeBranchRequest'
+        required: true
+      responses:
+        '200':
+          description: Branches merged successfully
+        '400':
+          description: Cannot merge experimental branch
+        '404':
+          description: Branch not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/branches/{name}:
+    get:
+      tags:
+      - Branches
+      operationId: get_branch
+      parameters:
+      - name: name
+        in: path
+        description: Branch name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Branch details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchResponse'
+        '404':
+          description: Branch not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/branches/{name}/commits:
+    get:
+      tags:
+      - Branches
+      operationId: list_commits
+      parameters:
+      - name: name
+        in: path
+        description: Branch name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: List of commits
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/catalogs:
+    get:
+      tags:
+      - Catalogs
+      operationId: list_catalogs
+      responses:
+        '200':
+          description: List of catalogs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CatalogResponse'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Catalogs
+      operationId: create_catalog
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCatalogRequest'
+        required: true
+      responses:
+        '201':
+          description: Catalog created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogResponse'
+        '400':
+          description: Bad request
+        '403':
+          description: Forbidden for root user
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/catalogs/{catalog_name}/merge-operations:
+    get:
+      tags:
+      - Merge Operations
+      summary: List all merge operations for a catalog
+      operationId: list_merge_operations
+      parameters:
+      - name: catalog_name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: List of merge operations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MergeOperationResponse'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/catalogs/{name}:
+    get:
+      tags:
+      - Catalogs
+      operationId: get_catalog
+      parameters:
+      - name: name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Catalog details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogResponse'
+        '404':
+          description: Catalog not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - Catalogs
+      operationId: update_catalog
+      parameters:
+      - name: name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCatalogRequest'
+        required: true
+      responses:
+        '200':
+          description: Catalog updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogResponse'
+        '404':
+          description: Catalog not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - Catalogs
+      operationId: delete_catalog
+      parameters:
+      - name: name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Catalog deleted
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/conflicts/{conflict_id}/resolve:
+    post:
+      tags:
+      - Merge Operations
+      summary: Resolve a specific conflict
+      operationId: resolve_conflict
+      parameters:
+      - name: conflict_id
+        in: path
+        description: Conflict ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveConflictRequest'
+        required: true
+      responses:
+        '200':
+          description: Conflict resolved
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/federated-catalogs:
+    get:
+      tags:
+      - Federated Catalogs
+      summary: List all federated catalogs
+      operationId: list_federated_catalogs
+      responses:
+        '200':
+          description: List of federated catalogs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FederatedCatalogResponse'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Federated Catalogs
+      summary: Create a new federated catalog
+      operationId: create_federated_catalog
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFederatedCatalogRequest'
+        required: true
+      responses:
+        '201':
+          description: Federated catalog created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederatedCatalogResponse'
+        '403':
+          description: Forbidden
+        '409':
+          description: Catalog name conflict
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/federated-catalogs/{catalog_name}:
+    get:
+      tags:
+      - Federated Catalogs
+      summary: Get a specific federated catalog
+      operationId: get_federated_catalog
+      parameters:
+      - name: catalog_name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Federated catalog details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FederatedCatalogResponse'
+        '400':
+          description: Not a federated catalog
+        '404':
+          description: Catalog not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - Federated Catalogs
+      summary: Delete a federated catalog
+      operationId: delete_federated_catalog
+      parameters:
+      - name: catalog_name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Federated catalog deleted
+        '400':
+          description: Not a federated catalog
+        '403':
+          description: Forbidden
+        '404':
+          description: Catalog not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/federated-catalogs/{catalog_name}/test:
+    post:
+      tags:
+      - Federated Catalogs
+      summary: Test connection to a federated catalog
+      operationId: test_federated_connection
+      parameters:
+      - name: catalog_name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Connection successful
+        '400':
+          description: Not a federated catalog
+        '404':
+          description: Catalog not found
+        '500':
+          description: Internal server error
+        '503':
+          description: Connection failed
+      security:
+      - bearer_auth: []
+  /api/v1/merge-operations/{operation_id}:
+    get:
+      tags:
+      - Merge Operations
+      summary: Get a specific merge operation
+      operationId: get_merge_operation
+      parameters:
+      - name: operation_id
+        in: path
+        description: Merge operation ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Merge operation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MergeOperation'
+        '404':
+          description: Merge operation not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/merge-operations/{operation_id}/abort:
+    post:
+      tags:
+      - Merge Operations
+      summary: Abort a merge operation
+      operationId: abort_merge
+      parameters:
+      - name: operation_id
+        in: path
+        description: Merge operation ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Merge aborted
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/merge-operations/{operation_id}/complete:
+    post:
+      tags:
+      - Merge Operations
+      summary: Complete a merge operation (after all conflicts resolved)
+      operationId: complete_merge
+      parameters:
+      - name: operation_id
+        in: path
+        description: Merge operation ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Merge completed
+        '400':
+          description: Cannot complete merge
+        '404':
+          description: Merge operation not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/merge-operations/{operation_id}/conflicts:
+    get:
+      tags:
+      - Merge Operations
+      summary: List conflicts for a merge operation
+      operationId: list_merge_conflicts
+      parameters:
+      - name: operation_id
+        in: path
+        description: Merge operation ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: List of merge conflicts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MergeConflict'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/oauth/{provider}/authorize:
+    get:
+      tags:
+      - OAuth
+      summary: Initiate OAuth flow
+      operationId: oauth_authorize
+      parameters:
+      - name: provider
+        in: path
+        description: OAuth provider (google, microsoft, github, okta)
+        required: true
+        schema:
+          type: string
+      responses:
+        '302':
+          description: Redirect to OAuth provider
+        '400':
+          description: Invalid provider
+  /api/v1/oauth/{provider}/callback:
+    get:
+      tags:
+      - OAuth
+      summary: OAuth callback handler
+      operationId: oauth_callback
+      parameters:
+      - name: provider
+        in: path
+        description: OAuth provider (google, microsoft, github, okta)
+        required: true
+        schema:
+          type: string
+      responses:
+        '302':
+          description: Redirect to frontend with token
+        '400':
+          description: Invalid provider or callback failed
+        '500':
+          description: Internal server error
+  /api/v1/permissions:
+    get:
+      tags:
+      - Roles & Permissions
+      operationId: list_permissions
+      responses:
+        '200':
+          description: List of permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Permission'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Roles & Permissions
+      summary: Grant permission to user
+      operationId: grant_permission
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrantPermissionRequest'
+        required: true
+      responses:
+        '201':
+          description: Permission granted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Permission'
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/permissions/{id}:
+    delete:
+      tags:
+      - Roles & Permissions
+      summary: Revoke permission
+      operationId: revoke_permission
+      parameters:
+      - name: id
+        in: path
+        description: Permission ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Permission revoked
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/roles:
+    get:
+      tags:
+      - Roles & Permissions
+      summary: List roles
+      operationId: list_roles
+      responses:
+        '200':
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Role'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Roles & Permissions
+      summary: Create a new role
+      operationId: create_role
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoleRequest'
+        required: true
+      responses:
+        '201':
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/roles/{id}:
+    get:
+      tags:
+      - Roles & Permissions
+      summary: Get role details
+      operationId: get_role
+      parameters:
+      - name: id
+        in: path
+        description: Role ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Role details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Role'
+        '404':
+          description: Role not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - Roles & Permissions
+      summary: Update role
+      operationId: update_role
+      parameters:
+      - name: id
+        in: path
+        description: Role ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+        required: true
+      responses:
+        '200':
+          description: Role updated
+        '400':
+          description: Bad request
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - Roles & Permissions
+      summary: Delete role
+      operationId: delete_role
+      parameters:
+      - name: id
+        in: path
+        description: Role ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Role deleted
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/service-users:
+    get:
+      tags:
+      - Service Users
+      summary: List service users for the tenant
+      description: GET /api/v1/service-users
+      operationId: list_service_users
+      responses:
+        '200':
+          description: List of service users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceUser'
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Service Users
+      summary: Create a new service user
+      description: POST /api/v1/service-users
+      operationId: create_service_user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceUserRequest'
+        required: true
+      responses:
+        '201':
+          description: Service user created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyResponse'
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/service-users/{id}:
+    get:
+      tags:
+      - Service Users
+      summary: Get a specific service user
+      description: GET /api/v1/service-users/{id}
+      operationId: get_service_user
+      parameters:
+      - name: id
+        in: path
+        description: Service user ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Service user details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceUser'
+        '403':
+          description: Forbidden
+        '404':
+          description: Service user not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - Service Users
+      summary: Update a service user
+      description: PUT /api/v1/service-users/{id}
+      operationId: update_service_user
+      parameters:
+      - name: id
+        in: path
+        description: Service user ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateServiceUserRequest'
+        required: true
+      responses:
+        '200':
+          description: Service user updated
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - Service Users
+      summary: Delete a service user
+      description: DELETE /api/v1/service-users/{id}
+      operationId: delete_service_user
+      parameters:
+      - name: id
+        in: path
+        description: Service user ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Service user deleted
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/service-users/{id}/rotate:
+    post:
+      tags:
+      - Service Users
+      summary: Rotate API key for a service user
+      description: POST /api/v1/service-users/{id}/rotate
+      operationId: rotate_api_key
+      parameters:
+      - name: id
+        in: path
+        description: Service user ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: API key rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Service user not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/tags:
+    get:
+      tags:
+      - Tags
+      operationId: list_tags
+      responses:
+        '200':
+          description: List of tags
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Tags
+      operationId: create_tag
+      requestBody:
+        description: ''
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTagRequest'
+        required: true
+      responses:
+        '201':
+          description: Tag created
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/tags/{name}:
+    delete:
+      tags:
+      - Tags
+      operationId: delete_tag
+      parameters:
+      - name: name
+        in: path
+        description: Tag name
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Tag deleted
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
   /api/v1/tenants:
     get:
-      tags: [Tenants]
-      summary: List all tenants
-      security:
-        - BearerAuth: []
+      tags:
+      - Tenants
+      operationId: list_tenants
       responses:
         '200':
           description: List of tenants
@@ -215,97 +1219,296 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Tenant'
-
-    post:
-      tags: [Tenants]
-      summary: Create a new tenant
+                  $ref: '#/components/schemas/TenantResponse'
+        '500':
+          description: Internal server error
       security:
-        - BearerAuth: []
+      - bearer_auth: []
+    post:
+      tags:
+      - Tenants
+      operationId: create_tenant
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                properties:
-                  type: object
+              $ref: '#/components/schemas/CreateTenantRequest'
+        required: true
       responses:
         '201':
           description: Tenant created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Tenant'
-
+                $ref: '#/components/schemas/TenantResponse'
+        '403':
+          description: Forbidden in NO_AUTH mode
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
   /api/v1/tenants/{id}:
     get:
-      tags: [Tenants]
-      summary: Get tenant by ID
+      tags:
+      - Tenants
+      operationId: get_tenant
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: id
+        in: path
+        description: Tenant ID
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: Tenant details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Tenant'
-
+                $ref: '#/components/schemas/TenantResponse'
+        '404':
+          description: Tenant not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
     put:
-      tags: [Tenants]
-      summary: Update tenant
+      tags:
+      - Tenants
+      operationId: update_tenant
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
+      - name: id
+        in: path
+        description: Tenant ID
         required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                properties:
-                  type: object
+              $ref: '#/components/schemas/UpdateTenantRequest'
+        required: true
       responses:
         '200':
           description: Tenant updated
-
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantResponse'
+        '404':
+          description: Tenant not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
     delete:
-      tags: [Tenants]
-      summary: Delete tenant
+      tags:
+      - Tenants
+      operationId: delete_tenant
       parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - name: id
+        in: path
+        description: Tenant ID
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '204':
           description: Tenant deleted
-
-  # ============================================================================
-  # WAREHOUSE MANAGEMENT
-  # ============================================================================
+        '404':
+          description: Tenant not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/tokens:
+    post:
+      tags:
+      - Tokens
+      summary: Generate a JWT token for a tenant
+      description: This endpoint allows generating tokens for testing and development
+      operationId: generate_token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateTokenRequest'
+        required: true
+      responses:
+        '200':
+          description: Token generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateTokenResponse'
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+  /api/v1/users:
+    get:
+      tags:
+      - Users
+      summary: List all users (filtered by permissions)
+      operationId: list_users
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserInfo'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    post:
+      tags:
+      - Users
+      summary: Create a new user
+      operationId: create_user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+        required: true
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '400':
+          description: Bad request
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/users/login:
+    post:
+      tags:
+      - Users
+      summary: User login
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+        '500':
+          description: Internal server error
+  /api/v1/users/{user_id}:
+    get:
+      tags:
+      - Users
+      summary: Get user by ID
+      operationId: get_user
+      parameters:
+      - name: user_id
+        in: path
+        description: User ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - Users
+      summary: Update user
+      operationId: update_user
+      parameters:
+      - name: user_id
+        in: path
+        description: User ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+        required: true
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+        '403':
+          description: Forbidden
+        '404':
+          description: User not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - Users
+      summary: Delete user
+      operationId: delete_user
+      parameters:
+      - name: user_id
+        in: path
+        description: User ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: User deleted
+        '400':
+          description: Cannot delete yourself
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
   /api/v1/warehouses:
     get:
-      tags: [Warehouses]
-      summary: List warehouses
+      tags:
+      - Warehouses
+      operationId: list_warehouses
       responses:
         '200':
           description: List of warehouses
@@ -314,203 +1517,1535 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/Warehouse'
-
+                  $ref: '#/components/schemas/WarehouseResponse'
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
     post:
-      tags: [Warehouses]
-      summary: Create warehouse
+      tags:
+      - Warehouses
+      operationId: create_warehouse
       requestBody:
-        required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                use_sts:
-                  type: boolean
-                storage_config:
-                  type: object
+              $ref: '#/components/schemas/CreateWarehouseRequest'
+        required: true
       responses:
         '201':
           description: Warehouse created
-
-  /api/v1/warehouses/{name}:
-    get:
-      tags: [Warehouses]
-      summary: Get warehouse
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Warehouse details
-
-    put:
-      tags: [Warehouses]
-      summary: Update warehouse
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                use_sts:
-                  type: boolean
-                storage_config:
-                  type: object
-      responses:
-        '200':
-          description: Warehouse updated
-
-    delete:
-      tags: [Warehouses]
-      summary: Delete warehouse
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: Warehouse deleted
-
-  # ============================================================================
-  # CATALOG MANAGEMENT
-  # ============================================================================
-  /api/v1/catalogs:
-    get:
-      tags: [Catalogs]
-      summary: List catalogs
-      responses:
-        '200':
-          description: List of catalogs
-
-    post:
-      tags: [Catalogs]
-      summary: Create catalog
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                warehouse_name:
-                  type: string
-                  nullable: true
-                storage_location:
-                  type: string
-                  nullable: true
-      responses:
-        '201':
-          description: Catalog created
-
-  /api/v1/catalogs/{name}:
-    get:
-      tags: [Catalogs]
-      summary: Get catalog
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Catalog details
-
-    put:
-      tags: [Catalogs]
-      summary: Update catalog
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                warehouse_name:
-                  type: string
-                storage_location:
-                  type: string
-                properties:
-                  type: object
-      responses:
-        '200':
-          description: Catalog updated
-
-    delete:
-      tags: [Catalogs]
-      summary: Delete catalog
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '204':
-          description: Catalog deleted
-
-  # ============================================================================
-  # CREDENTIAL VENDING
-  # ============================================================================
-  /v1/{catalog}/namespaces/{namespace}/tables/{table}/credentials:
-    get:
-      tags: [Credentials]
-      summary: Get storage credentials
-      description: Vend temporary credentials for accessing table data (AWS STS, Azure OAuth2, GCP)
-      parameters:
-        - name: catalog
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: namespace
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: table
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Credentials vended
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  storage-credentials:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        prefix:
-                          type: string
-                        config:
-                          type: object
+                $ref: '#/components/schemas/WarehouseResponse'
+        '403':
+          description: Forbidden for root user
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/warehouses/{name}:
+    get:
+      tags:
+      - Warehouses
+      operationId: get_warehouse
+      parameters:
+      - name: name
+        in: path
+        description: Warehouse name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Warehouse details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+        '404':
+          description: Warehouse not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    put:
+      tags:
+      - Warehouses
+      operationId: update_warehouse
+      parameters:
+      - name: name
+        in: path
+        description: Warehouse name
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWarehouseRequest'
+        required: true
+      responses:
+        '200':
+          description: Warehouse updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WarehouseResponse'
+        '404':
+          description: Warehouse not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+    delete:
+      tags:
+      - Warehouses
+      operationId: delete_warehouse
+      parameters:
+      - name: name
+        in: path
+        description: Warehouse name
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Warehouse deleted
+        '404':
+          description: Warehouse not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+components:
+  schemas:
+    AccessRequest:
+      type: object
+      description: Access request for discoverable assets
+      required:
+      - id
+      - tenant-id
+      - user-id
+      - asset-id
+      - requested-at
+      - status
+      properties:
+        asset-id:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          nullable: true
+        requested-at:
+          type: string
+          format: date-time
+        review-comment:
+          type: string
+          nullable: true
+        reviewed-at:
+          type: string
+          format: date-time
+          nullable: true
+        reviewed-by:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        tenant-id:
+          type: string
+          format: uuid
+        user-id:
+          type: string
+          format: uuid
+    Action:
+      type: string
+      description: Actions that can be performed
+      enum:
+      - read
+      - write
+      - delete
+      - create
+      - update
+      - list
+      - all
+      - ingest-branching
+      - experimental-branching
+      - manage-discovery
+    AddMetadataRequest:
+      type: object
+      required:
+      - tags
+      - properties
+      - discoverable
+      properties:
+        description:
+          type: string
+          nullable: true
+        discoverable:
+          type: boolean
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+    ApiKeyResponse:
+      type: object
+      description: API Key response (only shown once on creation)
+      required:
+      - service_user_id
+      - name
+      - api_key
+      properties:
+        api_key:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        name:
+          type: string
+        service_user_id:
+          type: string
+          format: uuid
+    AssignRoleRequest:
+      type: object
+      description: Request to assign a role to a user
+      required:
+      - role-id
+      properties:
+        role-id:
+          type: string
+          format: uuid
+    AuthorizeParams:
+      type: object
+      properties:
+        redirect_uri:
+          type: string
+          nullable: true
+    BranchResponse:
+      type: object
+      required:
+      - name
+      - branch_type
+      - assets
+      properties:
+        assets:
+          type: array
+          items:
+            type: string
+        branch_type:
+          type: string
+        head_commit_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+    BusinessMetadata:
+      type: object
+      description: Business metadata attached to assets
+      required:
+      - id
+      - asset-id
+      - tags
+      - properties
+      - discoverable
+      - created-by
+      - created-at
+      - updated-by
+      - updated-at
+      properties:
+        asset-id:
+          type: string
+          format: uuid
+        created-at:
+          type: string
+          format: date-time
+        created-by:
+          type: string
+          format: uuid
+        description:
+          type: string
+          description: Markdown description
+          nullable: true
+        discoverable:
+          type: boolean
+          description: Whether this asset appears in search for users without access
+        id:
+          type: string
+          format: uuid
+        properties:
+          type: object
+          description: Custom key-value properties
+          additionalProperties:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags/labels for categorization
+        updated-at:
+          type: string
+          format: date-time
+        updated-by:
+          type: string
+          format: uuid
+    Catalog:
+      type: object
+      required:
+      - id
+      - name
+      - catalog_type
+      - properties
+      properties:
+        catalog_type:
+          $ref: '#/components/schemas/CatalogType'
+        federated_config:
+          allOf:
+          - $ref: '#/components/schemas/FederatedCatalogConfig'
+          nullable: true
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+        storage_location:
+          type: string
+          nullable: true
+        warehouse_name:
+          type: string
+          nullable: true
+    CatalogResponse:
+      type: object
+      required:
+      - id
+      - name
+      - catalog_type
+      - properties
+      properties:
+        catalog_type:
+          $ref: '#/components/schemas/pangolin_core.model.CatalogType'
+        federated_config:
+          allOf:
+          - $ref: '#/components/schemas/pangolin_core.model.FederatedCatalogConfig'
+          nullable: true
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+        storage_location:
+          type: string
+          nullable: true
+        warehouse_name:
+          type: string
+          nullable: true
+    CatalogType:
+      type: string
+      enum:
+      - Local
+      - Federated
+    CatalogUpdate:
+      type: object
+      properties:
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        storage_location:
+          type: string
+          nullable: true
+        warehouse_name:
+          type: string
+          nullable: true
+    ConflictResolution:
+      type: object
+      required:
+      - conflict_id
+      - strategy
+      - resolved_by
+      - resolved_at
+      properties:
+        conflict_id:
+          type: string
+          format: uuid
+        resolved_at:
+          type: string
+          format: date-time
+        resolved_by:
+          type: string
+          format: uuid
+        resolved_value:
+          nullable: true
+        strategy:
+          $ref: '#/components/schemas/ResolutionStrategy'
+    ConflictType:
+      oneOf:
+      - type: object
+        required:
+        - SchemaChange
+        properties:
+          SchemaChange:
+            type: object
+            required:
+            - asset_name
+            - source_schema
+            - target_schema
+            properties:
+              asset_name:
+                type: string
+              source_schema: {}
+              target_schema: {}
+      - type: object
+        required:
+        - DataOverlap
+        properties:
+          DataOverlap:
+            type: object
+            required:
+            - asset_name
+            - overlapping_partitions
+            properties:
+              asset_name:
+                type: string
+              overlapping_partitions:
+                type: array
+                items:
+                  type: string
+      - type: object
+        required:
+        - MetadataConflict
+        properties:
+          MetadataConflict:
+            type: object
+            required:
+            - asset_name
+            - conflicting_properties
+            properties:
+              asset_name:
+                type: string
+              conflicting_properties:
+                type: array
+                items:
+                  type: string
+      - type: object
+        required:
+        - DeletionConflict
+        properties:
+          DeletionConflict:
+            type: object
+            required:
+            - asset_name
+            - deleted_in
+            - modified_in
+            properties:
+              asset_name:
+                type: string
+              deleted_in:
+                type: string
+              modified_in:
+                type: string
+    CreateAccessRequestPayload:
+      type: object
+      properties:
+        reason:
+          type: string
+          nullable: true
+    CreateBranchRequest:
+      type: object
+      required:
+      - name
+      properties:
+        assets:
+          type: array
+          items:
+            type: string
+          nullable: true
+        branch_type:
+          type: string
+          nullable: true
+        catalog:
+          type: string
+          nullable: true
+        from_branch:
+          type: string
+          nullable: true
+        name:
+          type: string
+    CreateCatalogRequest:
+      type: object
+      required:
+      - name
+      properties:
+        catalog_type:
+          allOf:
+          - $ref: '#/components/schemas/pangolin_core.model.CatalogType'
+          nullable: true
+        federated_config:
+          allOf:
+          - $ref: '#/components/schemas/pangolin_core.model.FederatedCatalogConfig'
+          nullable: true
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        storage_location:
+          type: string
+          nullable: true
+        warehouse_name:
+          type: string
+          nullable: true
+    CreateFederatedCatalogRequest:
+      type: object
+      required:
+      - name
+      - config
+      properties:
+        config:
+          $ref: '#/components/schemas/FederatedCatalogConfig'
+        name:
+          type: string
+    CreateRoleRequest:
+      type: object
+      description: Request to create a new role
+      required:
+      - name
+      - tenant-id
+      properties:
+        description:
+          type: string
+          nullable: true
+        name:
+          type: string
+        tenant-id:
+          type: string
+          format: uuid
+    CreateServiceUserRequest:
+      type: object
+      required:
+      - name
+      - role
+      properties:
+        description:
+          type: string
+          nullable: true
+        expires_in_days:
+          type: integer
+          format: int64
+          nullable: true
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+    CreateTenantRequest:
+      type: object
+      required:
+      - name
+      properties:
+        admin_password:
+          type: string
+          nullable: true
+        admin_username:
+          type: string
+          nullable: true
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+    CreateUserRequest:
+      type: object
+      description: Request to create a new user
+      required:
+      - username
+      - email
+      - role
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+          nullable: true
+        role:
+          $ref: '#/components/schemas/UserRole'
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        username:
+          type: string
+    CreateWarehouseRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        storage_config:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        use_sts:
+          type: boolean
+          nullable: true
+        vending_strategy:
+          allOf:
+          - $ref: '#/components/schemas/VendingStrategy'
+          nullable: true
+    FederatedAuthType:
+      type: string
+      enum:
+      - None
+      - BasicAuth
+      - BearerToken
+      - ApiKey
+    FederatedCatalogConfig:
+      type: object
+      required:
+      - base_url
+      - auth_type
+      - timeout_seconds
+      properties:
+        auth_type:
+          $ref: '#/components/schemas/FederatedAuthType'
+        base_url:
+          type: string
+        credentials:
+          allOf:
+          - $ref: '#/components/schemas/FederatedCredentials'
+          nullable: true
+        timeout_seconds:
+          type: integer
+          format: int64
+          minimum: 0
+    FederatedCatalogResponse:
+      type: object
+      required:
+      - id
+      - name
+      - base_url
+      - auth_type
+      - timeout_seconds
+      properties:
+        auth_type:
+          type: string
+        base_url:
+          type: string
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        timeout_seconds:
+          type: integer
+          format: int64
+          minimum: 0
+    FederatedCredentials:
+      type: object
+      properties:
+        api_key:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+        token:
+          type: string
+          nullable: true
+        username:
+          type: string
+          nullable: true
+    GenerateTokenRequest:
+      type: object
+      required:
+      - tenant_id
+      properties:
+        expires_in_hours:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+        roles:
+          type: array
+          items:
+            type: string
+          nullable: true
+        tenant_id:
+          type: string
+        username:
+          type: string
+          nullable: true
+    GenerateTokenResponse:
+      type: object
+      required:
+      - token
+      - expires_at
+      - tenant_id
+      properties:
+        expires_at:
+          type: string
+        tenant_id:
+          type: string
+        token:
+          type: string
+    GrantPermissionRequest:
+      type: object
+      description: Request to grant a permission
+      required:
+      - user-id
+      - scope
+      - actions
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+          uniqueItems: true
+        scope:
+          $ref: '#/components/schemas/PermissionScope'
+        user-id:
+          type: string
+          format: uuid
+    ListBranchParams:
+      type: object
+      properties:
+        catalog:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+    LoginRequest:
+      type: object
+      description: User login request
+      required:
+      - username
+      - password
+      properties:
+        password:
+          type: string
+        username:
+          type: string
+    LoginResponse:
+      type: object
+      description: Login response with JWT token
+      required:
+      - token
+      - user
+      - expires-at
+      properties:
+        expires-at:
+          type: string
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/UserInfo'
+    MergeBranchRequest:
+      type: object
+      required:
+      - source_branch
+      - target_branch
+      properties:
+        catalog:
+          type: string
+          nullable: true
+        source_branch:
+          type: string
+        target_branch:
+          type: string
+    MergeConflict:
+      type: object
+      required:
+      - id
+      - merge_operation_id
+      - conflict_type
+      - description
+      - created_at
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+          nullable: true
+        conflict_type:
+          $ref: '#/components/schemas/ConflictType'
+        created_at:
+          type: string
+          format: date-time
+        description:
+          type: string
+        id:
+          type: string
+          format: uuid
+        merge_operation_id:
+          type: string
+          format: uuid
+        resolution:
+          allOf:
+          - $ref: '#/components/schemas/ConflictResolution'
+          nullable: true
+    MergeOperation:
+      type: object
+      required:
+      - id
+      - tenant_id
+      - catalog_name
+      - source_branch
+      - target_branch
+      - status
+      - conflicts
+      - initiated_by
+      - initiated_at
+      properties:
+        base_commit_id:
+          type: string
+          format: uuid
+          nullable: true
+        catalog_name:
+          type: string
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        conflicts:
+          type: array
+          items:
+            type: string
+            format: uuid
+        id:
+          type: string
+          format: uuid
+        initiated_at:
+          type: string
+          format: date-time
+        initiated_by:
+          type: string
+          format: uuid
+        result_commit_id:
+          type: string
+          format: uuid
+          nullable: true
+        source_branch:
+          type: string
+        status:
+          $ref: '#/components/schemas/MergeStatus'
+        target_branch:
+          type: string
+        tenant_id:
+          type: string
+          format: uuid
+    MergeOperationResponse:
+      type: object
+      required:
+      - id
+      - status
+      - source_branch
+      - target_branch
+      - conflicts_count
+      - initiated_at
+      properties:
+        completed_at:
+          type: string
+          nullable: true
+        conflicts_count:
+          type: integer
+          minimum: 0
+        id:
+          type: string
+          format: uuid
+        initiated_at:
+          type: string
+        source_branch:
+          type: string
+        status:
+          type: string
+        target_branch:
+          type: string
+    MergeStatus:
+      type: string
+      enum:
+      - Pending
+      - Conflicted
+      - Resolving
+      - Ready
+      - Completed
+      - Aborted
+    MetadataResponse:
+      type: object
+      required:
+      - metadata
+      properties:
+        metadata:
+          $ref: '#/components/schemas/BusinessMetadata'
+    OAuthCallback:
+      type: object
+      description: OAuth callback query parameters
+      required:
+      - code
+      properties:
+        code:
+          type: string
+        state:
+          type: string
+          nullable: true
+    OAuthProvider:
+      type: string
+      description: OAuth provider
+      enum:
+      - google
+      - microsoft
+      - github
+      - okta
+    Permission:
+      type: object
+      description: A single permission grant
+      required:
+      - id
+      - user-id
+      - scope
+      - actions
+      - granted-by
+      - granted-at
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Action'
+          uniqueItems: true
+        granted-at:
+          type: string
+          format: date-time
+        granted-by:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        scope:
+          $ref: '#/components/schemas/PermissionScope'
+        user-id:
+          type: string
+          format: uuid
+    PermissionScope:
+      oneOf:
+      - type: object
+        description: Applies to entire catalog
+        required:
+        - catalog_id
+        - type
+        properties:
+          catalog_id:
+            type: string
+            format: uuid
+          type:
+            type: string
+            enum:
+            - catalog
+      - type: object
+        description: Applies to namespace and all assets within
+        required:
+        - catalog_id
+        - namespace
+        - type
+        properties:
+          catalog_id:
+            type: string
+            format: uuid
+          namespace:
+            type: string
+          type:
+            type: string
+            enum:
+            - namespace
+      - type: object
+        description: Applies to specific asset
+        required:
+        - catalog_id
+        - namespace
+        - asset_id
+        - type
+        properties:
+          asset_id:
+            type: string
+            format: uuid
+          catalog_id:
+            type: string
+            format: uuid
+          namespace:
+            type: string
+          type:
+            type: string
+            enum:
+            - asset
+      - type: object
+        description: Applies to all assets with specific tag
+        required:
+        - tag_name
+        - type
+        properties:
+          tag_name:
+            type: string
+          type:
+            type: string
+            enum:
+            - tag
+      - type: object
+        required:
+        - type
+        properties:
+          type:
+            type: string
+            enum:
+            - tenant
+      description: Permission scope - where the permission applies
+      discriminator:
+        propertyName: type
+    RequestStatus:
+      type: string
+      description: Status of an access request
+      enum:
+      - pending
+      - approved
+      - rejected
+    ResolutionStrategy:
+      type: string
+      enum:
+      - AutoMerge
+      - TakeSource
+      - TakeTarget
+      - Manual
+      - ThreeWayMerge
+    ResolveConflictRequest:
+      type: object
+      required:
+      - strategy
+      properties:
+        resolved_value:
+          nullable: true
+        strategy:
+          $ref: '#/components/schemas/ResolutionStrategy'
+    RevokeTokenRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          nullable: true
+    RevokeTokenResponse:
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
+    Role:
+      type: object
+      description: A role that groups permissions
+      required:
+      - id
+      - name
+      - tenant-id
+      - permissions
+      - created-by
+      - created-at
+      - updated-at
+      properties:
+        created-at:
+          type: string
+          format: date-time
+        created-by:
+          type: string
+          format: uuid
+        description:
+          type: string
+          nullable: true
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionGrant'
+        tenant-id:
+          type: string
+          format: uuid
+        updated-at:
+          type: string
+          format: date-time
+    SearchRequest:
+      type: object
+      required:
+      - query
+      properties:
+        query:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+          nullable: true
+    ServiceUser:
+      type: object
+      description: Service user for API key authentication
+      required:
+      - id
+      - name
+      - tenant-id
+      - api-key-hash
+      - role
+      - created-at
+      - created-by
+      - active
+      properties:
+        active:
+          type: boolean
+        api-key-hash:
+          type: string
+        created-at:
+          type: string
+          format: date-time
+        created-by:
+          type: string
+          format: uuid
+        description:
+          type: string
+          nullable: true
+        expires-at:
+          type: string
+          format: date-time
+          nullable: true
+        id:
+          type: string
+          format: uuid
+        last-used:
+          type: string
+          format: date-time
+          nullable: true
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/UserRole'
+        tenant-id:
+          type: string
+          format: uuid
+    Tenant:
+      type: object
+      required:
+      - id
+      - name
+      - properties
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+    TenantResponse:
+      type: object
+      required:
+      - id
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+    TenantUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+    UpdateCatalogRequest:
+      type: object
+      properties:
+        federated_config:
+          allOf:
+          - $ref: '#/components/schemas/pangolin_core.model.FederatedCatalogConfig'
+          nullable: true
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        storage_location:
+          type: string
+          nullable: true
+        warehouse_name:
+          type: string
+          nullable: true
+    UpdateRequestStatus:
+      type: object
+      required:
+      - status
+      properties:
+        comment:
+          type: string
+          nullable: true
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+    UpdateServiceUserRequest:
+      type: object
+      properties:
+        active:
+          type: boolean
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+    UpdateUserRequest:
+      type: object
+      description: Request to update a user
+      properties:
+        active:
+          type: boolean
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        password:
+          type: string
+          nullable: true
+    UpdateWarehouseRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        storage_config:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        use_sts:
+          type: boolean
+          nullable: true
+        vending_strategy:
+          allOf:
+          - $ref: '#/components/schemas/VendingStrategy'
+          nullable: true
+    User:
+      type: object
+      description: User in the system
+      required:
+      - id
+      - username
+      - email
+      - role
+      - created-at
+      - updated-at
+      - active
+      properties:
+        active:
+          type: boolean
+        created-at:
+          type: string
+          format: date-time
+        email:
+          type: string
+        id:
+          type: string
+          format: uuid
+        last-login:
+          type: string
+          format: date-time
+          nullable: true
+        oauth-provider:
+          allOf:
+          - $ref: '#/components/schemas/OAuthProvider'
+          nullable: true
+        oauth-subject:
+          type: string
+          description: OAuth subject ID from provider
+          nullable: true
+        password-hash:
+          type: string
+          description: Password hash (bcrypt) - None for OAuth users
+          nullable: true
+        role:
+          $ref: '#/components/schemas/UserRole'
+        tenant-id:
+          type: string
+          format: uuid
+          description: None for root user, Some(tenant_id) for tenant users
+          nullable: true
+        updated-at:
+          type: string
+          format: date-time
+        username:
+          type: string
+    UserInfo:
+      type: object
+      description: Public user information
+      required:
+      - id
+      - username
+      - email
+      - role
+      properties:
+        email:
+          type: string
+        id:
+          type: string
+          format: uuid
+        oauth-provider:
+          allOf:
+          - $ref: '#/components/schemas/OAuthProvider'
+          nullable: true
+        role:
+          $ref: '#/components/schemas/UserRole'
+        tenant-id:
+          type: string
+          format: uuid
+          nullable: true
+        username:
+          type: string
+    UserRole:
+      type: string
+      description: User role in the system
+      enum:
+      - root
+      - tenant-admin
+      - tenant-user
+    UserSession:
+      type: object
+      description: User session for JWT or OAuth
+      required:
+      - user_id
+      - username
+      - role
+      - issued_at
+      - expires_at
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+        issued_at:
+          type: string
+          format: date-time
+        role:
+          $ref: '#/components/schemas/UserRole'
+        tenant_id:
+          type: string
+          format: uuid
+          nullable: true
+        user_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+    VendingStrategy:
+      oneOf:
+      - type: object
+        required:
+        - AwsSts
+        properties:
+          AwsSts:
+            type: object
+            description: AWS S3 with STS temporary credentials
+            required:
+            - role_arn
+            properties:
+              external_id:
+                type: string
+                nullable: true
+              role_arn:
+                type: string
+      - type: object
+        required:
+        - AwsStatic
+        properties:
+          AwsStatic:
+            type: object
+            description: AWS S3 with static credentials
+            required:
+            - access_key_id
+            - secret_access_key
+            properties:
+              access_key_id:
+                type: string
+              secret_access_key:
+                type: string
+      - type: object
+        required:
+        - AzureSas
+        properties:
+          AzureSas:
+            type: object
+            description: Azure Blob Storage with SAS tokens
+            required:
+            - account_name
+            - account_key
+            properties:
+              account_key:
+                type: string
+              account_name:
+                type: string
+      - type: object
+        required:
+        - GcpDownscoped
+        properties:
+          GcpDownscoped:
+            type: object
+            description: GCP with downscoped credentials
+            required:
+            - service_account_email
+            - private_key
+            properties:
+              private_key:
+                type: string
+              service_account_email:
+                type: string
+      - type: string
+        description: No credential vending (client-provided only)
+        enum:
+        - None
+    Warehouse:
+      type: object
+      required:
+      - id
+      - name
+      - tenant_id
+      - storage_config
+      - use_sts
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        storage_config:
+          type: object
+          additionalProperties:
+            type: string
+        tenant_id:
+          type: string
+          format: uuid
+        use_sts:
+          type: boolean
+        vending_strategy:
+          allOf:
+          - $ref: '#/components/schemas/VendingStrategy'
+          nullable: true
+    WarehouseResponse:
+      type: object
+      required:
+      - id
+      - name
+      - tenant_id
+      - use_sts
+      - storage_config
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        storage_config:
+          type: object
+          additionalProperties:
+            type: string
+        tenant_id:
+          type: string
+          format: uuid
+        use_sts:
+          type: boolean
+        vending_strategy:
+          allOf:
+          - $ref: '#/components/schemas/VendingStrategy'
+          nullable: true
+    WarehouseUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        storage_config:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        use_sts:
+          type: boolean
+          nullable: true
+        vending_strategy:
+          allOf:
+          - $ref: '#/components/schemas/VendingStrategy'
+          nullable: true
+  securitySchemes:
+    bearer_auth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/v1/users/login or /api/v1/tokens
+tags:
+- name: Tenants
+  description: Tenant management endpoints
+- name: Warehouses
+  description: Warehouse management endpoints
+- name: Catalogs
+  description: Catalog management endpoints
+- name: Users
+  description: User management and authentication endpoints
+- name: Tokens
+  description: Token generation and revocation endpoints
+- name: Roles & Permissions
+  description: Role and permission management endpoints
+- name: Federated Catalogs
+  description: Federated catalog management endpoints
+- name: Service Users
+  description: Service user and API key management endpoints
+- name: OAuth
+  description: OAuth authentication endpoints
+- name: Branches
+  description: Branch management endpoints
+- name: Tags
+  description: Tag management endpoints
+- name: Merge Operations
+  description: Merge operation and conflict resolution endpoints
+- name: Business Metadata
+  description: Business metadata and asset discovery endpoints
+

@@ -9,8 +9,9 @@ use uuid::Uuid;
 use crate::auth::Claims;
 use crate::iceberg_handlers::AppState;
 use pangolin_core::user::UserRole;
+use utoipa::ToSchema;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct GenerateTokenRequest {
     pub tenant_id: String,
     pub username: Option<String>,
@@ -18,7 +19,7 @@ pub struct GenerateTokenRequest {
     pub expires_in_hours: Option<u64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GenerateTokenResponse {
     pub token: String,
     pub expires_at: String,
@@ -27,6 +28,17 @@ pub struct GenerateTokenResponse {
 
 /// Generate a JWT token for a tenant
 /// This endpoint allows generating tokens for testing and development
+#[utoipa::path(
+    post,
+    path = "/api/v1/tokens",
+    tag = "Tokens",
+    request_body = GenerateTokenRequest,
+    responses(
+        (status = 200, description = "Token generated", body = GenerateTokenResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn generate_token(
     State(store): State<AppState>,
     Json(payload): Json<GenerateTokenRequest>,
@@ -112,17 +124,28 @@ use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use chrono::{Utc, Duration};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RevokeTokenRequest {
     pub reason: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct RevokeTokenResponse {
     pub message: String,
 }
 
 /// Revoke the current user's token (logout)
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/revoke",
+    tag = "Tokens",
+    request_body = RevokeTokenRequest,
+    responses(
+        (status = 200, description = "Token revoked", body = RevokeTokenResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn revoke_current_token(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -157,6 +180,20 @@ pub async fn revoke_current_token(
 }
 
 /// Admin endpoint to revoke any token by ID
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/revoke/{token_id}",
+    tag = "Tokens",
+    params(
+        ("token_id" = Uuid, Path, description = "Token ID to revoke")
+    ),
+    request_body = RevokeTokenRequest,
+    responses(
+        (status = 200, description = "Token revoked", body = RevokeTokenResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn revoke_token_by_id(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,

@@ -5,6 +5,7 @@ use pangolin_store::memory::MemoryStore;
 use axum::routing::{get, post, delete, put};
 use tower_http::cors::{CorsLayer, Any};
 use axum::http::{HeaderValue, Method};
+use utoipa::OpenApi;
 
 pub mod iceberg_handlers;
 pub mod pangolin_handlers;
@@ -34,6 +35,7 @@ pub mod tests_common;
 pub mod permission_handlers; // Registered new module
 pub mod service_user_handlers; // Service user management
 pub mod cleanup_job; // Token cleanup background job
+pub mod openapi; // OpenAPI documentation
 
 
 
@@ -58,6 +60,9 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
 
     Router::new()
         .route("/health", get(|| async { "OK" }))
+        // Swagger UI for API documentation
+        .merge(utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
+            .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()))
         .route("/v1/config", get(iceberg_handlers::config))
         .route("/v1/:prefix/config", get(iceberg_handlers::config))
         .route("/v1/:prefix/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))

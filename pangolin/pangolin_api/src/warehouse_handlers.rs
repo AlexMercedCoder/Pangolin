@@ -12,8 +12,9 @@ use uuid::Uuid;
 use crate::auth::TenantId;
 use crate::iceberg_handlers::AppState;
 use pangolin_core::user::UserRole;
+use utoipa::ToSchema;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateWarehouseRequest {
     pub name: String,
     pub use_sts: Option<bool>, // If true, use STS credential vending; if false, pass through static creds
@@ -21,7 +22,7 @@ pub struct CreateWarehouseRequest {
     pub vending_strategy: Option<VendingStrategy>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateWarehouseRequest {
     name: Option<String>,
     use_sts: Option<bool>,
@@ -29,7 +30,7 @@ pub struct UpdateWarehouseRequest {
     vending_strategy: Option<VendingStrategy>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct WarehouseResponse {
     pub id: Uuid,
     pub name: String,
@@ -52,6 +53,16 @@ impl From<Warehouse> for WarehouseResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/warehouses",
+    tag = "Warehouses",
+    responses(
+        (status = 200, description = "List of warehouses", body = Vec<WarehouseResponse>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_warehouses(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -65,6 +76,18 @@ pub async fn list_warehouses(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/warehouses",
+    tag = "Warehouses",
+    request_body = CreateWarehouseRequest,
+    responses(
+        (status = 201, description = "Warehouse created", body = WarehouseResponse),
+        (status = 403, description = "Forbidden for root user"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_warehouse(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -93,6 +116,20 @@ pub async fn create_warehouse(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/warehouses/{name}",
+    tag = "Warehouses",
+    params(
+        ("name" = String, Path, description = "Warehouse name")
+    ),
+    responses(
+        (status = 200, description = "Warehouse details", body = WarehouseResponse),
+        (status = 404, description = "Warehouse not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_warehouse(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -105,6 +142,20 @@ pub async fn get_warehouse(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/warehouses/{name}",
+    tag = "Warehouses",
+    params(
+        ("name" = String, Path, description = "Warehouse name")
+    ),
+    responses(
+        (status = 204, description = "Warehouse deleted"),
+        (status = 404, description = "Warehouse not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_warehouse(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -122,6 +173,21 @@ pub async fn delete_warehouse(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/warehouses/{name}",
+    tag = "Warehouses",
+    params(
+        ("name" = String, Path, description = "Warehouse name")
+    ),
+    request_body = UpdateWarehouseRequest,
+    responses(
+        (status = 200, description = "Warehouse updated", body = WarehouseResponse),
+        (status = 404, description = "Warehouse not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_warehouse(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,

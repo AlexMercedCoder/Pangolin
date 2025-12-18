@@ -109,7 +109,7 @@ impl Permission {
 }
 
 /// A role that groups permissions
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct Role {
     pub id: Uuid,

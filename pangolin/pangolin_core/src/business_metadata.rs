@@ -2,9 +2,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use utoipa::ToSchema;
 
 /// Business metadata attached to assets
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct BusinessMetadata {
     pub id: Uuid,
@@ -83,7 +84,7 @@ impl BusinessMetadata {
 }
 
 /// Access request for discoverable assets
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct AccessRequest {
     pub id: Uuid,
@@ -99,7 +100,7 @@ pub struct AccessRequest {
 }
 
 /// Status of an access request
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum RequestStatus {
     Pending,

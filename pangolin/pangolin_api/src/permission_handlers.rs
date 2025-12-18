@@ -11,9 +11,10 @@ use std::collections::HashSet;
 use pangolin_core::permission::{Role, Permission, PermissionScope, Action, UserRole};
 use pangolin_core::user::{UserSession, UserRole as AuthRole};
 use pangolin_store::CatalogStore;
+use utoipa::ToSchema;
 
 /// Request to create a new role
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct CreateRoleRequest {
     pub name: String,
@@ -22,14 +23,14 @@ pub struct CreateRoleRequest {
 }
 
 /// Request to assign a role to a user
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct AssignRoleRequest {
     pub role_id: Uuid,
 }
 
 /// Request to grant a permission
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct GrantPermissionRequest {
     pub user_id: Uuid,
@@ -38,6 +39,18 @@ pub struct GrantPermissionRequest {
 }
 
 /// Create a new role
+#[utoipa::path(
+    post,
+    path = "/api/v1/roles",
+    tag = "Roles & Permissions",
+    request_body = CreateRoleRequest,
+    responses(
+        (status = 201, description = "Role created", body = Role),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -63,6 +76,16 @@ pub async fn create_role(
 }
 
 /// List roles
+#[utoipa::path(
+    get,
+    path = "/api/v1/roles",
+    tag = "Roles & Permissions",
+    responses(
+        (status = 200, description = "List of roles", body = Vec<Role>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_roles(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -79,6 +102,20 @@ pub async fn list_roles(
 }
 
 /// Get role details
+#[utoipa::path(
+    get,
+    path = "/api/v1/roles/{id}",
+    tag = "Roles & Permissions",
+    params(
+        ("id" = Uuid, Path, description = "Role ID")
+    ),
+    responses(
+        (status = 200, description = "Role details", body = Role),
+        (status = 404, description = "Role not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Path(role_id): Path<Uuid>,
@@ -91,6 +128,22 @@ pub async fn get_role(
 }
 
 /// Update role
+#[utoipa::path(
+    put,
+    path = "/api/v1/roles/{id}",
+    tag = "Roles & Permissions",
+    params(
+        ("id" = Uuid, Path, description = "Role ID")
+    ),
+    request_body = Role,
+    responses(
+        (status = 200, description = "Role updated"),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -112,6 +165,20 @@ pub async fn update_role(
 }
 
 /// Delete role
+#[utoipa::path(
+    delete,
+    path = "/api/v1/roles/{id}",
+    tag = "Roles & Permissions",
+    params(
+        ("id" = Uuid, Path, description = "Role ID")
+    ),
+    responses(
+        (status = 204, description = "Role deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -189,6 +256,18 @@ pub async fn revoke_role(
 }
 
 /// Grant permission to user
+#[utoipa::path(
+    post,
+    path = "/api/v1/permissions",
+    tag = "Roles & Permissions",
+    request_body = GrantPermissionRequest,
+    responses(
+        (status = 201, description = "Permission granted", body = Permission),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn grant_permission(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -212,6 +291,20 @@ pub async fn grant_permission(
 }
 
 /// Revoke permission
+#[utoipa::path(
+    delete,
+    path = "/api/v1/permissions/{id}",
+    tag = "Roles & Permissions",
+    params(
+        ("id" = Uuid, Path, description = "Permission ID")
+    ),
+    responses(
+        (status = 204, description = "Permission revoked"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn revoke_permission(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Path(permission_id): Path<Uuid>,
@@ -229,6 +322,16 @@ pub struct ListPermissionsParams {
     pub role: Option<Uuid>, // Unused in store list, but could be used for filtering result
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/permissions",
+    tag = "Roles & Permissions",
+    responses(
+        (status = 200, description = "List of permissions", body = Vec<Permission>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_permissions(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>, // Use UserSession

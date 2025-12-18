@@ -12,9 +12,10 @@ use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use crate::auth_middleware::{create_session, generate_token};
 use base64::Engine;
+use utoipa::ToSchema;
 
 /// OAuth callback query parameters
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct OAuthCallback {
     pub code: String,
     pub state: Option<String>,
@@ -28,12 +29,24 @@ pub struct OAuthUserInfo {
     pub name: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct AuthorizeParams {
     pub redirect_uri: Option<String>,
 }
 
 /// Initiate OAuth flow
+#[utoipa::path(
+    get,
+    path = "/api/v1/oauth/{provider}/authorize",
+    tag = "OAuth",
+    params(
+        ("provider" = String, Path, description = "OAuth provider (google, microsoft, github, okta)")
+    ),
+    responses(
+        (status = 302, description = "Redirect to OAuth provider"),
+        (status = 400, description = "Invalid provider")
+    )
+)]
 pub async fn oauth_authorize(
     State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Path(provider): Path<String>,
@@ -55,6 +68,19 @@ pub async fn oauth_authorize(
 }
 
 /// OAuth callback handler
+#[utoipa::path(
+    get,
+    path = "/api/v1/oauth/{provider}/callback",
+    tag = "OAuth",
+    params(
+        ("provider" = String, Path, description = "OAuth provider (google, microsoft, github, okta)")
+    ),
+    responses(
+        (status = 302, description = "Redirect to frontend with token"),
+        (status = 400, description = "Invalid provider or callback failed"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn oauth_callback(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Path(provider): Path<String>,

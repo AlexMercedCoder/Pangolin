@@ -11,17 +11,18 @@ use std::sync::Arc;
 use uuid::Uuid;
 use crate::auth::TenantId;
 use pangolin_core::user::UserSession;
+use utoipa::ToSchema;
 
 type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 // Request/Response types
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ResolveConflictRequest {
     pub strategy: ResolutionStrategy,
     pub resolved_value: Option<serde_json::Value>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MergeOperationResponse {
     pub id: Uuid,
     pub status: String,
@@ -33,6 +34,19 @@ pub struct MergeOperationResponse {
 }
 
 /// List all merge operations for a catalog
+#[utoipa::path(
+    get,
+    path = "/api/v1/catalogs/{catalog_name}/merge-operations",
+    tag = "Merge Operations",
+    params(
+        ("catalog_name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "List of merge operations", body = Vec<MergeOperationResponse>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_merge_operations(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -63,6 +77,20 @@ pub async fn list_merge_operations(
 }
 
 /// Get a specific merge operation
+#[utoipa::path(
+    get,
+    path = "/api/v1/merge-operations/{operation_id}",
+    tag = "Merge Operations",
+    params(
+        ("operation_id" = Uuid, Path, description = "Merge operation ID")
+    ),
+    responses(
+        (status = 200, description = "Merge operation details", body = MergeOperation),
+        (status = 404, description = "Merge operation not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_merge_operation(
     State(store): State<AppState>,
     Path(operation_id): Path<Uuid>,
@@ -83,6 +111,19 @@ pub async fn get_merge_operation(
 }
 
 /// List conflicts for a merge operation
+#[utoipa::path(
+    get,
+    path = "/api/v1/merge-operations/{operation_id}/conflicts",
+    tag = "Merge Operations",
+    params(
+        ("operation_id" = Uuid, Path, description = "Merge operation ID")
+    ),
+    responses(
+        (status = 200, description = "List of merge conflicts", body = Vec<MergeConflict>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_merge_conflicts(
     State(store): State<AppState>,
     Path(operation_id): Path<Uuid>,
@@ -98,6 +139,20 @@ pub async fn list_merge_conflicts(
 }
 
 /// Resolve a specific conflict
+#[utoipa::path(
+    post,
+    path = "/api/v1/conflicts/{conflict_id}/resolve",
+    tag = "Merge Operations",
+    params(
+        ("conflict_id" = Uuid, Path, description = "Conflict ID")
+    ),
+    request_body = ResolveConflictRequest,
+    responses(
+        (status = 200, description = "Conflict resolved"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn resolve_conflict(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -143,6 +198,21 @@ pub async fn resolve_conflict(
 }
 
 /// Complete a merge operation (after all conflicts resolved)
+#[utoipa::path(
+    post,
+    path = "/api/v1/merge-operations/{operation_id}/complete",
+    tag = "Merge Operations",
+    params(
+        ("operation_id" = Uuid, Path, description = "Merge operation ID")
+    ),
+    responses(
+        (status = 200, description = "Merge completed"),
+        (status = 400, description = "Cannot complete merge"),
+        (status = 404, description = "Merge operation not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn complete_merge(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -216,6 +286,19 @@ pub async fn complete_merge(
 }
 
 /// Abort a merge operation
+#[utoipa::path(
+    post,
+    path = "/api/v1/merge-operations/{operation_id}/abort",
+    tag = "Merge Operations",
+    params(
+        ("operation_id" = Uuid, Path, description = "Merge operation ID")
+    ),
+    responses(
+        (status = 200, description = "Merge aborted"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn abort_merge(
     State(store): State<AppState>,
     Path(operation_id): Path<Uuid>,

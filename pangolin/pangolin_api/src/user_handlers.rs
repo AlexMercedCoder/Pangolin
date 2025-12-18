@@ -10,10 +10,10 @@ use uuid::Uuid;
 use pangolin_core::user::{User, UserRole, OAuthProvider, UserSession};
 use pangolin_store::CatalogStore;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
 /// Request to create a new user
-#[derive(Debug, Deserialize)]
-// #[serde(rename_all = "kebab-case")] // Removed to match frontend snake_case payload
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateUserRequest {
     pub username: String,
     pub email: String,
@@ -23,7 +23,7 @@ pub struct CreateUserRequest {
 }
 
 /// Request to update a user
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct UpdateUserRequest {
     pub email: Option<String>,
@@ -32,7 +32,7 @@ pub struct UpdateUserRequest {
 }
 
 /// User login request
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct LoginRequest {
     pub username: String,
@@ -40,7 +40,7 @@ pub struct LoginRequest {
 }
 
 /// Login response with JWT token
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct LoginResponse {
     pub token: String,
@@ -49,7 +49,7 @@ pub struct LoginResponse {
 }
 
 /// Public user information
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct UserInfo {
     pub id: Uuid,
@@ -80,6 +80,19 @@ pub struct AppConfig {
 }
 
 /// Create a new user
+#[utoipa::path(
+    post,
+    path = "/api/v1/users",
+    tag = "Users",
+    request_body = CreateUserRequest,
+    responses(
+        (status = 201, description = "User created", body = UserInfo),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_user(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -153,6 +166,16 @@ pub async fn create_user(
 use crate::auth::TenantId;
 
 /// List all users (filtered by permissions)
+#[utoipa::path(
+    get,
+    path = "/api/v1/users",
+    tag = "Users",
+    responses(
+        (status = 200, description = "List of users", body = Vec<UserInfo>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_users(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(tenant): Extension<TenantId>,
@@ -172,6 +195,21 @@ pub async fn list_users(
 }
 
 /// Get user by ID
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/{user_id}",
+    tag = "Users",
+    params(
+        ("user_id" = Uuid, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "User details", body = UserInfo),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_user(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -190,6 +228,22 @@ pub async fn get_user(
 }
 
 /// Update user
+#[utoipa::path(
+    put,
+    path = "/api/v1/users/{user_id}",
+    tag = "Users",
+    params(
+        ("user_id" = Uuid, Path, description = "User ID")
+    ),
+    request_body = UpdateUserRequest,
+    responses(
+        (status = 200, description = "User updated", body = UserInfo),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "User not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_user(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -236,6 +290,21 @@ pub async fn update_user(
 }
 
 /// Delete user
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users/{user_id}",
+    tag = "Users",
+    params(
+        ("user_id" = Uuid, Path, description = "User ID")
+    ),
+    responses(
+        (status = 204, description = "User deleted"),
+        (status = 400, description = "Cannot delete yourself"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_user(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -258,6 +327,17 @@ pub async fn delete_user(
 }
 
 /// User login
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/login",
+    tag = "Users",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = LoginResponse),
+        (status = 401, description = "Invalid credentials"),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn login(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Json(req): Json<LoginRequest>,

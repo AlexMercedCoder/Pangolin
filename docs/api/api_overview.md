@@ -60,8 +60,27 @@ Pangolin implements the standard Apache Iceberg REST Catalog API.
 | **Tenants** | `/api/v1/tenants` | GET, POST, PUT, DELETE |
 | **Warehouses** | `/api/v1/warehouses` | GET, POST, PUT, DELETE |
 | **Catalogs** | `/api/v1/catalogs` | GET, POST, PUT, DELETE |
+| **Federated Catalogs** | `/api/v1/federated-catalogs` | GET, POST, DELETE, TEST |
 | **Users** | `/api/v1/users` | GET, POST, PUT, DELETE |
 | **Service Users**| `/api/v1/service-users` | GET, POST, PUT, DELETE, ROTATE |
+| **Roles** | `/api/v1/roles` | GET, POST, PUT, DELETE |
+| **Permissions** | `/api/v1/permissions` | GET, POST, DELETE |
+
+### Token Management
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/tokens` | POST | Generate a long-lived JWT token for scripts/automation. |
+| `/api/v1/auth/revoke` | POST | Revoke current user's token. |
+| `/api/v1/auth/revoke/{token_id}` | POST | Revoke a specific token (admin only). |
+| `/api/v1/auth/cleanup-tokens` | POST | Clean up expired tokens (admin only). |
+
+### OAuth
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/oauth/authorize/{provider}` | GET | Initiate OAuth flow (Google, GitHub, etc.). |
+| `/oauth/callback/{provider}` | GET | OAuth callback handler. |
 
 ## Auditing
 

@@ -23,9 +23,37 @@ A "Root User" is configured via environment variables to bootstrap the system. T
 Pangolin supports the following roles:
 
 -   **Root**: Full system access. Can manage tenants, users, and system configuration.
--   **Admin**: Tenant-level administration. Can manage warehouses, catalogs, and users within a tenant.
--   **User**: Standard access. Can read/write data based on catalog permissions.
--   **Viewer**: Read-only access to data.
+-   **TenantAdmin**: Tenant-level administration. Can manage warehouses, catalogs, and users within a tenant.
+-   **TenantUser**: Standard access. Can read/write data based on catalog permissions.
+
+## Token Generation
+
+For automation and scripts, users can generate long-lived JWT tokens:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tokens \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant_id": "your-tenant-id",
+    "username": "your-username",
+    "expires_in_hours": 720
+  }'
+```
+
+## Token Revocation
+
+Tokens can be revoked for security:
+
+- **Self-revoke**: `POST /api/v1/auth/revoke` - Revoke your current token
+- **Admin-revoke**: `POST /api/v1/auth/revoke/{token_id}` - Revoke any token (admin only)
+
+## OAuth Authentication
+
+Pangolin supports OAuth providers (Google, GitHub, etc.):
+
+1. Navigate to `/oauth/authorize/{provider}` (e.g., `/oauth/authorize/google`)
+2. Complete OAuth flow with provider
+3. Receive JWT token upon successful authentication
 
 ## Middleware
 

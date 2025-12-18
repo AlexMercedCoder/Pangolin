@@ -12,11 +12,12 @@ use uuid::Uuid;
 use crate::auth::TenantId;
 use pangolin_core::permission::{PermissionScope, Action};
 use pangolin_core::user::{UserSession, UserRole};
+use utoipa::ToSchema;
 
 // Placeholder for AppState
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateBranchRequest {
     name: String,
     branch_type: Option<String>, // "ingest" or "experimental", defaults to experimental
@@ -25,20 +26,20 @@ pub struct CreateBranchRequest {
     assets: Option<Vec<String>>, // List of asset names to include.
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ListBranchParams {
     name: Option<String>,
     catalog: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct MergeBranchRequest {
     pub source_branch: String,
     pub target_branch: String,
     pub catalog: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BranchResponse {
     name: String,
     head_commit_id: Option<Uuid>,
@@ -60,6 +61,16 @@ impl From<Branch> for BranchResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/branches",
+    tag = "Branches",
+    responses(
+        (status = 200, description = "List of branches", body = Vec<BranchResponse>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_branches(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -80,6 +91,19 @@ pub async fn list_branches(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/branches",
+    tag = "Branches",
+    request_body = CreateBranchRequest,
+    responses(
+        (status = 201, description = "Branch created", body = BranchResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -185,6 +209,20 @@ pub async fn create_branch(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/branches/{name}",
+    tag = "Branches",
+    params(
+        ("name" = String, Path, description = "Branch name")
+    ),
+    responses(
+        (status = 200, description = "Branch details", body = BranchResponse),
+        (status = 404, description = "Branch not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -203,6 +241,19 @@ pub async fn get_branch(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/branches/merge",
+    tag = "Branches",
+    request_body = MergeBranchRequest,
+    responses(
+        (status = 200, description = "Branches merged successfully"),
+        (status = 400, description = "Cannot merge experimental branch"),
+        (status = 404, description = "Branch not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn merge_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -306,6 +357,19 @@ pub async fn merge_branch(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/branches/{name}/commits",
+    tag = "Branches",
+    params(
+        ("name" = String, Path, description = "Branch name")
+    ),
+    responses(
+        (status = 200, description = "List of commits"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_commits(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -362,6 +426,16 @@ impl From<pangolin_core::model::Tag> for TagResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/tags",
+    tag = "Tags",
+    responses(
+        (status = 200, description = "List of tags"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_tags(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -380,6 +454,16 @@ pub async fn list_tags(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/tags",
+    tag = "Tags",
+    responses(
+        (status = 201, description = "Tag created"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_tag(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -400,6 +484,19 @@ pub async fn create_tag(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/tags/{name}",
+    tag = "Tags",
+    params(
+        ("name" = String, Path, description = "Tag name")
+    ),
+    responses(
+        (status = 204, description = "Tag deleted"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_tag(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -428,7 +525,7 @@ pub async fn list_audit_events(
 }
 
 // Catalog Management
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateCatalogRequest {
     name: String,
     catalog_type: Option<pangolin_core::model::CatalogType>,
@@ -438,7 +535,7 @@ pub struct CreateCatalogRequest {
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateCatalogRequest {
     warehouse_name: Option<String>,
     storage_location: Option<String>,
@@ -446,7 +543,7 @@ pub struct UpdateCatalogRequest {
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CatalogResponse {
     id: Uuid,
     name: String,
@@ -471,6 +568,16 @@ impl From<pangolin_core::model::Catalog> for CatalogResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/catalogs",
+    tag = "Catalogs",
+    responses(
+        (status = 200, description = "List of catalogs", body = Vec<CatalogResponse>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_catalogs(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -486,6 +593,19 @@ pub async fn list_catalogs(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/catalogs",
+    tag = "Catalogs",
+    request_body = CreateCatalogRequest,
+    responses(
+        (status = 201, description = "Catalog created", body = CatalogResponse),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden for root user"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -533,6 +653,20 @@ pub async fn create_catalog(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/catalogs/{name}",
+    tag = "Catalogs",
+    params(
+        ("name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "Catalog details", body = CatalogResponse),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -545,6 +679,19 @@ pub async fn get_catalog(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/catalogs/{name}",
+    tag = "Catalogs",
+    params(
+        ("name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 204, description = "Catalog deleted"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -565,6 +712,21 @@ pub async fn delete_catalog(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/catalogs/{name}",
+    tag = "Catalogs",
+    params(
+        ("name" = String, Path, description = "Catalog name")
+    ),
+    request_body = UpdateCatalogRequest,
+    responses(
+        (status = 200, description = "Catalog updated", body = CatalogResponse),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,

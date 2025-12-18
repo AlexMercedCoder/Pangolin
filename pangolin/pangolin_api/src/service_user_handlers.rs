@@ -13,11 +13,12 @@ use chrono::{Utc, Duration};
 use bcrypt::{hash, DEFAULT_COST};
 use crate::auth::TenantId;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
 type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 // Request/Response types
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateServiceUserRequest {
     pub name: String,
     pub description: Option<String>,
@@ -25,7 +26,7 @@ pub struct CreateServiceUserRequest {
     pub expires_in_days: Option<i64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateServiceUserRequest {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -53,6 +54,18 @@ fn generate_api_key() -> String {
 
 /// Create a new service user
 /// POST /api/v1/service-users
+#[utoipa::path(
+    post,
+    path = "/api/v1/service-users",
+    tag = "Service Users",
+    request_body = CreateServiceUserRequest,
+    responses(
+        (status = 201, description = "Service user created", body = ApiKeyResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_service_user(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -116,6 +129,17 @@ pub async fn create_service_user(
 
 /// List service users for the tenant
 /// GET /api/v1/service-users
+#[utoipa::path(
+    get,
+    path = "/api/v1/service-users",
+    tag = "Service Users",
+    responses(
+        (status = 200, description = "List of service users", body = Vec<ServiceUser>),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_service_users(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -142,6 +166,21 @@ pub async fn list_service_users(
 
 /// Get a specific service user
 /// GET /api/v1/service-users/{id}
+#[utoipa::path(
+    get,
+    path = "/api/v1/service-users/{id}",
+    tag = "Service Users",
+    params(
+        ("id" = Uuid, Path, description = "Service user ID")
+    ),
+    responses(
+        (status = 200, description = "Service user details", body = ServiceUser),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Service user not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_service_user(
     State(store): State<AppState>,
     Extension(session): Extension<pangolin_core::user::UserSession>,
@@ -170,6 +209,21 @@ pub async fn get_service_user(
 
 /// Update a service user
 /// PUT /api/v1/service-users/{id}
+#[utoipa::path(
+    put,
+    path = "/api/v1/service-users/{id}",
+    tag = "Service Users",
+    params(
+        ("id" = Uuid, Path, description = "Service user ID")
+    ),
+    request_body = UpdateServiceUserRequest,
+    responses(
+        (status = 200, description = "Service user updated"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_service_user(
     State(store): State<AppState>,
     Extension(session): Extension<pangolin_core::user::UserSession>,
@@ -198,6 +252,20 @@ pub async fn update_service_user(
 
 /// Delete a service user
 /// DELETE /api/v1/service-users/{id}
+#[utoipa::path(
+    delete,
+    path = "/api/v1/service-users/{id}",
+    tag = "Service Users",
+    params(
+        ("id" = Uuid, Path, description = "Service user ID")
+    ),
+    responses(
+        (status = 200, description = "Service user deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_service_user(
     State(store): State<AppState>,
     Extension(session): Extension<pangolin_core::user::UserSession>,
@@ -225,6 +293,21 @@ pub async fn delete_service_user(
 
 /// Rotate API key for a service user
 /// POST /api/v1/service-users/{id}/rotate
+#[utoipa::path(
+    post,
+    path = "/api/v1/service-users/{id}/rotate",
+    tag = "Service Users",
+    params(
+        ("id" = Uuid, Path, description = "Service user ID")
+    ),
+    responses(
+        (status = 200, description = "API key rotated", body = ApiKeyResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Service user not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn rotate_api_key(
     State(store): State<AppState>,
     Extension(session): Extension<pangolin_core::user::UserSession>,

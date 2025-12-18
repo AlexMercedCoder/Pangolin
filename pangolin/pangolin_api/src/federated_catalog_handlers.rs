@@ -12,17 +12,18 @@ use uuid::Uuid;
 use crate::auth::TenantId;
 use pangolin_core::user::{UserSession, UserRole};
 use crate::federated_proxy::FederatedCatalogProxy;
+use utoipa::ToSchema;
 
 type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 // Request/Response types
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateFederatedCatalogRequest {
     pub name: String,
     pub config: FederatedCatalogConfig,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct FederatedCatalogResponse {
     pub id: Uuid,
     pub name: String,
@@ -48,6 +49,19 @@ impl From<Catalog> for FederatedCatalogResponse {
 }
 
 /// Create a new federated catalog
+#[utoipa::path(
+    post,
+    path = "/api/v1/federated-catalogs",
+    tag = "Federated Catalogs",
+    request_body = CreateFederatedCatalogRequest,
+    responses(
+        (status = 201, description = "Federated catalog created", body = FederatedCatalogResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 409, description = "Catalog name conflict"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_federated_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -108,6 +122,16 @@ pub async fn create_federated_catalog(
 }
 
 /// List all federated catalogs
+#[utoipa::path(
+    get,
+    path = "/api/v1/federated-catalogs",
+    tag = "Federated Catalogs",
+    responses(
+        (status = 200, description = "List of federated catalogs", body = Vec<FederatedCatalogResponse>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_federated_catalogs(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -130,6 +154,21 @@ pub async fn list_federated_catalogs(
 }
 
 /// Get a specific federated catalog
+#[utoipa::path(
+    get,
+    path = "/api/v1/federated-catalogs/{catalog_name}",
+    tag = "Federated Catalogs",
+    params(
+        ("catalog_name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "Federated catalog details", body = FederatedCatalogResponse),
+        (status = 400, description = "Not a federated catalog"),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_federated_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -161,6 +200,22 @@ pub async fn get_federated_catalog(
 }
 
 /// Delete a federated catalog
+#[utoipa::path(
+    delete,
+    path = "/api/v1/federated-catalogs/{catalog_name}",
+    tag = "Federated Catalogs",
+    params(
+        ("catalog_name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "Federated catalog deleted"),
+        (status = 400, description = "Not a federated catalog"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_federated_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -219,6 +274,22 @@ pub async fn delete_federated_catalog(
 }
 
 /// Test connection to a federated catalog
+#[utoipa::path(
+    post,
+    path = "/api/v1/federated-catalogs/{catalog_name}/test",
+    tag = "Federated Catalogs",
+    params(
+        ("catalog_name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "Connection successful"),
+        (status = 400, description = "Not a federated catalog"),
+        (status = 404, description = "Catalog not found"),
+        (status = 503, description = "Connection failed"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn test_federated_connection(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,

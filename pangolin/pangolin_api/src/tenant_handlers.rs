@@ -12,8 +12,9 @@ use pangolin_core::model::Tenant;
 use uuid::Uuid;
 use crate::auth::{TenantId, RootUser};
 use crate::iceberg_handlers::AppState;
+use utoipa::ToSchema;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateTenantRequest {
     name: String,
     properties: Option<std::collections::HashMap<String, String>>,
@@ -21,13 +22,13 @@ pub struct CreateTenantRequest {
     pub admin_password: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateTenantRequest {
     name: Option<String>,
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TenantResponse {
     id: Uuid,
     pub name: String,
@@ -44,6 +45,16 @@ impl From<Tenant> for TenantResponse {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/tenants",
+    tag = "Tenants",
+    responses(
+        (status = 200, description = "List of tenants", body = Vec<TenantResponse>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_tenants(
     State(store): State<AppState>,
     Extension(_root): Extension<RootUser>,
@@ -57,6 +68,18 @@ pub async fn list_tenants(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/tenants",
+    tag = "Tenants",
+    request_body = CreateTenantRequest,
+    responses(
+        (status = 201, description = "Tenant created", body = TenantResponse),
+        (status = 403, description = "Forbidden in NO_AUTH mode"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_tenant(
     State(store): State<AppState>,
     Extension(_root): Extension<RootUser>,
@@ -119,6 +142,20 @@ pub async fn create_tenant(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/tenants/{id}",
+    tag = "Tenants",
+    params(
+        ("id" = Uuid, Path, description = "Tenant ID")
+    ),
+    responses(
+        (status = 200, description = "Tenant details", body = TenantResponse),
+        (status = 404, description = "Tenant not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_tenant(
     State(store): State<AppState>,
     Extension(_tenant): Extension<TenantId>,
@@ -131,6 +168,21 @@ pub async fn get_tenant(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/tenants/{id}",
+    tag = "Tenants",
+    params(
+        ("id" = Uuid, Path, description = "Tenant ID")
+    ),
+    request_body = UpdateTenantRequest,
+    responses(
+        (status = 200, description = "Tenant updated", body = TenantResponse),
+        (status = 404, description = "Tenant not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_tenant(
     State(store): State<AppState>,
     Extension(_root): Extension<RootUser>,
@@ -154,6 +206,20 @@ pub async fn update_tenant(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/tenants/{id}",
+    tag = "Tenants",
+    params(
+        ("id" = Uuid, Path, description = "Tenant ID")
+    ),
+    responses(
+        (status = 204, description = "Tenant deleted"),
+        (status = 404, description = "Tenant not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_tenant(
     State(store): State<AppState>,
     Extension(_root): Extension<RootUser>,

@@ -167,7 +167,7 @@ pub struct Tag {
 
 // Merge Conflict Resolution Models
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum ConflictType {
     SchemaChange {
         asset_name: String,
@@ -189,7 +189,7 @@ pub enum ConflictType {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub enum ResolutionStrategy {
     AutoMerge,          // Automatically merge non-conflicting changes
     TakeSource,         // Use source branch version
@@ -198,7 +198,7 @@ pub enum ResolutionStrategy {
     ThreeWayMerge,      // Merge using base commit as reference
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ConflictResolution {
     pub conflict_id: Uuid,
     pub strategy: ResolutionStrategy,
@@ -207,7 +207,7 @@ pub struct ConflictResolution {
     pub resolved_at: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MergeConflict {
     pub id: Uuid,
     pub merge_operation_id: Uuid,
@@ -241,7 +241,7 @@ impl MergeConflict {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum MergeStatus {
     Pending,        // Merge initiated, conflicts being detected
     Conflicted,     // Conflicts detected, awaiting resolution
@@ -251,7 +251,7 @@ pub enum MergeStatus {
     Aborted,        // Merge aborted by user
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MergeOperation {
     pub id: Uuid,
     pub tenant_id: Uuid,

@@ -52,6 +52,25 @@ Authentication methods:
 - `POST /api/v1/tags` - Create tag
 - `DELETE /api/v1/tags/{name}` - Delete tag
 
+**Merge Operations**:
+- `GET /api/v1/catalogs/{catalog}/merge-operations` - List merge operations
+- `GET /api/v1/merge-operations/{id}` - Get merge operation
+- `GET /api/v1/merge-operations/{id}/conflicts` - List conflicts
+- `POST /api/v1/conflicts/{id}/resolve` - Resolve conflict
+- `POST /api/v1/merge-operations/{id}/complete` - Complete merge
+- `POST /api/v1/merge-operations/{id}/abort` - Abort merge
+
+**Business Metadata & Access Requests**:
+- `GET/POST/DELETE /api/v1/assets/{id}/metadata` - Manage business metadata
+- `GET /api/v1/assets/search` - Search assets
+- `GET /api/v1/assets/{id}` - Get asset details
+- `POST /api/v1/assets/{id}/request-access` - Request access
+- `GET /api/v1/access-requests` - List access requests
+- `GET/PUT /api/v1/access-requests/{id}` - Get/update access request
+
+**Audit Logs**:
+- `GET /api/v1/audit` - List audit events
+
 **Warehouse Management**:
 - `GET /api/v1/warehouses` - List warehouses
 - `POST /api/v1/warehouses` - Create warehouse
@@ -61,6 +80,27 @@ Authentication methods:
 - `GET /api/v1/catalogs` - List catalogs
 - `POST /api/v1/catalogs` - Create catalog
 - `GET /api/v1/catalogs/{name}` - Get catalog
+- `PUT /api/v1/catalogs/{name}` - Update catalog
+- `DELETE /api/v1/catalogs/{name}` - Delete catalog
+
+**Federated Catalog Management**:
+- `GET /api/v1/federated-catalogs` - List federated catalogs
+- `POST /api/v1/federated-catalogs` - Create federated catalog
+- `GET /api/v1/federated-catalogs/{name}` - Get federated catalog
+- `DELETE /api/v1/federated-catalogs/{name}` - Delete federated catalog
+- `POST /api/v1/federated-catalogs/{name}/test` - Test federated connection
+
+**Permission & Role Management**:
+- `GET /api/v1/roles` - List roles
+- `POST /api/v1/roles` - Create role
+- `GET /api/v1/permissions` - List permissions
+- `POST /api/v1/permissions` - Grant permission
+- `DELETE /api/v1/permissions/{id}` - Revoke permission
+
+**Token Management**:
+- `POST /api/v1/tokens` - Generate JWT token
+- `POST /api/v1/auth/revoke` - Revoke current token
+- `POST /api/v1/auth/revoke/{token_id}` - Revoke specific token
 
 ## Contents
 

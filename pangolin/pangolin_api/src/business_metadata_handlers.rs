@@ -13,8 +13,9 @@ use pangolin_core::user::{UserSession, UserRole};
 use pangolin_core::permission::{Action, PermissionScope};
 use uuid::Uuid;
 use crate::iceberg_handlers::AppState;
+use utoipa::ToSchema;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct AddMetadataRequest {
     pub description: Option<String>,
     pub tags: Vec<String>,
@@ -22,11 +23,27 @@ pub struct AddMetadataRequest {
     pub discoverable: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MetadataResponse {
     pub metadata: BusinessMetadata,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/assets/{asset_id}/metadata",
+    tag = "Business Metadata",
+    params(
+        ("asset_id" = Uuid, Path, description = "Asset ID")
+    ),
+    request_body = AddMetadataRequest,
+    responses(
+        (status = 200, description = "Metadata added", body = MetadataResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Asset not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn add_business_metadata(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -85,6 +102,20 @@ pub async fn add_business_metadata(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/assets/{asset_id}/metadata",
+    tag = "Business Metadata",
+    params(
+        ("asset_id" = Uuid, Path, description = "Asset ID")
+    ),
+    responses(
+        (status = 200, description = "Metadata retrieved", body = MetadataResponse),
+        (status = 404, description = "Metadata not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_business_metadata(
     State(store): State<AppState>,
     Extension(_session): Extension<UserSession>,
@@ -101,6 +132,19 @@ pub async fn get_business_metadata(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/assets/{asset_id}/metadata",
+    tag = "Business Metadata",
+    params(
+        ("asset_id" = Uuid, Path, description = "Asset ID")
+    ),
+    responses(
+        (status = 204, description = "Metadata deleted"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_business_metadata(
     State(store): State<AppState>,
     Extension(_session): Extension<UserSession>,
@@ -114,12 +158,22 @@ pub async fn delete_business_metadata(
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct SearchRequest {
     pub query: String,
     pub tags: Option<Vec<String>>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/assets/search",
+    tag = "Business Metadata",
+    responses(
+        (status = 200, description = "Search results"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn search_assets(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -190,11 +244,25 @@ pub async fn search_assets(
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct CreateAccessRequestPayload {
     pub reason: Option<String>,
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/assets/{asset_id}/access-requests",
+    tag = "Business Metadata",
+    params(
+        ("asset_id" = Uuid, Path, description = "Asset ID")
+    ),
+    request_body = CreateAccessRequestPayload,
+    responses(
+        (status = 201, description = "Access request created"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn request_access(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -210,6 +278,16 @@ pub async fn request_access(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/access-requests",
+    tag = "Business Metadata",
+    responses(
+        (status = 200, description = "List of access requests"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_access_requests(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -236,12 +314,29 @@ pub async fn list_access_requests(
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct UpdateRequestStatus {
     pub status: RequestStatus,
     pub comment: Option<String>,
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/access-requests/{request_id}",
+    tag = "Business Metadata",
+    params(
+        ("request_id" = Uuid, Path, description = "Request ID")
+    ),
+    request_body = UpdateRequestStatus,
+    responses(
+        (status = 200, description = "Request updated"),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_access_request(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -271,6 +366,21 @@ pub async fn update_access_request(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/access-requests/{request_id}",
+    tag = "Business Metadata",
+    params(
+        ("request_id" = Uuid, Path, description = "Request ID")
+    ),
+    responses(
+        (status = 200, description = "Request details"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Request not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_access_request(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
@@ -289,6 +399,21 @@ pub async fn get_access_request(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/assets/{asset_id}",
+    tag = "Business Metadata",
+    params(
+        ("asset_id" = Uuid, Path, description = "Asset ID")
+    ),
+    responses(
+        (status = 200, description = "Asset details with metadata"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Asset not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_asset_details(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,

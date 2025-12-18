@@ -76,7 +76,7 @@ pub struct ServiceUser {
 }
 
 /// API Key response (only shown once on creation)
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ApiKeyResponse {
     pub service_user_id: Uuid,
     pub name: String,
