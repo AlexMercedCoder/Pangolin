@@ -709,3 +709,590 @@ pub async fn handle_test_federated_catalog(client: &PangolinClient, name: String
     
     Ok(())
 }
+
+// ==================== Service User Management ====================
+
+pub async fn handle_create_service_user(
+    client: &PangolinClient,
+    name: String,
+    description: Option<String>,
+    role: String,
+    expires_in_days: Option<i64>,
+) -> Result<(), CliError> {
+    let mut payload = serde_json::json!({
+        "name": name,
+        "role": role,
+    });
+    
+    if let Some(desc) = description {
+        payload["description"] = serde_json::Value::String(desc);
+    }
+    
+    if let Some(days) = expires_in_days {
+        payload["expires_in_days"] = serde_json::Value::Number(days.into());
+    }
+    
+    let res = client.post("/api/v1/service-users", &payload).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to create service user ({}): {}", status, error_text)));
+    }
+    
+    let result: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("✅ Service user created successfully!");
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("⚠️  IMPORTANT: Save this API key - it will not be shown again!");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Service User ID: {}", result["service_user_id"].as_str().unwrap_or("-"));
+    println!("Name: {}", result["name"].as_str().unwrap_or("-"));
+    println!("API Key: {}", result["api_key"].as_str().unwrap_or("-"));
+    if let Some(expires) = result["expires_at"].as_str() {
+        println!("Expires At: {}", expires);
+    }
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    
+    Ok(())
+}
+
+pub async fn handle_list_service_users(client: &PangolinClient) -> Result<(), CliError> {
+    let res = client.get("/api/v1/service-users").await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to list service users: {}", res.status())));
+    }
+    
+    let service_users: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    if service_users.is_empty() {
+        println!("No service users found.");
+        return Ok(());
+    }
+    
+    let rows: Vec<Vec<String>> = service_users.iter().map(|su| {
+        vec![
+            su["id"].as_str().unwrap_or("-").to_string(),
+            su["name"].as_str().unwrap_or("-").to_string(),
+            su["role"].as_str().unwrap_or("-").to_string(),
+            su["active"].as_bool().map(|a| if a { "✓" } else { "✗" }).unwrap_or("-").to_string(),
+            su["last_used"].as_str().unwrap_or("Never").to_string(),
+            su["expires_at"].as_str().unwrap_or("Never").to_string(),
+        ]
+    }).collect();
+    
+    print_table(
+        vec!["ID", "Name", "Role", "Active", "Last Used", "Expires At"],
+        rows
+    );
+    
+    Ok(())
+}
+
+pub async fn handle_get_service_user(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/service-users/{}", id)).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to get service user: {}", res.status())));
+    }
+    
+    let su: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Service User Details");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("ID: {}", su["id"].as_str().unwrap_or("-"));
+    println!("Name: {}", su["name"].as_str().unwrap_or("-"));
+    if let Some(desc) = su["description"].as_str() {
+        println!("Description: {}", desc);
+    }
+    println!("Role: {}", su["role"].as_str().unwrap_or("-"));
+    println!("Active: {}", if su["active"].as_bool().unwrap_or(false) { "Yes" } else { "No" });
+    println!("Created At: {}", su["created_at"].as_str().unwrap_or("-"));
+    println!("Last Used: {}", su["last_used"].as_str().unwrap_or("Never"));
+    if let Some(expires) = su["expires_at"].as_str() {
+        println!("Expires At: {}", expires);
+    }
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    
+    Ok(())
+}
+
+pub async fn handle_update_service_user(
+    client: &PangolinClient,
+    id: String,
+    name: Option<String>,
+    description: Option<String>,
+    active: Option<bool>,
+) -> Result<(), CliError> {
+    let mut payload = serde_json::json!({});
+    
+    if let Some(n) = name {
+        payload["name"] = serde_json::Value::String(n);
+    }
+    
+    if let Some(desc) = description {
+        payload["description"] = serde_json::Value::String(desc);
+    }
+    
+    if let Some(a) = active {
+        payload["active"] = serde_json::Value::Bool(a);
+    }
+    
+    let mut res = client.put(&format!("/api/v1/service-users/{}", id), &payload).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to update service user ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Service user updated successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_delete_service_user(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.delete(&format!("/api/v1/service-users/{}", id)).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to delete service user: {}", res.status())));
+    }
+    
+    println!("✅ Service user deleted successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_rotate_service_user_key(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.post(&format!("/api/v1/service-users/{}/rotate", id), &serde_json::json!({})).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to rotate API key ({}): {}", status, error_text)));
+    }
+    
+    let result: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("✅ API key rotated successfully!");
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("⚠️  IMPORTANT: Save this new API key - it will not be shown again!");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Service User ID: {}", result["service_user_id"].as_str().unwrap_or("-"));
+    println!("Name: {}", result["name"].as_str().unwrap_or("-"));
+    println!("New API Key: {}", result["api_key"].as_str().unwrap_or("-"));
+    if let Some(expires) = result["expires_at"].as_str() {
+        println!("Expires At: {}", expires);
+    }
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    
+    Ok(())
+}
+
+// ==================== Update Operations ====================
+
+pub async fn handle_update_tenant(
+    client: &PangolinClient,
+    id: String,
+    name: Option<String>,
+) -> Result<(), CliError> {
+    let mut payload = serde_json::json!({});
+    
+    if let Some(n) = name {
+        payload["name"] = serde_json::Value::String(n);
+    }
+    
+    let res = client.put(&format!("/api/v1/tenants/{}", id), &payload).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to update tenant ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Tenant updated successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_update_user(
+    client: &PangolinClient,
+    id: String,
+    username: Option<String>,
+    email: Option<String>,
+    active: Option<bool>,
+) -> Result<(), CliError> {
+    let mut payload = serde_json::json!({});
+    
+    if let Some(u) = username {
+        payload["username"] = serde_json::Value::String(u);
+    }
+    
+    if let Some(e) = email {
+        payload["email"] = serde_json::Value::String(e);
+    }
+    
+    if let Some(a) = active {
+        payload["active"] = serde_json::Value::Bool(a);
+    }
+    
+    let res = client.put(&format!("/api/v1/users/{}", id), &payload).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to update user ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ User updated successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_update_warehouse(
+    client: &PangolinClient,
+    id: String,
+    name: Option<String>,
+) -> Result<(), CliError> {
+    let mut payload = serde_json::json!({});
+    
+    if let Some(n) = name {
+        payload["name"] = serde_json::Value::String(n);
+    }
+    
+    let res = client.put(&format!("/api/v1/warehouses/{}", id), &payload).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to update warehouse ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Warehouse updated successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_update_catalog(
+    client: &PangolinClient,
+    id: String,
+    name: Option<String>,
+) -> Result<(), CliError> {
+    let mut payload = serde_json::json!({});
+    
+    if let Some(n) = name {
+        payload["name"] = serde_json::Value::String(n);
+    }
+    
+    let res = client.put(&format!("/api/v1/catalogs/{}", id), &payload).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to update catalog ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Catalog updated successfully!");
+    
+    Ok(())
+}
+
+// ==================== Token Management ====================
+
+pub async fn handle_revoke_token(client: &PangolinClient) -> Result<(), CliError> {
+    let res = client.post("/api/v1/tokens/revoke", &serde_json::json!({})).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to revoke token ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Token revoked successfully!");
+    println!("You have been logged out. Please login again to continue.");
+    
+    Ok(())
+}
+
+pub async fn handle_revoke_token_by_id(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.post(&format!("/api/v1/tokens/revoke/{}", id), &serde_json::json!({})).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to revoke token ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Token {} revoked successfully!", id);
+    
+    Ok(())
+}
+
+// ==================== Merge Operations ====================
+
+pub async fn handle_list_merge_operations(client: &PangolinClient) -> Result<(), CliError> {
+    let res = client.get("/api/v1/merge-operations").await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to list merge operations: {}", res.status())));
+    }
+    
+    let merges: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    if merges.is_empty() {
+        println!("No merge operations found.");
+        return Ok(());
+    }
+    
+    let rows: Vec<Vec<String>> = merges.iter().map(|m| {
+        vec![
+            m["id"].as_str().unwrap_or("-").to_string(),
+            m["source_branch"].as_str().unwrap_or("-").to_string(),
+            m["target_branch"].as_str().unwrap_or("-").to_string(),
+            m["status"].as_str().unwrap_or("-").to_string(),
+            m["created_at"].as_str().unwrap_or("-").to_string(),
+        ]
+    }).collect();
+    
+    print_table(
+        vec!["ID", "Source Branch", "Target Branch", "Status", "Created At"],
+        rows
+    );
+    
+    Ok(())
+}
+
+pub async fn handle_get_merge_operation(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/merge-operations/{}", id)).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to get merge operation: {}", res.status())));
+    }
+    
+    let merge: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Merge Operation Details");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("ID: {}", merge["id"].as_str().unwrap_or("-"));
+    println!("Source Branch: {}", merge["source_branch"].as_str().unwrap_or("-"));
+    println!("Target Branch: {}", merge["target_branch"].as_str().unwrap_or("-"));
+    println!("Status: {}", merge["status"].as_str().unwrap_or("-"));
+    println!("Created At: {}", merge["created_at"].as_str().unwrap_or("-"));
+    if let Some(completed) = merge["completed_at"].as_str() {
+        println!("Completed At: {}", completed);
+    }
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    
+    Ok(())
+}
+
+pub async fn handle_list_conflicts(client: &PangolinClient, merge_id: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/merge-operations/{}/conflicts", merge_id)).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to list conflicts: {}", res.status())));
+    }
+    
+    let conflicts: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    if conflicts.is_empty() {
+        println!("No conflicts found.");
+        return Ok(());
+    }
+    
+    let rows: Vec<Vec<String>> = conflicts.iter().map(|c| {
+        vec![
+            c["id"].as_str().unwrap_or("-").to_string(),
+            c["asset_id"].as_str().unwrap_or("-").to_string(),
+            c["conflict_type"].as_str().unwrap_or("-").to_string(),
+            c["resolved"].as_bool().map(|r| if r { "Yes" } else { "No" }).unwrap_or("-").to_string(),
+        ]
+    }).collect();
+    
+    print_table(
+        vec!["ID", "Asset ID", "Conflict Type", "Resolved"],
+        rows
+    );
+    
+    Ok(())
+}
+
+pub async fn handle_resolve_conflict(
+    client: &PangolinClient,
+    merge_id: String,
+    conflict_id: String,
+    resolution: String,
+) -> Result<(), CliError> {
+    let payload = serde_json::json!({
+        "resolution": resolution,
+    });
+    
+    let res = client.post(
+        &format!("/api/v1/merge-operations/{}/conflicts/{}/resolve", merge_id, conflict_id),
+        &payload
+    ).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to resolve conflict ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Conflict resolved successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_complete_merge(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.post(&format!("/api/v1/merge-operations/{}/complete", id), &serde_json::json!({})).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to complete merge ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Merge completed successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_abort_merge(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.post(&format!("/api/v1/merge-operations/{}/abort", id), &serde_json::json!({})).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to abort merge ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Merge aborted successfully!");
+    
+    Ok(())
+}
+
+// ==================== Business Metadata ====================
+
+pub async fn handle_delete_metadata(client: &PangolinClient, asset_id: String) -> Result<(), CliError> {
+    let res = client.delete(&format!("/api/v1/business-metadata/{}", asset_id)).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to delete metadata ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Business metadata deleted successfully!");
+    
+    Ok(())
+}
+
+pub async fn handle_request_access(
+    client: &PangolinClient,
+    asset_id: String,
+    reason: String,
+) -> Result<(), CliError> {
+    let payload = serde_json::json!({
+        "asset_id": asset_id,
+        "reason": reason,
+    });
+    
+    let res = client.post("/api/v1/access-requests", &payload).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to request access ({}): {}", status, error_text)));
+    }
+    
+    let result: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("✅ Access request submitted successfully!");
+    println!("Request ID: {}", result["id"].as_str().unwrap_or("-"));
+    
+    Ok(())
+}
+
+pub async fn handle_list_access_requests(client: &PangolinClient) -> Result<(), CliError> {
+    let res = client.get("/api/v1/access-requests").await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to list access requests: {}", res.status())));
+    }
+    
+    let requests: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    if requests.is_empty() {
+        println!("No access requests found.");
+        return Ok(());
+    }
+    
+    let rows: Vec<Vec<String>> = requests.iter().map(|r| {
+        vec![
+            r["id"].as_str().unwrap_or("-").to_string(),
+            r["asset_id"].as_str().unwrap_or("-").to_string(),
+            r["user_id"].as_str().unwrap_or("-").to_string(),
+            r["status"].as_str().unwrap_or("-").to_string(),
+            r["reason"].as_str().unwrap_or("-").to_string(),
+            r["created_at"].as_str().unwrap_or("-").to_string(),
+        ]
+    }).collect();
+    
+    print_table(
+        vec!["ID", "Asset ID", "User ID", "Status", "Reason", "Created At"],
+        rows
+    );
+    
+    Ok(())
+}
+
+pub async fn handle_update_access_request(
+    client: &PangolinClient,
+    id: String,
+    status: String,
+) -> Result<(), CliError> {
+    let payload = serde_json::json!({
+        "status": status,
+    });
+    
+    let res = client.put(&format!("/api/v1/access-requests/{}", id), &payload).await?;
+    
+    if !res.status().is_success() {
+        let status_code = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to update access request ({}): {}", status_code, error_text)));
+    }
+    
+    println!("✅ Access request updated to: {}", status);
+    
+    Ok(())
+}
+
+pub async fn handle_get_asset_details(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/assets/{}", id)).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to get asset details: {}", res.status())));
+    }
+    
+    let asset: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Asset Details");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("ID: {}", asset["id"].as_str().unwrap_or("-"));
+    println!("Name: {}", asset["name"].as_str().unwrap_or("-"));
+    println!("Type: {}", asset["asset_type"].as_str().unwrap_or("-"));
+    println!("Catalog: {}", asset["catalog_id"].as_str().unwrap_or("-"));
+    if let Some(desc) = asset["description"].as_str() {
+        println!("Description: {}", desc);
+    }
+    println!("Discoverable: {}", asset["discoverable"].as_bool().unwrap_or(false));
+    println!("Created At: {}", asset["created_at"].as_str().unwrap_or("-"));
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    
+    Ok(())
+}

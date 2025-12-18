@@ -90,6 +90,29 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::RevokePermission { role, action, resource } => handlers::handle_revoke_permission(&client, role, action, resource).await?,
             AdminCommand::GetMetadata { entity_type, entity_id } => handlers::handle_get_metadata(&client, entity_type, entity_id).await?,
             AdminCommand::SetMetadata { entity_type, entity_id, key, value } => handlers::handle_set_metadata(&client, entity_type, entity_id, key, value).await?,
+            AdminCommand::CreateServiceUser { name, description, role, expires_in_days } => handlers::handle_create_service_user(&client, name, description, role, expires_in_days).await?,
+            AdminCommand::ListServiceUsers => handlers::handle_list_service_users(&client).await?,
+            AdminCommand::GetServiceUser { id } => handlers::handle_get_service_user(&client, id).await?,
+            AdminCommand::UpdateServiceUser { id, name, description, active } => handlers::handle_update_service_user(&client, id, name, description, active).await?,
+            AdminCommand::DeleteServiceUser { id } => handlers::handle_delete_service_user(&client, id).await?,
+            AdminCommand::RotateServiceUserKey { id } => handlers::handle_rotate_service_user_key(&client, id).await?,
+            AdminCommand::UpdateTenant { id, name } => handlers::handle_update_tenant(&client, id, name).await?,
+            AdminCommand::UpdateUser { id, username, email, active } => handlers::handle_update_user(&client, id, username, email, active).await?,
+            AdminCommand::UpdateWarehouse { id, name } => handlers::handle_update_warehouse(&client, id, name).await?,
+            AdminCommand::UpdateCatalog { id, name } => handlers::handle_update_catalog(&client, id, name).await?,
+            AdminCommand::RevokeToken => handlers::handle_revoke_token(&client).await?,
+            AdminCommand::RevokeTokenById { id } => handlers::handle_revoke_token_by_id(&client, id).await?,
+            AdminCommand::ListMergeOperations => handlers::handle_list_merge_operations(&client).await?,
+            AdminCommand::GetMergeOperation { id } => handlers::handle_get_merge_operation(&client, id).await?,
+            AdminCommand::ListConflicts { merge_id } => handlers::handle_list_conflicts(&client, merge_id).await?,
+            AdminCommand::ResolveConflict { merge_id, conflict_id, resolution } => handlers::handle_resolve_conflict(&client, merge_id, conflict_id, resolution).await?,
+            AdminCommand::CompleteMerge { id } => handlers::handle_complete_merge(&client, id).await?,
+            AdminCommand::AbortMerge { id } => handlers::handle_abort_merge(&client, id).await?,
+            AdminCommand::DeleteMetadata { asset_id } => handlers::handle_delete_metadata(&client, asset_id).await?,
+            AdminCommand::RequestAccess { asset_id, reason } => handlers::handle_request_access(&client, asset_id, reason).await?,
+            AdminCommand::ListAccessRequests => handlers::handle_list_access_requests(&client).await?,
+            AdminCommand::UpdateAccessRequest { id, status } => handlers::handle_update_access_request(&client, id, status).await?,
+            AdminCommand::GetAssetDetails { id } => handlers::handle_get_asset_details(&client, id).await?,
             _ => println!("Command not available in non-interactive mode."),
         }
         return Ok(());
@@ -224,6 +247,75 @@ async fn main() -> anyhow::Result<()> {
                                     },
                                     AdminCommand::SetMetadata { entity_type, entity_id, key, value } => {
                                         if let Err(e) = handlers::handle_set_metadata(&client, entity_type, entity_id, key, value).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::CreateServiceUser { name, description, role, expires_in_days } => {
+                                        if let Err(e) = handlers::handle_create_service_user(&client, name, description, role, expires_in_days).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListServiceUsers => {
+                                        if let Err(e) = handlers::handle_list_service_users(&client).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::GetServiceUser { id } => {
+                                        if let Err(e) = handlers::handle_get_service_user(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::UpdateServiceUser { id, name, description, active } => {
+                                        if let Err(e) = handlers::handle_update_service_user(&client, id, name, description, active).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::DeleteServiceUser { id } => {
+                                        if let Err(e) = handlers::handle_delete_service_user(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::RotateServiceUserKey { id } => {
+                                        if let Err(e) = handlers::handle_rotate_service_user_key(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::UpdateTenant { id, name } => {
+                                        if let Err(e) = handlers::handle_update_tenant(&client, id, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::UpdateUser { id, username, email, active } => {
+                                        if let Err(e) = handlers::handle_update_user(&client, id, username, email, active).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::UpdateWarehouse { id, name } => {
+                                        if let Err(e) = handlers::handle_update_warehouse(&client, id, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::UpdateCatalog { id, name } => {
+                                        if let Err(e) = handlers::handle_update_catalog(&client, id, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::RevokeToken => {
+                                        if let Err(e) = handlers::handle_revoke_token(&client).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::RevokeTokenById { id } => {
+                                        if let Err(e) = handlers::handle_revoke_token_by_id(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListMergeOperations => {
+                                        if let Err(e) = handlers::handle_list_merge_operations(&client).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::GetMergeOperation { id } => {
+                                        if let Err(e) = handlers::handle_get_merge_operation(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListConflicts { merge_id } => {
+                                        if let Err(e) = handlers::handle_list_conflicts(&client, merge_id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ResolveConflict { merge_id, conflict_id, resolution } => {
+                                        if let Err(e) = handlers::handle_resolve_conflict(&client, merge_id, conflict_id, resolution).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::CompleteMerge { id } => {
+                                        if let Err(e) = handlers::handle_complete_merge(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::AbortMerge { id } => {
+                                        if let Err(e) = handlers::handle_abort_merge(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::DeleteMetadata { asset_id } => {
+                                        if let Err(e) = handlers::handle_delete_metadata(&client, asset_id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::RequestAccess { asset_id, reason } => {
+                                        if let Err(e) = handlers::handle_request_access(&client, asset_id, reason).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListAccessRequests => {
+                                        if let Err(e) = handlers::handle_list_access_requests(&client).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::UpdateAccessRequest { id, status } => {
+                                        if let Err(e) = handlers::handle_update_access_request(&client, id, status).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::GetAssetDetails { id } => {
+                                        if let Err(e) = handlers::handle_get_asset_details(&client, id).await { eprintln!("Error: {}", e); }
                                     }
                                 }
                             },

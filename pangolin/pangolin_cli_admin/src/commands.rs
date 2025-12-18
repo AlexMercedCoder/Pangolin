@@ -37,6 +37,13 @@ pub enum AdminCommand {
     DeleteTenant {
         id: String,
     },
+    /// Update a tenant
+    UpdateTenant {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
     // --- Users ---
     ListUsers,
     CreateUser {
@@ -52,6 +59,17 @@ pub enum AdminCommand {
     },
     DeleteUser {
         username: String,
+    },
+    /// Update a user
+    UpdateUser {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        username: Option<String>,
+        #[arg(long)]
+        email: Option<String>,
+        #[arg(long)]
+        active: Option<bool>,
     },
     // --- Warehouses ---
     ListWarehouses,
@@ -73,6 +91,13 @@ pub enum AdminCommand {
     DeleteWarehouse {
         name: String,
     },
+    /// Update a warehouse
+    UpdateWarehouse {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
     // --- Catalogs ---
     ListCatalogs,
     CreateCatalog {
@@ -82,6 +107,13 @@ pub enum AdminCommand {
     },
     DeleteCatalog {
         name: String,
+    },
+    /// Update a catalog
+    UpdateCatalog {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
     },
     // --- Federated Catalogs ---
     /// Create a federated catalog that proxies to another Iceberg REST catalog
@@ -154,6 +186,113 @@ pub enum AdminCommand {
         entity_id: String,
         key: String,
         value: String,
+    },
+    // --- Service Users ---
+    /// Create a new service user for API access
+    CreateServiceUser {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long, default_value = "TenantUser")]
+        role: String,
+        #[arg(long)]
+        expires_in_days: Option<i64>,
+    },
+    /// List all service users
+    ListServiceUsers,
+    /// Get service user details
+    GetServiceUser {
+        #[arg(long)]
+        id: String,
+    },
+    /// Update a service user
+    UpdateServiceUser {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        active: Option<bool>,
+    },
+    /// Delete a service user
+    DeleteServiceUser {
+        #[arg(long)]
+        id: String,
+    },
+    /// Rotate service user API key
+    RotateServiceUserKey {
+        #[arg(long)]
+        id: String,
+    },
+    // --- Token Management ---
+    /// Revoke your own token (logout)
+    RevokeToken,
+    /// Revoke a token by ID (admin only)
+    RevokeTokenById {
+        #[arg(long)]
+        id: String,
+    },
+    // --- Merge Operations ---
+    /// List merge operations
+    ListMergeOperations,
+    /// Get merge operation details
+    GetMergeOperation {
+        #[arg(long)]
+        id: String,
+    },
+    /// List conflicts in a merge
+    ListConflicts {
+        #[arg(long)]
+        merge_id: String,
+    },
+    /// Resolve a merge conflict
+    ResolveConflict {
+        #[arg(long)]
+        merge_id: String,
+        #[arg(long)]
+        conflict_id: String,
+        #[arg(long)]
+        resolution: String,
+    },
+    /// Complete a merge operation
+    CompleteMerge {
+        #[arg(long)]
+        id: String,
+    },
+    /// Abort a merge operation
+    AbortMerge {
+        #[arg(long)]
+        id: String,
+    },
+    // --- Business Metadata ---
+    /// Delete business metadata from an asset
+    DeleteMetadata {
+        #[arg(long)]
+        asset_id: String,
+    },
+    /// Request access to an asset
+    RequestAccess {
+        #[arg(long)]
+        asset_id: String,
+        #[arg(long)]
+        reason: String,
+    },
+    /// List all access requests
+    ListAccessRequests,
+    /// Update an access request status
+    UpdateAccessRequest {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        status: String,
+    },
+    /// Get asset details
+    GetAssetDetails {
+        #[arg(long)]
+        id: String,
     },
     /// Exit the REPL
     Exit,
