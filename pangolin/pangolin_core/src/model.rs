@@ -1,15 +1,16 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Tenant {
     pub id: Uuid,
     pub name: String,
     pub properties: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub enum VendingStrategy {
     /// AWS S3 with STS temporary credentials
     AwsSts {
@@ -35,7 +36,7 @@ pub enum VendingStrategy {
     None,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Warehouse {
     pub id: Uuid,
     pub name: String,
@@ -46,13 +47,13 @@ pub struct Warehouse {
 }
 
 // Federated Catalog Support
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum CatalogType {
     Local,      // Native Pangolin catalog
     Federated,  // External Iceberg REST catalog (proxy)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum FederatedAuthType {
     None,           // No authentication required
     BasicAuth,      // Username/password
@@ -60,7 +61,7 @@ pub enum FederatedAuthType {
     ApiKey,         // X-API-Key header
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct FederatedCredentials {
     pub username: Option<String>,
     pub password: Option<String>,
@@ -68,7 +69,7 @@ pub struct FederatedCredentials {
     pub api_key: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct FederatedCatalogConfig {
     pub base_url: String,
     pub auth_type: FederatedAuthType,
@@ -76,7 +77,7 @@ pub struct FederatedCatalogConfig {
     pub timeout_seconds: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Catalog {
     pub id: Uuid, // Added ID for permission scoping
     pub name: String,
@@ -333,13 +334,13 @@ mod tests {
 }
 
 // Update structs for CRUD operations
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TenantUpdate {
     pub name: Option<String>,
     pub properties: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WarehouseUpdate {
     pub name: Option<String>,
     pub storage_config: Option<HashMap<String, String>>,
@@ -347,7 +348,7 @@ pub struct WarehouseUpdate {
     pub vending_strategy: Option<VendingStrategy>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CatalogUpdate {
     pub warehouse_name: Option<String>,
     pub storage_location: Option<String>,

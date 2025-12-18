@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use utoipa::ToSchema;
 
 /// User in the system
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct User {
     pub id: Uuid,
@@ -25,7 +26,7 @@ pub struct User {
 }
 
 /// User role in the system
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum UserRole {
     /// Super admin - can manage everything
@@ -37,7 +38,7 @@ pub enum UserRole {
 }
 
 /// OAuth provider
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum OAuthProvider {
     Google,
@@ -47,7 +48,7 @@ pub enum OAuthProvider {
 }
 
 /// User session for JWT or OAuth
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 pub struct UserSession {
     pub user_id: Uuid,
     pub username: String,
@@ -58,7 +59,7 @@ pub struct UserSession {
 }
 
 /// Service user for API key authentication
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceUser {
     pub id: Uuid,

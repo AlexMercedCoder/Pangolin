@@ -11,3 +11,4 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { workspace = true }
+utoipa = { version = "4", features = ["chrono", "uuid"] }

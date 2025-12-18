@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::collections::HashSet;
+use utoipa::ToSchema;
 
 /// Permission scope - where the permission applies
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, ToSchema)]
 #[serde(rename_all = "kebab-case", tag = "type")]
 pub enum PermissionScope {
     /// Applies to entire catalog
@@ -46,7 +47,7 @@ impl PermissionScope {
 }
 
 /// Actions that can be performed
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum Action {
     Read,
@@ -78,7 +79,7 @@ impl Action {
 }
 
 /// A single permission grant
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct Permission {
     pub id: Uuid,
