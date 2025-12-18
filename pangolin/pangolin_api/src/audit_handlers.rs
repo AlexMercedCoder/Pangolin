@@ -47,7 +47,7 @@ pub struct AuditListQuery {
 }
 
 /// Response for audit event count
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AuditCountResponse {
     /// Total number of audit events matching the filter
     #[schema(example = 42)]

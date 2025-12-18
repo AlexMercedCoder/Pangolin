@@ -1296,3 +1296,82 @@ pub async fn handle_get_asset_details(client: &PangolinClient, id: String) -> Re
     
     Ok(())
 }
+
+// ==================== Audit Logging ====================
+
+pub async fn handle_list_audit_events(
+    client: &PangolinClient,
+    user_id: Option<String>,
+    action: Option<String>,
+    resource_type: Option<String>,
+    result: Option<String>,
+    limit: usize,
+) -> Result<(), CliError> {
+    let mut query_params = vec![format!("limit={}", limit)];
+    if let Some(uid) = user_id { query_params.push(format!("user_id={}", uid)); }
+    if let Some(act) = action { query_params.push(format!("action={}", act)); }
+    if let Some(rt) = resource_type { query_params.push(format!("resource_type={}", rt)); }
+    if let Some(res) = result { query_params.push(format!("result={}", res)); }
+    
+    let query_string = if query_params.is_empty() { String::new() } else { format!("?{}", query_params.join("&")) };
+    let res = client.get(&format!("/api/v1/audit{}", query_string)).await?;
+    if !res.status().is_success() { return Err(CliError::ApiError(format!("Failed: {}", res.status()))); }
+    
+    let events: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    if events.is_empty() { println!("No audit events found."); return Ok(()); }
+    
+    let rows: Vec<Vec<String>> = events.iter().map(|e| vec![
+        e["id"].as_str().unwrap_or("-").chars().take(8).collect::<String>(),
+        e["username"].as_str().unwrap_or("-").to_string(),
+        e["action"].as_str().unwrap_or("-").to_string(),
+        e["resource_type"].as_str().unwrap_or("-").to_string(),
+        e["resource_name"].as_str().unwrap_or("-").to_string(),
+        e["result"].as_str().unwrap_or("-").to_string(),
+        e["timestamp"].as_str().unwrap_or("-").chars().take(19).collect::<String>(),
+    ]).collect();
+    
+    print_table(vec!["ID", "User", "Action", "Resource Type", "Resource Name", "Result", "Timestamp"], rows);
+    println!("\nShowing {} events", events.len());
+    Ok(())
+}
+
+pub async fn handle_count_audit_events(
+    client: &PangolinClient,
+    user_id: Option<String>,
+    action: Option<String>,
+    resource_type: Option<String>,
+    result: Option<String>,
+) -> Result<(), CliError> {
+    let mut query_params = vec![];
+    if let Some(uid) = user_id { query_params.push(format!("user_id={}", uid)); }
+    if let Some(act) = action { query_params.push(format!("action={}", act)); }
+    if let Some(rt) = resource_type { query_params.push(format!("resource_type={}", rt)); }
+    if let Some(res) = result { query_params.push(format!("result={}", res)); }
+    
+    let query_string = if query_params.is_empty() { String::new() } else { format!("?{}", query_params.join("&")) };
+    let res = client.get(&format!("/api/v1/audit/count{}", query_string)).await?;
+    if !res.status().is_success() { return Err(CliError::ApiError(format!("Failed: {}", res.status()))); }
+    
+    let count_response: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    println!("Total audit events: {}", count_response["count"].as_u64().unwrap_or(0));
+    Ok(())
+}
+
+pub async fn handle_get_audit_event(client: &PangolinClient, id: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/audit/{}", id)).await?;
+    if !res.status().is_success() { return Err(CliError::ApiError(format!("Failed: {}", res.status()))); }
+    
+    let event: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Audit Event Details");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("ID: {}", event["id"].as_str().unwrap_or("-"));
+    println!("User: {}", event["username"].as_str().unwrap_or("-"));
+    println!("Action: {}", event["action"].as_str().unwrap_or("-"));
+    println!("Resource: {} ({})", event["resource_name"].as_str().unwrap_or("-"), event["resource_type"].as_str().unwrap_or("-"));
+    println!("Result: {}", event["result"].as_str().unwrap_or("-"));
+    println!("Timestamp: {}", event["timestamp"].as_str().unwrap_or("-"));
+    if let Some(error) = event["error_message"].as_str() { println!("Error: {}", error); }
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Ok(())
+}

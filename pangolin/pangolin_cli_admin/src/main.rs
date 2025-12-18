@@ -113,6 +113,9 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::ListAccessRequests => handlers::handle_list_access_requests(&client).await?,
             AdminCommand::UpdateAccessRequest { id, status } => handlers::handle_update_access_request(&client, id, status).await?,
             AdminCommand::GetAssetDetails { id } => handlers::handle_get_asset_details(&client, id).await?,
+            AdminCommand::ListAuditEvents { user_id, action, resource_type, result, limit } => handlers::handle_list_audit_events(&client, user_id, action, resource_type, result, limit).await?,
+            AdminCommand::CountAuditEvents { user_id, action, resource_type, result } => handlers::handle_count_audit_events(&client, user_id, action, resource_type, result).await?,
+            AdminCommand::GetAuditEvent { id } => handlers::handle_get_audit_event(&client, id).await?,
             _ => println!("Command not available in non-interactive mode."),
         }
         return Ok(());
@@ -316,6 +319,15 @@ async fn main() -> anyhow::Result<()> {
                                     },
                                     AdminCommand::GetAssetDetails { id } => {
                                         if let Err(e) = handlers::handle_get_asset_details(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListAuditEvents { user_id, action, resource_type, result, limit } => {
+                                        if let Err(e) = handlers::handle_list_audit_events(&client, user_id, action, resource_type, result, limit).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::CountAuditEvents { user_id, action, resource_type, result } => {
+                                        if let Err(e) = handlers::handle_count_audit_events(&client, user_id, action, resource_type, result).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::GetAuditEvent { id } => {
+                                        if let Err(e) = handlers::handle_get_audit_event(&client, id).await { eprintln!("Error: {}", e); }
                                     }
                                 }
                             },

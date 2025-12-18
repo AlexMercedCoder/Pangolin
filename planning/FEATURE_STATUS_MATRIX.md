@@ -76,15 +76,15 @@
 | Update Access Request | ✅ | ✅ | ❌ | **NEW**: CLI added 2025-12-18 |
 | Get Asset Details | ✅ | ✅ | ❌ | **NEW**: CLI added 2025-12-18 |
 | **Audit Logging** |
-| List Audit Events | ✅ | 🔄 | ❌ | **NEW**: Enhanced 2025-12-18 |
-| Filter by User | ✅ | 🔄 | ❌ | Type-safe filtering |
-| Filter by Action | ✅ | 🔄 | ❌ | 40+ action types |
-| Filter by Resource | ✅ | 🔄 | ❌ | 19 resource types |
-| Filter by Time Range | ✅ | 🔄 | ❌ | Start/end time filtering |
-| Filter by Result | ✅ | 🔄 | ❌ | Success/failure filtering |
-| Pagination Support | ✅ | 🔄 | ❌ | Limit/offset pagination |
-| Count Audit Events | ✅ | 🔄 | ❌ | With filtering support |
-| Get Specific Event | ✅ | 🔄 | ❌ | By event ID |
+| List Audit Events | ✅ | ✅ | ❌ | **NEW**: Enhanced 2025-12-18 |
+| Filter by User | ✅ | ✅ | ❌ | Type-safe filtering |
+| Filter by Action | ✅ | ✅ | ❌ | 40+ action types |
+| Filter by Resource | ✅ | ✅ | ❌ | 19 resource types |
+| Filter by Time Range | ✅ | ✅ | ❌ | Start/end time filtering |
+| Filter by Result | ✅ | ✅ | ❌ | Success/failure filtering |
+| Pagination Support | ✅ | ✅ | ❌ | Limit/offset pagination |
+| Count Audit Events | ✅ | ✅ | ❌ | With filtering support |
+| Get Specific Event | ✅ | ✅ | ❌ | By event ID |
 | **Credential Vending** |
 | AWS STS Vending | ✅ | N/A | N/A | Tested with PyIceberg |
 | AWS Static Vending | ✅ | N/A | N/A | Tested with PyIceberg |
@@ -325,12 +325,12 @@
 | Component | Completion | Notes |
 |-----------|-----------|-------|
 | **API** | 100% | All 70 handlers complete + OpenAPI ✅ |
-| **CLI** | 95% | 60+ commands, audit logging in progress 🔄 |
+| **CLI** | 100% | All 63 commands implemented ✅ |
 | **UI** | 60% | Basic CRUD, missing advanced features |
-| **Docs** | 95% | Comprehensive, recently updated |
-| **Tests** | 75% | API tested, CLI partial, UI none |
+| **Docs** | 100% | Comprehensive, up-to-date ✅ |
+| **Tests** | 80% | API 100%, CLI tested, UI none |
 
-**Overall Project Completion**: ~87%
+**Overall Project Completion**: ~90%
 
 **Estimated Time to MVP**: 2-3 weeks (UI gaps + multi-cloud)
 
@@ -351,10 +351,8 @@
 - ✅ **Unit Tests**: 6 test files, 30+ scenarios
 - ✅ **Migrations**: PostgreSQL and SQLite scripts
 - ✅ **Documentation**: Complete deployment guide
-
-#### In Progress
-- 🔄 **CLI Commands**: Audit log viewing (next step)
-- 🔄 **OpenAPI Docs**: Endpoint documentation (next step)
+- ✅ **CLI Commands**: Audit log viewing (list, count, get)
+- ✅ **OpenAPI Docs**: Endpoint documentation
 
 ### Key Features
 - **40+ Action Types**: CreateTable, UpdateCatalog, GrantPermission, etc.
