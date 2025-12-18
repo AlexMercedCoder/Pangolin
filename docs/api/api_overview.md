@@ -1,72 +1,78 @@
 # API Overview
 
-Pangolin exposes two sets of APIs: the standard Iceberg REST API and the extended Pangolin API.
+Pangolin provides a rich set of APIs for catalog management, branching, merging, and authentication.
+
+## Authentication
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/users/login` | POST | Authenticate and receive a JWT token. |
+| `/api/v1/users/logout` | POST | Invalidate current session (optional). |
+| `/api/v1/users/me` | GET | Get current user information. |
+| `/api/v1/tokens` | POST | Generate a long-lived JWT token for a specific tenant/user. |
 
 ## Iceberg REST API
-Compliant with the Apache Iceberg REST Catalog Specification.
 
-### Catalog Configuration
-- `GET /v1/config`: Get catalog configuration.
+Pangolin implements the standard Apache Iceberg REST Catalog API.
 
-### Table Management
-- `POST /v1/{prefix}/namespaces/{namespace}/tables`: Create a table.
-- `GET /v1/{prefix}/namespaces/{namespace}/tables/{table}`: Load a table.
-- `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}`: Update/Commit to a table.
-- `DELETE /v1/{prefix}/namespaces/{namespace}/tables/{table}`: Delete a table.
-- `POST /v1/{prefix}/tables/rename`: Rename a table.
-- `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/metrics`: Report metrics.
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/v1/config` | GET | Get Iceberg client configuration. |
+| `/v1/{tenant}/config` | GET | Get tenant-specific Iceberg client configuration. |
+| `/v1/{prefix}/namespaces` | GET/POST | List and create namespaces. |
+| `/v1/{prefix}/namespaces/{namespace}/tables` | GET/POST | List and create tables. |
+| `/v1/{prefix}/namespaces/{namespace}/tables/{table}` | GET/POST/DELETE | Manage table metadata and snapshots. |
 
-### Namespace Management
-- `GET /v1/{prefix}/namespaces`: List namespaces.
-- `POST /v1/{prefix}/namespaces`: Create a namespace.
-- `DELETE /v1/{prefix}/namespaces/{namespace}`: Delete a namespace.
-- `POST /v1/{prefix}/namespaces/{namespace}/properties`: Update namespace properties.
+**Note**: Branching is supported via the `table@branch` syntax (e.g., `GET .../tables/my_table@dev`).
 
-**Branching Support**:
-Append `@branchName` to the table name or namespace to target a specific branch.
-- Example: `GET .../tables/my_table@dev`
+## Pangolin Extended APIs
 
-## Pangolin Extended API
-Additional endpoints for features not covered by the Iceberg spec.
+### Branch Operations
 
-### Tenant Management
-- `POST /api/v1/tenants`: Create a new tenant.
-- `GET /api/v1/tenants`: List all tenants.
-- `GET /api/v1/tenants/:id`: Get a specific tenant.
-
-### Warehouse Management
-- `POST /api/v1/warehouses`: Create a new warehouse.
-- `GET /api/v1/warehouses`: List all warehouses.
-- `GET /api/v1/warehouses/:name`: Get a specific warehouse.
-
-### Asset Management (Views)
-- `POST /v1/{prefix}/namespaces/{namespace}/views`: Create a new view.
-- `GET /v1/{prefix}/namespaces/{namespace}/views/{view}`: Get a specific view.
-
-### Branch Management
-- `GET /api/v1/branches`: List branches for a catalog.
-- `POST /api/v1/branches`: Create a new branch.
-- `GET /api/v1/branches/:name`: Get branch details.
-- `POST /api/v1/branches/merge`: Merge a source branch into a target branch.
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/branches` | GET/POST | List all branches or create a new branch. |
+| `/api/v1/branches/merge` | POST | Initiate a merge from a source branch to a target branch. |
+| `/api/v1/branches/{name}/commits` | GET | List commit history for a specific branch. |
 
 ### Tag Management
-- `GET /api/v1/tags`: List tags.
-- `POST /api/v1/tags`: Create a new tag.
-- `DELETE /api/v1/tags/:name`: Delete a tag.
 
-### Maintenance
-- `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/maintenance`: Trigger maintenance tasks (expire snapshots, remove orphan files).
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/tags` | GET/POST | List all tags or create a new tag. |
+| `/api/v1/tags/{name}` | GET/DELETE | View or delete a specific tag. |
 
-### Audit Logs
-- `GET /api/v1/audit`: Retrieve audit logs for the tenant.
+### Merge Operations (Conflict Resolution)
 
-### Authentication & Users
-- `POST /api/v1/login`: Authenticate and receive a JWT.
-- `POST /api/v1/users`: Create a new user (Admin only).
-- `GET /api/v1/users`: List users (Admin only).
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/catalogs/{catalog}/merge-operations` | GET | List merge operations for a catalog. |
+| `/api/v1/merge-operations/{id}` | GET | Get merge operation details and status. |
+| `/api/v1/merge-operations/{id}/conflicts` | GET | List conflicts for a merge operation. |
+| `/api/v1/conflicts/{id}/resolve` | POST | Resolve a specific conflict with a strategy. |
+| `/api/v1/merge-operations/{id}/complete` | POST | Complete a merge after resolving all conflicts. |
+| `/api/v1/merge-operations/{id}/abort` | POST | Abort a pending merge operation. |
 
-### Permission Management
-- `POST /api/v1/permissions`: Grant permission to a user.
-- `DELETE /api/v1/permissions/{id}`: Revoke a permission.
-- `GET /api/v1/roles`: List roles.
-- `POST /api/v1/roles`: Create a new role.
+### Management CRUD
+
+| Entity | Endpoints | Methods |
+| :--- | :--- | :--- |
+| **Tenants** | `/api/v1/tenants` | GET, POST, PUT, DELETE |
+| **Warehouses** | `/api/v1/warehouses` | GET, POST, PUT, DELETE |
+| **Catalogs** | `/api/v1/catalogs` | GET, POST, PUT, DELETE |
+| **Users** | `/api/v1/users` | GET, POST, PUT, DELETE |
+| **Service Users**| `/api/v1/service-users` | GET, POST, PUT, DELETE, ROTATE |
+
+## Auditing
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/audit-logs` | GET | Retrieve audit logs for the current tenant. |
+
+## Other APIs
+
+- **Credential Vending**: `/api/v1/credentials` (GET)
+- **S3 Presigning**: `/api/v1/presign` (POST)
+- **Business Metadata**: `/api/v1/metadata/search` (POST)
+- **Access Requests**: `/api/v1/access-requests` (GET/POST)
+- **App Config**: `/api/v1/app-config` (GET)

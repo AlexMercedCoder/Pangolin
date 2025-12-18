@@ -82,7 +82,7 @@ pub struct CreateNamespaceResponse {
     properties: HashMap<String, String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct CreateTableRequest {
     name: String,
     location: Option<String>,
@@ -170,14 +170,14 @@ pub struct PartitionField {
     pub transform: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct CommitTableRequest {
     identifier: Option<TableIdentifier>,
     requirements: Vec<CommitRequirement>,
     updates: Vec<CommitUpdate>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum CommitRequirement {
     #[serde(rename = "assert-create")]
@@ -194,7 +194,7 @@ pub enum CommitRequirement {
     // Add others as needed
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "action")]
 pub enum CommitUpdate {
     #[serde(rename = "assign-uuid")]
@@ -328,6 +328,8 @@ pub async fn create_namespace(
     let tenant_id = tenant.0;
     let catalog_name = prefix;
     
+    tracing::info!("create_namespace: tenant_id={}, catalog_name={}", tenant_id, catalog_name);
+
     // Resolve catalog ID
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
@@ -417,6 +419,32 @@ pub async fn create_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Federated check
+    let mut path = format!("/namespaces/{}/tables", namespace);
+    if !params.is_empty() {
+        let query_string: String = params.iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&");
+        path.push_str("?");
+        path.push_str(&query_string);
+    }
+
+    // Serialize body for forwarding
+    let body_bytes = serde_json::to_vec(&payload).ok().map(Bytes::from);
+
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::POST,
+        &path,
+        body_bytes,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
     
     // Resolve catalog ID
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
@@ -623,6 +651,29 @@ pub async fn load_table(
     let tenant_id = tenant.0;
     let catalog_name = prefix;
     
+    // Federated check
+    let mut path = format!("/namespaces/{}/tables/{}", namespace, table);
+    if !params.is_empty() {
+        let query_string: String = params.iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&");
+        path.push_str("?");
+        path.push_str(&query_string);
+    }
+    
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::GET,
+        &path,
+        None,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
+    
     // Resolve catalog ID
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
@@ -739,6 +790,23 @@ pub async fn update_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Federated check
+    let path = format!("/namespaces/{}/tables/{}", namespace, table);
+    // Serialize body
+    let body_bytes = serde_json::to_vec(&payload).ok().map(Bytes::from);
+    
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::POST,
+        &path,
+        body_bytes,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
     
     // Resolve catalog ID
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
@@ -894,7 +962,7 @@ pub async fn update_table(
     (StatusCode::CONFLICT, "Failed to commit after retries").into_response()
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct RenameTableRequest {
     source: TableIdentifier,
     destination: TableIdentifier,
@@ -909,6 +977,24 @@ pub async fn rename_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Federated check - Rename is weird in REST catalog spec (POST /tables/rename or similar?)
+    // Our route is /v1/:prefix/tables/rename.
+    // So path relative to catalogue is /tables/rename
+    let path = "/tables/rename".to_string();
+    let body_bytes = serde_json::to_vec(&payload).ok().map(Bytes::from);
+    
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::POST,
+        &path,
+        body_bytes,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
     
     let source_ns = payload.source.namespace;
     let source_name = payload.source.name;
@@ -934,6 +1020,20 @@ pub async fn delete_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Federated check
+    let path = format!("/namespaces/{}/tables/{}", namespace, table);
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::DELETE,
+        &path,
+        None,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
     
     // Resolve catalog ID
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
@@ -1015,7 +1115,7 @@ pub async fn delete_namespace(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct UpdateNamespacePropertiesRequest {
     removals: Option<Vec<String>>,
     updates: Option<std::collections::HashMap<String, String>>,
@@ -1037,6 +1137,22 @@ pub async fn update_namespace_properties(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
+    
+    // Federated check
+    let path = format!("/namespaces/{}/properties", namespace);
+    let body_bytes = serde_json::to_vec(&payload).ok().map(Bytes::from);
+    
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::POST,
+        &path,
+        body_bytes,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
 
     // For MVP, we only support updates. Removals are ignored or TODO.
@@ -1139,6 +1255,22 @@ pub async fn table_exists(
     Extension(tenant_id): Extension<TenantId>,
     Path((prefix, namespace, table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
+    let tenant_id = tenant_id.0;
+    let catalog_name = prefix;
+    
+    // Federated check
+    let path = format!("/namespaces/{}/tables/{}", namespace, table);
+    if let Some(response) = check_and_forward_if_federated(
+        &store,
+        tenant_id,
+        &catalog_name,
+        Method::HEAD,
+        &path,
+        None,
+        HeaderMap::new(),
+    ).await {
+         return response;
+    }
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
     // Parse table@branch
     let (table_name, branch_name) = if let Some((t, b)) = table.split_once('@') {
@@ -1147,9 +1279,58 @@ pub async fn table_exists(
         (table.to_string(), None)
     };
 
-    match store.get_asset(tenant_id.0, &prefix, branch_name, namespace_parts, table_name).await {
-        Ok(Some(_)) => StatusCode::OK,
-        Ok(None) => StatusCode::NOT_FOUND,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    match store.get_asset(tenant_id, &catalog_name, branch_name, namespace_parts, table_name).await {
+        Ok(Some(_)) => StatusCode::OK.into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_table_request_serialization() {
+        let req = CreateTableRequest {
+            name: "test_table".to_string(),
+            location: None,
+            schema: Some(serde_json::json!({"type": "struct", "fields": []})),
+            properties: Some(HashMap::new()),
+        };
+
+        let serialized = serde_json::to_string(&req);
+        assert!(serialized.is_ok(), "CreateTableRequest should be serializable");
+    }
+
+    #[test]
+    fn test_commit_table_request_serialization() {
+        let req = CommitTableRequest {
+            identifier: None,
+            requirements: vec![],
+            updates: vec![],
+        };
+        let serialized = serde_json::to_string(&req);
+        assert!(serialized.is_ok(), "CommitTableRequest should be serializable");
+    }
+
+    #[test]
+    fn test_rename_table_request_serialization() {
+        let req = RenameTableRequest {
+            source: TableIdentifier { namespace: vec!["ns".to_string()], name: "t1".to_string() },
+            destination: TableIdentifier { namespace: vec!["ns".to_string()], name: "t2".to_string() },
+        };
+        let serialized = serde_json::to_string(&req);
+        assert!(serialized.is_ok(), "RenameTableRequest should be serializable");
+    }
+
+    #[test]
+    fn test_update_namespace_properties_request_serialization() {
+        let req = UpdateNamespacePropertiesRequest {
+            removals: Some(vec!["prop1".to_string()]),
+            updates: Some(HashMap::new()),
+        };
+        let serialized = serde_json::to_string(&req);
+        assert!(serialized.is_ok(), "UpdateNamespacePropertiesRequest should be serializable");
     }
 }

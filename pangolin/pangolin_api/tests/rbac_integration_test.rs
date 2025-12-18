@@ -10,10 +10,10 @@ use pangolin_core::model::{Catalog, CatalogType};
 use pangolin_store::MemoryStore;
 use pangolin_store::CatalogStore;
 use std::sync::Arc;
-use crate::user_handlers::login;
-use crate::auth_middleware::hash_password;
-use crate::iceberg_handlers;
-use crate::tests_common::EnvGuard;
+use pangolin_api::user_handlers::login;
+use pangolin_api::auth_middleware::hash_password;
+use pangolin_api::iceberg_handlers;
+use pangolin_api::tests_common::EnvGuard;
 use uuid::Uuid;
 use chrono::Utc;
 

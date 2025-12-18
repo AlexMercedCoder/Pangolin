@@ -102,11 +102,12 @@ mod tests {
         // Generate valid token
         let secret = "secret";
         let claims = Claims {
-            sub: uuid::Uuid::new_v4().to_string(), // must be valid UUID
+            sub: uuid::Uuid::new_v4().to_string(),
+            jti: Some(uuid::Uuid::new_v4().to_string()),
             username: "test_user".to_string(),
             tenant_id: Some(tenant_id.to_string()),
             role: UserRole::TenantAdmin,
-            exp: (Utc::now().timestamp() + 3600),
+            exp: Utc::now().timestamp() + 3600,
             iat: Utc::now().timestamp(),
         };
 
@@ -161,11 +162,12 @@ mod tests {
         let secret = "secret";
         let claims = Claims {
             sub: uuid::Uuid::new_v4().to_string(),
+            jti: Some(uuid::Uuid::new_v4().to_string()),
             username: "test_user".to_string(),
             tenant_id: Some("00000000-0000-0000-0000-000000000001".to_string()),
             role: UserRole::TenantUser,
-            exp: (Utc::now().timestamp() - 3600), // Expired
-            iat: (Utc::now().timestamp() - 7200),
+            exp: Utc::now().timestamp() - 3600,
+            iat: Utc::now().timestamp() - 7200,
         };
 
         let token = encode(

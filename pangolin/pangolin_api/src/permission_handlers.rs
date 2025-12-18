@@ -1,9 +1,8 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Extension, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
-    Extension,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -223,13 +222,40 @@ pub async fn revoke_permission(
     }
 }
 
-/// Get user permissions
-pub async fn get_user_permissions(
+/// List permissions for the tenant
+#[derive(serde::Deserialize)]
+pub struct ListPermissionsParams {
+    pub user: Option<Uuid>,
+    pub role: Option<Uuid>, // Unused in store list, but could be used for filtering result
+}
+
+pub async fn list_permissions(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
-    Path(target_user_id): Path<Uuid>,
+    Extension(session): Extension<UserSession>, // Use UserSession
+    Query(params): Query<ListPermissionsParams>,
 ) -> Response {
-    match store.list_user_permissions(target_user_id).await {
-        Ok(perms) => (StatusCode::OK, Json(perms)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list permissions: {}", e)).into_response(),
+    // Check if user is authorized to list permissions (e.g. admin or listing own?)
+    // For now assume TenantAdmin or Root
+    // Simple check:
+    // param user filter: if user filters by themselves, allow.
+    // if listing all, require admin.
+    
+    // For MVP, if listing specific user:
+    if let Some(target_user_id) = params.user {
+         match store.list_user_permissions(target_user_id).await {
+            Ok(perms) => (StatusCode::OK, Json(perms)).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list user permissions: {}", e)).into_response(),
+        }
+    } else {
+        // List all permissions for tenant
+        let tenant_id = match session.tenant_id {
+            Some(t) => t,
+            None => return (StatusCode::BAD_REQUEST, "User must belong to a tenant").into_response(),
+        };
+
+        match store.list_permissions(tenant_id).await {
+            Ok(perms) => (StatusCode::OK, Json(perms)).into_response(),
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list permissions: {}", e)).into_response(),
+        }
     }
 }

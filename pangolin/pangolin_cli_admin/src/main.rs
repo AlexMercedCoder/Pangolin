@@ -81,6 +81,10 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::ListCatalogs => handlers::handle_list_catalogs(&client).await?,
             AdminCommand::CreateCatalog { name, warehouse } => handlers::handle_create_catalog(&client, name, warehouse).await?,
             AdminCommand::DeleteCatalog { name } => handlers::handle_delete_catalog(&client, name).await?,
+            AdminCommand::CreateFederatedCatalog { name, base_url, storage_location, auth_type, token, username, password, api_key, timeout } => handlers::handle_create_federated_catalog(&client, name, base_url, storage_location, auth_type, token, username, password, api_key, timeout).await?,
+            AdminCommand::ListFederatedCatalogs => handlers::handle_list_federated_catalogs(&client).await?,
+            AdminCommand::DeleteFederatedCatalog { name } => handlers::handle_delete_federated_catalog(&client, name).await?,
+            AdminCommand::TestFederatedCatalog { name } => handlers::handle_test_federated_catalog(&client, name).await?,
             AdminCommand::ListPermissions { role, user } => handlers::handle_list_permissions(&client, role, user).await?,
             AdminCommand::GrantPermission { username, action, resource } => handlers::handle_grant_permission(&client, username, action, resource).await?,
             AdminCommand::RevokePermission { role, action, resource } => handlers::handle_revoke_permission(&client, role, action, resource).await?,
@@ -193,6 +197,18 @@ async fn main() -> anyhow::Result<()> {
                                     },
                                     AdminCommand::DeleteCatalog { name } => {
                                         if let Err(e) = handlers::handle_delete_catalog(&client, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::CreateFederatedCatalog { name, base_url, storage_location, auth_type, token, username, password, api_key, timeout } => {
+                                        if let Err(e) = handlers::handle_create_federated_catalog(&client, name, base_url, storage_location, auth_type, token, username, password, api_key, timeout).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListFederatedCatalogs => {
+                                        if let Err(e) = handlers::handle_list_federated_catalogs(&client).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::DeleteFederatedCatalog { name } => {
+                                        if let Err(e) = handlers::handle_delete_federated_catalog(&client, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::TestFederatedCatalog { name } => {
+                                        if let Err(e) = handlers::handle_test_federated_catalog(&client, name).await { eprintln!("Error: {}", e); }
                                     },
                                     AdminCommand::ListPermissions { role, user } => {
                                         if let Err(e) = handlers::handle_list_permissions(&client, role, user).await { eprintln!("Error: {}", e); }

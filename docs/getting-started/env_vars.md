@@ -12,7 +12,8 @@ Pangolin supports the following environment variables for configuration:
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `DATABASE_URL` | Connection string for backend storage | - | Yes |
+| `DATABASE_URL` | Full connection string (e.g., `postgresql://...`, `mongodb://...`, `sqlite://...`). Primary driver for storage selection. | - | Yes |
+| `PANGOLIN_STORAGE_TYPE` | Legacy backend selector (falling back to `DATABASE_URL` if present). Options: `memory`, `postgres`, `mongo`, `sqlite`. | `memory` | No |
 
 **Supported Backends**:
 - **PostgreSQL**: `postgresql://user:password@host:port/database`
@@ -25,10 +26,12 @@ See [Backend Storage Documentation](../backend_storage/README.md) for detailed c
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `PANGOLIN_NO_AUTH` | Disable authentication (development only). Must be set to exactly `"true"` (case-insensitive) to enable. Any other value keeps auth enabled. | unset | No |
-| `PANGOLIN_JWT_SECRET` | Secret key for signing JWTs (min 32 chars) | - | For JWT auth |
-| `PANGOLIN_ROOT_USER` | Username for Root operations | - | For initial setup |
-| `PANGOLIN_ROOT_PASSWORD` | Password for Root operations | - | For initial setup |
+| `PANGOLIN_NO_AUTH` | Enable "Evaluation Mode" (disables JWT/Key checks, defaults to TenantAdmin in `default` tenant). Must be set to exactly `"true"` (case-insensitive) to enable. | `false` | No |
+| `PANGOLIN_JWT_SECRET` | Secret key for signing and verifying JWT tokens. | `default_secret` | For JWT auth |
+| `PANGOLIN_ADMIN_USER` | Auto-provisioned Tenant Admin for `default` tenant when `PANGOLIN_NO_AUTH=true`. | `tenant_admin` | No |
+| `PANGOLIN_ADMIN_PASSWORD`| Password for the auto-provisioned Tenant Admin. | `password123` | No |
+| `PANGOLIN_ROOT_USER` | Global Root User (enables Basic Auth and fallback login for system management). | `admin` | For initial setup |
+| `PANGOLIN_ROOT_PASSWORD` | Password for the Global Root User. | `password` | For initial setup |
 
 ## OAuth 2.0 Configuration
 

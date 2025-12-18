@@ -15,8 +15,8 @@ mod tests {
     use std::sync::Arc;
     use pangolin_store::{MemoryStore, CatalogStore};
     use uuid::Uuid;
-    use crate::user_handlers;
-    use crate::warehouse_handlers::{list_warehouses, create_warehouse, CreateWarehouseRequest, WarehouseResponse};
+    use pangolin_api::user_handlers;
+    use pangolin_api::warehouse_handlers::{list_warehouses, create_warehouse, CreateWarehouseRequest, WarehouseResponse};
 
     // Helper to get app router
     fn setup_app() -> Router {
@@ -83,6 +83,7 @@ mod tests {
                     name: "warehouse-a".to_string(),
                     use_sts: None,
                     storage_config: None,
+                    vending_strategy: None,
                 }).unwrap()))
                 .unwrap()
         ).await.unwrap();

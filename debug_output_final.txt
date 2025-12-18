@@ -1,0 +1,35 @@
+Traceback (most recent call last):
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/models.py", line 976, in json
+    return complexjson.loads(self.text, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/json/decoder.py", line 337, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/tests/scripts/debug_federation.py", line 57, in run_debug
+    token_a = create_tenant_admin(id_a, "admin_a_debug", "password")
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/tests/scripts/debug_federation.py", line 49, in create_tenant_admin
+    return resp.json()["token"]
+           ^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/models.py", line 980, in json
+    raise RequestsJSONDecodeError(e.msg, e.doc, e.pos)
+requests.exceptions.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+==================================================
+Setting up Tenants
+==================================================
+Logging in with admin / password
+Logging in with admin / password
+Logging in with admin / password
+User login failed: Invalid credentials
+Error: Expecting value: line 1 column 1 (char 0)

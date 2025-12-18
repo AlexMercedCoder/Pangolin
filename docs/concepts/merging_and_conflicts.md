@@ -2,6 +2,16 @@
 
 Pangolin supports advanced branching and merging capabilities for data catalogs, similar to Git but specialized for data lake table formats like Iceberg. This document explains the merge logic, conflict detection, and resolution strategies.
 
+## Overview
+
+Pangolin's Enhanced Merge Conflict Resolution system provides intelligent conflict detection and resolution when merging branches. Unlike simple merge operations that fail on any conflict, this system:
+
+- **Detects** conflicts automatically during merge operations
+- **Categorizes** conflicts by type (schema, deletion, metadata, data overlap)
+- **Tracks** merge operations with full lifecycle management
+- **Enables** manual resolution with multiple strategies
+- **Supports** automatic resolution for non-critical conflicts
+
 ## Merge Logic
 
 Pangolin uses a **3-Way Merge** algorithm when a common ancestor (base commit) can be detected. If no common ancestor is found (e.g., disjoint histories), it falls back to a 2-way merge (Source overwrites Target).
@@ -26,58 +36,101 @@ Pangolin detects conflicts by comparing modifications to assets in Source and Ta
 | **Deletion** | Deleted | Modified | **CONFLICT** (Deletion Conflict) |
 | **Resurrection**| Created | Created | **CONFLICT** (if different content) |
 
-### 3. Conflict Types
+## Conflict Types
 
-*   **SchemaChange**: Both branches modified the schema of the same table in incompatible ways (e.g., adding columns with same name but different types).
-*   **DataOverlap**: Both branches added data files to the same partition (optimistic concurrency failure).
-*   **MetadataConflict**: Conflicting updates to table properties or snapshots.
-*   **DeletionConflict**: One branch deleted an asset while the other modified it.
+### 1. Schema Change Conflicts
+Occur when the same table has different schemas in source and target branches.
+- **Example**: Both branches added columns independently or changed column types.
+- **Resolution**: Requires manual review to merge schema changes properly.
 
-## Manual Conflict Resolution
+### 2. Deletion Conflicts
+Occur when an asset is deleted in one branch but modified in another.
+- **Example**: Source deleted `temp_table` while Target added data to it.
+- **Resolution**: Choose to keep (with modifications) or delete the asset.
 
-When a merge operation enters the `Conflicted` state, it pauses. You must resolve each conflict before the merge can complete.
+### 3. Metadata Conflicts
+Occur when asset properties (tags, description, properties) differ between branches.
+- **Resolution**: Can often be auto-resolved for non-critical properties.
 
-### Resolution Strategies
+### 4. Data Overlap Conflicts
+Occur when the same partitions of a table are modified in both branches.
+- **Resolution**: Requires manual review to determine which version to keep.
 
-1.  **TakeSource**: Discard target changes and apply source version.
-    *   *Use case*: The feature branch is the source of truth.
-2.  **TakeTarget**: Discard source changes and keep target version.
-    *   *Use case*: The main branch has critical hotfixes that supersede the feature branch.
-3.  **Manual (JSON Patch)**: Supply a specific JSON value to serve as the resolved state.
-    *   *Use case*: Merging two schemas manually (e.g., keeping columns from both).
+## Merge Workflow
 
-### Resolution Workflow (API)
+### 1. Initiate Merge
+```http
+POST /api/v1/branches/merge
+{
+  "catalog": "production",
+  "source_branch": "feature-branch",
+  "target_branch": "main"
+}
+```
 
-1.  **List Conflicts**:
-    ```http
-    GET /api/v1/merge-operations/{operation_id}/conflicts
-    ```
+**Response (Conflicts Detected):**
+```json
+{
+  "status": "conflicted",
+  "operation_id": "550e8400-e29b...",
+  "conflicts": 3,
+  "message": "Merge has 3 conflicts that need resolution"
+}
+```
 
-2.  **Resolve Each Conflict**:
-    ```http
-    POST /api/v1/conflicts/{conflict_id}/resolve
-    {
-      "strategy": "TakeSource"
-    }
-    ```
-    OR
-    ```http
-    POST /api/v1/conflicts/{conflict_id}/resolve
-    {
-      "strategy": "Manual",
-      "resolved_value": { ...merged schema... }
-    }
-    ```
+### 2. List Conflicts
+```http
+GET /api/v1/merge-operations/{operation_id}/conflicts
+```
 
-3.  **Complete Merge**:
-    Once all conflicts are resolved:
-    ```http
-    POST /api/v1/merge-operations/{operation_id}/complete
-    ```
+### 3. Resolve Conflicts
+```http
+POST /api/v1/conflicts/{conflict_id}/resolve
+{
+  "strategy": "TakeSource",
+  "resolved_value": null
+}
+```
 
-## Automated Merging
+**Resolution Strategies:**
+- `TakeSource`: Use the source branch version.
+- `TakeTarget`: Use the target branch version.
+- `Manual`: Provide custom resolution (e.g., a merged schema) in `resolved_value`.
+- `AutoMerge`: Automatically merge non-conflicting changes.
 
-If no conflicts are detected during the initial check, Pangolin automatically:
-1.  Applies all Source changes to the Target branch.
-2.  Creates a new Merge Commit on the Target branch.
-3.  Updates the Target Branch head.
+### 4. Complete Merge
+After all conflicts are resolved:
+```http
+POST /api/v1/merge-operations/{operation_id}/complete
+```
+
+### 5. Abort Merge
+If you decide not to proceed:
+```http
+POST /api/v1/merge-operations/{operation_id}/abort
+```
+
+## Merge Operation Lifecycle
+
+```
+Pending → Conflicted → Resolving → Ready → Completed
+   ↓                                           ↑
+   └─────────────→ Aborted ←──────────────────┘
+```
+
+## Managing Merge Operations
+
+### List All Merge Operations
+```http
+GET /api/v1/catalogs/{catalog_name}/merge-operations
+```
+
+### Get Merge Operation Details
+```http
+GET /api/v1/merge-operations/{operation_id}
+```
+
+## Best Practices
+- **Merge Frequently**: Minimize divergence between branches.
+- **Review Thoroughly**: Schema and deletion conflicts can be destructive.
+- **Test After Merge**: Always validate data and schema after a complex merge.

@@ -6,14 +6,15 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use uuid::Uuid;
-use crate::auth::{Claims, Role};
+use crate::auth::Claims;
 use crate::iceberg_handlers::AppState;
+use pangolin_core::user::UserRole;
 
 #[derive(Deserialize)]
 pub struct GenerateTokenRequest {
     pub tenant_id: String,
     pub username: Option<String>,
-    pub roles: Option<Vec<Role>>,
+    pub roles: Option<Vec<String>>,
     pub expires_in_hours: Option<u64>,
 }
 
@@ -27,34 +28,71 @@ pub struct GenerateTokenResponse {
 /// Generate a JWT token for a tenant
 /// This endpoint allows generating tokens for testing and development
 pub async fn generate_token(
-    State(_store): State<AppState>,
+    State(store): State<AppState>,
     Json(payload): Json<GenerateTokenRequest>,
 ) -> impl IntoResponse {
     // Validate tenant_id is a valid UUID
-    let tenant_uuid = match Uuid::parse_str(&payload.tenant_id) {
+    let _tenant_uuid = match Uuid::parse_str(&payload.tenant_id) {
         Ok(uuid) => uuid,
         Err(_) => return (StatusCode::BAD_REQUEST, "Invalid tenant_id format").into_response(),
     };
     
-    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
     let expires_in = payload.expires_in_hours.unwrap_or(24);
-    let exp = chrono::Utc::now()
+    let now = chrono::Utc::now();
+    let exp = now
         .checked_add_signed(chrono::Duration::hours(expires_in as i64))
         .unwrap()
-        .timestamp() as usize;
+        .timestamp() as i64;
     
+    let username = payload.username.unwrap_or_else(|| "api-user".to_string());
+
+    // Map role strings to UserRole
+    // Default to lookup user role or TenantUser if not specified
+    let role = if let Some(roles) = &payload.roles {
+        if let Some(first_role) = roles.first() {
+            match first_role.as_str() {
+                "Root" | "root" => UserRole::Root,
+                "Admin" | "admin" | "TenantAdmin" | "tenant-admin" => UserRole::TenantAdmin,
+                _ => UserRole::TenantUser,
+            }
+        } else {
+            UserRole::TenantUser
+        }
+    } else {
+        // Try to lookup user
+        if let Ok(Some(user)) = store.get_user_by_username(&username).await {
+            tracing::info!("generate_token: Found user '{}' with role {:?} ({})", username, user.role, user.id);
+            user.role
+        } else {
+            tracing::warn!("generate_token: User '{}' not found, defaulting to TenantUser", username);
+            UserRole::TenantUser
+        }
+    };
+
+    // sub MUST be a UUID for to_session() to work
+    // If user exists, use their ID. Else generate one.
+    let user_id = if let Ok(Some(user)) = store.get_user_by_username(&username).await {
+        user.id
+    } else {
+        Uuid::new_v4()
+    };
+
     let claims = Claims {
-        sub: payload.username.unwrap_or_else(|| "api-user".to_string()),
-        exp,
+        sub: user_id.to_string(), 
+        jti: Some(Uuid::new_v4().to_string()),
+        username: username.clone(), 
         tenant_id: Some(payload.tenant_id.clone()),
-        roles: payload.roles.unwrap_or_else(|| vec![Role::User]),
+        role,
+        exp,
+        iat: now.timestamp(),
     };
     
     match encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())) {
         Ok(token) => {
             let response = GenerateTokenResponse {
                 token,
-                expires_at: chrono::DateTime::from_timestamp(exp as i64, 0)
+                expires_at: chrono::DateTime::from_timestamp(exp, 0)
                     .unwrap()
                     .to_rfc3339(),
                 tenant_id: payload.tenant_id,
@@ -69,7 +107,7 @@ pub async fn generate_token(
 
 use axum::extract::Path;
 use axum::Extension;
-use pangolin_core::user::{UserSession, UserRole};
+use pangolin_core::user::UserSession;
 use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use chrono::{Utc, Duration};

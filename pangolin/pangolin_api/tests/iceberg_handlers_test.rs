@@ -1,4 +1,4 @@
-use crate::iceberg_handlers::TableResponse;
+use pangolin_api::iceberg_handlers::TableResponse;
 use pangolin_core::iceberg_metadata::{Snapshot, TableMetadata};
 use serde_json::json;
 

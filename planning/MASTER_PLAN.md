@@ -1,6 +1,6 @@
 # Pangolin Master Plan & Outstanding Work
 
-**Last Updated**: 2025-12-17
+**Last Updated**: 2025-12-18
 **Status**: Consolidated from Audit & Cloud Strategy docs.
 
 This document serves as the **single source of truth** for remaining work on the Pangolin project, consolidating findings from the implementation audit and the cloud strategy roadmap.
@@ -83,15 +83,41 @@ These items addressed direct security and performance gaps identified in the aud
 
 ---
 
-## ☁️ Phase 3: Multi-Cloud Strategy
+## ✅ Phase 3: Multi-Cloud & Federation (COMPLETE)
 
-### 3.1 Credential Vending Expansion
-- **Goal**: Support Azure and GCP for native Iceberg access.
-- **Current State**: Only AWS S3 (STS/Static) is supported.
+**Status**: Core infrastructure, Federation, and AWS Vending completed and verified on 2025-12-18. Azure/GCP structured but pending SDK integration.
+
+### 3.1 Federated Catalogs ✅
+- **Current State**: ✅ **IMPLEMENTED AND VERIFIED**
+- **Goal**: Allow Pangolin to act as a proxy for other Iceberg REST catalogs.
 - **Tasks**:
-  - [ ] **Refactor Signer**: Update `Warehouse` config to support "Vending Strategy" selection.
-  - [ ] **Azure Implementation**: Implement `Signer` for `az://` paths using SAS Tokens (requires `azure_storage_blobs` crate).
-  - [ ] **GCP Implementation**: Implement `Signer` for `gs://` paths using Downscoped Credentials (requires `google-cloud-storage` crate).
+    - [x] **Proxy Implementation**: `FederatedCatalogProxy` handles request forwarding.
+    - [x] **Catalog Type**: Support for `Local` vs `Federated` catalogs in API.
+    - [x] **Verification**: Validated connectivity and 404 handling from remote catalogs via PyIceberg.
+    - [x] **Path Handling**: Fixed critical path resolution bug (relative vs absolute paths).
+    - [x] **Cross-Tenant Access**: Fixed federated catalog visibility by adding required `timeout_seconds` field to config.
+    - [x] **End-to-End Testing**: Verified Tenant A can successfully query Tenant B's data through federated catalogs.
+
+### 3.2 Credential Vending Expansion 🔄
+- **Goal**: Support AWS, Azure, and GCP for native Iceberg access.
+- **Current State**: AWS (STS & Static) Verified. Azure/GCP Structured but unverified.
+- **Tasks**:
+    - [x] **Refactor Signer**: Updated `Warehouse` config to support "Vending Strategy" selection.
+    - [x] **AWS Implementation**:
+        - ✅ **STS Vending**: Verified working with PyIceberg (Catalog C).
+        - ✅ **Static Vending**: Verified working with PyIceberg (Catalog A).
+        - ✅ **S3 Bucket Resolution**: Fixed bug where default `warehouse` bucket was used instead of configured bucket.
+    - [ ] **Azure Implementation**: Implement `Signer` for `az://` paths using SAS Tokens (requires `azure_storage_blobs` crate).
+    - [ ] **GCP Implementation**: Implement `Signer` for `gs://` paths using Downscoped Credentials (requires `google-cloud-storage` crate).
+
+### 3.3 Verification Results & Learnings
+- ✅ **AWS Credential Vending**: Confirmed that both `AwsSts` and `AwsStatic` strategies correctly vend tokens that PyIceberg can use for S3 IO.
+- ✅ **PyIceberg Branching**: Identified and fixed a client-side validation bug by using keyword arguments in `create_branch`.
+- ✅ **Federated Catalogs**: Successfully verified cross-tenant data access. Tenant A can query Tenant B's namespaces through federated catalogs.
+  - **Issue Found**: Missing `timeout_seconds` field in `federated_config` caused 422 validation errors.
+  - **Resolution**: Added required field to federated catalog creation payload.
+  - **Result**: `list_namespaces()` now returns `[('db_b',)]` as expected.
+- ⚠️ **S3 Configuration**: Ensure MinIO/S3 buckets explicitly exist. The system falls back to a default `warehouse` bucket if resolution fails or config is missing, which caused initial test failures.
 
 ---
 
@@ -100,13 +126,15 @@ These items addressed direct security and performance gaps identified in the aud
 ### 4.1 Ease of Access
 - **Goal**: Make authentication and documentation accessible.
 - **Tasks**:
-  - [ ] **Token Generation**: Implement easy generation of auth tokens from CLI and UI.
-  - [ ] **Documentation Links**: Add direct links to documentation in both UI and CLI.
+    - [ ] **Token Generation**: Implement easy generation of auth tokens from CLI and UI.
+    - [ ] **Documentation Links**: Add direct links to documentation in both UI and CLI.
+    - [ ] **Catalog Creation UI**: Ensure UI supports creating both `Local` and `Federated` catalogs with appropriate config fields.
 
 ### 4.2 UI Improvements
 - **Goal**: Clean up interface.
 - **Tasks**:
-  - [ ] **Remove Stats**: Remove "Total Users/Catalogs" boxes from the UI dashboard.
+    - [ ] **Remove Stats**: Remove "Total Users/Catalogs" boxes from the UI dashboard.
+    - [ ] **Live Verification**: Run E2E tests for UI features with PyIceberg and MinIO.
 
 ---
 
@@ -115,3 +143,30 @@ These items addressed direct security and performance gaps identified in the aud
 - **User CRUD**: Full RBAC implementation for User management.
 - **Deletion**: Federated Catalog deletion logic.
 - **Merge**: Merge base commit detection (3-way merge support).
+- **Phase 3: Federated Catalog Access** (2025-12-18): 
+  - ✅ Fixed credential vending for S3/MinIO access
+  - ✅ Resolved JWT token validation issues (secret mismatch)
+  - ✅ Implemented federation proxy logic in all Iceberg handlers
+  - ✅ Fixed permission listing (500/400 errors)
+  - ✅ Added unit tests for serialization and permission filtering
+  - ✅ E2E test (`test_cli_live.sh`) passing all 15 steps
+
+---
+
+## 🧪 Phase 5: Test Suite Maintenance
+
+### 5.1 Test Audit Findings (2025-12-18)
+- **Status**: Audit complete. 8 compilation errors identified.
+- **Primary Issues**:
+  - Outdated `Claims` struct usage (missing `username`, `jti`, `iat` fields)
+  - Missing `User` struct fields (`active`, `last_login`, `oauth_provider`, `mfa_enabled`)
+  - Deprecated `PermissionScope::System` variant
+  - Missing `Warehouse.vending_strategy` field
+
+### 5.2 Recommended Actions
+- **Priority 1**: Fix struct definitions in test files
+- **Priority 2**: Consolidate test files (move `src/*_test.rs` to `tests/` directory)
+- **Priority 3**: Add missing test coverage for federation proxy logic
+
+**Reference**: See [`test_audit_report.md`](file:///home/alexmerced/.gemini/antigravity/brain/a61bc4b8-f11a-4118-b176-848228ad3b68/test_audit_report.md) for full details.
+

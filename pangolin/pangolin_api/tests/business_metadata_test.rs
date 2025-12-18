@@ -12,15 +12,15 @@ use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use std::collections::HashMap;
 use uuid::Uuid;
-use crate::business_metadata_handlers::{
+use pangolin_api::business_metadata_handlers::{
     add_business_metadata, get_business_metadata, request_access, list_access_requests, update_access_request, get_access_request,
     AddMetadataRequest, CreateAccessRequestPayload, UpdateRequestStatus
 };
-use crate::auth_middleware::{auth_middleware, hash_password};
-use crate::auth::TenantId;
+use pangolin_api::auth_middleware::{auth_middleware, hash_password};
+use pangolin_api::auth::TenantId;
 use pangolin_core::business_metadata::RequestStatus;
 use serial_test::serial;
-use crate::tests_common::EnvGuard;
+use pangolin_api::tests_common::EnvGuard;
 
 #[tokio::test]
 #[serial]

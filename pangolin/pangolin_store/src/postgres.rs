@@ -1301,6 +1301,31 @@ impl CatalogStore for PostgresStore {
         Ok(perms)
     }
 
+    async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
+        let rows = sqlx::query(
+            "SELECT p.id, p.user_id, p.scope, p.actions, p.granted_by, p.granted_at 
+             FROM permissions p
+             JOIN users u ON p.user_id = u.id
+             WHERE u.tenant_id = $1"
+        )
+            .bind(tenant_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut perms = Vec::new();
+        for row in rows {
+            perms.push(Permission {
+                id: row.get("id"),
+                user_id: row.get("user_id"),
+                scope: serde_json::from_value(row.get("scope"))?,
+                actions: serde_json::from_value(row.get("actions"))?,
+                granted_by: row.get("granted_by"),
+                granted_at: row.get("granted_at"),
+            });
+        }
+        Ok(perms)
+    }
+
 
 }
 

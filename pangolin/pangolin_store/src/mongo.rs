@@ -942,6 +942,24 @@ impl CatalogStore for MongoStore {
         Ok(perms)
     }
 
+    async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
+        // 1. Get all user IDs for the tenant
+        let user_filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let user_cursor = self.users().find(user_filter).await?;
+        let users: Vec<User> = user_cursor.try_collect().await?;
+        let user_ids: Vec<mongodb::bson::Bson> = users.iter().map(|u| to_bson_uuid(u.id)).collect();
+
+        if user_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // 2. Get permissions for those users
+        let perm_filter = doc! { "user_id": { "$in": user_ids } };
+        let perm_cursor = self.permissions().find(perm_filter).await?;
+        let perms: Vec<Permission> = perm_cursor.try_collect().await?;
+        Ok(perms)
+    }
+
     // Maintenance Operations
     async fn expire_snapshots(&self, _tenant_id: Uuid, _catalog_name: &str, _branch: Option<String>, _namespace: Vec<String>, _table: String, _retention_ms: i64) -> Result<()> {
         Ok(())

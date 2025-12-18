@@ -547,7 +547,6 @@ impl CatalogStore for MemoryStore {
         self.commits.insert(key, commit);
         Ok(())
     }
-
     async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>> {
         let key = (tenant_id, commit_id);
         if let Some(c) = self.commits.get(&key) {
@@ -733,6 +732,20 @@ impl CatalogStore for MemoryStore {
             .filter(|p| p.value().user_id == user_id)
             .map(|p| p.value().clone())
             .collect())
+    }
+
+    async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
+        let mut permissions = Vec::new();
+        for entry in self.permissions.iter() {
+            let perm = entry.value();
+            // Look up user to check tenant
+            if let Some(user_entry) = self.users.get(&perm.user_id) {
+                if user_entry.value().tenant_id == Some(tenant_id) {
+                    permissions.push(perm.clone());
+                }
+            }
+        }
+        Ok(permissions)
     }
 
     async fn upsert_business_metadata(&self, metadata: pangolin_core::business_metadata::BusinessMetadata) -> Result<()> {
@@ -1166,8 +1179,11 @@ impl Signer for MemoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pangolin_core::user::User;
+    use pangolin_core::permission::Permission;
     use pangolin_core::model::{Tenant, Warehouse, AssetType};
     use std::collections::HashMap;
+    use chrono::Utc;
 
     #[tokio::test]
     async fn test_tenant_operations() {
@@ -1245,5 +1261,82 @@ mod tests {
     async fn test_asset_update_consistency() {
         let store = MemoryStore::new();
         crate::tests::test_asset_update_consistency(&store).await;
+    }
+
+    #[tokio::test]
+    async fn test_list_permissions_filtering() {
+        use pangolin_core::permission::{Action, PermissionScope};
+        use std::collections::HashSet;
+
+        let store = MemoryStore::new();
+        let tenant1 = Uuid::new_v4();
+        let tenant2 = Uuid::new_v4();
+        
+        // Create users for tenants
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+        
+        let u1 = User {
+            id: user1,
+            username: "user1".to_string(),
+            email: "user1@example.com".to_string(),
+            password_hash: Some("hash".to_string()),
+            role: pangolin_core::user::UserRole::TenantUser,
+            tenant_id: Some(tenant1),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login: None,
+            active: true,
+            oauth_provider: None,
+            oauth_subject: None,
+        };
+        store.create_user(u1).await.unwrap();
+
+        let u2 = User {
+            id: user2,
+            username: "user2".to_string(),
+            email: "user2@example.com".to_string(),
+            password_hash: Some("hash".to_string()),
+            role: pangolin_core::user::UserRole::TenantUser,
+            tenant_id: Some(tenant2),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_login: None,
+            active: true,
+            oauth_provider: None,
+            oauth_subject: None,
+        };
+        store.create_user(u2).await.unwrap();
+
+        // Grant permissions
+        let p1 = Permission::new(
+            user1,
+            PermissionScope::Catalog { catalog_id: Uuid::new_v4() },
+            HashSet::from([Action::Read]),
+            Uuid::new_v4(),
+        );
+        store.create_permission(p1.clone()).await.unwrap();
+
+        let p2 = Permission::new(
+            user2,
+            PermissionScope::Catalog { catalog_id: Uuid::new_v4() },
+            HashSet::from([Action::Write]),
+            Uuid::new_v4(),
+        );
+        store.create_permission(p2.clone()).await.unwrap();
+
+        // Test tenant filtering
+        let perms_t1 = store.list_permissions(tenant1).await.unwrap();
+        assert_eq!(perms_t1.len(), 1);
+        assert_eq!(perms_t1[0].user_id, user1);
+
+        let perms_t2 = store.list_permissions(tenant2).await.unwrap();
+        assert_eq!(perms_t2.len(), 1);
+        assert_eq!(perms_t2[0].user_id, user2);
+
+        // Test user filtering
+        let perms_u1 = store.list_user_permissions(user1).await.unwrap();
+        assert_eq!(perms_u1.len(), 1);
+        assert_eq!(perms_u1[0].id, p1.id);
     }
 }

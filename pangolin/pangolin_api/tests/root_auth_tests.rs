@@ -11,10 +11,10 @@ use pangolin_store::MemoryStore;
 use pangolin_store::CatalogStore;
 // Handlers
 // Handlers
-use crate::user_handlers::{login, LoginRequest, get_app_config};
-use crate::warehouse_handlers::create_warehouse;
-use crate::pangolin_handlers::create_catalog;
-use crate::tests_common::EnvGuard;
+use pangolin_api::user_handlers::{login, LoginRequest, get_app_config};
+use pangolin_api::warehouse_handlers::create_warehouse;
+use pangolin_api::pangolin_handlers::create_catalog;
+use pangolin_api::tests_common::EnvGuard;
 
 use serial_test::serial;
 

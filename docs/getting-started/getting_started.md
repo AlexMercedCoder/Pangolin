@@ -8,7 +8,7 @@ The fastest way to get started is using NO_AUTH mode for testing:
 
 1. **Start the server:**
    ```bash
-   PANGOLIN_NO_AUTH=1 cargo run --bin pangolin_api
+   PANGOLIN_NO_AUTH=true cargo run --bin pangolin_api
    ```
 
 2. **Test with PyIceberg:**
@@ -56,7 +56,7 @@ The fastest way to get started is using NO_AUTH mode for testing:
     
     **For Testing (NO_AUTH mode):**
     ```bash
-    PANGOLIN_NO_AUTH=1 cargo run --bin pangolin_api
+    PANGOLIN_NO_AUTH=true cargo run --bin pangolin_api
     ```
     
     **For Production:**

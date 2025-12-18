@@ -171,7 +171,7 @@ pub async fn handle_create_user(client: &PangolinClient, username: String, email
         "email": email,
         "password": password,
         "role": role.unwrap_or_else(|| "tenant-user".to_string()),
-        "tenant-id": tenant_id_opt.or(client.config.tenant_id.clone())
+        "tenant_id": tenant_id_opt.or(client.config.tenant_id.clone())
     });
 
     let res = client.post("/api/v1/users", &payload).await?; // Assuming endpoint is /api/v1/users based on search
@@ -326,8 +326,16 @@ pub async fn handle_delete_catalog(client: &PangolinClient, name: String) -> Res
 pub async fn handle_list_permissions(client: &PangolinClient, role: Option<String>, user: Option<String>) -> Result<(), CliError> {
     // Construct query parameters
     let mut query = String::new();
-    if let Some(r) = role { query.push_str(&format!("role={}&", r)); }
-    if let Some(u) = user { query.push_str(&format!("user={}&", u)); }
+    
+    if let Some(r_name) = role { 
+        let role_id = resolve_role_id(client, &r_name).await?;
+        query.push_str(&format!("role={}&", role_id)); 
+    }
+    
+    if let Some(u_name) = user { 
+        let user_id = resolve_user_id(client, &u_name).await?;
+        query.push_str(&format!("user={}&", user_id)); 
+    }
     
     let res = client.get(&format!("/api/v1/permissions?{}", query)).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
@@ -340,6 +348,19 @@ pub async fn handle_list_permissions(client: &PangolinClient, role: Option<Strin
     ]).collect();
     print_table(vec!["Role", "Action", "Resource"], rows);
     Ok(())
+}
+
+async fn resolve_role_id(client: &PangolinClient, role_name: &str) -> Result<String, CliError> {
+    let res = client.get("/api/v1/roles").await?;
+    if !res.status().is_success() { return Err(CliError::ApiError(format!("Failed to list roles: {}", res.status()))); }
+    let roles: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    if let Some(r) = roles.iter().find(|r| r["name"].as_str() == Some(role_name)) {
+        if let Some(id) = r["id"].as_str() {
+            return Ok(id.to_string());
+        }
+    }
+    Err(CliError::ApiError(format!("Role '{}' not found", role_name)))
 }
 
 async fn resolve_user_id(client: &PangolinClient, username: &str) -> Result<String, CliError> {
@@ -514,5 +535,177 @@ pub async fn handle_set_metadata(client: &PangolinClient, entity_type: String, e
     let res = client.post(&format!("/api/v1/metadata/{}/{}", entity_type, entity_id), &body).await?;
      if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     println!("✅ Metadata set.");
+    Ok(())
+}
+// --- Federated Catalogs ---
+pub async fn handle_create_federated_catalog(
+    client: &PangolinClient,
+    name: String,
+    base_url: String,
+    storage_location: String,
+    auth_type: String,
+    token: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    api_key: Option<String>,
+    timeout: u32,
+) -> Result<(), CliError> {
+    if client.config.tenant_id.is_none() {
+        return Err(CliError::ApiError("Root user cannot create federated catalogs. Please login as Tenant Admin.".to_string()));
+    }
+
+    // Build credentials based on auth_type
+    let credentials = match auth_type.as_str() {
+        "BearerToken" => {
+            let t = token.ok_or_else(|| CliError::ApiError("--token required for BearerToken auth".to_string()))?;
+            serde_json::json!({ "token": t })
+        },
+        "BasicAuth" => {
+            let u = username.ok_or_else(|| CliError::ApiError("--username required for BasicAuth".to_string()))?;
+            let p = password.ok_or_else(|| CliError::ApiError("--password required for BasicAuth".to_string()))?;
+            serde_json::json!({ "username": u, "password": p })
+        },
+        "ApiKey" => {
+            let k = api_key.ok_or_else(|| CliError::ApiError("--api-key required for ApiKey auth".to_string()))?;
+            serde_json::json!({ "api_key": k })
+        },
+        "None" => serde_json::json!({}),
+        _ => return Err(CliError::ApiError(format!("Invalid auth_type: {}. Use None, BasicAuth, BearerToken, or ApiKey", auth_type))),
+    };
+
+    let body = serde_json::json!({
+        "name": name,
+        "catalog_type": "Federated",
+        "storage_location": storage_location,
+        "federated_config": {
+            "base_url": base_url,
+            "auth_type": auth_type,
+            "credentials": credentials,
+            "timeout_seconds": timeout
+        }
+    });
+
+    let res = client.post("/api/v1/catalogs", &body).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("{} - {}", status, text)));
+    }
+
+    println!("✅ Federated catalog '{}' created successfully!", name);
+    println!("   Base URL: {}", base_url);
+    println!("   Auth Type: {}", auth_type);
+    Ok(())
+}
+
+pub async fn handle_list_federated_catalogs(client: &PangolinClient) -> Result<(), CliError> {
+    let res = client.get("/api/v1/catalogs").await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Error: {}", res.status())));
+    }
+    
+    let catalogs: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    // Filter for federated catalogs
+    let federated: Vec<&Value> = catalogs
+        .iter()
+        .filter(|c| c["catalog_type"].as_str() == Some("Federated"))
+        .collect();
+    
+    if federated.is_empty() {
+        println!("No federated catalogs found.");
+        return Ok(());
+    }
+    
+    let rows: Vec<Vec<String>> = federated.iter().map(|c| {
+        let config = &c["federated_config"];
+        vec![
+            c["name"].as_str().unwrap_or("-").to_string(),
+            config["base_url"].as_str().unwrap_or("-").to_string(),
+            config["auth_type"].as_str().unwrap_or("-").to_string(),
+        ]
+    }).collect();
+    
+    print_table(vec!["Name", "Base URL", "Auth Type"], rows);
+    Ok(())
+}
+
+pub async fn handle_delete_federated_catalog(client: &PangolinClient, name: String) -> Result<(), CliError> {
+    use dialoguer::Confirm;
+    
+    if !Confirm::new()
+        .with_prompt(format!("Are you sure you want to delete federated catalog '{}'?", name))
+        .interact()
+        .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+    {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    let res = client.delete(&format!("/api/v1/catalogs/{}", name)).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("{} - {}", status, text)));
+    }
+    
+    println!("✅ Federated catalog '{}' deleted successfully!", name);
+    Ok(())
+}
+
+pub async fn handle_test_federated_catalog(client: &PangolinClient, name: String) -> Result<(), CliError> {
+    println!("Testing connection to federated catalog '{}'...\n", name);
+    
+    // Test 1: Get catalog config
+    print!("1. Checking catalog configuration... ");
+    let res = client.get(&format!("/api/v1/catalogs")).await?;
+    if !res.status().is_success() {
+        println!("❌");
+        return Err(CliError::ApiError(format!("Failed to fetch catalogs: {}", res.status())));
+    }
+    
+    let catalogs: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    let catalog = catalogs.iter().find(|c| c["name"].as_str() == Some(&name));
+    
+    if catalog.is_none() {
+        println!("❌");
+        return Err(CliError::ApiError(format!("Catalog '{}' not found", name)));
+    }
+    println!("✅");
+    
+    // Test 2: List namespaces
+    print!("2. Testing namespace listing... ");
+    let res = client.get(&format!("/v1/{}/namespaces", name)).await?;
+    
+    if !res.status().is_success() {
+        println!("❌");
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("Failed to list namespaces: {} - {}", status, text)));
+    }
+    
+    let namespaces: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    let ns_list = namespaces["namespaces"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_array())
+                .filter_map(|arr| arr.first())
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    
+    println!("✅");
+    
+    // Summary
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("✅ Federated catalog '{}' is working correctly!", name);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Namespaces accessible: {:?}", ns_list);
+    
     Ok(())
 }

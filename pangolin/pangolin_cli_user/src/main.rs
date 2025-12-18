@@ -41,17 +41,21 @@ async fn main() -> anyhow::Result<()> {
     // Non-interactive mode
     if let Some(cmd) = args.command {
         match cmd {
-            UserCommand::Login { username, password } => handlers::handle_login(&mut client, username, password).await?,
+            UserCommand::Login { username, password } => {
+                handlers::handle_login(&mut client, username, password).await?;
+                config_manager.save(&client.config).map_err(|e| anyhow::anyhow!("Failed to save config: {}", e))?;
+            },
             UserCommand::ListCatalogs => handlers::handle_list_catalogs(&client).await?,
             UserCommand::Search { query } => handlers::handle_search(&client, query).await?,
             UserCommand::GenerateCode { language, table } => handlers::handle_generate_code(&client, language, table).await?,
             UserCommand::ListBranches { catalog } => handlers::handle_list_branches(&client, catalog).await?,
-            UserCommand::CreateBranch { catalog, name, from } => handlers::handle_create_branch(&client, catalog, name, from).await?,
+            UserCommand::CreateBranch { catalog, name, from, branch_type, assets } => handlers::handle_create_branch(&client, catalog, name, from, branch_type, assets).await?,
             UserCommand::MergeBranch { catalog, source, target } => handlers::handle_merge_branch(&client, catalog, source, target).await?,
             UserCommand::ListTags { catalog } => handlers::handle_list_tags(&client, catalog).await?,
             UserCommand::CreateTag { catalog, name, commit_id } => handlers::handle_create_tag(&client, catalog, name, commit_id).await?,
             UserCommand::ListRequests => handlers::handle_list_requests(&client).await?,
             UserCommand::RequestAccess { resource, role, reason } => handlers::handle_request_access(&client, resource, role, reason).await?,
+            UserCommand::GetToken { description, expires_in } => handlers::handle_get_token(&client, description, expires_in).await?,
             _ => println!("Command not available in non-interactive mode."),
         }
         return Ok(());
@@ -129,8 +133,8 @@ async fn main() -> anyhow::Result<()> {
                                     UserCommand::ListBranches { catalog } => {
                                         if let Err(e) = handlers::handle_list_branches(&client, catalog).await { eprintln!("Error: {}", e); }
                                     },
-                                    UserCommand::CreateBranch { catalog, name, from } => {
-                                        if let Err(e) = handlers::handle_create_branch(&client, catalog, name, from).await { eprintln!("Error: {}", e); }
+                                    UserCommand::CreateBranch { catalog, name, from, branch_type, assets } => {
+                                        if let Err(e) = handlers::handle_create_branch(&client, catalog, name, from, branch_type, assets).await { eprintln!("Error: {}", e); }
                                     },
                                     UserCommand::MergeBranch { catalog, source, target } => {
                                         if let Err(e) = handlers::handle_merge_branch(&client, catalog, source, target).await { eprintln!("Error: {}", e); }
@@ -146,6 +150,9 @@ async fn main() -> anyhow::Result<()> {
                                     },
                                     UserCommand::RequestAccess { resource, role, reason } => {
                                         if let Err(e) = handlers::handle_request_access(&client, resource, role, reason).await { eprintln!("Error: {}", e); }
+                                    },
+                                    UserCommand::GetToken { description, expires_in } => {
+                                        if let Err(e) = handlers::handle_get_token(&client, description, expires_in).await { eprintln!("Error: {}", e); }
                                     }
                                 }
                             },

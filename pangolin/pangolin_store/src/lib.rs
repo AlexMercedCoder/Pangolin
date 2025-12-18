@@ -150,6 +150,9 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn list_user_permissions(&self, _user_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
+    async fn list_permissions(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 
     // Business Metadata Operations
     async fn upsert_business_metadata(&self, _metadata: pangolin_core::business_metadata::BusinessMetadata) -> Result<()> {

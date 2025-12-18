@@ -10,20 +10,22 @@ mod tests {
     use pangolin_store::memory::MemoryStore;
     use pangolin_store::CatalogStore;
     use uuid::Uuid;
-    use pangolin_api::{app, auth::{Claims, Role}};
+    use pangolin_api::auth_middleware::Claims;
     use std::sync::Arc;
-    use tokio::sync::RwLock;
     use jsonwebtoken::{encode, EncodingKey, Header};
     use chrono::Utc;
     use std::collections::HashMap;
 
     fn create_test_token(tenant_id: &str) -> String {
-        let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+        let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
         let claims = Claims {
-            sub: "test-user".to_string(),
+            sub: uuid::Uuid::new_v4().to_string(),
+            jti: Some(uuid::Uuid::new_v4().to_string()),
+            username: "test-user".to_string(),
             tenant_id: Some(tenant_id.to_string()),
-            roles: vec![Role::User],
-            exp: (Utc::now().timestamp() + 3600) as usize,
+            role: pangolin_core::user::UserRole::TenantUser,
+            exp: chrono::Utc::now().timestamp() + 3600,
+            iat: chrono::Utc::now().timestamp(),
         };
 
         encode(
@@ -56,6 +58,7 @@ mod tests {
             name: "test_warehouse".to_string(),
             use_sts: false,
             storage_config,
+            vending_strategy: None,
         };
         store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
 

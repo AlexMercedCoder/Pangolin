@@ -1341,6 +1341,31 @@ impl CatalogStore for SqliteStore {
         Ok(perms)
     }
 
+    async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
+        let rows = sqlx::query(
+            "SELECT p.id, p.user_id, p.scope, p.actions, p.granted_by, p.granted_at 
+             FROM permissions p
+             JOIN users u ON p.user_id = u.id
+             WHERE u.tenant_id = $1"
+        )
+            .bind(tenant_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut perms = Vec::new();
+        for row in rows {
+            perms.push(Permission {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
+                scope: serde_json::from_str(&row.get::<String, _>("scope"))?,
+                actions: serde_json::from_str(&row.get::<String, _>("actions"))?,
+                granted_by: Uuid::parse_str(&row.get::<String, _>("granted_by"))?,
+                granted_at: row.get("granted_at"),
+            });
+        }
+        Ok(perms)
+    }
+
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;

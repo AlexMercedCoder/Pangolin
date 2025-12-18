@@ -46,13 +46,13 @@ curl -X POST /api/v1/branches \
 ```
 
 ### 2. Working on a Branch
-To read or write to a specific branch, append the `@branchName` suffix to the table or namespace in your Iceberg client or API call.
+To read or write to a specific branch, append the `@branchName` suffix to the table name in your Iceberg client or API call.
 
 **API Example:**
-`POST /v1/.../tables/users?branch=dev`
+`GET /v1/{prefix}/namespaces/{ns}/tables/my_table@dev`
 
-**SQL Example (if supported by engine):**
-`SELECT * FROM pangolin.data_team.users.branch_dev`
+**SQL Example:**
+`SELECT * FROM catalog.db."users@dev"`
 
 ### 3. Merging
 - **Merge**: Integrate changes from a feature branch back into `main`.

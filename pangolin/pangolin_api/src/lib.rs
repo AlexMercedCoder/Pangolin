@@ -14,8 +14,7 @@ pub mod asset_handlers;
 pub mod auth;
 pub mod signing_handlers;
 
-#[cfg(test)]
-mod isolation_test;
+
 pub mod token_handlers;
 pub mod user_handlers;
 pub mod oauth_handlers;
@@ -28,31 +27,21 @@ pub mod federated_proxy;
 pub mod federated_catalog_handlers;
 pub mod tests_common;
 
-#[cfg(test)]
-pub mod auth_test;
 
-#[cfg(test)]
-pub mod business_metadata_test;
+
+
 
 pub mod permission_handlers; // Registered new module
 pub mod service_user_handlers; // Service user management
 pub mod cleanup_job; // Token cleanup background job
 
-#[cfg(test)]
-#[path = "iceberg_handlers_test.rs"]
-mod iceberg_handlers_test;
 
-#[cfg(test)]
-#[cfg(test)]
-#[path = "signing_handlers_test.rs"]
-mod signing_handlers_test;
 
-#[cfg(test)]
-#[cfg(test)]
-mod root_auth_tests;
 
-#[cfg(test)]
-mod rbac_integration_test;
+
+
+
+
 
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
     let cors = CorsLayer::new()
@@ -148,7 +137,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/roles", post(permission_handlers::create_role).get(permission_handlers::list_roles))
         .route("/api/v1/roles/:id", get(permission_handlers::get_role).put(permission_handlers::update_role).delete(permission_handlers::delete_role))
         // Permission Management
-        .route("/api/v1/permissions", post(permission_handlers::grant_permission)) 
+        .route("/api/v1/permissions", post(permission_handlers::grant_permission).get(permission_handlers::list_permissions))
         .route("/api/v1/permissions/:id", delete(permission_handlers::revoke_permission))
         // User Role Assignment
         .route("/api/v1/users/:id/roles", post(permission_handlers::assign_role).get(permission_handlers::get_user_roles))

@@ -83,6 +83,46 @@ pub enum AdminCommand {
     DeleteCatalog {
         name: String,
     },
+    // --- Federated Catalogs ---
+    /// Create a federated catalog that proxies to another Iceberg REST catalog
+    CreateFederatedCatalog {
+        /// Name of the federated catalog
+        name: String,
+        /// Base URL of the remote catalog (e.g., http://remote:8080/v1/catalog_name)
+        #[arg(long)]
+        base_url: String,
+        /// Storage location (required even for federated catalogs)
+        #[arg(long)]
+        storage_location: String,
+        /// Authentication type: None, BasicAuth, BearerToken, ApiKey
+        #[arg(long, default_value = "None")]
+        auth_type: String,
+        /// Bearer token (required if auth_type is BearerToken)
+        #[arg(long)]
+        token: Option<String>,
+        /// Username (required if auth_type is BasicAuth)
+        #[arg(long)]
+        username: Option<String>,
+        /// Password (required if auth_type is BasicAuth)
+        #[arg(long)]
+        password: Option<String>,
+        /// API key (required if auth_type is ApiKey)
+        #[arg(long)]
+        api_key: Option<String>,
+        /// Timeout in seconds
+        #[arg(long, default_value = "30")]
+        timeout: u32,
+    },
+    /// List all federated catalogs
+    ListFederatedCatalogs,
+    /// Delete a federated catalog
+    DeleteFederatedCatalog {
+        name: String,
+    },
+    /// Test connectivity to a federated catalog
+    TestFederatedCatalog {
+        name: String,
+    },
     // --- Governance: Permissions ---
     ListPermissions {
         #[arg(long)]

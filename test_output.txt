@@ -1,0 +1,107 @@
+==========================================
+Pangolin CLI Live Test
+==========================================
+
+[0;34m===> Step 1: Login as Root Admin[0m
+✅ Logged in successfully as admin
+[0;32m✓ Root admin logged in[0m
+[0;34m===> Step 2: Creating Tenants[0m
+✅ Tenant 'tenant_alpha' created successfully.
+✅ Tenant 'tenant_beta' created successfully.
+[0;32m✓ Created tenant_alpha and tenant_beta[0m
+[0;34m===> Step 3: Setting up Tenant Alpha Infrastructure[0m
+✅ Logged in successfully as admin_alpha
+✅ Warehouse 'warehouse_alpha' created.
+✅ Catalog 'catalog_alpha' created.
+[0;32m✓ Created warehouse_alpha and catalog_alpha[0m
+[0;34m===> Step 4: Creating Users in Tenant Alpha[0m
+✅ User 'alice_alpha' created.
+✅ User 'bob_alpha' created.
+[0;32m✓ Created alice_alpha and bob_alpha[0m
+[0;34m===> Step 5: Granting Permissions to Alice[0m
+✅ Permission granted to user 'alice_alpha' on 'catalog:catalog_alpha'
+[0;32m✓ Granted read/write/branching permissions to alice_alpha on catalog_alpha[0m
+[0;34m===> Step 6: Setting up Tenant Beta Infrastructure[0m
+✅ Logged in successfully as admin_beta
+✅ Warehouse 'warehouse_beta' created.
+✅ Catalog 'catalog_beta' created.
+[0;32m✓ Created warehouse_beta and catalog_beta[0m
+[0;34m===> Step 7: Testing Token Generation[0m
+[1;33mℹ Logging in as alice_alpha...[0m
+DEBUG: Login Output: ✅ Logged in successfully as alice_alpha
+[0;32m✓ Token generated successfully[0m
+[1;33mℹ Token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0Y...[0m
+DEBUG: Token Payload:
+{"sub":"4b8bdc0f-38b1-4148-af1a-5221f0981584","jti":"c5f46b13-d459-4abf-9535-fd8bdf91df85","username":"alice_alpha","tenant_id":"8d56f591-1e98-484d-97c2-fa158265a209","role":"tenant-user","exp":1768659574,"iat":1766067574}
+[0;34m===> Step 8: Testing Federated Catalog Creation[0m
+[1;33mℹ Generating token for admin_beta...[0m
+✅ Logged in successfully as admin_beta
+DEBUG: beta token output: 
+✅ Token generated successfully!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Token: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJlNGUzODY0NC0yYzExLTRiOGEtOGM2Mi01ZWFjNmU1YjFiNWMiLCJqdGkiOiI5Yzk2ODc0Ny0yZjE2LTRiOGUtODRmYi1lYjE5OTA3NTRiNzkiLCJ1c2VybmFtZSI6ImFkbWluX2JldGEiLCJ0ZW5hbnRfaWQiOiI5ZmVhZTkwMy04NjcwLTRiNmMtOTk5Yi0zYmVhMWRmZTUzYmEiLCJyb2xlIjoidGVuYW50LWFkbWluIiwiZXhwIjoxNzY4NjU5NTc1LCJpYXQiOjE3NjYwNjc1NzV9.K7N6y89E2t3ht8XjpWZQMQDb72FNv2xNkZiBNA7heus
+Expires: 2026-01-17T14:19:35+00:00
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  Save this token securely. It will not be shown again.
+💡 Use this token with PyIceberg:
+   catalog = load_catalog('my_catalog', uri='...', token='<TOKEN>')
+[1;33mℹ Generated Beta Token: eyJ0eXAiOi...[0m
+[1;33mℹ Switching back to admin_alpha...[0m
+✅ Logged in successfully as admin_alpha
+✅ Federated catalog 'fed_catalog_beta' created successfully!
+   Base URL: http://localhost:8080/v1/catalog_beta
+   Auth Type: BearerToken
+[0;32m✓ Created federated catalog fed_catalog_beta[0m
+[0;34m===> Step 9: Testing Federated Catalog Operations[0m
++------------------+---------------------------------------+-------------+
+| Name             | Base URL                              | Auth Type   |
++------------------+---------------------------------------+-------------+
+| fed_catalog_beta | http://localhost:8080/v1/catalog_beta | BearerToken |
++------------------+---------------------------------------+-------------+
+Testing connection to federated catalog 'fed_catalog_beta'...
+
+1. Checking catalog configuration... ✅
+2. Testing namespace listing... ✅
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Federated catalog 'fed_catalog_beta' is working correctly!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Namespaces accessible: []
+[0;32m✓ Federated catalog test completed[0m
+[0;34m===> Step 10: Testing Enhanced Branching[0m
+✅ Logged in successfully as alice_alpha
+✅ Branch 'feature-branch-1' created.
+   Type: feature
+[1;33mℹ Creating experiment branch (partial branching will be tested after table creation)[0m
++------------------+-------------+
+| Name             | Head Commit |
++------------------+-------------+
+| feature-branch-1 | -           |
++------------------+-------------+
+[0;32m✓ Enhanced branching tested[0m
+[0;34m===> Step 11: Creating PyIceberg Test Script[0m
+[0;32m✓ PyIceberg test script created[0m
+[0;34m===> Step 12: Running PyIceberg Integration Test[0m
+✓ Connected to catalog_alpha
+✓ Created namespace test_ns
+✓ Created table test_ns.test_table
+✓ Wrote data to table
+✓ Read 3 rows from table
+pyarrow.Table
+id: int64
+name: string
+----
+id: [[1,2,3]]
+name: [["Alice","Bob","Charlie"]]
+
+✅ All PyIceberg operations successful!
+[0;32m✓ PyIceberg integration test passed[0m
+[0;34m===> Step 13: Testing Partial Branching[0m
+✅ Branch 'experiment-branch-1' created.
+   Type: experiment
+   Assets: test_table
+[0;32m✓ Partial branching tested[0m
+[0;34m===> Step 14: Testing Permission Management[0m
+✅ Logged in successfully as admin_alpha
+Error: API Request Failed: Error: 405 Method Not Allowed

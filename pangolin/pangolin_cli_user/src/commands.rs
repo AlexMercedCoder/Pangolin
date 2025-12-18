@@ -44,6 +44,12 @@ pub enum UserCommand {
         name: String,
         #[arg(long)]
         from: Option<String>,
+        /// Branch type: main, feature, or experiment
+        #[arg(long)]
+        branch_type: Option<String>,
+        /// Comma-separated list of assets for partial branching
+        #[arg(long)]
+        assets: Option<String>,
     },
     MergeBranch {
         #[arg(short, long)]
@@ -72,6 +78,16 @@ pub enum UserCommand {
         role: String,
         #[arg(long)]
         reason: String,
+    },
+    // --- Token Generation ---
+    /// Generate a JWT token for automation/scripts
+    GetToken {
+        /// Description of what this token will be used for
+        #[arg(short, long)]
+        description: String,
+        /// Token expiration in days (default: 90)
+        #[arg(long, default_value = "90")]
+        expires_in: u32,
     },
     /// Exit the REPL
     Exit,

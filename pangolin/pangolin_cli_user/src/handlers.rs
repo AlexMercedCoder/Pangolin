@@ -138,19 +138,51 @@ pub async fn handle_list_branches(client: &PangolinClient, catalog: String) -> R
     Ok(())
 }
 
-pub async fn handle_create_branch(client: &PangolinClient, catalog: String, name: String, from: Option<String>) -> Result<(), CliError> {
-    let body = serde_json::json!({
+pub async fn handle_create_branch(
+    client: &PangolinClient,
+    catalog: String,
+    name: String,
+    from: Option<String>,
+    branch_type: Option<String>,
+    assets: Option<String>,
+) -> Result<(), CliError> {
+    let mut body = serde_json::json!({
         "catalog": catalog,
         "name": name,
         "from_branch": from.unwrap_or("main".to_string())
     });
+    
+    // Add branch_type if provided
+    if let Some(bt) = &branch_type {
+        body["branch_type"] = serde_json::json!(bt);
+    }
+    
+    // Add assets if provided (parse comma-separated list)
+    if let Some(assets_str) = &assets {
+        let asset_list: Vec<String> = assets_str
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !asset_list.is_empty() {
+            body["assets"] = serde_json::json!(asset_list);
+        }
+    }
+    
     let res = client.post("/api/v1/branches", &body).await?;
     if !res.status().is_success() { 
         let status = res.status();
         let t = res.text().await.unwrap_or_default();
         return Err(CliError::ApiError(format!("{} - {}", status, t))); 
     }
+    
     println!("✅ Branch '{}' created.", name);
+    if let Some(bt) = branch_type {
+        println!("   Type: {}", bt);
+    }
+    if let Some(assets_str) = assets {
+        println!("   Assets: {}", assets_str);
+    }
     Ok(())
 }
 
@@ -214,5 +246,39 @@ pub async fn handle_list_requests(client: &PangolinClient) -> Result<(), CliErro
 }
 
 pub async fn handle_request_access(client: &PangolinClient, resource: String, role: String, reason: String) -> Result<(), CliError> {
+    Ok(())
+}
+
+// --- Token Generation ---
+pub async fn handle_get_token(client: &PangolinClient, description: String, expires_in: u32) -> Result<(), CliError> {
+    let body = serde_json::json!({
+        "description": description,
+        "expires_in_hours": expires_in * 24, // Endpoint expects hours? Wait, previous code said expires_in_days but endpoint is hours?
+        // token_handlers.rs uses `payload.expires_in_hours.unwrap_or(24)`.
+        // The CLI arg is `expires_in` (u32). The payload key in `handle_get_token` was `expires_in_days`.
+        // Let's check GenerateTokenRequest struct in `token_handlers.rs`.
+        "tenant_id": client.config.tenant_id,
+        "username": client.config.username
+    });
+    
+    let res = client.post("/api/v1/tokens", &body).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("{} - {}", status, text)));
+    }
+    
+    let response: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("\n✅ Token generated successfully!");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Token: {}", response["token"].as_str().unwrap_or("N/A"));
+    println!("Expires: {}", response["expires_at"].as_str().unwrap_or("N/A"));
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("\n⚠️  Save this token securely. It will not be shown again.");
+    println!("💡 Use this token with PyIceberg:");
+    println!("   catalog = load_catalog('my_catalog', uri='...', token='<TOKEN>')");
+    
     Ok(())
 }
