@@ -19,7 +19,7 @@ Google Cloud Storage provides:
 
 ## Warehouse Configuration
 
-### Option 1: With Service Account Key
+### GcpDownscoped - Service Account Credentials
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/warehouses \
@@ -27,31 +27,39 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "gcs-prod",
-    "storage_type": "gcs",
-    "bucket": "my-iceberg-tables",
-    "project_id": "my-gcp-project",
-    "use_sts": false,
-    "credentials": {
-      "service_account_key": "{\"type\":\"service_account\",\"project_id\":\"my-project\",...}"
+    "storage_config": {
+      "bucket": "my-iceberg-tables",
+      "project_id": "my-gcp-project"
+    },
+    "vending_strategy": {
+      "type": "GcpDownscoped",
+      "service_account_email": "iceberg@my-gcp-project.iam.gserviceaccount.com",
+      "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQE...\n-----END PRIVATE KEY-----\n"
     }
   }'
 ```
 
-### Option 2: With Workload Identity (GKE - Recommended)
+### None - Client-Provided Credentials
+
+For scenarios where clients provide their own GCS credentials:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "X-Pangolin-Tenant: my-tenant" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "gcs-prod",
-    "storage_type": "gcs",
-    "bucket": "my-iceberg-tables",
-    "project_id": "my-gcp-project",
-    "use_sts": true,
-    "workload_identity": "pangolin-sa@my-project.iam.gserviceaccount.com"
+    "name": "gcs-client-creds",
+    "storage_config": {
+      "bucket": "my-iceberg-tables",
+      "project_id": "my-gcp-project"
+    },
+    "vending_strategy": {
+      "type": "None"
+    }
   }'
 ```
+
+**Note**: Workload Identity (GKE) support is not yet implemented in the VendingStrategy enum. Use GcpDownscoped for credential vending or None for client-provided credentials.
 
 ## Client Configuration
 

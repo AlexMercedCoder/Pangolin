@@ -96,39 +96,124 @@ The catalog has no warehouse attached:
 
 ## Authentication Methods
 
-### Method 1: Static Credentials (No STS)
+### VendingStrategy Enum
 
-Warehouse stores long-lived access keys:
+Pangolin uses the `vending_strategy` field to configure credential vending. The `use_sts` field is deprecated but kept for backward compatibility.
+
+**Available Strategies**:
+
+#### 1. AwsSts - AWS STS Temporary Credentials (Recommended)
+
+```json
+{
+  "name": "prod-s3",
+  "storage_config": {
+    "bucket": "my-datalake",
+    "region": "us-east-1"
+  },
+  "vending_strategy": {
+    "type": "AwsSts",
+    "role_arn": "arn:aws:iam::123456789:role/PangolinDataAccess",
+    "external_id": null
+  }
+}
+```
+
+**Pros**: Most secure, credentials expire, fine-grained permissions  
+**Cons**: Requires IAM role setup
+
+#### 2. AwsStatic - AWS Static Credentials
 
 ```json
 {
   "name": "dev-s3",
-  "use_sts": false,
-  "credentials": {
+  "storage_config": {
+    "bucket": "my-dev-datalake",
+    "region": "us-east-1"
+  },
+  "vending_strategy": {
+    "type": "AwsStatic",
     "access_key_id": "AKIAIOSFODNN7EXAMPLE",
     "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
   }
 }
 ```
 
-**Pros**: Simple, works everywhere
+**Pros**: Simple, works everywhere  
 **Cons**: Less secure, credentials don't expire
 
-### Method 2: IAM Role / STS (Recommended)
-
-Warehouse uses temporary credentials via STS:
+#### 3. AzureSas - Azure SAS Tokens
 
 ```json
 {
-  "name": "prod-s3",
-  "use_sts": true,
-  "role_arn": "arn:aws:iam::123456789:role/PangolinDataAccess",
-  "session_duration": 3600
+  "name": "prod-azure",
+  "storage_config": {
+    "account_name": "mystorageaccount",
+    "container": "datalake"
+  },
+  "vending_strategy": {
+    "type": "AzureSas",
+    "account_name": "mystorageaccount",
+    "account_key": "your-account-key"
+  }
 }
 ```
 
-**Pros**: More secure, credentials expire, fine-grained permissions
-**Cons**: Requires IAM role setup
+#### 4. GcpDownscoped - GCP Service Account
+
+```json
+{
+  "name": "prod-gcs",
+  "storage_config": {
+    "bucket": "my-datalake",
+    "project_id": "my-project"
+  },
+  "vending_strategy": {
+    "type": "GcpDownscoped",
+    "service_account_email": "iceberg@my-project.iam.gserviceaccount.com",
+    "private_key": "-----BEGIN PRIVATE KEY-----\n..."
+  }
+}
+```
+
+#### 5. None - No Credential Vending
+
+```json
+{
+  "name": "client-provided",
+  "storage_config": {
+    "bucket": "my-datalake"
+  },
+  "vending_strategy": {
+    "type": "None"
+  }
+}
+```
+
+Clients must provide their own credentials.
+
+### Deprecated: use_sts Field
+
+The `use_sts` boolean field is deprecated. Use `vending_strategy` instead.
+
+**Old Format** (Deprecated):
+```json
+{
+  "use_sts": true,
+  "role_arn": "arn:aws:iam::123:role/Access"
+}
+```
+
+**New Format** (Current):
+```json
+{
+  "vending_strategy": {
+    "type": "AwsSts",
+    "role_arn": "arn:aws:iam::123:role/Access",
+    "external_id": null
+  }
+}
+```
 
 ## Supported Storage Types
 
@@ -148,11 +233,15 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "production-s3",
-    "storage_type": "s3",
-    "bucket": "my-datalake",
-    "region": "us-east-1",
-    "use_sts": true,
-    "role_arn": "arn:aws:iam::123456789:role/DataAccess"
+    "storage_config": {
+      "bucket": "my-datalake",
+      "region": "us-east-1"
+    },
+    "vending_strategy": {
+      "type": "AwsSts",
+      "role_arn": "arn:aws:iam::123456789:role/DataAccess",
+      "external_id": null
+    }
   }'
 ```
 

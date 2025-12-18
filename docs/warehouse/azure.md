@@ -19,7 +19,7 @@ Azure Blob Storage with ADLS Gen2 provides:
 
 ## Warehouse Configuration
 
-### Option 1: With Storage Account Key
+### AzureSas - Storage Account Key
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/warehouses \
@@ -27,31 +27,39 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "azure-prod",
-    "storage_type": "azure",
-    "account_name": "mystorageaccount",
-    "container": "iceberg-tables",
-    "use_sts": false,
-    "credentials": {
+    "storage_config": {
+      "account_name": "mystorageaccount",
+      "container": "iceberg-tables"
+    },
+    "vending_strategy": {
+      "type": "AzureSas",
+      "account_name": "mystorageaccount",
       "account_key": "your-account-key-here=="
     }
   }'
 ```
 
-### Option 2: With Managed Identity (Recommended for Production)
+### None - Client-Provided Credentials
+
+For scenarios where clients provide their own Azure credentials:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "X-Pangolin-Tenant: my-tenant" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "azure-prod",
-    "storage_type": "azure",
-    "account_name": "mystorageaccount",
-    "container": "iceberg-tables",
-    "use_sts": true,
-    "managed_identity_client_id": "your-client-id"
+    "name": "azure-client-creds",
+    "storage_config": {
+      "account_name": "mystorageaccount",
+      "container": "iceberg-tables"
+    },
+    "vending_strategy": {
+      "type": "None"
+    }
   }'
 ```
+
+**Note**: Managed Identity support via Azure AD is not yet implemented in the VendingStrategy enum. Use AzureSas for credential vending or None for client-provided credentials.
 
 ## Client Configuration
 
