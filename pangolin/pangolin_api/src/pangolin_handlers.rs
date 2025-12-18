@@ -187,7 +187,7 @@ pub async fn create_branch(
     match store.create_branch(tenant_id, catalog_name, branch).await {
         Ok(_) => {
             // Audit Log
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
                 tenant_id,
                 session.username.clone(), // Get user from auth context
                 "create_branch".to_string(),
@@ -334,7 +334,7 @@ pub async fn merge_branch(
             let _ = store.complete_merge_operation(operation.id, commit_id).await;
 
             // Audit Log
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
                 tenant_id,
                 session.username.clone(),
                 "merge_branch".to_string(),
@@ -518,7 +518,7 @@ pub async fn list_audit_events(
     Extension(tenant): Extension<TenantId>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    match store.list_audit_events(tenant_id).await {
+    match store.list_audit_events(tenant_id, None).await {
         Ok(events) => (StatusCode::OK, Json(events)).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }

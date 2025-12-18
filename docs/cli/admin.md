@@ -55,3 +55,92 @@ pangolin-admin --profile prod create-user --username newuser
 ### Metadata
 - `get-metadata --entity-type <type> --entity-id <id>`: detailed JSON metadata.
 - `set-metadata --entity-type <type> --entity-id <id> <key> <value>`: Attach key-value metadata.
+
+## Update Operations
+
+Update existing resources. See [Update Operations Guide](./admin-update-operations.md) for details.
+
+### Commands
+- `update-tenant --id <id> --name <name>`: Update tenant properties
+- `update-user --id <id> [--username <name>] [--email <email>] [--active <bool>]`: Update user properties
+- `update-warehouse --id <id> --name <name>`: Update warehouse properties
+- `update-catalog --id <id> --name <name>`: Update catalog properties
+
+## Token Management
+
+Manage authentication tokens for security. See [Token Management Guide](./admin-token-management.md) for details.
+
+### Commands
+- `revoke-token`: Revoke your own token (logout)
+- `revoke-token-by-id --id <token-id>`: Admin revoke any token
+
+## Merge Operations
+
+Complete merge workflow for branch management. See [Merge Operations Guide](./admin-merge-operations.md) for details.
+
+### Commands
+- `list-merge-operations`: List all merge operations
+- `get-merge-operation --id <id>`: Get merge details
+- `list-conflicts --merge-id <id>`: List merge conflicts
+- `resolve-conflict --merge-id <id> --conflict-id <id> --resolution <strategy>`: Resolve conflict
+- `complete-merge --id <id>`: Complete a merge
+- `abort-merge --id <id>`: Abort a merge
+
+## Business Metadata & Governance
+
+Manage business metadata and access requests. See [Business Metadata Guide](./admin-business-metadata.md) for details.
+
+### Commands
+- `delete-metadata --asset-id <id>`: Delete business metadata
+- `request-access --asset-id <id> --reason <reason>`: Request asset access
+- `list-access-requests`: List all access requests
+- `update-access-request --id <id> --status <status>`: Approve/deny access request
+- `get-asset-details --id <id>`: Get asset details
+
+## Service User Management
+
+Service users provide API key authentication for machine-to-machine access.
+
+### Commands
+
+- `create-service-user --name <name> [--description <desc>] [--role <role>] [--expires-in-days <days>]`: Create a new service user
+  - Default role: `tenant-user`
+  - Returns API key (shown only once!)
+  
+- `list-service-users`: List all service users with status
+
+- `get-service-user --id <id>`: View detailed service user information
+
+- `update-service-user --id <id> [--name <name>] [--description <desc>] [--active <true|false>]`: Update service user properties
+
+- `delete-service-user --id <id>`: Delete a service user
+
+- `rotate-service-user-key --id <id>`: Rotate API key (invalidates old key immediately)
+
+### Examples
+
+**Create service user**:
+```bash
+pangolin-admin create-service-user \
+  --name "ci-pipeline" \
+  --description "CI/CD automation" \
+  --role "tenant-user" \
+  --expires-in-days 90
+```
+
+**List service users**:
+```bash
+pangolin-admin list-service-users
+```
+
+**Rotate API key**:
+```bash
+pangolin-admin rotate-service-user-key --id <uuid>
+```
+
+### Important Notes
+
+- ⚠️ API keys are shown only once during creation/rotation - save them securely!
+- Valid roles: `tenant-user`, `tenant-admin`, `root`
+- Service users authenticate via `X-API-Key` header
+- Rotating a key immediately invalidates the old key

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-pangolin_core = { path = "../pangolin_core" }
+pangolin_core = { path = "../pangolin_core", features = ["sqlx"] }
 object_store = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }

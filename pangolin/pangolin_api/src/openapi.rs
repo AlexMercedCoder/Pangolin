@@ -13,6 +13,7 @@ use crate::service_user_handlers::*;
 use crate::oauth_handlers::*;
 use crate::merge_handlers::*;
 use crate::business_metadata_handlers::*;
+use crate::audit_handlers::*;
 
 // Import all schema types
 use pangolin_core::model::{
@@ -123,6 +124,11 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         update_access_request,
         get_access_request,
         get_asset_details,
+        
+        // Audit logging endpoints
+        list_audit_events,
+        get_audit_event,
+        count_audit_events,
     ),
     components(
         schemas(
@@ -159,6 +165,9 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             AddMetadataRequest, MetadataResponse, SearchRequest,
             CreateAccessRequestPayload, UpdateRequestStatus,
             BusinessMetadata, AccessRequest, RequestStatus,
+            
+            // Audit logging types
+            AuditListQuery, AuditCountResponse,
         )
     ),
     tags(
@@ -175,6 +184,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         (name = "Tags", description = "Tag management endpoints"),
         (name = "Merge Operations", description = "Merge operation and conflict resolution endpoints"),
         (name = "Business Metadata", description = "Business metadata and asset discovery endpoints"),
+        (name = "Audit Logging", description = "Audit log viewing and filtering endpoints"),
     ),
     modifiers(&SecurityAddon),
     info(

@@ -27,6 +27,7 @@ pub mod merge_handlers;
 pub mod federated_proxy;
 pub mod federated_catalog_handlers;
 pub mod tests_common;
+pub mod audit_handlers;
 
 
 
@@ -99,8 +100,10 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Tag Operations
         .route("/api/v1/tags", post(pangolin_handlers::create_tag).get(pangolin_handlers::list_tags))
         .route("/api/v1/tags/:name", delete(pangolin_handlers::delete_tag))
-        // Audit Logs
-        .route("/api/v1/audit", get(pangolin_handlers::list_audit_events))
+        // Audit Logs (Enhanced with filtering)
+        .route("/api/v1/audit", get(audit_handlers::list_audit_events))
+        .route("/api/v1/audit/count", get(audit_handlers::count_audit_events))
+        .route("/api/v1/audit/:event_id", get(audit_handlers::get_audit_event))
         // Tenant Management
         .route("/api/v1/tenants", get(tenant_handlers::list_tenants).post(tenant_handlers::create_tenant))
         .route("/api/v1/tenants/:id", get(tenant_handlers::get_tenant).put(tenant_handlers::update_tenant).delete(tenant_handlers::delete_tenant))

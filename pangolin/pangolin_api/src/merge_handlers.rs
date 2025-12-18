@@ -263,7 +263,7 @@ pub async fn complete_merge(
             let _ = store.complete_merge_operation(operation_id, commit_id).await;
 
             // Audit log
-            let _ = store.log_audit_event(tenant.0, pangolin_core::audit::AuditLogEntry::new(
+            let _ = store.log_audit_event(tenant.0, pangolin_core::audit::AuditLogEntry::legacy_new(
                 tenant.0,
                 session.username.clone(),
                 "complete_merge".to_string(),

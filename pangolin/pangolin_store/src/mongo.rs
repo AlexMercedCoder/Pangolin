@@ -797,35 +797,192 @@ impl CatalogStore for MongoStore {
         let doc = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "id": to_bson_uuid(event.id),
+            "user_id": event.user_id.map(to_bson_uuid).unwrap_or(Bson::Null),
+            "username": &event.username,
+            "action": format!("{:?}", event.action),
+            "resource_type": format!("{:?}", event.resource_type),
+            "resource_id": event.resource_id.map(to_bson_uuid).unwrap_or(Bson::Null),
+            "resource_name": &event.resource_name,
             "timestamp": mongodb::bson::DateTime::from_chrono(event.timestamp),
-            "actor": &event.actor,
-            "action": &event.action,
-            "resource": &event.resource,
-            "details": mongodb::bson::to_bson(&event.details)?
+            "ip_address": event.ip_address.as_ref().map(|s| s.as_str()).unwrap_or(""),
+            "user_agent": event.user_agent.as_ref().map(|s| s.as_str()).unwrap_or(""),
+            "result": format!("{:?}", event.result),
+            "error_message": event.error_message.as_ref().map(|s| s.as_str()).unwrap_or(""),
+            "metadata": mongodb::bson::to_bson(&event.metadata)?
         };
         self.db.collection::<Document>("audit_logs").insert_one(doc).await?;
         Ok(())
     }
 
-    async fn list_audit_events(&self, tenant_id: Uuid) -> Result<Vec<AuditLogEntry>> {
-        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
-        let options = mongodb::options::FindOptions::builder().sort(doc! { "timestamp": -1 }).limit(100).build();
-        let cursor = self.db.collection::<Document>("audit_logs").find(filter).with_options(options).await?;
+    async fn list_audit_events(&self, tenant_id: Uuid, filter: Option<pangolin_core::audit::AuditLogFilter>) -> Result<Vec<AuditLogEntry>> {
+        let mut query = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        
+        // Build filter conditions
+        if let Some(ref f) = filter {
+            if let Some(user_id) = f.user_id {
+                query.insert("user_id", to_bson_uuid(user_id));
+            }
+            if let Some(ref action) = f.action {
+                query.insert("action", format!("{:?}", action));
+            }
+            if let Some(ref resource_type) = f.resource_type {
+                query.insert("resource_type", format!("{:?}", resource_type));
+            }
+            if let Some(resource_id) = f.resource_id {
+                query.insert("resource_id", to_bson_uuid(resource_id));
+            }
+            if let Some(start_time) = f.start_time {
+                query.insert("timestamp", doc! { "$gte": mongodb::bson::DateTime::from_chrono(start_time) });
+            }
+            if let Some(end_time) = f.end_time {
+                let existing = query.get_document_mut("timestamp").ok();
+                if let Some(existing_doc) = existing {
+                    existing_doc.insert("$lte", mongodb::bson::DateTime::from_chrono(end_time));
+                } else {
+                    query.insert("timestamp", doc! { "$lte": mongodb::bson::DateTime::from_chrono(end_time) });
+                }
+            }
+            if let Some(ref result) = f.result {
+                query.insert("result", format!("{:?}", result));
+            }
+        }
+        
+        // Build options with pagination
+        let limit = filter.as_ref().and_then(|f| f.limit).unwrap_or(100) as i64;
+        let skip = filter.as_ref().and_then(|f| f.offset).map(|o| o as u64);
+        
+        let mut options = mongodb::options::FindOptions::builder()
+            .sort(doc! { "timestamp": -1 })
+            .limit(limit)
+            .build();
+        
+        if let Some(skip_val) = skip {
+            options.skip = Some(skip_val);
+        }
+        
+        let cursor = self.db.collection::<Document>("audit_logs")
+            .find(query)
+            .with_options(options)
+            .await?;
         let docs: Vec<Document> = cursor.try_collect().await?;
         
         let mut events = Vec::new();
         for d in docs {
+            // Parse action enum from string
+            let action_str = d.get_str("action")?;
+            let action = serde_json::from_str(&format!("\"{}\"" , action_str.to_lowercase()))
+                .unwrap_or(pangolin_core::audit::AuditAction::CreateCatalog);
+            
+            // Parse resource_type enum from string
+            let resource_type_str = d.get_str("resource_type")?;
+            let resource_type = serde_json::from_str(&format!("\"{}\"", resource_type_str.to_lowercase()))
+                .unwrap_or(pangolin_core::audit::ResourceType::Catalog);
+            
+            // Parse result enum from string
+            let result_str = d.get_str("result")?;
+            let result = serde_json::from_str(&format!("\"{}\"", result_str.to_lowercase()))
+                .unwrap_or(pangolin_core::audit::AuditResult::Success);
+            
             events.push(AuditLogEntry {
                 id: mongodb::bson::from_bson(d.get("id").unwrap().clone())?,
                 tenant_id,
+                user_id: d.get("user_id").and_then(|b| from_bson_uuid(b).ok()),
+                username: d.get_str("username")?.to_string(),
+                action,
+                resource_type,
+                resource_id: d.get("resource_id").and_then(|b| from_bson_uuid(b).ok()),
+                resource_name: d.get_str("resource_name")?.to_string(),
                 timestamp: d.get_datetime("timestamp")?.to_chrono(),
-                actor: d.get_str("actor")?.to_string(),
-                action: d.get_str("action")?.to_string(),
-                resource: d.get_str("resource")?.to_string(),
-                details: mongodb::bson::from_bson(d.get("details").unwrap().clone())?,
+                ip_address: d.get_str("ip_address").ok().filter(|s| !s.is_empty()).map(|s| s.to_string()),
+                user_agent: d.get_str("user_agent").ok().filter(|s| !s.is_empty()).map(|s| s.to_string()),
+                result,
+                error_message: d.get_str("error_message").ok().filter(|s| !s.is_empty()).map(|s| s.to_string()),
+                metadata: mongodb::bson::from_bson(d.get("metadata").unwrap().clone())?,
             });
         }
         Ok(events)
+    }
+    
+    async fn get_audit_event(&self, tenant_id: Uuid, event_id: Uuid) -> Result<Option<AuditLogEntry>> {
+        let filter = doc! {
+            "tenant_id": to_bson_uuid(tenant_id),
+            "id": to_bson_uuid(event_id)
+        };
+        
+        let doc = self.db.collection::<Document>("audit_logs").find_one(filter).await?;
+        
+        if let Some(d) = doc {
+            let action_str = d.get_str("action")?;
+            let action = serde_json::from_str(&format!("\"{}\"", action_str.to_lowercase()))
+                .unwrap_or(pangolin_core::audit::AuditAction::CreateCatalog);
+            
+            let resource_type_str = d.get_str("resource_type")?;
+            let resource_type = serde_json::from_str(&format!("\"{}\"", resource_type_str.to_lowercase()))
+                .unwrap_or(pangolin_core::audit::ResourceType::Catalog);
+            
+            let result_str = d.get_str("result")?;
+            let result = serde_json::from_str(&format!("\"{}\"", result_str.to_lowercase()))
+                .unwrap_or(pangolin_core::audit::AuditResult::Success);
+            
+            Ok(Some(AuditLogEntry {
+                id: mongodb::bson::from_bson(d.get("id").unwrap().clone())?,
+                tenant_id,
+                user_id: d.get("user_id").and_then(|b| from_bson_uuid(b).ok()),
+                username: d.get_str("username")?.to_string(),
+                action,
+                resource_type,
+                resource_id: d.get("resource_id").and_then(|b| from_bson_uuid(b).ok()),
+                resource_name: d.get_str("resource_name")?.to_string(),
+                timestamp: d.get_datetime("timestamp")?.to_chrono(),
+                ip_address: d.get_str("ip_address").ok().filter(|s| !s.is_empty()).map(|s| s.to_string()),
+                user_agent: d.get_str("user_agent").ok().filter(|s| !s.is_empty()).map(|s| s.to_string()),
+                result,
+                error_message: d.get_str("error_message").ok().filter(|s| !s.is_empty()).map(|s| s.to_string()),
+                metadata: mongodb::bson::from_bson(d.get("metadata").unwrap().clone())?,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+    
+    async fn count_audit_events(&self, tenant_id: Uuid, filter: Option<pangolin_core::audit::AuditLogFilter>) -> Result<usize> {
+        let mut query = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        
+        // Build same filter conditions as list_audit_events
+        if let Some(ref f) = filter {
+            if let Some(user_id) = f.user_id {
+                query.insert("user_id", to_bson_uuid(user_id));
+            }
+            if let Some(ref action) = f.action {
+                query.insert("action", format!("{:?}", action));
+            }
+            if let Some(ref resource_type) = f.resource_type {
+                query.insert("resource_type", format!("{:?}", resource_type));
+            }
+            if let Some(resource_id) = f.resource_id {
+                query.insert("resource_id", to_bson_uuid(resource_id));
+            }
+            if let Some(start_time) = f.start_time {
+                query.insert("timestamp", doc! { "$gte": mongodb::bson::DateTime::from_chrono(start_time) });
+            }
+            if let Some(end_time) = f.end_time {
+                let existing = query.get_document_mut("timestamp").ok();
+                if let Some(existing_doc) = existing {
+                    existing_doc.insert("$lte", mongodb::bson::DateTime::from_chrono(end_time));
+                } else {
+                    query.insert("timestamp", doc! { "$lte": mongodb::bson::DateTime::from_chrono(end_time) });
+                }
+            }
+            if let Some(ref result) = f.result {
+                query.insert("result", format!("{:?}", result));
+            }
+        }
+        
+        let count = self.db.collection::<Document>("audit_logs")
+            .count_documents(query)
+            .await? as usize;
+        
+        Ok(count)
     }
 
      // User Operations

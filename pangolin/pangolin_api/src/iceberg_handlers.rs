@@ -599,7 +599,7 @@ pub async fn create_table(
             }
 
             // Audit Log
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
                 tenant_id,
                 "system".to_string(),
                 "create_table".to_string(),
@@ -1067,7 +1067,7 @@ pub async fn delete_table(
     match store.delete_asset(tenant_id, &catalog_name, branch, namespace_parts, table_name).await {
         Ok(_) => {
              // Audit Log
-             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::new(
+             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
                 tenant_id,
                 "system".to_string(),
                 "delete_table".to_string(),

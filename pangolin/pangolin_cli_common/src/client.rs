@@ -69,6 +69,18 @@ impl PangolinClient {
         Ok(res)
     }
 
+    pub async fn put<T: serde::Serialize>(&self, path: &str, body: &T) -> Result<Response, CliError> {
+        let headers = self.build_headers()?;
+        let res = self.client.put(&self.url(path))
+            .headers(headers)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| CliError::ApiError(e.to_string()))?;
+
+        Ok(res)
+    }
+
     pub async fn delete(&self, path: &str) -> Result<Response, CliError> {
         let headers = self.build_headers()?;
         let res = self.client.delete(&self.url(path))

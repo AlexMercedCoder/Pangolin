@@ -12,3 +12,9 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 url = { workspace = true }
 utoipa = { version = "4", features = ["chrono", "uuid"] }
+sqlx = { version = "0.8.6", optional = true }
+
+[features]
+default = ["utoipa"]
+utoipa = []
+sqlx = ["dep:sqlx"]

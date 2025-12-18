@@ -294,6 +294,36 @@ pub enum AdminCommand {
         #[arg(long)]
         id: String,
     },
+    // --- Audit Logging ---
+    /// List audit events with optional filtering
+    ListAuditEvents {
+        #[arg(long, help = "Filter by user ID")]
+        user_id: Option<String>,
+        #[arg(long, help = "Filter by action (e.g., create_table)")]
+        action: Option<String>,
+        #[arg(long, help = "Filter by resource type (e.g., table, catalog)")]
+        resource_type: Option<String>,
+        #[arg(long, help = "Filter by result (success or failure)")]
+        result: Option<String>,
+        #[arg(long, help = "Maximum number of results", default_value = "50")]
+        limit: usize,
+    },
+    /// Count audit events with optional filtering
+    CountAuditEvents {
+        #[arg(long, help = "Filter by user ID")]
+        user_id: Option<String>,
+        #[arg(long, help = "Filter by action")]
+        action: Option<String>,
+        #[arg(long, help = "Filter by resource type")]
+        resource_type: Option<String>,
+        #[arg(long, help = "Filter by result")]
+        result: Option<String>,
+    },
+    /// Get a specific audit event by ID
+    GetAuditEvent {
+        #[arg(long)]
+        id: String,
+    },
     /// Exit the REPL
     Exit,
     /// Clear the screen
