@@ -2,8 +2,9 @@ use crate::CatalogStore;
 use anyhow::Result;
 use async_trait::async_trait;
 use pangolin_core::model::{
-    Asset, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse,
+    Asset, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse, VendingStrategy,
 };
+use crate::signer::{Signer, Credentials};
 use pangolin_core::user::{User, UserRole, OAuthProvider};
 use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
 use pangolin_core::audit::AuditLogEntry;
@@ -135,19 +136,20 @@ impl CatalogStore for PostgresStore {
 
     // Warehouse Operations
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
-        sqlx::query("INSERT INTO warehouses (id, tenant_id, name, use_sts, storage_config) VALUES ($1, $2, $3, $4, $5)")
+        sqlx::query("INSERT INTO warehouses (id, tenant_id, name, use_sts, storage_config, vending_strategy) VALUES ($1, $2, $3, $4, $5, $6)")
             .bind(warehouse.id)
             .bind(tenant_id)
             .bind(&warehouse.name)
             .bind(warehouse.use_sts)
             .bind(serde_json::to_value(&warehouse.storage_config)?)
+            .bind(serde_json::to_value(&warehouse.vending_strategy)?)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
     async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>> {
-        let row = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config FROM warehouses WHERE tenant_id = $1 AND name = $2")
+        let row = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = $1 AND name = $2")
             .bind(tenant_id)
             .bind(name)
             .fetch_optional(&self.pool)
@@ -173,6 +175,9 @@ impl CatalogStore for PostgresStore {
                 tenant_id: row.get("tenant_id"),
                 use_sts: row.try_get("use_sts").unwrap_or(false),
                 storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+                vending_strategy: row.try_get("vending_strategy")
+                    .ok()
+                    .and_then(|v: serde_json::Value| serde_json::from_value(v).ok()),
             }))
         } else {
             Ok(None)
@@ -180,7 +185,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>> {
-        let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config FROM warehouses WHERE tenant_id = $1")
+        let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = $1")
             .bind(tenant_id)
             .fetch_all(&self.pool)
             .await?;
@@ -193,6 +198,9 @@ impl CatalogStore for PostgresStore {
                 tenant_id: row.get("tenant_id"),
                 use_sts: row.try_get("use_sts").unwrap_or(false),
                 storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+                vending_strategy: row.try_get("vending_strategy")
+                    .ok()
+                    .and_then(|v: serde_json::Value| serde_json::from_value(v).ok()),
             });
         }
         Ok(warehouses)
@@ -215,6 +223,10 @@ impl CatalogStore for PostgresStore {
             set_clauses.push(format!("use_sts = ${}", bind_count));
             bind_count += 1;
         }
+        if updates.vending_strategy.is_some() {
+            set_clauses.push(format!("vending_strategy = ${}", bind_count));
+            bind_count += 1;
+        }
 
         if set_clauses.is_empty() {
             return self.get_warehouse(tenant_id, name).await?
@@ -222,7 +234,7 @@ impl CatalogStore for PostgresStore {
         }
 
         query.push_str(&set_clauses.join(", "));
-        query.push_str(&format!(" WHERE tenant_id = ${} AND name = ${} RETURNING id, name, tenant_id, use_sts, storage_config", bind_count, bind_count + 1));
+        query.push_str(&format!(" WHERE tenant_id = ${} AND name = ${} RETURNING id, name, tenant_id, use_sts, storage_config, vending_strategy", bind_count, bind_count + 1));
 
         let mut q = sqlx::query(&query);
         if let Some(new_name) = &updates.name {
@@ -234,6 +246,9 @@ impl CatalogStore for PostgresStore {
         if let Some(use_sts) = updates.use_sts {
             q = q.bind(use_sts);
         }
+        if let Some(vending_strategy) = updates.vending_strategy {
+             q = q.bind(serde_json::to_value(vending_strategy)?);
+        }
         q = q.bind(tenant_id).bind(&name);
 
         let row = q.fetch_one(&self.pool).await?;
@@ -243,6 +258,9 @@ impl CatalogStore for PostgresStore {
             tenant_id: row.get("tenant_id"),
             use_sts: row.try_get("use_sts").unwrap_or(false),
             storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+            vending_strategy: row.try_get("vending_strategy")
+                .ok()
+                .and_then(|v: serde_json::Value| serde_json::from_value(v).ok()),
         })
     }
 
@@ -1377,124 +1395,167 @@ impl PostgresStore {
         Ok(rows_affected as usize)
     }
 }
-use crate::signer::Signer;
-use crate::signer::Credentials;
+
 
 #[async_trait]
 impl Signer for PostgresStore {
     async fn get_table_credentials(&self, location: &str) -> Result<crate::signer::Credentials> {
         // 1. Find the warehouse that owns this location by querying all warehouses
-        let warehouses = sqlx::query("SELECT id, name, storage_config, use_sts FROM warehouses")
+        let rows = sqlx::query("SELECT id, name, storage_config, use_sts, vending_strategy FROM warehouses")
             .fetch_all(&self.pool)
             .await?;
         
         let mut target_warehouse = None;
         
-        for row in warehouses {
+        for row in rows {
             let storage_config_json: serde_json::Value = row.get("storage_config");
             let storage_config: HashMap<String, String> = serde_json::from_value(storage_config_json)?;
             
-            // Check if location contains this warehouse's bucket
+            // Check matches
+             // Check AWS S3
             if let Some(bucket) = storage_config.get("s3.bucket") {
                 if location.contains(bucket) {
-                    target_warehouse = Some((
-                        storage_config,
-                        row.get::<bool, _>("use_sts")
-                    ));
+                    target_warehouse = Some(row);
+                    break;
+                }
+            }
+            // Check Azure
+            if let Some(container) = storage_config.get("azure.container") {
+                if location.contains(container) {
+                     target_warehouse = Some(row);
+                     break;
+                }
+            }
+            // Check GCP
+            if let Some(bucket) = storage_config.get("gcp.bucket") {
+                if location.contains(bucket) {
+                    target_warehouse = Some(row);
                     break;
                 }
             }
         }
         
-        let (storage_config, use_sts) = target_warehouse
-            .ok_or_else(|| anyhow::anyhow!("No warehouse found for location: {}", location))?;
+        let row = target_warehouse.ok_or_else(|| anyhow::anyhow!("No warehouse found for location: {}", location))?;
         
-        // 2. Extract credentials from storage_config
-        let access_key = storage_config.get("s3.access-key-id")
-            .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id in warehouse config"))?;
+        let storage_config_json: serde_json::Value = row.get("storage_config");
+        let storage_config: HashMap<String, String> = serde_json::from_value(storage_config_json)?;
+        let use_sts: bool = row.try_get("use_sts").unwrap_or(false);
+        let vending_strategy: Option<VendingStrategy> = row.try_get("vending_strategy")
+            .ok()
+            .and_then(|v: serde_json::Value| serde_json::from_value(v).ok());
             
-        let secret_key = storage_config.get("s3.secret-access-key")
-            .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key in warehouse config"))?;
-            
-        // 3. Check STS flag
-        if use_sts {
-            // STS Mode
-            let region = storage_config.get("s3.region")
-                .map(|s| s.as_str())
-                .unwrap_or("us-east-1");
-                
-            let endpoint = storage_config.get("s3.endpoint")
-                .map(|s| s.as_str());
-
-            let creds = aws_credential_types::Credentials::new(
-                access_key.to_string(),
-                secret_key.to_string(),
-                None,
-                None,
-                "static"
-            );
-
-            let config_loader = aws_config::defaults(aws_config::BehaviorVersion::latest())
-                .region(aws_config::Region::new(region.to_string()))
-                .credentials_provider(creds);
-                
-            let config_loader = if let Some(ep) = endpoint {
-                 config_loader.endpoint_url(ep)
-            } else {
-                config_loader
-            };
-            
-            let config = config_loader.load().await;
-            let client = aws_sdk_sts::Client::new(&config);
-            
-            // Assume Role or GetSessionToken
-            let role_arn = storage_config.get("s3.role-arn").map(|s| s.as_str());
-            
-            let (temp_ak, temp_sk, temp_token, expiration) = if let Some(arn) = role_arn {
-                 let resp = client.assume_role()
-                    .role_arn(arn)
-                    .role_session_name("pangolin-vended-session")
-                    .send()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("STS AssumeRole failed: {}", e))?;
-                    
-                 let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in AssumeRole response"))?;
-                 (
-                     c.access_key_id, 
-                     c.secret_access_key, 
-                     c.session_token, 
-                     Some(c.expiration.to_string())
-                 )
-            } else {
-                 let resp = client.get_session_token()
-                    .send()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("STS GetSessionToken failed: {}", e))?;
-                    
-                 let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in GetSessionToken response"))?;
-                 (
-                     c.access_key_id, 
-                     c.secret_access_key, 
-                     c.session_token, 
-                     Some(c.expiration.to_string())
-                 )
-            };
-            
-            Ok(crate::signer::Credentials {
-                access_key_id: temp_ak,
-                secret_access_key: temp_sk,
-                session_token: Some(temp_token),
-                expiration,
-            })
-
+        // 2. Check Vending Strategy
+        if let Some(strategy) = vending_strategy {
+             match strategy {
+                 VendingStrategy::AwsSts { role_arn: _, external_id: _ } => {
+                     Err(anyhow::anyhow!("AWS STS vending not implemented yet via VendingStrategy in PostgresStore"))
+                 }
+                 VendingStrategy::AwsStatic { access_key_id, secret_access_key } => {
+                     Ok(Credentials::Aws {
+                         access_key_id,
+                         secret_access_key,
+                         session_token: None,
+                         expiration: None,
+                     })
+                 }
+                 VendingStrategy::AzureSas { account_name, account_key } => {
+                     let signer = crate::azure_signer::AzureSigner::new(account_name.clone(), account_key);
+                     let sas_token = signer.generate_sas_token(location).await?;
+                     Ok(Credentials::Azure {
+                         sas_token,
+                         account_name,
+                         expiration: chrono::Utc::now() + chrono::Duration::hours(1),
+                     })
+                 }
+                 VendingStrategy::GcpDownscoped { service_account_email, private_key } => {
+                     let signer = crate::gcp_signer::GcpSigner::new(service_account_email, private_key);
+                     let access_token = signer.generate_downscoped_token(location).await?;
+                     Ok(Credentials::Gcp {
+                         access_token,
+                         expiration: chrono::Utc::now() + chrono::Duration::hours(1),
+                     })
+                 }
+                 VendingStrategy::None => Err(anyhow::anyhow!("Vending disabled")),
+             }
         } else {
-            // Static Mode
-            Ok(crate::signer::Credentials {
-                access_key_id: access_key.to_string(),
-                secret_access_key: secret_key.to_string(),
-                session_token: None,
-                expiration: None,
-            })
+            // Legacy Logic
+            let access_key = storage_config.get("s3.access-key-id")
+                .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id"))?;
+            let secret_key = storage_config.get("s3.secret-access-key")
+                .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key"))?;
+                
+            if use_sts {
+                // Existing STS Logic restored for backward compatibility
+                let region = storage_config.get("s3.region")
+                    .map(|s| s.as_str())
+                    .unwrap_or("us-east-1");
+                    
+                let endpoint = storage_config.get("s3.endpoint")
+                    .map(|s| s.as_str());
+
+                let creds = aws_credential_types::Credentials::new(
+                    access_key.to_string(),
+                    secret_key.to_string(),
+                    None,
+                    None,
+                    "legacy_provider"
+                );
+                
+                let config_loader = aws_config::from_env()
+                    .region(aws_config::Region::new(region.to_string()))
+                    .credentials_provider(creds);
+                    
+                let config = if let Some(ep) = endpoint {
+                     config_loader.endpoint_url(ep).load().await
+                } else {
+                     config_loader.load().await
+                };
+                
+                let client = aws_sdk_sts::Client::new(&config);
+                
+                // Assume Role logic was present in legacy? Or just GetSessionToken?
+                // Checking SqliteStore, it tried AssumeRole if role-arn present, else GetSessionToken.
+                // Replicating that for consistency.
+                
+                let role_arn = storage_config.get("s3.role-arn").map(|s| s.as_str());
+            
+                if let Some(arn) = role_arn {
+                     let resp = client.assume_role()
+                        .role_arn(arn)
+                        .role_session_name("pangolin-legacy-session")
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("STS AssumeRole failed: {}", e))?;
+                        
+                     let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in AssumeRole response"))?;
+                     Ok(Credentials::Aws {
+                         access_key_id: c.access_key_id,
+                         secret_access_key: c.secret_access_key,
+                         session_token: Some(c.session_token),
+                         expiration: chrono::DateTime::from_timestamp(c.expiration.secs(), c.expiration.subsec_nanos()),
+                     })
+                } else {
+                     let resp = client.get_session_token()
+                        .send()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("STS GetSessionToken failed: {}", e))?;
+                        
+                     let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in GetSessionToken response"))?;
+                     Ok(Credentials::Aws {
+                         access_key_id: c.access_key_id,
+                         secret_access_key: c.secret_access_key,
+                         session_token: Some(c.session_token),
+                         expiration: chrono::DateTime::from_timestamp(c.expiration.secs(), c.expiration.subsec_nanos()),
+                     })
+                }
+            } else {
+                Ok(Credentials::Aws {
+                    access_key_id: access_key.clone(),
+                    secret_access_key: secret_key.clone(),
+                    session_token: None,
+                    expiration: None,
+                })
+            }
         }
     }
 

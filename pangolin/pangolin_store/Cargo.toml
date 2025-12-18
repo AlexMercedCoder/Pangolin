@@ -25,3 +25,20 @@ sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "sql
 mongodb = "3.4.1"
 bson = { version = "2.14", features = ["uuid-1", "chrono-0_4"] }
 aws-sdk-sts = { version = "1.0", features = ["behavior-version-latest"] }
+azure_storage_blobs = { version = "0.20", optional = true }
+azure_core = { version = "0.20", optional = true }
+google-cloud-storage = { version = "0.20", optional = true }
+google-cloud-auth = { version = "0.16", optional = true }
+# Using reqwest for manual HTTP calls/mocks if needed
+reqwest = { version = "0.12", features = ["json"], optional = true }
+
+[features]
+default = ["aws", "azure", "gcp"]
+aws = [] # AWS is currently hard-required by code structure unless refactored, but deps are here? 
+         # Wait, if I make deps optional, code using them must be conditional.
+         # For now, let's keep AWS deps required in code (implied) or just add Azure/GCP support.
+         # The plan said "aws = []" but AWS SDK deps above act as required if not marked optional.
+         # I will NOT mark AWS deps optional yet to avoid massive refactor of existing AWS code.
+         # I will only mark new deps optional.
+azure = ["dep:azure_storage_blobs", "dep:azure_core"]
+gcp = ["dep:google-cloud-storage", "dep:google-cloud-auth"]

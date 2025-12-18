@@ -1,13 +1,29 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Credentials {
-    pub access_key_id: String,
-    pub secret_access_key: String,
-    pub session_token: Option<String>,
-    pub expiration: Option<String>,
+#[serde(tag = "type")]
+pub enum Credentials {
+    // AWS S3 credentials (STS or Static)
+    Aws {
+        access_key_id: String,
+        secret_access_key: String,
+        session_token: Option<String>,
+        expiration: Option<DateTime<Utc>>,
+    },
+    // Azure SAS token
+    Azure {
+        sas_token: String,
+        account_name: String, // Added account_name as it's often needed by clients
+        expiration: DateTime<Utc>,
+    },
+    // GCP OAuth2 token
+    Gcp {
+        access_token: String,
+        expiration: DateTime<Utc>,
+    },
 }
 
 #[async_trait]

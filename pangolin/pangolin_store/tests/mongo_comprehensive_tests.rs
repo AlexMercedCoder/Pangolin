@@ -54,6 +54,7 @@ async fn test_mongo_warehouse_crud() {
             ("type".to_string(), "s3".to_string()),
             ("bucket".to_string(), "test-bucket".to_string()),
         ]),
+        vending_strategy: None,
     };
     
     store.create_warehouse(tenant_id, warehouse.clone()).await.expect("Failed to create warehouse");
@@ -201,6 +202,7 @@ async fn test_mongo_multi_tenant_isolation() {
         name: "shared_name".to_string(),
         use_sts: false,
         storage_config: HashMap::new(),
+        vending_strategy: None,
     };
     store.create_warehouse(tenant1_id, warehouse).await.unwrap();
     

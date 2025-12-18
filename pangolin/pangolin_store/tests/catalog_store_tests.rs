@@ -12,13 +12,14 @@ async fn test_catalog_crud() {
     // Create a warehouse first (catalogs need warehouses)
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
-        name: "test-warehouse".to_string(),
+        name: "test_wh".to_string(),
         tenant_id,
         use_sts: false,
-        storage_config: HashMap::from([
+        storage_config: From::from([
             ("type".to_string(), "s3".to_string()),
             ("bucket".to_string(), "test-bucket".to_string()),
         ]),
+        vending_strategy: None,
     };
     store.create_warehouse(tenant_id, warehouse).await.unwrap();
     
@@ -27,7 +28,7 @@ async fn test_catalog_crud() {
         id: Uuid::new_v4(),
         name: "test-catalog".to_string(),
         catalog_type: pangolin_core::model::CatalogType::Local,
-        warehouse_name: Some("test-warehouse".to_string()),
+        warehouse_name: Some("test_wh".to_string()),
         storage_location: Some("s3://test-bucket/catalog/".to_string()),
         federated_config: None,
         properties: HashMap::new(),
@@ -64,35 +65,36 @@ async fn test_warehouse_crud() {
     // Test Create
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
-        name: "test-warehouse".to_string(),
+        name: "test_wh_sts".to_string(),
         tenant_id,
-        use_sts: false,
-        storage_config: HashMap::from([
+        use_sts: true,
+        storage_config: From::from([
             ("type".to_string(), "s3".to_string()),
             ("bucket".to_string(), "test-bucket".to_string()),
             ("region".to_string(), "us-east-1".to_string()),
         ]),
+        vending_strategy: None,
     };
     
     store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
     
     // Test Read
-    let retrieved = store.get_warehouse(tenant_id, "test-warehouse".to_string()).await.unwrap();
+    let retrieved = store.get_warehouse(tenant_id, "test_wh_sts".to_string()).await.unwrap();
     assert!(retrieved.is_some());
     let retrieved_warehouse = retrieved.unwrap();
-    assert_eq!(retrieved_warehouse.name, "test-warehouse");
-    assert_eq!(retrieved_warehouse.use_sts, false);
+    assert_eq!(retrieved_warehouse.name, "test_wh_sts");
+    assert_eq!(retrieved_warehouse.use_sts, true);
     
     // Test List
     let warehouses = store.list_warehouses(tenant_id).await.unwrap();
     assert_eq!(warehouses.len(), 1);
-    assert_eq!(warehouses[0].name, "test-warehouse");
+    assert_eq!(warehouses[0].name, "test_wh_sts");
     
     // Test Delete
-    store.delete_warehouse(tenant_id, "test-warehouse".to_string()).await.unwrap();
+    store.delete_warehouse(tenant_id, "test_wh_sts".to_string()).await.unwrap();
     
     // Verify deletion
-    let deleted = store.get_warehouse(tenant_id, "test-warehouse".to_string()).await.unwrap();
+    let deleted = store.get_warehouse(tenant_id, "test_wh_sts".to_string()).await.unwrap();
     assert!(deleted.is_none());
     
     let warehouses_after = store.list_warehouses(tenant_id).await.unwrap();
@@ -129,10 +131,11 @@ async fn test_multiple_tenants_isolation() {
     // Create warehouse for tenant1
     let warehouse1 = Warehouse {
         id: Uuid::new_v4(),
-        name: "warehouse1".to_string(),
+        name: "wh1".to_string(),
         tenant_id: tenant1,
         use_sts: false,
         storage_config: HashMap::new(),
+        vending_strategy: None,
     };
     store.create_warehouse(tenant1, warehouse1).await.unwrap();
     
@@ -178,6 +181,7 @@ async fn test_warehouse_delete_prevents_orphaned_catalogs() {
         tenant_id,
         use_sts: false,
         storage_config: HashMap::new(),
+        vending_strategy: None,
     };
     store.create_warehouse(tenant_id, warehouse).await.unwrap();
     

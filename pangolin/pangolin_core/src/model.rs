@@ -10,12 +10,39 @@ pub struct Tenant {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum VendingStrategy {
+    /// AWS S3 with STS temporary credentials
+    AwsSts {
+        role_arn: String,
+        external_id: Option<String>,
+    },
+    /// AWS S3 with static credentials
+    AwsStatic {
+        access_key_id: String,
+        secret_access_key: String,
+    },
+    /// Azure Blob Storage with SAS tokens
+    AzureSas {
+        account_name: String,
+        account_key: String,
+    },
+    /// GCP with downscoped credentials
+    GcpDownscoped {
+        service_account_email: String,
+        private_key: String,
+    },
+    /// No credential vending (client-provided only)
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Warehouse {
     pub id: Uuid,
     pub name: String,
     pub tenant_id: Uuid,
     pub storage_config: std::collections::HashMap<String, String>,
-    pub use_sts: bool, // If true, vend STS credentials; if false, pass through static creds
+    pub use_sts: bool, // Deprecated in favor of vending_strategy, kept for backward compatibility
+    pub vending_strategy: Option<VendingStrategy>,
 }
 
 // Federated Catalog Support
@@ -317,6 +344,7 @@ pub struct WarehouseUpdate {
     pub name: Option<String>,
     pub storage_config: Option<HashMap<String, String>>,
     pub use_sts: Option<bool>,
+    pub vending_strategy: Option<VendingStrategy>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

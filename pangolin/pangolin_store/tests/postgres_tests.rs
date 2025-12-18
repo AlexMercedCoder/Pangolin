@@ -136,7 +136,7 @@ async fn test_postgres_access_requests() {
     store.create_asset(tenant_id, "req_catalog", None, vec!["default".to_string()], asset.clone()).await.expect("Create asset");
     
     // 1. Create Request
-    let mut request = AccessRequest::new(user.id, asset.id, Some("Access please".to_string()));
+    let mut request = AccessRequest::new(user.tenant_id.expect("tenant_id"), user.id, asset.id, Some("Access please".to_string()));
     store.create_access_request(request.clone()).await.expect("Create request");
 
     // 2. Get Request

@@ -17,6 +17,7 @@ pub async fn test_asset_update_consistency<S: CatalogStore>(store: &S) {
         tenant_id,
         storage_config: HashMap::new(),
         use_sts: false,
+        vending_strategy: None,
     };
     let _ = store.create_warehouse(tenant_id, warehouse.clone()).await; // Ignore error if exists/unimplemented checking
 
@@ -82,3 +83,5 @@ pub async fn test_asset_update_consistency<S: CatalogStore>(store: &S) {
     let current_loc = store.get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone()).await.unwrap();
     assert_eq!(current_loc, Some(new_loc), "Location should not change on CAS failure");
 }
+
+pub mod multi_cloud;

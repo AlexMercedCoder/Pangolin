@@ -43,6 +43,7 @@ async fn test_warehouse_update() {
         tenant_id,
         storage_config: HashMap::from([("type".to_string(), "s3".to_string())]),
         use_sts: false,
+        vending_strategy: None,
     };
     store.create_warehouse(tenant_id, warehouse).await.unwrap();
     
@@ -51,6 +52,7 @@ async fn test_warehouse_update() {
         name: None,
         storage_config: Some(HashMap::from([("role_arn".to_string(), "arn:aws:iam::123:role/test".to_string())])),
         use_sts: Some(true),
+        vending_strategy: None,
     };
     let updated = store.update_warehouse(tenant_id, "test_wh".to_string(), updates).await.unwrap();
     assert_eq!(updated.use_sts, true);

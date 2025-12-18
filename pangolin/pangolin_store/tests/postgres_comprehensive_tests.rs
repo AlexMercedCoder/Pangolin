@@ -48,12 +48,10 @@ async fn test_postgres_warehouse_crud() {
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
         tenant_id,
-        name: warehouse_name.clone(),
+        name: "test_wh".to_string(),
         use_sts: false,
-        storage_config: HashMap::from([
-            ("type".to_string(), "s3".to_string()),
-            ("bucket".to_string(), "test-bucket".to_string()),
-        ]),
+        storage_config: From::from([("s3.bucket".to_string(), "b".to_string())]),
+        vending_strategy: None,
     };
     
     store.create_warehouse(tenant_id, warehouse.clone()).await.expect("Failed to create warehouse");
@@ -262,6 +260,7 @@ async fn test_postgres_multi_tenant_isolation() {
         name: "shared_name".to_string(),
         use_sts: false,
         storage_config: HashMap::new(),
+        vending_strategy: None,
     };
     store.create_warehouse(tenant1_id, warehouse).await.unwrap();
     

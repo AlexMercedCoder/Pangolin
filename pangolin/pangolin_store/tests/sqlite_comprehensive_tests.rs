@@ -55,12 +55,13 @@ async fn test_sqlite_warehouse_crud() {
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
         tenant_id: tenant.id,
-        name: "test_warehouse".to_string(),
+        name: "test_wh".to_string(),
         use_sts: false,
-        storage_config: HashMap::from([
+        storage_config: From::from([
             ("type".to_string(), "s3".to_string()),
-            ("bucket".to_string(), "test".to_string()),
+            ("bucket".to_string(), "test-bucket".to_string()),
         ]),
+        vending_strategy: None,
     };
     
     store.create_warehouse(tenant.id, warehouse.clone()).await.expect("Failed to create warehouse");
@@ -475,7 +476,7 @@ async fn test_sqlite_access_requests() {
         .expect("Create asset");
 
     // 1. Create Request
-    let mut request = AccessRequest::new(user.id, asset.id, Some("Need access".to_string()));
+    let mut request = AccessRequest::new(tenant.id, user.id, asset.id, Some("Need access".to_string()));
     store.create_access_request(request.clone()).await.expect("Create request");
 
     // 2. Get Request

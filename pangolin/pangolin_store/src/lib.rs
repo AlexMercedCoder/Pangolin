@@ -4,6 +4,8 @@ pub mod postgres;
 pub mod mongo;
 pub mod sqlite;
 pub mod tests;
+pub mod azure_signer;
+pub mod gcp_signer;
 
 pub use memory::MemoryStore;
 pub use postgres::PostgresStore;

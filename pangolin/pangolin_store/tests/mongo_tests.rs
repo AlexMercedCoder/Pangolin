@@ -35,6 +35,7 @@ async fn test_mongo_store_flow() {
         tenant_id,
         storage_config: HashMap::new(),
         use_sts: false,
+        vending_strategy: None,
     };
     store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
 
