@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { token } from '$lib/auth';
+    import { token } from '$lib/stores/auth';
     import { fade } from 'svelte/transition';
 
     let query = '';

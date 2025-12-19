@@ -11,10 +11,9 @@ describe('Warehouses Page', () => {
             { 
                 id: 'w1', 
                 name: 'warehouse-1', 
-                tenant_id: 't1',
                 use_sts: false,
                 storage_config: { type: 's3', bucket: 'test-bucket', region: 'us-east-1' },
-                vending_strategy: null
+                vending_strategy: undefined
             }
         ]);
         // Set selected tenant to trigger load

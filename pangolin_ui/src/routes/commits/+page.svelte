@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
-    import { user, token } from '$lib/auth';
+    import { user, token } from '$lib/stores/auth';
 
     let commits: any[] = [];
     let branchName = $page.url.searchParams.get('branch');

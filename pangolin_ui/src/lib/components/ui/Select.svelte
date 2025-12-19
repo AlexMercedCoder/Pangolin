@@ -8,18 +8,31 @@
 	export let label = '';
 	export let id = '';
 	export let required = false;
+	export let tooltip = '';
 
 	const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
 </script>
 
 <div class="space-y-1">
 	{#if label}
-		<label for={selectId} class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-			{label}
-			{#if required}
-				<span class="text-error-600">*</span>
+		<div class="flex items-center gap-1.5 mb-1">
+			<label for={selectId} class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+				{label}
+				{#if required}
+					<span class="text-error-600">*</span>
+				{/if}
+			</label>
+			{#if tooltip}
+				<div class="group relative flex items-center">
+					<span class="material-icons text-xs text-gray-400 cursor-help hover:text-primary-500 transition-colors">help</span>
+					<div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-900 text-white text-xs rounded shadow-lg 
+								opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-10 text-center font-normal">
+						{tooltip}
+						<div class="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900"></div>
+					</div>
+				</div>
 			{/if}
-		</label>
+		</div>
 	{/if}
 	<select
 		id={selectId}

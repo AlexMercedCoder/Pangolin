@@ -7,8 +7,8 @@ import { tenantsApi } from '$lib/api/tenants';
 describe('Tenants Page', () => {
     beforeEach(() => {
         vi.mocked(tenantsApi.list).mockResolvedValue([
-            { id: 't1', name: 'Tenant One', organization: 'Org 1', properties: {} },
-            { id: 't2', name: 'Tenant Two', organization: 'Org 2', properties: {} }
+            { id: 't1', name: 'Tenant One', properties: {} },
+            { id: 't2', name: 'Tenant Two', properties: {} }
         ]);
     });
 

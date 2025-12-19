@@ -5,8 +5,10 @@
 	import { authStore, isRoot, isTenantAdmin } from '$lib/stores/auth';
 	import { themeStore } from '$lib/stores/theme';
 	import { tenantStore } from '$lib/stores/tenant';
+	import { helpStore } from '$lib/stores/help';
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
 	import Notification from '$lib/components/ui/Notification.svelte';
+	import HelpPanel from '$lib/components/ui/HelpPanel.svelte';
 	import '../app.css';
 
 	let sidebarOpen = true;
@@ -47,6 +49,23 @@
 
 		return unsubscribeAuth;
 	});
+
+	// Route guards
+	$: if ($authStore.isAuthenticated && !$authStore.isLoading) {
+		const path = $page.url.pathname;
+		
+		// Root-only routes
+		const rootRoutes = ['/tenants', '/root-dashboard'];
+		if (rootRoutes.some(r => path === r || path.startsWith(r + '/')) && !$isRoot) {
+			goto('/');
+		}
+
+		// Admin-only routes (Root or TenantAdmin)
+		const adminRoutes = ['/users', '/warehouses', '/roles', '/admin/requests'];
+		if (adminRoutes.some(r => path === r || path.startsWith(r + '/')) && !$isRoot && !$isTenantAdmin) {
+			goto('/');
+		}
+	}
 
 	function toggleSidebar() {
 		sidebarOpen = !sidebarOpen;
@@ -254,6 +273,22 @@
 									</p>
 								</div>
 								<button
+                                    on:click={() => {
+                                        const path = $page.url.pathname;
+                                        let doc = 'README';
+                                        if (path.startsWith('/warehouses')) doc = 'features/warehouse_management';
+                                        if (path.startsWith('/catalogs')) doc = 'features/catalog_management'; // Adjust based on actual filenames
+                                        if (path.startsWith('/tenants')) doc = 'features/multi_tenancy';
+                                        if (path.startsWith('/users')) doc = 'authentication'; // or user management if exists
+                                        
+                                        helpStore.open(doc, 'Help & Resources');
+                                    }}
+                                    class="p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                    title="Contextual Help"
+                                >
+                                    <span class="material-icons">help_outline</span>
+                                </button>
+								<button
 									on:click={() => {
 										authStore.logout();
 										goto('/login');
@@ -279,5 +314,6 @@
 	{/if}
 </div>
 
-<!-- Global Notifications -->
+<!-- Global Components -->
 <Notification />
+<HelpPanel />

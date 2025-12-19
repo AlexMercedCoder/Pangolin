@@ -200,11 +200,15 @@ function createAuthStore() {
 export const authStore = createAuthStore();
 
 // Derived stores for convenience
-// Derived stores for convenience
 export const isAuthenticated = derived(authStore, $auth => $auth.isAuthenticated);
 export const currentUser = derived(authStore, $auth => $auth.user);
+export const user = currentUser; // Alias for compatibility with legacy imports
+export const token = derived(authStore, $auth => $auth.token);
 export const isRoot = derived(authStore, $auth => $auth.user?.role?.toLowerCase() === 'root');
 export const isTenantAdmin = derived(authStore, $auth => {
 	const role = $auth.user?.role?.toLowerCase();
 	return role === 'root' || role === 'tenantadmin' || role === 'tenant_admin'; // Handle potential variations
 });
+
+// Provide a legacy-compatible logout
+export const logout = () => authStore.logout();

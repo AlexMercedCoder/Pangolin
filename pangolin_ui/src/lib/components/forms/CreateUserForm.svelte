@@ -143,6 +143,7 @@
 		bind:value={formData.username}
 		error={errors.username}
 		helpText="Used for login (alphanumeric, dashes, underscores only)"
+		tooltip="A unique name for this user to log in with."
 		required
 		placeholder="john.doe"
 	/>
@@ -153,6 +154,7 @@
 		bind:value={formData.email}
 		error={errors.email}
 		helpText="User's email address"
+		tooltip="Required for password resets and notifications."
 		required
 		placeholder="john@example.com"
 	/>

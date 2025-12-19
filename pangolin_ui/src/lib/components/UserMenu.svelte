@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { user, logout } from '$lib/auth';
+    import { user, logout } from '$lib/stores/auth';
     import { goto } from '$app/navigation';
     import { onMount } from 'svelte';
     import { fade } from 'svelte/transition';

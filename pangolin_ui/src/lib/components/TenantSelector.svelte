@@ -1,6 +1,8 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { user, token, selectedTenant } from '$lib/auth';
+    import { authStore, token, isRoot } from '$lib/stores/auth';
+    import { tenantStore } from '$lib/stores/tenant';
+    import { tenantsApi } from '$lib/api/tenants';
     import { fade } from 'svelte/transition';
 
     let tenants: any[] = [];
@@ -12,16 +14,8 @@
         if (!$token) return;
         loading = true;
         try {
-            // Only Root user should really need this, and API should allow Root to list all.
-            // If the endpoint /api/v1/tenants returns all for Root, we are good.
-            const res = await fetch('/api/v1/tenants', {
-                headers: {
-                    'Authorization': `Bearer ${$token}`
-                }
-            });
-            if (res.ok) {
-                tenants = await res.json();
-            }
+            // Use the API client instead of raw fetch to ensure consistency
+            tenants = await tenantsApi.list();
         } catch (e) {
             console.error("Failed to fetch tenants", e);
         } finally {
@@ -30,7 +24,11 @@
     }
 
     function selectTenant(tenant: any) {
-        selectedTenant.set(tenant.id);
+        if (tenant.id) {
+            tenantStore.selectTenant(tenant.id, tenant.name);
+        } else {
+            tenantStore.clearTenant();
+        }
         isOpen = false;
         // Optionally reload page or trigger data refresh
         window.location.reload(); 
@@ -57,10 +55,10 @@
     });
 
     // Reactive label
-    $: currentTenantName = tenants.find(t => t.id === $selectedTenant)?.name || 'All Tenants';
+    $: currentTenantName = $tenantStore.selectedTenantName || 'All Tenants';
 </script>
 
-{#if $user?.role === 'Root'}
+{#if $isRoot}
 <div class="tenant-selector" bind:this={menuRef}>
     <button class="selector-btn" on:click|stopPropagation={toggleMenu}>
         <span class="material-icons">business</span>
@@ -73,11 +71,11 @@
             {#if loading}
                 <div class="item loading">Loading...</div>
             {:else}
-                <button class="item" on:click={() => selectTenant({id: null, name: 'All Tenants'})} class:selected={!$selectedTenant}>
+                <button class="item" on:click={() => selectTenant({id: null, name: 'All Tenants'})} class:selected={!$tenantStore.selectedTenantId}>
                     All Tenants
                 </button>
                 {#each tenants as tenant}
-                    <button class="item" on:click={() => selectTenant(tenant)} class:selected={$selectedTenant === tenant.id}>
+                    <button class="item" on:click={() => selectTenant(tenant)} class:selected={$tenantStore.selectedTenantId === tenant.id}>
                         {tenant.name}
                     </button>
                 {/each}
