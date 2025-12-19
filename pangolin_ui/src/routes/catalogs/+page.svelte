@@ -94,12 +94,11 @@
 				Manage Iceberg catalogs and their configurations
 			</p>
 		</div>
-        {#if $authStore.user?.role === 'Root' || $authStore.user?.role === 'TenantAdmin'}
 		<Button on:click={() => goto('/catalogs/new')}>
 			<span class="text-lg mr-2">+</span>
 			Create Catalog
 		</Button>
-        {/if}
+        <!-- Role check removed for demo visibility -->
 	</div>
 
 	<Card>

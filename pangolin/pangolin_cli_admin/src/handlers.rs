@@ -518,23 +518,66 @@ pub async fn handle_revoke_permission(client: &PangolinClient, role: String, act
 }
 
 // --- Governance: Metadata ---
-pub async fn handle_get_metadata(client: &PangolinClient, entity_type: String, entity_id: String) -> Result<(), CliError> {
-    let res = client.get(&format!("/api/v1/metadata/{}/{}", entity_type, entity_id)).await?;
+pub async fn handle_get_metadata(client: &PangolinClient, _entity_type: String, entity_id: String) -> Result<(), CliError> {
+    // API uses asset ID directly
+    let res = client.get(&format!("/api/v1/assets/{}/metadata", entity_id)).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     
-    let metadata: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
-    println!("{}", serde_json::to_string_pretty(&metadata).unwrap());
+    let response: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    // Response body is { "metadata": { ... } }
+    if let Some(metadata) = response.get("metadata") {
+        println!("{}", serde_json::to_string_pretty(metadata).unwrap());
+    } else {
+        println!("{}", serde_json::to_string_pretty(&response).unwrap());
+    }
     Ok(())
 }
 
-pub async fn handle_set_metadata(client: &PangolinClient, entity_type: String, entity_id: String, key: String, value: String) -> Result<(), CliError> {
-    let body = serde_json::json!({
-        "key": key,
-        "value": value
+pub async fn handle_set_metadata(client: &PangolinClient, _entity_type: String, entity_id: String, key: String, value: String) -> Result<(), CliError> {
+    // 1. Fetch existing metadata to preserve other fields
+    let get_res = client.get(&format!("/api/v1/assets/{}/metadata", entity_id)).await?;
+    
+    let mut current_metadata = if get_res.status().is_success() {
+        let body: Value = get_res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+        body.get("metadata").cloned().unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    // 2. Prepare defaults if missing
+    let description = current_metadata.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let tags = current_metadata.get("tags").and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_else(|| Vec::<String>::new());
+    let discoverable = current_metadata.get("discoverable").and_then(|v| v.as_bool()).unwrap_or(false);
+    
+    let mut properties = current_metadata.get("properties").cloned().unwrap_or(serde_json::json!({}));
+    
+    // 3. Update property (Try to parse as JSON, else String)
+    let json_value = serde_json::from_str(&value).unwrap_or(serde_json::Value::String(value));
+    
+    if let Some(obj) = properties.as_object_mut() {
+        obj.insert(key, json_value);
+    } else {
+        // If properties was null or not an object, make it one
+        properties = serde_json::json!({ key: json_value });
+    }
+
+    // 4. Construct Payload
+    let payload = serde_json::json!({
+        "description": description,
+        "tags": tags,
+        "properties": properties,
+        "discoverable": discoverable
     });
-    let res = client.post(&format!("/api/v1/metadata/{}/{}", entity_type, entity_id), &body).await?;
-     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
-    println!("✅ Metadata set.");
+
+    let res = client.post(&format!("/api/v1/assets/{}/metadata", entity_id), &payload).await?;
+    if !res.status().is_success() { 
+        let s = res.status();
+        let t = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("Error: {} - {}", s, t))); 
+    }
+    println!("✅ Metadata updated.");
     Ok(())
 }
 // --- Federated Catalogs ---

@@ -55,7 +55,7 @@
 				type="text"
 				bind:value={query}
                 on:keydown={(e) => e.key === 'Enter' && handleSearch()}
-				placeholder="Search for datasets, tags, or descriptions..."
+				placeholder="Search for datasets (use # for tags, e.g. #public)..."
 				class="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
 			/>
 			<button
@@ -97,13 +97,24 @@
                 {/if}
 
                 <div class="mt-auto pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                    <span class="text-xs text-gray-500">{asset.location}</span>
-                    <button 
-                        on:click={() => openRequestModal(asset.id)}
-                        class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                    >
-                        Request Access
-                    </button>
+                    <span class="text-xs text-gray-500">
+                        {asset.catalog ? `${asset.catalog}.${asset.namespace}` : asset.location}
+                    </span>
+                    {#if !asset.has_access && asset.discoverable}
+                        <button 
+                            on:click={() => openRequestModal(asset.id)}
+                            class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                        >
+                            Request Access
+                        </button>
+                    {:else if asset.has_access}
+                        <a 
+                            href="/assets/{asset.id}"
+                            class="text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                        >
+                            View Asset
+                        </a>
+                    {/if}
                 </div>
             </div>
         {/each}

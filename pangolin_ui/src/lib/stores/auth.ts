@@ -207,7 +207,7 @@ export const token = derived(authStore, $auth => $auth.token);
 export const isRoot = derived(authStore, $auth => $auth.user?.role?.toLowerCase() === 'root');
 export const isTenantAdmin = derived(authStore, $auth => {
 	const role = $auth.user?.role?.toLowerCase();
-	return role === 'root' || role === 'tenantadmin' || role === 'tenant_admin'; // Handle potential variations
+	return role === 'root' || role === 'tenantadmin' || role === 'tenant_admin' || role === 'tenant-admin'; // Handle potential variations
 });
 
 // Provide a legacy-compatible logout

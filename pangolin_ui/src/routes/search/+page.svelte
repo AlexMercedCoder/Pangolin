@@ -32,7 +32,7 @@
 
             if (res.ok) {
                 const data = await res.json();
-                results = data.results;
+                results = Array.isArray(data) ? data : (data.results || []);
             } else if (res.status === 501) {
                 error = 'Search functionality is not yet implemented on the backend.';
             } else {
@@ -99,7 +99,7 @@
                             </span>
                             <div>
                                 <h3><a href="/assets/{result.id}">{result.name}</a></h3>
-                                <small>{result.namespace}</small>
+                                <small>{result.catalog ? `${result.catalog}.${result.namespace}` : result.namespace}</small>
                             </div>
                             <div class="discoverable-status">
                                 {#if !result.has_access && result.discoverable}

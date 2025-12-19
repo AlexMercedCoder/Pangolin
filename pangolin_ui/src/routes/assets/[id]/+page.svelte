@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
     import { authStore } from '$lib/stores/auth';
+    import TagInput from '$lib/components/ui/TagInput.svelte';
     
     $: token = $authStore.token;
     import { fade } from 'svelte/transition';
@@ -19,7 +20,7 @@
     let isEditing = false;
     let editForm = {
         description: '',
-        tags: '',
+        tags: [] as string[],
         discoverable: false,
         properties: '' // JSON string
     };
@@ -39,7 +40,7 @@
                 
                 // Init edit form
                 editForm.description = metadata?.description || '';
-                editForm.tags = metadata?.tags?.join(', ') || '';
+                editForm.tags = metadata?.tags || [];
                 editForm.discoverable = metadata?.discoverable || false;
                 editForm.properties = JSON.stringify(metadata?.properties || {}, null, 2);
             } else {
@@ -56,7 +57,7 @@
 
             const payload = {
                 description: editForm.description,
-                tags: editForm.tags.split(',').map(t => t.trim()).filter(Boolean),
+                tags: editForm.tags,
                 properties: props,
                 discoverable: editForm.discoverable
             };
@@ -191,8 +192,11 @@
                                 <textarea bind:value={editForm.description} rows="5"></textarea>
                             </div>
                             <div class="form-group">
-                                <label>Tags (comma separated)</label>
-                                <input bind:value={editForm.tags} />
+                                <label>Tags</label>
+                                <TagInput 
+                                    bind:tags={editForm.tags} 
+                                    placeholder="Type and press Enter to add tags..." 
+                                />
                             </div>
                             <div class="form-group">
                                 <label>

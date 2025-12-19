@@ -11,6 +11,7 @@ use pangolin_core::model::{Asset, AssetType};
 use uuid::Uuid;
 use crate::auth::TenantId;
 use crate::iceberg_handlers::{AppState, parse_table_identifier};
+use utoipa::ToSchema;
 
 #[derive(Deserialize)]
 pub struct CreateViewRequest {

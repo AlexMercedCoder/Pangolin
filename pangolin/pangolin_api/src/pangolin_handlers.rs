@@ -581,13 +581,38 @@ impl From<pangolin_core::model::Catalog> for CatalogResponse {
 pub async fn list_catalogs(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
 ) -> impl IntoResponse {
-    tracing::info!("list_catalogs called with tenant_id: {}", tenant.0);
-    match store.list_catalogs(tenant.0).await {
+    let tenant_id = tenant.0;
+    tracing::info!("list_catalogs called with tenant_id: {}", tenant_id);
+
+    match store.list_catalogs(tenant_id).await {
         Ok(catalogs) => {
-            tracing::info!("list_catalogs returning {} catalogs for tenant {}", catalogs.len(), tenant.0);
-            let resp: Vec<CatalogResponse> = catalogs.into_iter().map(|c| c.into()).collect();
-            (StatusCode::OK, Json(resp)).into_response()
+            // RBAC Check
+            if crate::authz::is_admin(&session.role) {
+                tracing::info!("list_catalogs returning ALL {} catalogs for admin", catalogs.len());
+                let resp: Vec<CatalogResponse> = catalogs.into_iter().map(|c| c.into()).collect();
+                return (StatusCode::OK, Json(resp)).into_response();
+            }
+
+            // Filter for non-admin users
+            let user_permissions = match store.list_user_permissions(session.user_id).await {
+                Ok(p) => p,
+                Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch permissions").into_response(),
+            };
+
+            let filtered_catalogs: Vec<CatalogResponse> = catalogs.into_iter()
+                .filter(|c| {
+                    user_permissions.iter().any(|p| 
+                        matches!(p.scope, PermissionScope::Catalog { catalog_id } if catalog_id == c.id) &&
+                        p.actions.contains(&Action::Read)
+                    )
+                })
+                .map(|c| c.into())
+                .collect();
+
+            tracing::info!("list_catalogs returning {} filtered catalogs for user {}", filtered_catalogs.len(), session.user_id);
+            (StatusCode::OK, Json(filtered_catalogs)).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
@@ -752,6 +777,7 @@ pub async fn update_catalog(
         }
     }
 }
+
 
 /// Helper: Find the common ancestor commit between two branches
 async fn find_common_ancestor(

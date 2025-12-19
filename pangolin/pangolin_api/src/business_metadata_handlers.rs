@@ -19,7 +19,7 @@ use utoipa::ToSchema;
 pub struct AddMetadataRequest {
     pub description: Option<String>,
     pub tags: Vec<String>,
-    pub properties: std::collections::HashMap<String, String>,
+    pub properties: serde_json::Value,
     pub discoverable: bool,
 }
 
@@ -181,53 +181,56 @@ pub async fn search_assets(
 ) -> impl IntoResponse {
     let tenant_id = session.tenant_id.unwrap_or_default();
     
-    match store.search_assets(tenant_id, &params.query, params.tags).await {
+    // Handle #tag syntax in query
+    let (query, tags) = if params.query.trim().starts_with('#') {
+        let tag = params.query.trim()[1..].to_string();
+        let mut t = params.tags.unwrap_or_default();
+        t.push(tag);
+        ("".to_string(), Some(t))
+    } else {
+         (params.query, params.tags)
+    };
+    
+    match store.search_assets(tenant_id, &query, tags).await {
         Ok(results) => {
-            // Fetch User Permissions once
-            // We need a helper to check permissions efficiently.
-            // Or just list them all? `store.list_user_permissions(user_id)`
             tracing::info!("SEARCH DEBUG: Session user_id: {}", session.user_id);
             let user_perms = store.list_user_permissions(session.user_id).await.unwrap_or_default();
             
-            // Need mapping of Catalog Name -> Catalog ID for permission checks
             let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
             let catalog_map: std::collections::HashMap<_, _> = catalogs.iter().map(|c| (c.name.clone(), c.id)).collect();
 
-            // ASYNC FILTERING WORKAROUND
-            tracing::info!("SEARCH DEBUG: User perms: {:?}", user_perms);
-            tracing::info!("SEARCH DEBUG: Catalog map: {:?}", catalog_map);
+            // Store results tuple: (Asset, Metadata, HasAccess, CatalogName, Namespace)
+            let mut final_results: Vec<(pangolin_core::model::Asset, Option<BusinessMetadata>, bool, String, String)> = Vec::new();
             
-            let mut final_results: Vec<(pangolin_core::model::Asset, Option<BusinessMetadata>)> = Vec::new();
             for (asset, metadata) in results {
                 let is_discoverable = metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
-                if is_discoverable || crate::authz::is_admin(&session.role) {
-                    final_results.push((asset, metadata));
-                    continue;
-                }
                 
-                // Check Read Permission
-                if let Ok(Some((_, catalog_name, _))) = store.get_asset_by_id(tenant_id, asset.id).await {
-                     if let Some(catalog_id) = catalog_map.get(&catalog_name) {
-                         // Check permissions
-                         // Simple check: Does user have READ on this catalog?
-                         // (Namespace scope checking would require parsing namespace from asset properties or similar)
-                         // Let's assume Catalog-Level READ for now as phase 1 step.
-                         
-                         let has_read = user_perms.iter().any(|p| 
-                             p.actions.contains(&Action::Read) && 
-                             matches!(&p.scope, PermissionScope::Catalog { catalog_id: cid } if cid == catalog_id)
-                         );
-                         
-                         tracing::info!("SEARCH DEBUG: Asset {} in Catalog {} (ID: {:?}). Has Read: {}", asset.name, catalog_name, catalog_id, has_read);
-                         
-                         if has_read {
-                             final_results.push((asset, metadata));
-                         }
-                     }
+                // Get additional context (Catalog/Namespace) for FQN and Permissions
+                // We resolve this for every item to ensure we can display FQN
+                let (catalog_name, namespace) = match store.get_asset_by_id(tenant_id, asset.id).await {
+                    Ok(Some((_, c, n))) => (c, n.join(".")),
+                    Ok(None) => ("Unknown".to_string(), "Unknown".to_string()),
+                    Err(_) => ("Error".to_string(), "Error".to_string()), 
+                };
+                
+                // Calculate Read Permission
+                let has_read = if crate::authz::is_admin(&session.role) {
+                    true
+                } else if let Some(catalog_id) = catalog_map.get(&catalog_name) {
+                     user_perms.iter().any(|p| 
+                         p.actions.contains(&Action::Read) && 
+                         matches!(&p.scope, PermissionScope::Catalog { catalog_id: cid } if cid == catalog_id)
+                     )
+                } else {
+                    false
+                };
+
+                if is_discoverable || has_read || crate::authz::is_admin(&session.role) {
+                    final_results.push((asset, metadata, has_read, catalog_name.clone(), namespace.clone()));
                 }
             }
 
-            let mapped_results: Vec<_> = final_results.into_iter().map(|(asset, metadata)| {
+            let mapped_results: Vec<_> = final_results.into_iter().map(|(asset, metadata, has_access, catalog, namespace)| {
                 serde_json::json!({
                     "id": asset.id,
                     "name": asset.name,
@@ -235,6 +238,10 @@ pub async fn search_assets(
                     "location": asset.location,
                     "description": metadata.as_ref().and_then(|m| m.description.clone()),
                     "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
+                    "has_access": has_access,
+                    "discoverable": metadata.as_ref().map(|m| m.discoverable).unwrap_or(false),
+                    "catalog": catalog,
+                    "namespace": namespace
                 })
             }).collect();
             

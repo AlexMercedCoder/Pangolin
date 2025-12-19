@@ -22,7 +22,7 @@
 	let showCreateModal = false;
 	let newName = '';
 	let newDescription = '';
-	let newRole: UserRole = 'TenantUser';
+	let newRole: UserRole = 'tenant-user';
 	let newExpiresIn: number | null = null;
 
 	// API Key Modal State
@@ -39,8 +39,8 @@
 	let userToRotate: ServiceUser | null = null;
 
 	const roleOptions = [
-		{ value: 'TenantUser', label: 'Tenant User (Read/Write)' },
-		{ value: 'TenantAdmin', label: 'Tenant Admin (Full Access)' }
+		{ value: 'tenant-user', label: 'Tenant User (Read/Write)' },
+		{ value: 'tenant-admin', label: 'Tenant Admin (Full Access)' }
 	];
 
 	const columns = [
@@ -67,7 +67,7 @@
 	function openCreateModal() {
 		newName = '';
 		newDescription = '';
-		newRole = 'TenantUser';
+		newRole = 'tenant-user';
 		newExpiresIn = null;
 		showCreateModal = true;
 	}

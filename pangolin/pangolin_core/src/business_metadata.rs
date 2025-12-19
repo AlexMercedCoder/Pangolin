@@ -15,7 +15,7 @@ pub struct BusinessMetadata {
     /// Tags/labels for categorization
     pub tags: Vec<String>,
     /// Custom key-value properties
-    pub properties: HashMap<String, String>,
+    pub properties: serde_json::Value,
     /// Whether this asset appears in search for users without access
     pub discoverable: bool,
     pub created_by: Uuid,
@@ -31,7 +31,7 @@ impl BusinessMetadata {
             asset_id,
             description: None,
             tags: Vec::new(),
-            properties: HashMap::new(),
+            properties: serde_json::json!({}),
             discoverable: false,
             created_by,
             created_at: Utc::now(),
@@ -67,14 +67,18 @@ impl BusinessMetadata {
         self.updated_at = Utc::now();
     }
 
-    pub fn set_property(&mut self, key: String, value: String) {
-        self.properties.insert(key, value);
-        self.updated_at = Utc::now();
+    pub fn set_property(&mut self, key: String, value: serde_json::Value) {
+        if let Some(obj) = self.properties.as_object_mut() {
+            obj.insert(key, value);
+            self.updated_at = Utc::now();
+        }
     }
 
     pub fn remove_property(&mut self, key: &str) {
-        self.properties.remove(key);
-        self.updated_at = Utc::now();
+        if let Some(obj) = self.properties.as_object_mut() {
+            obj.remove(key);
+            self.updated_at = Utc::now();
+        }
     }
 
     pub fn update(&mut self, updated_by: Uuid) {

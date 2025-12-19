@@ -37,13 +37,57 @@
                 type: 'catalog',
                 icon: '📚',
                 hasChildren: true,
-                expanded: false
+                expanded: false,
+                // Pass loader for namespaces
+                loadChildren: () => loadNamespaces(c.name)
             }));
         } catch (e: any) {
             console.error('Failed to load catalogs:', e);
             error = e.message || 'Failed to load catalogs';
         } finally {
             loading = false;
+        }
+    }
+
+    async function loadNamespaces(catalogName: string) {
+        try {
+            const nss = await icebergApi.listNamespaces(catalogName);
+            // Namespace is array of strings (parts).
+            return nss.map(nsParts => {
+                const label = nsParts.join('.');
+                return {
+                    id: `${catalogName}.${label}`,
+                    label: label,
+                    type: 'namespace',
+                    icon: '📁',
+                    href: `/catalogs/${catalogName}/namespaces/${label}`, // Context for click
+                    hasChildren: true,
+                    expanded: false,
+                    // Pass loader for tables
+                    loadChildren: () => loadTables(catalogName, nsParts)
+                };
+            });
+        } catch (e) {
+            console.error(`Failed to load namespaces for ${catalogName}:`, e);
+            return [];
+        }
+    }
+
+    async function loadTables(catalogName: string, namespaceParts: string[]) {
+        try {
+            const tables = await icebergApi.listTables(catalogName, namespaceParts);
+            return tables.map(t => ({
+                id: `${catalogName}.${namespaceParts.join('.')}.${t.name}`,
+                label: t.name,
+                type: 'table',
+                icon: '📄',
+                href: `/catalogs/${catalogName}/tables/${namespaceParts.join('.')}/${t.name}`,
+                hasChildren: false,
+                expanded: false
+            }));
+        } catch (e) {
+             console.error(`Failed to load tables for ${namespaceParts.join('.')}:`, e);
+             return [];
         }
     }
 
@@ -194,7 +238,7 @@
                 </button>
                 <button 
                      class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
-                     on:click={() => triggerExplorerRefresh('catalog')}
+                     on:click={() => triggerExplorerRefresh('content')}
                 >
                     <span class="material-icons text-xs">refresh</span> Refresh
                 </button>
@@ -207,7 +251,7 @@
                 </button>
                  <button 
                      class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
-                     on:click={() => triggerExplorerRefresh('catalog')}
+                     on:click={() => triggerExplorerRefresh('content')}
                 >
                     <span class="material-icons text-xs">refresh</span> Refresh
                 </button>

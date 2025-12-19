@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 
-export type UserRole = 'Root' | 'TenantAdmin' | 'TenantUser';
+export type UserRole = 'root' | 'tenant-admin' | 'tenant-user';
 
 export interface ServiceUser {
 	id: string;

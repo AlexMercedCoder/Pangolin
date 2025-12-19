@@ -59,46 +59,52 @@ export interface CreateTableRequest {
 
 export const icebergApi = {
     async listNamespaces(catalogName: string, parent?: string[]): Promise<string[][]> {
-        const query = parent ? `?parent=${parent.join('.')}` : ''; // Simplified parent handling, usually passed as query param if supported or encoded in url
-        // Pangolin/Iceberg REST maps namespaces strictly. 
-        // Standard Iceberg REST: GET /v1/namespaces
-        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
+        const query = parent ? `?parent=${parent.join('.')}` : ''; 
+        // Correct route per lib.rs: /v1/:prefix/namespaces
+        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
         
-        const response = await apiClient.get<ListNamespacesResponse>(`${baseUrl}/v1/namespaces${query}`);
+        // The backend defines /v1/:prefix/namespaces, so we append /namespaces
+        const url = `${baseUrl}/namespaces${query}`;
+        console.log('iceberg.listNamespaces fetching:', url);
+        const response = await apiClient.get<ListNamespacesResponse>(url);
         if (response.error) throw new Error(response.error.message);
         return response.data?.namespaces || [];
     },
 
     async getNamespace(catalogName: string, namespace: string[]): Promise<Namespace> {
-        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
-        const nsStr = namespace.join('\x1F'); // Iceberg REST spec often uses specific encoding or joiner.
-        // Actually standard REST API usually encodes namespace parts in URL path if simpler, or uses escaped dots.
-        // Pangolin implementation likely expects standard REST behavior.
-        // Let's assume joining by encoded dot or verify based on typical python client behavior.
-        // PyIceberg joins with dot if simple, else multipart.
-        // For REST, it's usually /v1/namespaces/{namespace}
-        // Let's proceed with standard dot join for now, safe for simple names.
-        
-        const response = await apiClient.get<Namespace>(`${baseUrl}/v1/namespaces/${namespace.join('.')}`);
+        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
+        // Note: Client usually joins with x1F, but backend often supports dots if standard
+        // lib.rs route: /v1/:prefix/namespaces/:namespace
+        const response = await apiClient.get<Namespace>(`${baseUrl}/namespaces/${namespace.join('.')}`);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
     },
 
     async listTables(catalogName: string, namespace: string[]): Promise<TableIdentifier[]> {
-        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
+        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
         const nsPath = namespace.join('.');
-        const response = await apiClient.get<ListTablesResponse>(`${baseUrl}/v1/namespaces/${nsPath}/tables`);
+        // lib.rs: /v1/:prefix/namespaces/:namespace/tables
+        const response = await apiClient.get<ListTablesResponse>(`${baseUrl}/namespaces/${nsPath}/tables`);
         if (response.error) throw new Error(response.error.message);
         return response.data!.identifiers;
     },
 
     async loadTable(catalogName: string, namespace: string[], table: string): Promise<Table> {
-        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
+        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
         const nsPath = namespace.join('.');
-        const response = await apiClient.get<Table>(`${baseUrl}/v1/namespaces/${nsPath}/tables/${table}`);
+        // lib.rs: /v1/:prefix/namespaces/:namespace/tables/:table
+        const response = await apiClient.get<Table>(`${baseUrl}/namespaces/${nsPath}/tables/${table}`);
         if (response.error) throw new Error(response.error.message);
         
-        const result = response.data!;
+        const data = response.data as any;
+        
+        // Unwrap metadata if it's wrapped (standard Iceberg REST Response)
+        let result = data;
+        if (data.metadata) {
+            result = data.metadata;
+            // unexpected but useful to keep metadata-location available if needed, usually it's in config or top level
+        }
+
         if (!result.identifier) {
             result.identifier = { namespace, name: table };
         }
@@ -106,16 +112,16 @@ export const icebergApi = {
     },
 
     async createNamespace(catalogName: string, request: CreateNamespaceRequest): Promise<Namespace> {
-        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
-        const response = await apiClient.post<Namespace>(`${baseUrl}/v1/namespaces`, request);
+        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
+        const response = await apiClient.post<Namespace>(`${baseUrl}/namespaces`, request);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
     },
 
     async createTable(catalogName: string, namespace: string[], request: CreateTableRequest): Promise<Table> {
-        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}/iceberg`;
+        const baseUrl = `/v1/${encodeURIComponent(catalogName)}`;
         const nsPath = namespace.join('.');
-        const response = await apiClient.post<Table>(`${baseUrl}/v1/namespaces/${nsPath}/tables`, request);
+        const response = await apiClient.post<Table>(`${baseUrl}/namespaces/${nsPath}/tables`, request);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
     }

@@ -5,25 +5,14 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
-	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { notifications } from '$lib/stores/notifications';
-    import { isTenantAdmin } from '$lib/stores/auth';
-	import MergeBranchModal from '$lib/components/merges/MergeBranchModal.svelte';
+	import { icebergApi } from '$lib/api/iceberg';
+    import Input from '$lib/components/ui/Input.svelte';
+    import Modal from '$lib/components/ui/Modal.svelte';
 
-	let catalog: Catalog | null = null;
-	let branches: Branch[] = [];
-	let selectedBranch = 'main';
-	let loading = true;
-	let showDeleteDialog = false;
-	let showMergeModal = false;
-	let deleting = false;
-
-	$: catalogName = $page.params.name || '';
-
-	onMount(async () => {
-		await loadCatalog();
-	});
+    let namespaces: string[] = [];
+    let showNamespaceModal = false;
+    let newNamespaceName = '';
+    let creatingNamespace = false;
 
 	async function loadCatalog() {
 		if (!catalogName) return;
@@ -31,8 +20,10 @@
 		loading = true;
 		try {
 			catalog = await catalogsApi.get(catalogName);
-			// Load branches for this catalog
-			await loadBranches();
+			await Promise.all([
+                loadBranches(),
+                loadNamespaces()
+            ]);
 		} catch (error: any) {
 			console.error('Error loading catalog:', error);
 			notifications.error(`Failed to load catalog: ${error.message}`);
@@ -42,12 +33,44 @@
 		}
 	}
 
+    async function loadNamespaces() {
+        try {
+            // List top-level namespaces
+            const nss = await icebergApi.listNamespaces(catalogName);
+            // namespaces returns array of arrays (multipart identifier). flatten to dot-joined string for display
+            namespaces = nss.map(ns => ns.join('.'));
+        } catch (error: any) {
+            console.error('Failed to load namespaces:', error);
+            // Don't block whole page load
+        }
+    }
+
+    async function handleCreateNamespace() {
+        if (!newNamespaceName) return;
+        creatingNamespace = true;
+        try {
+            await icebergApi.createNamespace(catalogName, {
+                namespace: newNamespaceName.split('.')
+            });
+            notifications.success(`Namespace "${newNamespaceName}" created`);
+            showNamespaceModal = false;
+            newNamespaceName = '';
+            loadNamespaces();
+        } catch (e: any) {
+            console.error(e);
+            notifications.error(`Failed to create namespace: ${e.message}`);
+        } finally {
+            creatingNamespace = false;
+        }
+    }
+
 	async function loadBranches() {
 		try {
-			const allBranches = await branchesApi.list();
-			branches = allBranches.filter(b => b.catalog === catalogName);
+			const fetchedBranches = await branchesApi.list(catalogName);
+            // API doesn't return catalog field, so we add it manually since we requested for this catalog
+			branches = fetchedBranches.map(b => ({ ...b, catalog: catalogName }));
 		} catch (error: any) {
-			console.error('Failed to load branches:', error);
+			// console.error('Failed to load branches:', error); // Squelch common error if 404
 			branches = [];
 		}
 	}
@@ -149,6 +172,39 @@
 			</dl>
 		</Card>
 
+		<!-- Namespaces Card -->
+		<Card>
+            <div class="flex items-center justify-between mb-4">
+			    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Namespaces</h3>
+                <Button size="sm" on:click={() => showNamespaceModal = true}>Create Namespace</Button>
+            </div>
+            
+            {#if namespaces.length === 0}
+			    <p class="text-gray-600 dark:text-gray-400">
+				    No namespaces found. Create one to get started.
+			    </p>
+            {:else}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {#each namespaces as ns}
+                        <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-primary-500 transition-colors">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="material-icons text-gray-400">folder</span>
+                                <h4 class="font-medium text-gray-900 dark:text-white">{ns}</h4>
+                            </div>
+                            <div class="text-sm text-gray-500">
+                                <!-- Could verify table count here if we wanted extra calls -->
+                                <a href="#" class="text-primary-600 hover:underline text-sm mt-2 block" on:click|preventDefault={() => {
+                                    // Expand logic or navigation - for now, let's just show 'Tables' placeholder or maybe list them inline in future
+                                    // Ideally navigate to a Namespace view
+                                    alert('Namespace view coming soon! Use PyIceberg to list tables.');
+                                }}>View Tables</a>
+                            </div>
+                        </div>
+                    {/each}
+                </div>
+            {/if}
+		</Card>
+
 		<!-- Properties Card -->
 		{#if catalog.properties && Object.keys(catalog.properties).length > 0}
 			<Card>
@@ -167,14 +223,6 @@
 				</dl>
 			</Card>
 		{/if}
-
-		<!-- Namespaces Card (Placeholder for Phase 3) -->
-		<Card>
-			<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Namespaces</h3>
-			<p class="text-gray-600 dark:text-gray-400">
-				Namespace browsing will be available in Phase 3.
-			</p>
-		</Card>
 
 		<!-- Branch Management Card -->
 		<Card>
@@ -264,4 +312,28 @@
 			notifications.success('Branches merged successfully');
 		}}
 	/>
+    
+    <Modal bind:open={showNamespaceModal} title="Create Namespace">
+        <div class="space-y-4">
+            <Input 
+                label="Namespace Name" 
+                placeholder="e.g. sales or sales.regional" 
+                bind:value={newNamespaceName} 
+            />
+            <p class="text-sm text-gray-500">
+                Use dots for nested namespaces (e.g. <code>marketing.campaigns</code>)
+            </p>
+        </div>
+        <div slot="footer">
+            <Button variant="ghost" on:click={() => showNamespaceModal = false}>Cancel</Button>
+            <Button 
+                variant="primary" 
+                on:click={handleCreateNamespace} 
+                loading={creatingNamespace}
+                disabled={!newNamespaceName || creatingNamespace}
+            >
+                Create
+            </Button>
+        </div>
+    </Modal>
 {/if}

@@ -42,14 +42,18 @@
 		loading = true;
 
 		try {
+            console.log('Attempting login for:', username);
 			const result = await authStore.login(username, password);
+            console.log('Login result:', result);
 			if (result.success) {
 				goto('/');
 			} else {
+                console.error('Login failed:', result.error);
 				error = result.error || 'Login failed. Please check your credentials.';
 			}
 		} catch (e: any) {
-			error = e.message || 'Login failed. Please check your credentials.';
+            console.error('Login exception:', e);
+			error = e.message || 'An unexpected error occurred during login.';
 		} finally {
 			loading = false;
 		}

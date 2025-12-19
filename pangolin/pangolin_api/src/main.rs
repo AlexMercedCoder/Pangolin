@@ -58,12 +58,17 @@ async fn main() {
         Err(_) => tracing::debug!("Default tenant already exists"),
     }
 
+
     // Check for NO_AUTH mode and auto-provision initial Tenant Admin
     let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
         .map(|v| v.to_lowercase() == "true")
         .unwrap_or(false);
+        
+    let seed_admin_enabled = std::env::var("PANGOLIN_SEED_ADMIN")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
 
-    if no_auth_enabled {
+    if no_auth_enabled || seed_admin_enabled {
         let admin_username = std::env::var("PANGOLIN_ADMIN_USER").unwrap_or_else(|_| "tenant_admin".to_string());
         let admin_password = std::env::var("PANGOLIN_ADMIN_PASSWORD").unwrap_or_else(|_| "password123".to_string());
         let jwt_secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
