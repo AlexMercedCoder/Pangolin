@@ -513,6 +513,45 @@ pub async fn delete_tag(
     }
 }
 
+/// Rebase a branch onto main (merge main into branch)
+#[utoipa::path(
+    post,
+    path = "/api/v1/branches/{name}/rebase",
+    tag = "Branches",
+    params(
+        ("name" = String, Path, description = "Branch name")
+    ),
+    request_body = CreateBranchRequest, // Reusing to pass catalog_name
+    responses(
+        (status = 200, description = "Rebase successful"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn rebase_branch(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path(branch_name): Path<String>,
+    Json(payload): Json<CreateBranchRequest>, // We need catalog_name from body
+) -> impl IntoResponse {
+     let tenant_id = tenant.0;
+     
+     // Rebase = Merge main into branch
+     // Source: main
+     // Target: branch_name
+     
+     // Check permissions
+     // TODO: Granular permissions? For now assume Write on Catalog
+    
+    let catalog_name = payload.catalog.as_deref().unwrap_or("default");
+    
+    match store.merge_branch(tenant_id, catalog_name, "main".to_string(), branch_name).await {
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Rebase failed: {}", e)).into_response(),
+    }
+}
+
 pub async fn list_audit_events(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,

@@ -35,6 +35,7 @@ pub mod verification_tests;
 
 
 pub mod permission_handlers; // Registered new module
+pub mod system_config_handlers; // System configuration
 pub mod service_user_handlers; // Service user management
 pub mod cleanup_job; // Token cleanup background job
 pub mod openapi; // OpenAPI documentation
@@ -65,6 +66,8 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Swagger UI for API documentation
         .merge(utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
             .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()))
+        // System Config
+        .route("/api/v1/config/settings", get(system_config_handlers::get_system_settings).put(system_config_handlers::update_system_settings))
         .route("/v1/config", get(iceberg_handlers::config))
         .route("/v1/:prefix/config", get(iceberg_handlers::config))
         .route("/v1/:prefix/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
@@ -89,6 +92,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Branch Operations
         .route("/api/v1/branches", post(pangolin_handlers::create_branch).get(pangolin_handlers::list_branches))
         .route("/api/v1/branches/merge", post(pangolin_handlers::merge_branch))
+        .route("/api/v1/branches/:name/rebase", post(pangolin_handlers::rebase_branch)) // Rebase endpoint
         .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
         .route("/api/v1/branches/:name/commits", get(pangolin_handlers::list_commits))
         // Merge Operations
@@ -114,10 +118,13 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Catalog Management
         .route("/api/v1/catalogs", get(pangolin_handlers::list_catalogs).post(pangolin_handlers::create_catalog))
         .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog).put(pangolin_handlers::update_catalog).delete(pangolin_handlers::delete_catalog))
+        .route("/api/v1/catalogs/:prefix/namespaces/tree", get(iceberg_handlers::list_namespaces_tree))
         // Federated Catalog Management
         .route("/api/v1/federated-catalogs", post(federated_catalog_handlers::create_federated_catalog).get(federated_catalog_handlers::list_federated_catalogs))
         .route("/api/v1/federated-catalogs/:name", get(federated_catalog_handlers::get_federated_catalog).delete(federated_catalog_handlers::delete_federated_catalog))
         .route("/api/v1/federated-catalogs/:name/test", post(federated_catalog_handlers::test_federated_connection))
+        .route("/api/v1/federated-catalogs/:name/sync", post(federated_catalog_handlers::sync_federated_catalog))
+        .route("/api/v1/federated-catalogs/:name/stats", get(federated_catalog_handlers::get_federated_catalog_stats))
         // Asset Management (Views)
         .route("/v1/:prefix/namespaces/:namespace/views", post(asset_handlers::create_view))
         .route("/v1/:prefix/namespaces/:namespace/views/:view", get(asset_handlers::get_view))
@@ -138,10 +145,14 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/app-config", get(user_handlers::get_app_config))
         .route("/api/v1/users/me", get(user_handlers::get_current_user))
         .route("/api/v1/users/logout", post(user_handlers::logout))
-        // Token Revocation
+        // Token Revocation & Management
         .route("/api/v1/auth/revoke", post(token_handlers::revoke_current_token))
         .route("/api/v1/auth/revoke/:token_id", post(token_handlers::revoke_token_by_id))
         .route("/api/v1/auth/cleanup-tokens", post(token_handlers::cleanup_expired_tokens))
+        .route("/api/v1/users/me/tokens", get(token_handlers::list_my_tokens))
+        .route("/api/v1/users/:user_id/tokens", get(token_handlers::list_user_tokens))
+        .route("/api/v1/tokens/rotate", post(token_handlers::rotate_token))
+        .route("/api/v1/tokens/:token_id", delete(token_handlers::delete_token))
         // Role Management
         .route("/api/v1/roles", post(permission_handlers::create_role).get(permission_handlers::list_roles))
         .route("/api/v1/roles/:id", get(permission_handlers::get_role).put(permission_handlers::update_role).delete(permission_handlers::delete_role))

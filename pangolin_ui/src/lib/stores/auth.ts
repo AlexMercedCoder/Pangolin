@@ -56,7 +56,7 @@ function createAuthStore() {
 				const mockUser: User = {
 					id: 'no-auth-user',
 					username: 'no-auth',
-					role: 'TenantAdmin',
+					role: 'tenant-admin',
 					tenant_id: '00000000-0000-0000-0000-000000000000' // Default tenant
 				};
 				

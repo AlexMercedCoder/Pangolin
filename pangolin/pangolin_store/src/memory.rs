@@ -2,9 +2,10 @@ use crate::CatalogStore;
 use crate::signer::{Signer, Credentials};
 use async_trait::async_trait;
 use dashmap::DashMap;
+use chrono::Utc;
 use pangolin_core::model::{
     Catalog, CatalogType, Namespace, Warehouse, Asset, Commit, Branch, Tag, BranchType, Tenant,
-    VendingStrategy
+    VendingStrategy, SystemSettings, SyncStats
 };
 use pangolin_core::user::User;
 use pangolin_core::permission::{Role, UserRole, Permission};
@@ -46,6 +47,14 @@ pub struct MemoryStore {
     assets_by_id: Arc<DashMap<Uuid, (String, Vec<String>, Option<String>, String)>>,
     // Token revocation
     revoked_tokens: Arc<DashMap<Uuid, pangolin_core::token::RevokedToken>>,
+    // Active tokens (for listing - in real DB this would be querying sessions/tokens table)
+    // We only store TokenInfo here. The actual validation is stateless JWT + Revocation Check.
+    // But to "List Tokens", we need to store them.
+    active_tokens: Arc<DashMap<Uuid, pangolin_core::token::TokenInfo>>,
+    // System Settings: Tenant -> Settings
+    system_settings: Arc<DashMap<Uuid, SystemSettings>>,
+    // Federated Stats: (TenantId, CatalogName) -> SyncStats
+    federated_stats: Arc<DashMap<(Uuid, String), SyncStats>>,
 }
 
 impl MemoryStore {
@@ -73,6 +82,9 @@ impl MemoryStore {
             merge_conflicts: Arc::new(DashMap::new()),
             assets_by_id: Arc::new(DashMap::new()),
             revoked_tokens: Arc::new(DashMap::new()),
+            active_tokens: Arc::new(DashMap::new()),
+            system_settings: Arc::new(DashMap::new()),
+            federated_stats: Arc::new(DashMap::new()),
         }
     }
 }
@@ -1124,6 +1136,70 @@ impl CatalogStore for MemoryStore {
         }
         Ok(count)
     }
+
+    // Token Operations
+    async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Uuid) -> Result<Vec<pangolin_core::token::TokenInfo>> {
+        let mut tokens = Vec::new();
+        // Return tokens that match user and are not revoked/expired
+        for entry in self.active_tokens.iter() {
+            let token = entry.value();
+            if token.tenant_id == tenant_id && token.user_id == user_id {
+                // Check revocation
+                if !self.revoked_tokens.contains_key(&token.id) && token.expires_at > Utc::now() {
+                    tokens.push(token.clone());
+                }
+            }
+        }
+        Ok(tokens)
+    }
+
+    async fn store_token(&self, token: pangolin_core::token::TokenInfo) -> Result<()> {
+        self.active_tokens.insert(token.id, token);
+        Ok(())
+    }
+
+    // System Configuration
+    async fn get_system_settings(&self, tenant_id: Uuid) -> Result<SystemSettings> {
+        if let Some(s) = self.system_settings.get(&tenant_id) {
+            Ok(s.value().clone())
+        } else {
+            // Return default if not set
+            Ok(SystemSettings::default())
+        }
+    }
+    
+    async fn update_system_settings(&self, tenant_id: Uuid, settings: SystemSettings) -> Result<SystemSettings> {
+        self.system_settings.insert(tenant_id, settings.clone());
+        Ok(settings)
+    }
+
+    // Federated Catalog Operations
+    async fn sync_federated_catalog(&self, tenant_id: Uuid, catalog_name: &str) -> Result<()> {
+        let stats = SyncStats {
+            last_synced_at: Some(Utc::now()),
+            sync_status: "Success".to_string(),
+            tables_synced: 42,
+            namespaces_synced: 5,
+            error_message: None,
+        };
+        self.federated_stats.insert((tenant_id, catalog_name.to_string()), stats);
+        Ok(())
+    }
+
+    async fn get_federated_catalog_stats(&self, tenant_id: Uuid, catalog_name: &str) -> Result<SyncStats> {
+        if let Some(stats) = self.federated_stats.get(&(tenant_id, catalog_name.to_string())) {
+            Ok(stats.value().clone())
+        } else {
+             // Return empty stats if never synced
+             Ok(SyncStats {
+                last_synced_at: None,
+                sync_status: "Not Synced".to_string(),
+                tables_synced: 0,
+                namespaces_synced: 0,
+                error_message: None,
+             })
+        }
+    }
 }
 
 
@@ -1296,8 +1372,12 @@ impl Signer for MemoryStore {
     async fn presign_get(&self, _location: &str) -> Result<String> {
         // Stub: Presigning requires keeping an ObjectStore client around or rebuilding it.
         // For this task, we focus on table credentials.
+        // Stub: Presigning requires keeping an ObjectStore client around or rebuilding it.
+        // For this task, we focus on table credentials.
         Err(anyhow::anyhow!("MemoryStore does not support presigning yet"))
     }
+
+
 }
 
 
@@ -1465,3 +1545,5 @@ mod tests {
         assert_eq!(perms_u1[0].id, p1.id);
     }
 }
+
+

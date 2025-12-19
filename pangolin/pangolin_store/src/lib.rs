@@ -274,4 +274,33 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn cleanup_expired_tokens(&self) -> Result<usize> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
+
+    /// List active tokens for a user (not revoked)
+    async fn list_active_tokens(&self, _tenant_id: Uuid, _user_id: Uuid) -> Result<Vec<pangolin_core::token::TokenInfo>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    /// Store a newly generated token for listing purposes
+    async fn store_token(&self, _token: pangolin_core::token::TokenInfo) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // System Configuration
+    async fn get_system_settings(&self, _tenant_id: Uuid) -> Result<pangolin_core::model::SystemSettings> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    
+    async fn update_system_settings(&self, _tenant_id: Uuid, _settings: pangolin_core::model::SystemSettings) -> Result<pangolin_core::model::SystemSettings> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Federated Catalog Operations
+    async fn sync_federated_catalog(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn get_federated_catalog_stats(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<pangolin_core::model::SyncStats> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 }

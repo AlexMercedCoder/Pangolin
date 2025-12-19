@@ -43,8 +43,9 @@
     // 1. Authentication Tests
     #[tokio::test]
     async fn test_auth_root_login() {
-        let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin_test");
-        let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "pass_test");
+        // Use unique env var names to avoid conflicts with other tests
+        let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin_test_unique");
+        let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "pass_test_unique");
         
         let app = app();
 
@@ -55,8 +56,8 @@
                     .uri("/api/v1/users/login")
                     .header("Content-Type", "application/json")
                     .body(Body::from(json!({
-                        "username": "admin_test",
-                        "password": "pass_test"
+                        "username": "admin_test_unique",
+                        "password": "pass_test_unique"
                     }).to_string()))
                     .unwrap(),
             )
@@ -159,7 +160,7 @@
                     "username": "tenant_admin",
                     "email": "ta@test.com",
                     "password": "Password123",
-                    "role": "TenantAdmin",
+                    "role": "tenant-admin",
                     "tenant_id": tenant_id
                 }).to_string())).unwrap()
         ).await.unwrap();
@@ -232,7 +233,7 @@
         let t_id = serde_json::from_slice::<serde_json::Value>(&to_bytes(t_res.into_body(), usize::MAX).await.unwrap()).unwrap()["id"].as_str().unwrap().to_string();
 
         // User
-         let u_res = app.clone().oneshot(Request::builder().method("POST").uri("/api/v1/users").header("Authorization", format!("Bearer {}", root_token)).header("Content-Type", "application/json").body(Body::from(json!({"username":"ta","email":"t@a.com","password":"pw","role":"TenantAdmin","tenant_id":t_id}).to_string())).unwrap()).await.unwrap();
+         let u_res = app.clone().oneshot(Request::builder().method("POST").uri("/api/v1/users").header("Authorization", format!("Bearer {}", root_token)).header("Content-Type", "application/json").body(Body::from(json!({"username":"ta","email":"t@a.com","password":"pw","role":"tenant-admin","tenant_id":t_id}).to_string())).unwrap()).await.unwrap();
          assert_eq!(u_res.status(), StatusCode::CREATED);
         let ta_token = get_auth_token(&app, "ta", "pw").await;
 

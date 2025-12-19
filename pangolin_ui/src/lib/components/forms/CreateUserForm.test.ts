@@ -46,7 +46,7 @@ describe('CreateUserForm', () => {
         // This implies NO_AUTH mode where tenant_id should be default
         const mockAuthStore = readable({
             isAuthenticated: true,
-            user: { id: 'mock-user', role: 'TenantAdmin' },
+            user: { id: 'mock-user', role: 'tenant-admin' },
             authEnabled: false // NO_AUTH mode
         });
         

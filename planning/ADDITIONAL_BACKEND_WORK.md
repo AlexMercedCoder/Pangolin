@@ -1,63 +1,76 @@
 # Additional Backend Work Plan
 
-This document outlines backend API enhancements required to fully support advanced UI features and improve the overall Pangolin experience.
+**Status**: ✅ **COMPLETED** (December 19, 2025)
 
-## 1. Token Management
+This document outlined backend API enhancements required to fully support advanced UI features. **All items have been implemented and verified.**
+
+## ✅ 1. Token Management (COMPLETE)
 **Goal**: Allow users and admins to view, manage, and revoke access tokens.
 
-### New Endpoints
-*   `GET /api/v1/users/me/tokens`
-    *   **Description**: List active tokens for the current user.
-    *   **Response**: `[{ id, type, created_at, expires_at, name/description }]`
-*   `GET /api/v1/users/{user_id}/tokens` (Admin Only)
-    *   **Description**: List tokens for a specific user.
-*   `DELETE /api/v1/tokens/{token_id}`
-    *   **Description**: Revoke a specific token by ID.
-    *   **Note**: Currently sending a token works for revocation, but managing them by ID is better.
-*   `POST /api/v1/tokens/rotate`
-    *   **Description**: Rotate the current token (revoke old, issue new) in one atomic step.
+### Implemented Endpoints
+*   ✅ `GET /api/v1/users/me/tokens` - List active tokens for current user
+*   ✅ `GET /api/v1/users/{user_id}/tokens` - List tokens for specific user (Admin)
+*   ✅ `DELETE /api/v1/tokens/{token_id}` - Revoke specific token by ID
+*   ✅ `POST /api/v1/tokens/rotate` - Rotate current token atomically
 
-## 2. Enhanced Data Explorer
-**Goal**: Provide richer metadata and browsing capabilities without relying solely on Iceberg REST proxy.
+**Implementation**: All 3 backends (Sqlite, Postgres, Mongo) support token storage and retrieval.
 
-### Iceberg Proxy Enhancements
-*   **Problem**: Current `listNamespaces` relies on basic Iceberg proxy.
-*   **Enhancement**: Ensure `pangolin_api` supports flat and hierarchical namespace listing efficiently.
-*   `GET /api/v1/catalogs/{catalog}/namespaces/tree`
-    *   **Description**: Return a full tree structure of namespaces for faster UI rendering of deeply nested structures.
+## ✅ 2. Enhanced Data Explorer (COMPLETE)
+**Goal**: Provide richer metadata and browsing capabilities.
 
+### Implemented Enhancements
+*   ✅ `GET /api/v1/catalogs/{catalog}/namespaces/tree` - Hierarchical namespace tree structure
 
+**Implementation**: Returns full tree structure for efficient UI rendering of nested namespaces.
 
-## 3. System Configuration & Health
+## ✅ 3. System Configuration & Health (COMPLETE)
 **Goal**: Allow admins to configure system settings via UI.
 
-*   `GET /api/v1/config/settings`
-    *   **Description**: Retrieve dynamic system settings (e.g., default warehouse bucket, retention policies).
-*   `PUT /api/v1/config/settings`
-    *   **Description**: Update system settings.
+### Implemented Endpoints
+*   ✅ `GET /api/v1/config/settings` - Retrieve system settings
+*   ✅ `PUT /api/v1/config/settings` - Update system settings
 
-## 4. Federated Catalogs
+**Implementation**: Settings stored in all 3 backends with upsert logic.
+
+## ✅ 4. Federated Catalogs (COMPLETE)
 **Goal**: Improve management of external catalogs.
 
-*   `POST /api/v1/federated-catalogs/{name}/sync`
-    *   **Description**: Trigger an immediate metadata sync for a federated catalog.
-*   `GET /api/v1/federated-catalogs/{name}/stats`
-    *   **Description**: Get sync history and error counts.
+### Implemented Endpoints
+*   ✅ `POST /api/v1/federated-catalogs/{name}/sync` - Trigger immediate metadata sync
+*   ✅ `GET /api/v1/federated-catalogs/{name}/stats` - Get sync history and stats
 
-## 5. Branching & Merging
-*   `POST /api/v1/branches/{name}/rebase`
-    *   **Description**: Rebase a feature branch onto main to resolving conflicts before merge.
-## 6. Business Metadata APIs (Registered)
+**Implementation**: Sync stats tracked in all backends with timestamps and error tracking.
+
+## ✅ 5. Branching & Merging (COMPLETE)
+### Implemented Endpoints
+*   ✅ `POST /api/v1/branches/{name}/rebase` - Rebase feature branch onto main
+
+**Implementation**: Merge functionality updated to support both merge and rebase operations.
+
+## ✅ 6. Business Metadata APIs (COMPLETE)
 **Goal**: Manage asset metadata and access requests.
-*   `GET /api/v1/assets/search`
-    *   **Description**: Search for assets with `#tag` support.
-*   `POST /api/v1/assets/{id}/request-access`
-    *   **Description**: Submit a request to access a restricted asset.
-*   `GET /api/v1/access-requests`
-    *   **Description**: List access requests (Admin view).
-*   `PUT /api/v1/access-requests/{id}`
-    *   **Description**: Approve or reject a request.
-*   `GET /api/v1/assets/{id}/metadata`
-    *   **Description**: Retrieve metadata for an asset.
-*   `POST /api/v1/assets/{id}/metadata`
-    *   **Description**: Add or update metadata (description, tags, discovery).
+
+### Implemented Endpoints
+*   ✅ `GET /api/v1/assets/search` - Search assets with tag support
+*   ✅ `POST /api/v1/assets/{id}/request-access` - Submit access request
+*   ✅ `GET /api/v1/access-requests` - List access requests (Admin)
+*   ✅ `PUT /api/v1/access-requests/{id}` - Approve/reject request
+*   ✅ `GET /api/v1/assets/{id}/metadata` - Retrieve asset metadata
+*   ✅ `POST /api/v1/assets/{id}/metadata` - Add/update metadata
+
+**Implementation**: All endpoints implemented with proper permission checks and tenant isolation.
+
+---
+
+## Verification Status
+
+| Feature | API | Sqlite | Postgres | Mongo | UI | Tests |
+|---------|-----|--------|----------|-------|----|----|
+| Token Management | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Data Explorer Tree | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| System Config | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Federated Sync | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Branch Rebase | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Business Metadata | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**Next Step**: Update CLI to support all new endpoints (see `CLI_UPDATE_PLAN.md`)

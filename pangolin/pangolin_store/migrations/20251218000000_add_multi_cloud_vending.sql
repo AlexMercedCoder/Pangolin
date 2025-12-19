@@ -20,4 +20,11 @@ ADD COLUMN vending_strategy JSONB;
 -- Just adding the column is required.
 
 -- Migration content:
-ALTER TABLE warehouses ADD COLUMN vending_strategy JSONB;
+-- Add vending_strategy column if it doesn't exist (idempotent)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name='warehouses' AND column_name='vending_strategy') THEN
+        ALTER TABLE warehouses ADD COLUMN vending_strategy JSONB;
+    END IF;
+END $$;

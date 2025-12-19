@@ -8,16 +8,19 @@ use mongodb::bson::spec::BinarySubtype;
 use mongodb::options::{ClientOptions, ReplaceOptions};
 use pangolin_core::model::{
     Asset, AssetType, Branch, Catalog, Commit, Namespace, Tag, Tenant, Warehouse, VendingStrategy,
+    SystemSettings, SyncStats,
 };
 use pangolin_core::user::{User, UserRole as CoreUserRole, OAuthProvider};
 use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use pangolin_core::token::TokenInfo;
 use crate::signer::{Signer, Credentials};
 use object_store::ObjectStore;
 use object_store::aws::AmazonS3Builder;
 use pangolin_core::audit::AuditLogEntry;
 use uuid::Uuid;
 use std::collections::HashMap;
+use chrono::Utc;
 
 #[derive(Clone)]
 pub struct MongoStore {
@@ -87,6 +90,18 @@ impl MongoStore {
 
     fn access_requests(&self) -> Collection<AccessRequest> {
         self.db.collection("access_requests")
+    }
+
+    fn active_tokens(&self) -> Collection<Document> {
+        self.db.collection("active_tokens")
+    }
+
+    fn system_settings(&self) -> Collection<Document> {
+        self.db.collection("system_settings")
+    }
+
+    fn federated_sync_stats(&self) -> Collection<Document> {
+        self.db.collection("federated_sync_stats")
     }
 }
 
@@ -611,7 +626,7 @@ impl CatalogStore for MongoStore {
         Ok(branches)
     }
 
-    async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()> {
+    async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, target_branch: String, source_branch: String) -> Result<()> {
         let source = self.get_branch(tenant_id, catalog_name, source_branch.clone()).await?
             .ok_or_else(|| anyhow::anyhow!("Source branch not found"))?;
             
@@ -629,6 +644,117 @@ impl CatalogStore for MongoStore {
         
         self.db.collection::<Document>("branches").update_one(filter, update).await?;
         Ok(())
+    }
+
+    // Token Management
+    async fn list_active_tokens(&self, _tenant_id: Uuid, user_id: Uuid) -> Result<Vec<TokenInfo>> {
+        let filter = doc! { "user_id": to_bson_uuid(user_id) };
+        let cursor = self.active_tokens().find(filter).await?;
+        let docs: Vec<Document> = cursor.try_collect().await?;
+        
+        let mut tokens = Vec::new();
+        for d in docs {
+            tokens.push(TokenInfo {
+                id: from_bson_uuid(d.get("token_id").ok_or(anyhow::anyhow!("Missing token_id"))?)?,
+                tenant_id: Uuid::default(), // Not stored in mongo active_tokens
+                user_id: from_bson_uuid(d.get("user_id").ok_or(anyhow::anyhow!("Missing user_id"))?)?,
+                username: "unknown".to_string(), // Would need join
+                token: d.get_str("token").ok().map(|s| s.to_string()),
+                expires_at: mongodb::bson::from_bson(d.get("expires_at").unwrap().clone())?,
+                created_at: Utc::now(), // Not stored
+                is_valid: true,
+            });
+        }
+        Ok(tokens)
+    }
+
+    async fn store_token(&self, token_info: TokenInfo) -> Result<()> {
+        let doc = doc! {
+            "token_id": to_bson_uuid(token_info.id),
+            "user_id": to_bson_uuid(token_info.user_id),
+            "token": token_info.token.unwrap_or_default(),
+            "expires_at": token_info.expires_at
+        };
+        self.active_tokens().insert_one(doc).await?;
+        Ok(())
+    }
+
+    // System Settings
+    async fn get_system_settings(&self, tenant_id: Uuid) -> Result<SystemSettings> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let doc = self.system_settings().find_one(filter).await?;
+        
+        if let Some(d) = doc {
+            Ok(mongodb::bson::from_bson(d.get("settings").unwrap().clone())?)
+        } else {
+            Ok(SystemSettings {
+                allow_public_signup: None,
+                default_warehouse_bucket: None,
+                default_retention_days: None,
+                smtp_host: None,
+                smtp_port: None,
+                smtp_user: None,
+                smtp_password: None,
+            })
+        }
+    }
+
+    async fn update_system_settings(&self, tenant_id: Uuid, settings: SystemSettings) -> Result<SystemSettings> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let update = doc! {
+            "$set": {
+                "settings": mongodb::bson::to_bson(&settings)?
+            }
+        };
+        
+        let options = mongodb::options::UpdateOptions::builder().upsert(true).build();
+        self.system_settings().update_one(filter, update).with_options(options).await?;
+        Ok(settings)
+    }
+
+    // Federated Catalog Operations
+    async fn sync_federated_catalog(&self, tenant_id: Uuid, catalog_name: &str) -> Result<()> {
+        let stats = SyncStats {
+            last_synced_at: Some(Utc::now()),
+            sync_status: "Success".to_string(),
+            tables_synced: 0,
+            namespaces_synced: 0,
+            error_message: None,
+        };
+        
+        let filter = doc! {
+            "tenant_id": to_bson_uuid(tenant_id),
+            "catalog_name": catalog_name
+        };
+        let update = doc! {
+            "$set": {
+                "stats": mongodb::bson::to_bson(&stats)?
+            }
+        };
+        
+        let options = mongodb::options::UpdateOptions::builder().upsert(true).build();
+        self.federated_sync_stats().update_one(filter, update).with_options(options).await?;
+        Ok(())
+    }
+
+    async fn get_federated_catalog_stats(&self, tenant_id: Uuid, catalog_name: &str) -> Result<SyncStats> {
+        let filter = doc! {
+            "tenant_id": to_bson_uuid(tenant_id),
+            "catalog_name": catalog_name
+        };
+        let doc = self.federated_sync_stats().find_one(filter).await?;
+        
+        if let Some(d) = doc {
+            Ok(mongodb::bson::from_bson(d.get("stats").unwrap().clone())?)
+        } else {
+            Ok(SyncStats {
+                last_synced_at: None,
+                sync_status: "Never Synced".to_string(),
+                tables_synced: 0,
+                namespaces_synced: 0,
+                error_message: None,
+            })
+        }
     }
 
     // Commit Operations

@@ -145,9 +145,9 @@
 						class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 dark:text-white"
 						disabled={submitting}
 					>
-						<option value="Root">Root Admin</option>
-						<option value="TenantAdmin">Tenant Admin</option>
-						<option value="TenantUser">Tenant User</option>
+						<option value="root">Root Admin</option>
+						<option value="tenant-admin">Tenant Admin</option>
+						<option value="tenant-user">Tenant User</option>
 					</select>
 					<p class="text-sm text-gray-500 dark:text-gray-400">
 						User's permission level within the system

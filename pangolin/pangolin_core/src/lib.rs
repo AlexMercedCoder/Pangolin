@@ -7,5 +7,5 @@ pub mod snapshot;
 pub mod user;
 pub mod permission;
 pub mod business_metadata;
-pub mod auth;
 pub mod token;
+pub mod auth;

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
     tenant_id TEXT NOT NULL,
     name TEXT NOT NULL,
     use_sts INTEGER NOT NULL,
+    vending_strategy TEXT, -- NEW
     storage_config TEXT NOT NULL,
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );
@@ -187,4 +188,32 @@ CREATE TABLE IF NOT EXISTS business_metadata (
     updated_by TEXT NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (asset_id) REFERENCES assets(id) ON DELETE CASCADE
+);
+
+-- Active Tokens
+CREATE TABLE IF NOT EXISTS active_tokens (
+    token_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    token TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_active_tokens_user ON active_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_active_tokens_expiry ON active_tokens(expires_at);
+
+-- System Settings
+CREATE TABLE IF NOT EXISTS system_settings (
+    tenant_id TEXT PRIMARY KEY,
+    settings TEXT NOT NULL, -- JSON
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+-- Federated Catalog Stats
+CREATE TABLE IF NOT EXISTS federated_sync_stats (
+    tenant_id TEXT NOT NULL,
+    catalog_name TEXT NOT NULL,
+    stats TEXT NOT NULL, -- JSON
+    PRIMARY KEY (tenant_id, catalog_name),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );

@@ -100,7 +100,7 @@
                     {/if}
                 </div>
 
-                {#if req.status === 'Pending' && (user?.role === 'TenantAdmin' || user?.role === 'Root')}
+                {#if req.status === 'Pending' && (user?.role === 'tenant-admin' || user?.role === 'root')}
                     <div class="req-actions">
                         <button class="action-btn approve" on:click={() => updateStatus(req, 'Approve')}>
                             <span class="material-icons">check</span>

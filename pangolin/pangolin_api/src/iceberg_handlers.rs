@@ -12,11 +12,14 @@ use pangolin_store::CatalogStore;
 use pangolin_store::memory::MemoryStore;
 use pangolin_core::model::{Namespace, Asset, AssetType, CatalogType};
 use pangolin_core::iceberg_metadata::{TableMetadata, Schema, PartitionSpec, SortOrder, Snapshot, NestedField, Type};
+use chrono::Utc;
 use uuid::Uuid;
 use std::collections::HashMap;
-use chrono::Utc;
-use crate::auth::TenantId;
 use crate::federated_proxy::FederatedCatalogProxy;
+use crate::authz::check_permission;
+use pangolin_core::permission::{PermissionScope, Action};
+use pangolin_core::user::UserSession;
+use crate::auth::TenantId;
 
 // Placeholder for AppState
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
@@ -60,14 +63,26 @@ async fn check_and_forward_if_federated(
     }
 }
 
+#[derive(Serialize)]
+pub struct ListNamespacesResponse {
+    pub namespaces: Vec<Vec<String>>,
+}
+
 #[derive(Deserialize)]
 pub struct ListNamespaceParams {
     parent: Option<String>,
 }
 
+#[derive(Serialize, Clone)]
+pub struct NamespaceNode {
+    pub name: String,
+    pub full_path: Vec<String>,
+    pub children: Vec<NamespaceNode>,
+}
+
 #[derive(Serialize)]
-pub struct ListNamespacesResponse {
-    namespaces: Vec<Vec<String>>,
+pub struct ListNamespacesTreeResponse {
+    pub root: Vec<NamespaceNode>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -276,8 +291,10 @@ pub async fn list_namespaces(
 
     // Check Permissions (List Namespace requires List on Catalog)
     let scope = PermissionScope::Catalog { catalog_id: catalog.id };
-    if let Err(e) = check_permission(&store, &session, &scope, Action::List).await {
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::List, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
     
     match store.list_namespaces(tenant_id, &catalog_name, params.parent).await {
@@ -286,6 +303,66 @@ pub async fn list_namespaces(
             (StatusCode::OK, Json(ListNamespacesResponse { namespaces: ns_list })).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+pub async fn list_namespaces_tree(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path(prefix): Path<String>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix.clone();
+    
+    // Resolve catalog ID
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+
+    // Check Permissions
+    let scope = PermissionScope::Catalog { catalog_id: catalog.id };
+    match check_permission(&store, &session, &Action::List, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
+    }
+
+    // List ALL namespaces (no parent filter)
+    match store.list_namespaces(tenant_id, &catalog_name, None).await {
+        Ok(namespaces) => {
+            let mut root_nodes: Vec<NamespaceNode> = Vec::new();
+            
+            // Helper to find or create a node in a list of siblings
+            fn find_or_create_child<'a>(nodes: &'a mut Vec<NamespaceNode>, name: &str, full_path: Vec<String>) -> &'a mut NamespaceNode {
+                if let Some(pos) = nodes.iter().position(|n| n.name == name) {
+                    return &mut nodes[pos];
+                }
+                let new_node = NamespaceNode {
+                    name: name.to_string(),
+                    full_path,
+                    children: Vec::new(),
+                };
+                nodes.push(new_node);
+                nodes.last_mut().unwrap()
+            }
+
+            for ns in namespaces {
+                let parts = ns.name;
+                let mut current_level = &mut root_nodes;
+                let mut current_path = Vec::new();
+                
+                for part in parts {
+                    current_path.push(part.clone());
+                    current_level = &mut find_or_create_child(current_level, &part, current_path.clone()).children;
+                }
+            }
+            
+            (StatusCode::OK, Json(ListNamespacesTreeResponse { root: root_nodes })).into_response()
+        }
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list namespaces: {}", e)).into_response(),
     }
 }
 
@@ -339,8 +416,10 @@ pub async fn create_namespace(
     
     // Check Permissions (Create Namespace requires Create on Catalog)
     let scope = PermissionScope::Catalog { catalog_id: catalog.id };
-    if let Err(e) = check_permission(&store, &session, &scope, Action::Create).await {
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::Create, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
 
     let ns = Namespace {
@@ -391,8 +470,10 @@ pub async fn list_tables(
     
     // Check Permissions (List Tables requires List on Namespace)
     let scope = PermissionScope::Namespace { catalog_id: catalog.id, namespace: ns_name.clone() };
-    if let Err(e) = check_permission(&store, &session, &scope, Action::List).await {
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::List, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
     
     let ns_vec = vec![ns_name];
@@ -460,8 +541,10 @@ pub async fn create_table(
     
     // Check Permissions (Create Table requires Create on Namespace)
     let scope = PermissionScope::Namespace { catalog_id: catalog.id, namespace: ns_name.clone() };
-    if let Err(e) = check_permission(&store, &session, &scope, Action::Create).await {
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::Create, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
     
     let ns_vec = vec![ns_name];
@@ -701,8 +784,10 @@ pub async fn load_table(
         asset_id: asset.id 
     };
     
-    if let Err(e) = check_permission(&store, &session, &scope, Action::Read).await {
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::Read, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
 
     let current_metadata_location = asset.properties.get("metadata_location").cloned();
@@ -844,9 +929,13 @@ pub async fn update_table(
         asset_id: asset.id 
     };
     
-    if let Err(e) = check_permission(&store, &session, &scope, Action::Write).await {
-         tracing::error!("update_table: Permission denied");
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::Write, &scope).await {
+        Ok(true) => (),
+        Ok(false) => {
+            tracing::error!("update_table: Permission denied");
+            return (StatusCode::FORBIDDEN, "Forbidden").into_response();
+        },
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
     
     tracing::info!("update_table: Permission granted, starting retry loop");
@@ -1060,8 +1149,10 @@ pub async fn delete_table(
         asset_id: asset.id 
     };
     
-    if let Err(e) = check_permission(&store, &session, &scope, Action::Delete).await {
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::Delete, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
 
     match store.delete_asset(tenant_id, &catalog_name, branch, namespace_parts, table_name).await {
@@ -1105,8 +1196,10 @@ pub async fn delete_namespace(
         namespace: namespace_parts.join(".") 
     };
     
-    if let Err(e) = check_permission(&store, &session, &scope, Action::Delete).await {
-         return (e, "Forbidden").into_response();
+    match check_permission(&store, &session, &Action::Delete, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
 
     match store.delete_namespace(tenant_id, &catalog_name, namespace_parts).await {
@@ -1181,26 +1274,6 @@ pub async fn report_metrics(
     StatusCode::NO_CONTENT
 }
 
-// -------------------------------------------------------------------------------
-// Permission Helper
-// -------------------------------------------------------------------------------
-
-use pangolin_core::permission::{Action, PermissionScope};
-use pangolin_core::user::{UserRole, UserSession};
-
-// Permission Helper (Delegates to shared authz)
-async fn check_permission(
-    store: &AppState,
-    session: &UserSession,
-    required_scope: &PermissionScope,
-    required_action: Action
-) -> Result<(), StatusCode> {
-    match crate::authz::check_permission(store, session, &required_action, required_scope).await {
-        Ok(true) => Ok(()),
-        Ok(false) => Err(StatusCode::FORBIDDEN),
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
-}
 
 
 

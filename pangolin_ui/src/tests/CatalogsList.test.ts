@@ -26,7 +26,7 @@ describe('Catalogs Page', () => {
 
         // Set auth role to show create button
         authStore.subscribe.mockImplementation((run) => {
-             run({ isAuthenticated: true, user: { role: 'TenantAdmin' }, token: 'token' });
+             run({ isAuthenticated: true, user: { role: 'tenant-admin' }, token: 'token' });
              return () => {};
         });
     });

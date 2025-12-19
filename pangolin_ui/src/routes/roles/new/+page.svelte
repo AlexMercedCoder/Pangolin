@@ -21,7 +21,7 @@
 	let errors: Record<string, string> = {};
 
 	const auth = get(authStore);
-	const isRoot = auth.user?.role === 'Root';
+	const isRoot = auth.user?.role === 'root';
 
 	onMount(async () => {
 		if (isRoot) {

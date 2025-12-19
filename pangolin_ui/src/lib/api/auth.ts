@@ -13,7 +13,7 @@ export interface LoginResponse {
 export interface User {
 	id: string;
 	username: string;
-	role: 'Root' | 'TenantAdmin' | 'TenantUser';
+	role: 'root' | 'tenant-admin' | 'tenant-user';
 	tenant_id?: string;
 	tenant_name?: string;
 }

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 use utoipa::ToSchema;
+use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Tenant {
@@ -355,3 +356,36 @@ pub struct CatalogUpdate {
     pub properties: Option<HashMap<String, String>>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SystemSettings {
+    pub allow_public_signup: Option<bool>,
+    pub default_warehouse_bucket: Option<String>,
+    pub default_retention_days: Option<i32>,
+    pub smtp_host: Option<String>,
+    pub smtp_port: Option<i32>,
+    pub smtp_user: Option<String>,
+    pub smtp_password: Option<String>, // Should be encrypted in real app
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SyncStats {
+    pub last_synced_at: Option<DateTime<Utc>>,
+    pub sync_status: String, // "Success", "Failed", "Syncing"
+    pub tables_synced: i32,
+    pub namespaces_synced: i32,
+    pub error_message: Option<String>,
+}
+
+impl Default for SystemSettings {
+    fn default() -> Self {
+        Self {
+            allow_public_signup: Some(false),
+            default_warehouse_bucket: None,
+            default_retention_days: Some(30),
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_password: None,
+        }
+    }
+}

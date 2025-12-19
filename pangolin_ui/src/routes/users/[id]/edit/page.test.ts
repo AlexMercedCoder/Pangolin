@@ -20,7 +20,7 @@ describe('User Edit Page', () => {
 		id: 'user-123',
 		username: 'testuser',
 		email: 'test@example.com',
-		role: 'TenantUser' as const,
+		role: 'tenant-user' as const,
 		created_at: '2024-01-01T00:00:00Z'
 	};
 
@@ -67,8 +67,8 @@ describe('User Edit Page', () => {
 		await fireEvent.input(emailInput, { target: { value: 'newemail@example.com' } });
 
 		// Find select by its current value
-		const roleSelect = screen.getByDisplayValue('TenantUser');
-		await fireEvent.change(roleSelect, { target: { value: 'TenantAdmin' } });
+		const roleSelect = screen.getByDisplayValue('tenant-user');
+		await fireEvent.change(roleSelect, { target: { value: 'tenant-admin' } });
 
 		const submitButton = screen.getByRole('button', { name: /Update User/i });
 		await fireEvent.click(submitButton);
@@ -76,7 +76,7 @@ describe('User Edit Page', () => {
 		await waitFor(() => {
 			expect(usersApi.update).toHaveBeenCalledWith('user-123', {
 				email: 'newemail@example.com',
-				role: 'TenantAdmin'
+				role: 'tenant-admin'
 				// password should not be included
 			});
 		});
@@ -143,7 +143,7 @@ describe('User Edit Page', () => {
 		await waitFor(() => {
 			expect(usersApi.update).toHaveBeenCalledWith('user-123', expect.objectContaining({
 				email: 'test@example.com',
-				role: 'TenantUser',
+				role: 'tenant-user',
 				password: 'newpassword123'
 			}));
 		});

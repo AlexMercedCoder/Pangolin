@@ -13,6 +13,7 @@ use crate::auth::TenantId;
 use pangolin_core::user::{UserSession, UserRole};
 use crate::federated_proxy::FederatedCatalogProxy;
 use utoipa::ToSchema;
+use pangolin_core::model::SyncStats;
 
 type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
@@ -196,6 +197,71 @@ pub async fn get_federated_catalog(
             Json(serde_json::json!({"error": e.to_string()})),
         )
             .into_response(),
+    }
+}
+
+/// Trigger a sync for a federated catalog
+#[utoipa::path(
+    post,
+    path = "/api/v1/federated-catalogs/{catalog_name}/sync",
+    tag = "Federated Catalogs",
+    params(
+        ("catalog_name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "Sync triggered"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn sync_federated_catalog(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path(catalog_name): Path<String>,
+) -> impl IntoResponse {
+    // Only Admin
+    if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
+         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
+    }
+
+    match store.sync_federated_catalog(tenant.0, &catalog_name).await {
+         Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "Sync triggered"}))).into_response(),
+         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Sync failed: {}", e)).into_response(),
+    }
+}
+
+/// Get sync stats for a federated catalog
+#[utoipa::path(
+    get,
+    path = "/api/v1/federated-catalogs/{catalog_name}/stats",
+    tag = "Federated Catalogs",
+    params(
+        ("catalog_name" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "Sync stats", body = SyncStats),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_federated_catalog_stats(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path(catalog_name): Path<String>,
+) -> impl IntoResponse {
+    // Check permissions? Assuming Read on Catalog is enough or Admin.
+    // Let's require Admin for now as stats might reveal system details.
+    if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
+         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
+    }
+
+    match store.get_federated_catalog_stats(tenant.0, &catalog_name).await {
+         Ok(stats) => (StatusCode::OK, Json(stats)).into_response(),
+         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get stats: {}", e)).into_response(),
     }
 }
 

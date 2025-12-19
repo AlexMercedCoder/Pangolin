@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     use_sts BOOLEAN NOT NULL DEFAULT FALSE,
+    vending_strategy VARCHAR(50),
     storage_config JSONB NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -134,3 +135,28 @@ CREATE TABLE IF NOT EXISTS metadata_locations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_metadata_locations_lookup ON metadata_locations(tenant_id, catalog_name, table_name);
+
+-- Active Tokens
+CREATE TABLE IF NOT EXISTS active_tokens (
+    token_id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_active_tokens_user ON active_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_active_tokens_expiry ON active_tokens(expires_at);
+
+-- System Settings
+CREATE TABLE IF NOT EXISTS system_settings (
+    tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+    settings JSONB NOT NULL
+);
+
+-- Federated Catalog Stats
+CREATE TABLE IF NOT EXISTS federated_sync_stats (
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    catalog_name VARCHAR(255) NOT NULL,
+    stats JSONB NOT NULL,
+    PRIMARY KEY (tenant_id, catalog_name)
+);
