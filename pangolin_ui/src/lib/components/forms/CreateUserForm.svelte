@@ -40,7 +40,7 @@
 
 	// Only show tenant select for Root users creating non-Root users
 	// In NO_AUTH mode, always use default tenant
-	$: showTenantSelect = $isRoot && formData.role && formData.role !== 'Root' && !$authStore.authEnabled;
+	$: showTenantSelect = $isRoot && formData.role && formData.role !== 'Root';
 
 	// Auto-set tenant for non-root users or in NO_AUTH mode
 	$: if (!$authStore.authEnabled) {

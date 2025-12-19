@@ -124,6 +124,40 @@ function createAuthStore() {
 	return {
 		subscribe,
 		initialize,
+		async handleOAuthLogin(token: string) {
+			try {
+				if (browser) {
+					localStorage.setItem('auth_token', token);
+				}
+				
+				update(state => ({ ...state, token }));
+
+				// Fetch user details
+				const user = await authApi.getCurrentUser();
+
+				update(state => ({
+					...state,
+					user,
+					isAuthenticated: true,
+					isLoading: false
+				}));
+
+				if (browser) {
+					localStorage.setItem('auth_user', JSON.stringify(user));
+				}
+
+				return { success: true };
+			} catch (error: any) {
+				console.error('OAuth login failed:', error);
+				// Clean up invalid token
+				if (browser) {
+					localStorage.removeItem('auth_token');
+				}
+				update(state => ({ ...state, token: null, isAuthenticated: false, isLoading: false }));
+				
+				return { success: false, error: error.message || 'OAuth login failed' };
+			}
+		},
 		async login(username: string, password: string) {
 			try {
 				const response = await authApi.login({ username, password });

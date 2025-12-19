@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { MergeResponse } from './merges';
 
 export interface Branch {
 	id: string;
@@ -48,9 +49,16 @@ export const branchesApi = {
 		return response.data!;
 	},
 
-	async merge(data: MergeBranchRequest): Promise<void> {
-		const response = await apiClient.post<void>('/api/v1/branches/merge', data);
-		if (response.error) throw new Error(response.error.message);
+	async merge(data: MergeBranchRequest): Promise<MergeResponse> {
+		const response = await apiClient.post<MergeResponse>('/api/v1/branches/merge', data);
+		if (response.error) {
+			// If conflict (409), return the details as it contains operation_id for resolution
+			if (response.error.status === 409 && response.error.details) {
+				return response.error.details as MergeResponse;
+			}
+			throw new Error(response.error.message);
+		}
+		return response.data!;
 	},
 
 	async delete(catalog: string, name: string): Promise<void> {

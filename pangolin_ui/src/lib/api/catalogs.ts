@@ -1,23 +1,46 @@
 import { apiClient, type ApiResponse } from './client';
 
+export type CatalogType = 'Local' | 'Federated';
+
+export type FederatedAuthType = 'None' | 'BasicAuth' | 'BearerToken' | 'ApiKey';
+
+export interface FederatedCredentials {
+	username?: string;
+	password?: string;
+	token?: string;
+	api_key?: string;
+}
+
+export interface FederatedCatalogConfig {
+	base_url: string;
+	auth_type: FederatedAuthType;
+	credentials?: FederatedCredentials;
+	timeout_seconds: number;
+}
+
 export interface Catalog {
 	id: string;
 	name: string;
-	warehouse_name: string;
-	storage_location: string;
+	catalog_type: CatalogType;
+	warehouse_name?: string;
+	storage_location?: string;
+	federated_config?: FederatedCatalogConfig;
 	properties: Record<string, string>;
 }
 
 export interface CreateCatalogRequest {
 	name: string;
+	catalog_type?: CatalogType;
 	warehouse_name?: string;
-	storage_location: string;
+	storage_location?: string;
+	federated_config?: FederatedCatalogConfig;
 	properties?: Record<string, string>;
 }
 
 export interface UpdateCatalogRequest {
 	warehouse_name?: string;
 	storage_location?: string;
+	federated_config?: FederatedCatalogConfig;
 	properties?: Record<string, string>;
 }
 
@@ -49,5 +72,11 @@ export const catalogsApi = {
 	async delete(name: string): Promise<void> {
 		const response = await apiClient.delete<void>(`/api/v1/catalogs/${encodeURIComponent(name)}`);
 		if (response.error) throw new Error(response.error.message);
+	},
+
+	async testConnection(name: string): Promise<{ status: string; message?: string }> {
+		const response = await apiClient.post<{ status: string; message?: string }>(`/api/v1/federated-catalogs/${encodeURIComponent(name)}/test`, {});
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
 	},
 };

@@ -75,13 +75,6 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				</label>
 				<select
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/page.test.ts:48:49
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }[]' is not assignable to parameter of type 'Catalog[]'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.resetAllMocks();
-		vi.mocked(catalogsApi.list).mockResolvedValue(mockCatalogs);
-		vi.mocked(branchesApi.list).mockResolvedValue(mockBranches);
-
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/new/+page.svelte:126:5
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
@@ -110,13 +103,6 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				</label>
 				<textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/new/page.test.ts:20:49
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }[]' is not assignable to parameter of type 'Catalog[]'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.resetAllMocks();
-		vi.mocked(catalogsApi.list).mockResolvedValue(mockCatalogs);
-		vi.mocked(branchesApi.create).mockResolvedValue({
-
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/+page.svelte:117:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
 https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
@@ -124,26 +110,14 @@ https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
 			</div>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/page.test.ts:29:48
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' is not assignable to parameter of type 'Catalog'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.resetAllMocks();
-		vi.mocked(catalogsApi.get).mockResolvedValue(mockCatalog);
-		vi.mocked(catalogsApi.update).mockResolvedValue(mockCatalog);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/page.test.ts:30:51
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' is not assignable to parameter of type 'Catalog'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.mocked(catalogsApi.get).mockResolvedValue(mockCatalog);
-		vi.mocked(catalogsApi.update).mockResolvedValue(mockCatalog);
-	});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/new/CreateCatalog.test.ts:29:57
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' is not assignable to parameter of type 'Catalog'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-        ]);
-        vi.mocked(catalogsApi.create).mockResolvedValue({ id: 'cat-1', name: 'my-catalog', warehouse_name: '', storage_location: '', properties: {} });
-    });
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/new/+page.svelte:158:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+						Catalog Type
+					</label>
+					<div class="flex items-center space-x-4">
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/[id]/edit/+page.svelte:99:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
@@ -471,6 +445,27 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
             </label>
             <textarea
 
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/tokens/+page.svelte:159:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant <span class="text-red-500">*</span></label>
+					{#if loadingTenants}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/tokens/+page.svelte:188:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In</label>
+					<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/tokens/+page.svelte:270:4
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+		<div>
+			<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Access Token</label>
+			<div class="relative">
+
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:160:37
 Warn: `<tr>` cannot be a child of `<table>`. `<table>` only allows these children: `<caption>`, `<colgroup>`, `<tbody>`, `<thead>`, `<tfoot>`, `<style>`, `<script>`, `<template>`. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a `hydration_mismatch` warning
 https://svelte.dev/e/node_invalid_placement_ssr (svelte)
@@ -516,7 +511,7 @@ https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
 			</div>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:189:7
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:193:7
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 					<div class="space-y-2">
@@ -524,13 +519,6 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 							Active Branch
 						</label>
 						<select
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:128:46
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-						<a
-							href="/warehouses/{encodeURIComponent(catalog.warehouse_name)}"
-							class="text-primary-600 hover:text-primary-700 hover:underline"
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/discovery/+page.svelte:126:13
 Warn: A form label must be associated with a control
@@ -949,6 +937,27 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                         <label class="label text-sm text-surface-400">Email</label>
                         <div class="font-medium">{user.email}</div>
 
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/tokens/+page.svelte:129:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant <span class="text-red-500">*</span></label>
+						<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/tokens/+page.svelte:145:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In</label>
+						<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/tokens/+page.svelte:185:4
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+		<div>
+			<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Access Token</label>
+			<div class="relative">
+
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/new/+page.svelte:313:9
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
@@ -959,4 +968,4 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 								<textarea
 
 ====================================
-svelte-check found 6 errors and 67 warnings in 33 files
+svelte-check found 0 errors and 74 warnings in 32 files

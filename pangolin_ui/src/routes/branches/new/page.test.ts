@@ -11,8 +11,8 @@ vi.mock('$app/navigation');
 
 describe('Create Branch Page', () => {
 	const mockCatalogs = [
-		{ id: 'cat-1', name: 'analytics', warehouse_name: 'wh-1', storage_location: 's3://bucket', properties: {} },
-		{ id: 'cat-2', name: 'staging', warehouse_name: 'wh-1', storage_location: 's3://bucket', properties: {} }
+		{ id: 'cat-1', name: 'analytics', catalog_type: 'Local' as const, warehouse_name: 'wh-1', storage_location: 's3://bucket', properties: {} },
+		{ id: 'cat-2', name: 'staging', catalog_type: 'Local' as const, warehouse_name: 'wh-1', storage_location: 's3://bucket', properties: {} }
 	];
 
 	beforeEach(() => {

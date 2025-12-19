@@ -9,12 +9,14 @@
 	import { branchesApi, type Branch } from '$lib/api/branches';
 	import { notifications } from '$lib/stores/notifications';
     import { isTenantAdmin } from '$lib/stores/auth';
+	import MergeBranchModal from '$lib/components/merges/MergeBranchModal.svelte';
 
 	let catalog: Catalog | null = null;
 	let branches: Branch[] = [];
 	let selectedBranch = 'main';
 	let loading = true;
 	let showDeleteDialog = false;
+	let showMergeModal = false;
 	let deleting = false;
 
 	$: catalogName = $page.params.name || '';
@@ -124,12 +126,16 @@
 				<div>
 					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Warehouse</dt>
 					<dd class="mt-1 text-sm text-gray-900 dark:text-white">
-						<a
-							href="/warehouses/{encodeURIComponent(catalog.warehouse_name)}"
-							class="text-primary-600 hover:text-primary-700 hover:underline"
-						>
-							{catalog.warehouse_name}
-						</a>
+						{#if catalog.warehouse_name}
+							<a
+								href="/warehouses/{encodeURIComponent(catalog.warehouse_name)}"
+								class="text-primary-600 hover:text-primary-700 hover:underline"
+							>
+								{catalog.warehouse_name}
+							</a>
+						{:else}
+							<span class="text-gray-500 italic">None</span>
+						{/if}
 					</dd>
 				</div>
 				<div class="md:col-span-2">
@@ -174,9 +180,17 @@
 		<Card>
 			<div class="flex items-center justify-between mb-4">
 				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Branches</h3>
-				<Button size="sm" on:click={() => goto('/branches/new')}>
-					Create Branch
-				</Button>
+				<div class="flex gap-2">
+					<Button size="sm" variant="ghost" on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}/merges`)}>
+						View Merges
+					</Button>
+					<Button size="sm" variant="secondary" on:click={() => showMergeModal = true}>
+						Merge Branch
+					</Button>
+					<Button size="sm" on:click={() => goto('/branches/new')}>
+						Create Branch
+					</Button>
+				</div>
 			</div>
 
 			{#if branches.length === 0}
@@ -239,3 +253,15 @@
 	variant="danger"
 	onConfirm={handleDelete}
 />
+
+{#if catalog}
+	<MergeBranchModal
+		bind:open={showMergeModal}
+		catalog={catalogName}
+		{branches}
+		on:success={() => {
+			loadBranches();
+			notifications.success('Branches merged successfully');
+		}}
+	/>
+{/if}

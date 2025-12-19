@@ -7,7 +7,7 @@ export interface User {
 	role: 'Root' | 'TenantAdmin' | 'TenantUser';
 	tenant_id?: string;
 	tenant_name?: string;
-	created_at: string;
+	created_at?: string;
 	last_login?: string;
 }
 

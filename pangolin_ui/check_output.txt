@@ -1,164 +1,9 @@
 
-> pangolin-ui@0.0.1 check
+> pangolin-ui@0.1.0 check
 > svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
 
 Loading svelte-check in workspace: /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui
 Getting Svelte diagnostics...
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:20:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: mockCatalogs,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:25:17
-Error: Property 'data' does not exist on type 'Catalog[]'. 
-
-		expect(result.data).toEqual(mockCatalogs);
-		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/catalogs');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:39:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: mockCatalog,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:44:17
-Error: Property 'data' does not exist on type 'Catalog'. 
-
-		expect(result.data).toEqual(mockCatalog);
-		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/catalogs/test-catalog');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:59:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: createdCatalog,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:64:17
-Error: Property 'data' does not exist on type 'Catalog'. 
-
-		expect(result.data).toEqual(createdCatalog);
-		expect(apiClient.post).toHaveBeenCalledWith('/api/v1/catalogs', newCatalog);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:71:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: null,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:76:17
-Error: Property 'error' does not exist on type 'void'. 
-
-		expect(result.error).toBeNull();
-		expect(apiClient.delete).toHaveBeenCalledWith('/api/v1/catalogs/test-catalog');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:90:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: mockCatalog,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:93:36
-Error: Property 'getCatalog' does not exist on type '{ list(): Promise<Catalog[]>; get(name: string): Promise<Catalog>; create(data: CreateCatalogRequest): Promise<Catalog>; update(name: string, data: UpdateCatalogRequest): Promise<...>; delete(name: string): Promise<...>; }'. 
-
-		const result = await catalogsApi.getCatalog('test');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:101:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: null,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/catalogs.test.ts:104:21
-Error: Property 'deleteCatalog' does not exist on type '{ list(): Promise<Catalog[]>; get(name: string): Promise<Catalog>; create(data: CreateCatalogRequest): Promise<Catalog>; update(name: string, data: UpdateCatalogRequest): Promise<...>; delete(name: string): Promise<...>; }'. 
-
-		await catalogsApi.deleteCatalog('test');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:20:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: mockWarehouses,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:25:17
-Error: Property 'data' does not exist on type 'Warehouse[]'. 
-
-		expect(result.data).toEqual(mockWarehouses);
-		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/warehouses');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:39:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: mockWarehouse,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:44:17
-Error: Property 'data' does not exist on type 'Warehouse'. 
-
-		expect(result.data).toEqual(mockWarehouse);
-		expect(apiClient.get).toHaveBeenCalledWith('/api/v1/warehouses/test-warehouse');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:59:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: createdWarehouse,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:62:45
-Error: Argument of type '{ name: string; use_sts: boolean; storage_config: { type: string; bucket: string; }; }' is not assignable to parameter of type 'CreateWarehouseRequest'.
-  The types of 'storage_config.type' are incompatible between these types.
-    Type 'string' is not assignable to type '"s3" | "azure" | "gcs"'. 
-
-		const result = await warehousesApi.create(newWarehouse);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:64:17
-Error: Property 'data' does not exist on type 'Warehouse'. 
-
-		expect(result.data).toEqual(createdWarehouse);
-		expect(apiClient.post).toHaveBeenCalledWith('/api/v1/warehouses', newWarehouse);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:78:4
-Error: Type 'null' is not assignable to type 'ApiError | undefined'. 
-			data: mockWarehouse,
-			error: null
-		});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/api/warehouses.test.ts:81:38
-Error: Property 'getWarehouse' does not exist on type '{ list(): Promise<Warehouse[]>; get(name: string): Promise<Warehouse>; create(data: CreateWarehouseRequest): Promise<...>; update(name: string, data: UpdateWarehouseRequest): Promise<...>; delete(name: string): Promise<...>; }'. 
-
-		const result = await warehousesApi.getWarehouse('test');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/Input.svelte:9:13
-Error: Identifier 'required' has already been declared
-https://svelte.dev/e/js_parse_error (svelte)
-	export let required = false;
-	export let required = false;
-	export let id = '';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/Input.svelte:8:13
-Error: Cannot redeclare block-scoped variable 'required'. (ts)
-	export let disabled = false;
-	export let required = false;
-	export let required = false;
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/Input.svelte:9:13
-Error: Cannot redeclare block-scoped variable 'required'. (ts)
-	export let required = false;
-	export let required = false;
-	export let id = '';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/forms/CreateUserForm.svelte:184:3
-Error: Object literal may only specify known properties, and '"helpText"' does not exist in type '{ options?: { value: string; label: string; }[] | undefined; value?: string | undefined; placeholder?: string | undefined; disabled?: boolean | undefined; error?: string | undefined; label?: string | undefined; id?: string | undefined; required?: boolean | undefined; }'. (ts)
-		error={errors.role}
-		helpText="User's access level"
-		required
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/forms/CreateUserForm.svelte:195:4
-Error: Object literal may only specify known properties, and '"helpText"' does not exist in type '{ options?: { value: string; label: string; }[] | undefined; value?: string | undefined; placeholder?: string | undefined; disabled?: boolean | undefined; error?: string | undefined; label?: string | undefined; id?: string | undefined; required?: boolean | undefined; }'. (ts)
-			error={errors.tenant_id}
-			helpText="Tenant this user belongs to"
-			required
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/Modal.svelte:30:2
 Warn: Elements with the 'dialog' interactive role must have a tabindex value
@@ -209,12 +54,6 @@ https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 								/>
 								<span class="text-gray-600 dark:text-gray-400">Loading...</span>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/DataTable.test.ts:82:13
-Error: This expression is not callable.
-  Type 'never' has no call signatures. 
-		const rowClickHandler = vi.fn();
-		component.$on('rowClick', rowClickHandler);
-
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/ui/Textarea.svelte:18:5
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
@@ -226,35 +65,6 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
       {/if}
     </label>
   {/if}
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/stores/notifications.test.ts:16:17
-Error: Property 'clear' does not exist on type '{ subscribe: (this: void, run: Subscriber<Notification[]>, invalidate?: (() => void) | undefined) => Unsubscriber; add: (notification: Omit<Notification, "id">) => string; ... 4 more ...; info: (message: string, timeout?: number | undefined) => string; }'. 
-	it('adds error notification', () => {
-		notifications.clear();
-		notifications.error('Test error');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/stores/notifications.test.ts:26:17
-Error: Property 'clear' does not exist on type '{ subscribe: (this: void, run: Subscriber<Notification[]>, invalidate?: (() => void) | undefined) => Unsubscriber; add: (notification: Omit<Notification, "id">) => string; ... 4 more ...; info: (message: string, timeout?: number | undefined) => string; }'. 
-	it('adds info notification', () => {
-		notifications.clear();
-		notifications.info('Test info');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/stores/notifications.test.ts:36:17
-Error: Property 'clear' does not exist on type '{ subscribe: (this: void, run: Subscriber<Notification[]>, invalidate?: (() => void) | undefined) => Unsubscriber; add: (notification: Omit<Notification, "id">) => string; ... 4 more ...; info: (message: string, timeout?: number | undefined) => string; }'. 
-	it('removes notification by id', () => {
-		notifications.clear();
-		notifications.success('Test 1');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/stores/notifications.test.ts:59:17
-Error: Property 'clear' does not exist on type '{ subscribe: (this: void, run: Subscriber<Notification[]>, invalidate?: (() => void) | undefined) => Unsubscriber; add: (notification: Omit<Notification, "id">) => string; ... 4 more ...; info: (message: string, timeout?: number | undefined) => string; }'. 
-		
-		notifications.clear();
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/stores/notifications.test.ts:66:17
-Error: Property 'clear' does not exist on type '{ subscribe: (this: void, run: Subscriber<Notification[]>, invalidate?: (() => void) | undefined) => Unsubscriber; add: (notification: Omit<Notification, "id">) => string; ... 4 more ...; info: (message: string, timeout?: number | undefined) => string; }'. 
-	it('assigns unique IDs to notifications', () => {
-		notifications.clear();
-		notifications.success('Test 1');
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/+page.svelte:97:5
 Warn: A form label must be associated with a control
@@ -293,15 +103,18 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				</label>
 				<textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/page.test.ts:41:15
-Error: Property 'setTenant' does not exist on type '{ subscribe: (this: void, run: Subscriber<TenantState>, invalidate?: (() => void) | undefined) => Unsubscriber; selectTenant: (id: string, name: string) => void; clearTenant: () => void; }'. Did you mean 'selectTenant'? 
-		// Change tenant
-		tenantStore.setTenant('tenant-123', 'Test Tenant');
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/+page.svelte:96:14
+Error: `$isTenantAdmin` is an illegal variable name. To reference a global variable called `$isTenantAdmin`, use `globalThis.$isTenantAdmin`
+https://svelte.dev/e/global_reference_invalid (svelte)
+		</div>
+        {#if $isTenantAdmin}
+		<Button on:click={() => goto('/catalogs/new')}>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/page.test.ts:98:15
-Error: Property 'setTenant' does not exist on type '{ subscribe: (this: void, run: Subscriber<TenantState>, invalidate?: (() => void) | undefined) => Unsubscriber; selectTenant: (id: string, name: string) => void; clearTenant: () => void; }'. Did you mean 'selectTenant'? 
-		(catalogsApi.list as any).mockResolvedValue([]);
-		tenantStore.setTenant('empty-tenant', 'Empty Tenant');
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/+page.svelte:96:14
+Error: Cannot find name '$isTenantAdmin'. (ts)
+		</div>
+        {#if $isTenantAdmin}
+		<Button on:click={() => goto('/catalogs/new')}>
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/+page.svelte:117:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
@@ -310,25 +123,14 @@ https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
 			</div>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/+page.svelte:102:58
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-			<button
-				on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}`)}
-				class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/+page.svelte:141:5
-Error: Object literal may only specify known properties, and '"helpText"' does not exist in type '{ options?: { value: string; label: string; }[] | undefined; value?: string | undefined; placeholder?: string | undefined; disabled?: boolean | undefined; error?: string | undefined; label?: string | undefined; id?: string | undefined; required?: boolean | undefined; }'. (ts)
-				placeholder="Select a warehouse..."
-				helpText="Optional: Link this catalog to a warehouse for credential vending"
-			/>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/+page.svelte:157:60
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-						variant="ghost"
-						on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}`)}
-						disabled={submitting}
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/new/+page.svelte:158:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+						Catalog Type
+					</label>
+					<div class="flex items-center space-x-4">
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/[id]/edit/+page.svelte:99:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
@@ -387,53 +189,39 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 									</label>
 									<textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/[name]/edit/+page.svelte:107:31
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:172:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+							Scope Type
+						</label>
+						<select
 
-			await warehousesApi.update(warehouseName, request);
-			notifications.success(`Warehouse "${warehouseName}" updated successfully`);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/[name]/edit/+page.svelte:109:43
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-			notifications.success(`Warehouse "${warehouseName}" updated successfully`);
-			goto(`/warehouses/${encodeURIComponent(warehouseName)}`);
-		} catch (e: any) {
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/[name]/edit/+page.svelte:127:60
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-			<button
-				on:click={() => goto(`/warehouses/${encodeURIComponent(warehouseName)}`)}
-				class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/[name]/edit/+page.svelte:299:62
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-						disabled={submitting}
-						on:click={() => goto(`/warehouses/${encodeURIComponent(warehouseName)}`)}
-					>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/TenantSelector.svelte:63:13
-Error: Property 'role' does not exist on type 'User'. Did you mean 'roles'? (ts)
-
-{#if $user?.role === 'Root' || $user?.roles?.includes('Root')}
-<div class="tenant-selector" bind:this={menuRef}>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:171:8
-Error: `</label>` attempted to close an element that was not open
-https://svelte.dev/e/element_invalid_closing_tag (svelte)
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:190:8
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
 								Catalog
 							</label>
 							<select
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:171:8
-Error: `</label>` attempted to close an element that was not open
-https://svelte.dev/e/element_invalid_closing_tag (ts)
-								Catalog
-							</label>
-							<select
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:235:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div class="space-y-2">
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Actions
+						</label>
+						<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditPermissionsDialog.svelte:266:8
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+						<div class="flex items-center justify-center py-8">
+							<div class="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+						</div>
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/dialogs/EditRolesDialog.svelte:95:7
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
@@ -449,13 +237,7 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Schema Definition
                 </label>
-                <Button size="xs" variant="secondary" on:click={addField}>+ Add Column</Button>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/CreateTableDialog.svelte:81:25
-Error: Type '"xs"' is not assignable to type '"sm" | "md" | "lg" | undefined'. (ts)
-                </label>
-                <Button size="xs" variant="secondary" on:click={addField}>+ Add Column</Button>
-            </div>
+                <Button size="sm" variant="secondary" on:click={addField}>+ Add Column</Button>
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerNode.svelte:68:5
 Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
@@ -465,6 +247,7 @@ https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
         class="flex items-center py-1 px-2 rounded-lg cursor-pointer transition-colors duration-150
         {isActive ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/30 dark:text-primary-100' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'}"
         on:click={handleClick}
+        on:contextmenu|preventDefault={(e) => dispatch('contextmenu', { originalEvent: e, node: { label, type, href, icon } })}
         style="padding-left: 0.5rem"
     >
         {#if hasChildren}
@@ -489,13 +272,14 @@ https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
     </div>
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerNode.svelte:68:5
-Warn: `<div>` with a click handler must have an ARIA role
+Warn: `<div>` with a click or contextmenu handler must have an ARIA role
 https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
 <div class="select-none">
     <div 
         class="flex items-center py-1 px-2 rounded-lg cursor-pointer transition-colors duration-150
         {isActive ? 'bg-primary-100 text-primary-900 dark:bg-primary-900/30 dark:text-primary-100' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300'}"
         on:click={handleClick}
+        on:contextmenu|preventDefault={(e) => dispatch('contextmenu', { originalEvent: e, node: { label, type, href, icon } })}
         style="padding-left: 0.5rem"
     >
         {#if hasChildren}
@@ -519,24 +303,83 @@ https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
         {/if}
     </div>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerNode.svelte:10:16
-Warn: Component has unused export property 'type'. If it is for external reference only, please consider using `export const type`
-https://svelte.dev/e/export_let_unused (svelte)
-    export let label: string;
-    export let type: 'catalog' | 'namespace' | 'table';
-    export let icon: string = '📁';
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerTree.svelte:183:9
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+    {#if contextMenu.visible}
+        <div 
+            class="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg rounded-md py-1 z-50 text-sm min-w-[150px]"
+            style="top: {contextMenu.y}px; left: {contextMenu.x}px; position: fixed;"
+            on:click|stopPropagation
+        >
+            {#if contextMenu.node.type === 'catalog'}
+                <button 
+                    class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                    on:click={openCreateNamespace}
+                >
+                    <span class="material-icons text-xs">folder_open</span> New Namespace
+                </button>
+                <button 
+                     class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                     on:click={() => triggerExplorerRefresh('catalog')}
+                >
+                    <span class="material-icons text-xs">refresh</span> Refresh
+                </button>
+            {:else if contextMenu.node.type === 'namespace'}
+                <button 
+                    class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                    on:click={openCreateTable}
+                >
+                    <span class="material-icons text-xs">table_chart</span> New Table
+                </button>
+                 <button 
+                     class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                     on:click={() => triggerExplorerRefresh('catalog')}
+                >
+                    <span class="material-icons text-xs">refresh</span> Refresh
+                </button>
+            {/if}
+        </div>
+    {/if}
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerTree.svelte:7:1
-Error: `</script>` attempted to close an element that was not open
-https://svelte.dev/e/element_invalid_closing_tag (svelte)
-
-</script>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerTree.svelte:7:1
-Error: `</script>` attempted to close an element that was not open
-https://svelte.dev/e/element_invalid_closing_tag (js)
-
-</script>
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerTree.svelte:183:9
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+    {#if contextMenu.visible}
+        <div 
+            class="absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg rounded-md py-1 z-50 text-sm min-w-[150px]"
+            style="top: {contextMenu.y}px; left: {contextMenu.x}px; position: fixed;"
+            on:click|stopPropagation
+        >
+            {#if contextMenu.node.type === 'catalog'}
+                <button 
+                    class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                    on:click={openCreateNamespace}
+                >
+                    <span class="material-icons text-xs">folder_open</span> New Namespace
+                </button>
+                <button 
+                     class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                     on:click={() => triggerExplorerRefresh('catalog')}
+                >
+                    <span class="material-icons text-xs">refresh</span> Refresh
+                </button>
+            {:else if contextMenu.node.type === 'namespace'}
+                <button 
+                    class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                    on:click={openCreateTable}
+                >
+                    <span class="material-icons text-xs">table_chart</span> New Table
+                </button>
+                 <button 
+                     class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                     on:click={() => triggerExplorerRefresh('catalog')}
+                >
+                    <span class="material-icons text-xs">refresh</span> Refresh
+                </button>
+            {/if}
+        </div>
+    {/if}
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:239:25
 Warn: A form label must be associated with a control
@@ -559,57 +402,14 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                         <label class="block text-sm font-medium mb-1">Tags</label>
                         <div class="flex gap-2 mb-2">
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:14:24
-Error: Property 'history' does not exist on type 'Table'. (ts)
-    $: snapshots = table.snapshots || [];
-    $: history = table.history || [];
-    $: properties = table.properties || {};
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:28:18
-Error: This comparison appears to be unintentional because the types '"Root" | "TenantAdmin" | "TenantUser" | undefined' and '"tenant-admin"' have no overlap. (ts)
-
-    $: canEdit = $authStore.user?.role === 'tenant-admin' || $authStore.user?.role === 'root';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:28:62
-Error: This comparison appears to be unintentional because the types '"Root" | "TenantAdmin" | "TenantUser" | undefined' and '"root"' have no overlap. (ts)
-
-    $: canEdit = $authStore.user?.role === 'tenant-admin' || $authStore.user?.role === 'root';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:104:19
-Error: Element implicitly has an 'any' type because expression of type '"format-version"' can't be used to index type 'Table'.
-  Property 'format-version' does not exist on type 'Table'. (ts)
-            <div class="font-medium text-gray-900 dark:text-white">
-                v{table['format-version'] || '1'}
-            </div>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/TableDetail.svelte:110:24
-Error: Property 'location' does not exist on type 'Table'. (ts)
-            <div class="font-mono text-xs text-gray-900 dark:text-white break-all mt-1">
-                {table.location || '-'}
-            </div>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/rbac/PermissionBuilder.svelte:50:7
-Warn: A form label must be associated with a control
-https://svelte.dev/e/a11y_label_has_associated_control (svelte)
-    <div>
-      <label class="label text-sm font-medium mb-1">Scope</label>
-      <select class="select w-full" value={scope.type} on:change={updateScopeType}>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/rbac/PermissionBuilder.svelte:61:9
-Warn: A form label must be associated with a control
-https://svelte.dev/e/a11y_label_has_associated_control (svelte)
-      <div>
-        <label class="label text-sm font-medium mb-1">Resource ID / Name</label>
-        <input
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/rbac/PermissionBuilder.svelte:76:5
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/rbac/PermissionBuilder.svelte:80:5
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
   <div>
     <label class="label text-sm font-medium mb-2">Actions</label>
     <div class="flex flex-wrap gap-2">
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:261:8
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:260:8
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
 https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 						{#if stepNum < 4}
@@ -619,7 +419,7 @@ https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 							/>
 						{/if}
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:374:6
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:373:6
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				<div>
@@ -628,7 +428,7 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 					</label>
 					<div class="grid grid-cols-2 gap-4">
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:446:8
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:445:8
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 						<div>
@@ -637,7 +437,7 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 							</label>
 							<textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:449:8
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:448:8
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<textarea ...></textarea>` rather than `<textarea ... />`
 https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 							</label>
@@ -649,57 +449,6 @@ https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 							/>
 							{#if formErrors.gcsServiceAccountKey}
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:196:4
-Error: Property 'type' is missing in type 'Record<string, string>' but required in type 'StorageConfig'. (ts)
-			use_sts: formData.authMethod === 'iam',
-			storage_config,
-		};
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:201:16
-Error: Property 'error' does not exist on type 'Warehouse'. (ts)
-
-		if (response.error) {
-			notifications.error(`Failed to create warehouse: ${response.error.message}`);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:202:64
-Error: Property 'error' does not exist on type 'Warehouse'. (ts)
-		if (response.error) {
-			notifications.error(`Failed to create warehouse: ${response.error.message}`);
-		} else {
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/warehouses/CreateWarehouseModal.svelte:244:18
-Error: Type '"large"' is not assignable to type '"sm" | "md" | "lg" | undefined'. (ts)
-
-<Modal bind:open size="large">
-	<div class="space-y-6">
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/+layout.svelte:16:10
-Error: Argument of type '() => Promise<Unsubscriber>' is not assignable to parameter of type '() => (() => any) | Promise<never>'.
-  Type 'Promise<Unsubscriber>' is not assignable to type '(() => any) | Promise<never>'.
-    Type 'Promise<Unsubscriber>' is not assignable to type 'Promise<never>'.
-      Type 'Unsubscriber' is not assignable to type 'never'. (ts)
-
-	onMount(async () => {
-		// Initialize auth - checks server config and auto-authenticates if NO_AUTH mode
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/access-requests/+page.svelte:25:31
-Error: 'e' is of type 'unknown'. (ts)
-            }
-        } catch (e) { error = e.message; }
-        finally { loading = false; }
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/access-requests/+page.svelte:99:58
-Error: Property 'role' does not exist on type 'User'. Did you mean 'roles'? (ts)
-
-                {#if req.status === 'Pending' && ($user?.role === 'TenantAdmin' || $user?.role === 'Root')}
-                    <div class="req-actions">
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/access-requests/+page.svelte:99:91
-Error: Property 'role' does not exist on type 'User'. Did you mean 'roles'? (ts)
-
-                {#if req.status === 'Pending' && ($user?.role === 'TenantAdmin' || $user?.role === 'Root')}
-                    <div class="req-actions">
-
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/requests/+page.svelte:176:13
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
@@ -709,31 +458,51 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
             </label>
             <textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/requests/+page.svelte:4:39
-Error: Cannot find module '$lib/stores/notification' or its corresponding type declarations. (ts)
-	import { businessMetadataApi, type AccessRequest } from '$lib/api/business_metadata';
-    import { notificationStore } from '$lib/stores/notification';
-    import { authStore } from '$lib/stores/auth';
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/service-users/+page.svelte:240:4
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+		<div>
+			<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
+			<Input
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/+page.svelte:26:21
-Error: 'e' is of type 'unknown'. (ts)
-        } catch (e) {
-            error = e.message;
-        }
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/service-users/+page.svelte:254:4
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+		<div>
+			<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In (Days)</label>
+			<input
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[...asset]/+page.svelte:6:19
-Error: Module '"$lib/api/iceberg"' has no exported member 'Asset'. (ts)
-    import Card from '$lib/components/ui/Card.svelte';
-    import type { Asset } from '$lib/api/iceberg';
-    import SchemaField from '$lib/components/explorer/SchemaField.svelte';
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/service-users/+page.svelte:286:4
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+		<div>
+			<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+				API Key for <strong>{generatedKeyName}</strong>
+			</label>
+			<div class="relative">
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[...asset]/+page.svelte:11:35
-Error: Property 'branch' does not exist on type '{ id?: string | undefined; asset?: string | undefined; catalog?: string | undefined; name?: string | undefined; namespace?: string | undefined; table?: string | undefined; }'. (ts)
-    let catalogName = $page.params.catalog || "default";
-    let branchName = $page.params.branch || "main";
-    let assetPath = $page.params.asset || "";
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/tokens/+page.svelte:159:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant <span class="text-red-500">*</span></label>
+					{#if loadingTenants}
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:158:37
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/tokens/+page.svelte:188:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In</label>
+					<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/admin/tokens/+page.svelte:270:4
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+		<div>
+			<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Access Token</label>
+			<div class="relative">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:160:37
 Warn: `<tr>` cannot be a child of `<table>`. `<table>` only allows these children: `<caption>`, `<colgroup>`, `<tbody>`, `<thead>`, `<tfoot>`, `<style>`, `<script>`, `<template>`. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a `hydration_mismatch` warning
 https://svelte.dev/e/node_invalid_placement_ssr (svelte)
                                 {#each Object.entries(asset.properties) as [k, v]}
@@ -743,32 +512,26 @@ https://svelte.dev/e/node_invalid_placement_ssr (svelte)
                                     </tr>
                                 {/each}
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:188:33
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:190:33
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                             <div class="form-group">
                                 <label>Description (Markdown)</label>
                                 <textarea bind:value={editForm.description} rows="5"></textarea>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:192:33
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:194:33
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                             <div class="form-group">
                                 <label>Tags (comma separated)</label>
                                 <input bind:value={editForm.tags} />
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:202:33
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:204:33
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                             <div class="form-group">
                                 <label>Custom Properties (JSON)</label>
                                 <textarea bind:value={editForm.properties} rows="5" class="code-font"></textarea>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/assets/[id]/+page.svelte:46:31
-Error: 'e' is of type 'unknown'. (ts)
-            }
-        } catch (e) { error = e.message; }
-        finally { loading = false; }
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/[catalog]/[name]/+page.svelte:114:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
@@ -777,57 +540,23 @@ https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
 			</div>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:10:11
-Error: Identifier 'branchesApi' has already been declared
-https://svelte.dev/e/js_parse_error (svelte)
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { notifications } from '$lib/stores/notifications';
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:108:5
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+			<div class="flex items-center justify-center py-12">
+				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
+			</div>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:9:11
-Error: Duplicate identifier 'branchesApi'. (ts)
-	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { branchesApi, type Branch } from '$lib/api/branches';
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:193:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div class="space-y-2">
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+							Active Branch
+						</label>
+						<select
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:9:29
-Error: Duplicate identifier 'Branch'. (ts)
-	import { catalogsApi, type Catalog } from '$lib/api/catalogs';
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { branchesApi, type Branch } from '$lib/api/branches';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:10:11
-Error: Duplicate identifier 'branchesApi'. (ts)
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { notifications } from '$lib/stores/notifications';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:10:29
-Error: Duplicate identifier 'Branch'. (ts)
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { branchesApi, type Branch } from '$lib/api/branches';
-	import { notifications } from '$lib/stores/notifications';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/+page.svelte:96:65
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-            {#if $isTenantAdmin}
-			<Button on:click={() => goto(`/catalogs/${encodeURIComponent(catalogName)}/edit`)} disabled={loading}>
-				Edit Catalog
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/commits/+page.svelte:6:9
-Error: Variable 'commits' implicitly has type 'any[]' in some locations where its type cannot be determined. (ts)
-
-    let commits = [];
-    let branchName = $page.url.searchParams.get('branch');
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/commits/+page.svelte:52:24
-Error: Variable 'commits' implicitly has an 'any[]' type. (ts)
-            <tbody class="divide-y divide-gray-700">
-                {#each commits as commit}
-                    <tr class="hover:bg-gray-750">
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/discovery/+page.svelte:130:13
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/discovery/+page.svelte:126:13
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
         <div class="mb-4">
@@ -835,143 +564,6 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                 Reason for Access
             </label>
             <textarea
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/discovery/+page.svelte:4:19
-Error: Module '"$lib/api/iceberg"' has no exported member 'Asset'. (ts)
-	import { businessMetadataApi, type BusinessMetadata } from '$lib/api/business_metadata';
-    import type { Asset } from '$lib/api/iceberg'; // Import Asset type
-    import { notificationStore } from '$lib/stores/notification';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/discovery/+page.svelte:5:39
-Error: Cannot find module '$lib/stores/notification' or its corresponding type declarations. (ts)
-    import type { Asset } from '$lib/api/iceberg'; // Import Asset type
-    import { notificationStore } from '$lib/stores/notification';
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/+layout.svelte:2:27
-Error: File '/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/lib/components/explorer/ExplorerTree.svelte' is not a module. (ts)
-<script lang="ts">
-	import ExplorerTree from '$lib/components/explorer/ExplorerTree.svelte';
-</script>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/+page.svelte:25:58
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-        try {
-            namespaces = await icebergApi.listNamespaces(catalogName);
-        } catch (e: any) {
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/+page.svelte:46:46
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-
-            await icebergApi.createNamespace(catalogName, req);
-            notifications.success(`Namespace "${newName}" created`);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/+page.svelte:91:78
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-                        class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 transition-colors text-left group"
-                        on:click={() => goto(`/explorer/${encodeURIComponent(catalogName)}/${encodeURIComponent(ns.join('.'))}`)}
-                    >
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:33:43
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-            const [nsList, tblList] = await Promise.all([
-                icebergApi.listNamespaces(catalogName, namespaceParts),
-                icebergApi.listTables(catalogName, namespaceParts)
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:34:39
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-                icebergApi.listNamespaces(catalogName, namespaceParts),
-                icebergApi.listTables(catalogName, namespaceParts)
-            ]);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:60:46
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-
-            await icebergApi.createNamespace(catalogName, req);
-            notifications.success(`Namespace "${newName}" created`);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:77:42
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-            const req: CreateTableRequest = event.detail;
-            await icebergApi.createTable(catalogName, namespaceParts, req);
-            notifications.success(`Table "${req.name}" created`);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:95:56
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
-                <a href="/explorer/{encodeURIComponent(catalogName)}" class="hover:text-primary-600 hover:underline">
-                    {catalogName}
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:134:86
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-                                class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-primary-500 dark:hover:border-primary-500 transition-colors text-left group"
-                                on:click={() => goto(`/explorer/${encodeURIComponent(catalogName)}/${encodeURIComponent(ns.join('.'))}`)}
-                            >
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:157:34
-Error: Type '"xs"' is not assignable to type '"sm" | "md" | "lg" | undefined'. (ts)
-                    {:else}
-                         <Button size="xs" variant="ghost" on:click={() => showCreateTable = true}>+ Create Table</Button>
-                    {/if}
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:174:94
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-                                        class="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                                        on:click={() => goto(`/explorer/${encodeURIComponent(catalogName)}/${encodeURIComponent(namespaceParam)}/${encodeURIComponent(table.name)}`)}
-                                    >
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/+page.svelte:174:129
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-                                        class="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                                        on:click={() => goto(`/explorer/${encodeURIComponent(catalogName)}/${encodeURIComponent(namespaceParam)}/${encodeURIComponent(table.name)}`)}
-                                    >
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/[table]/+page.svelte:23:48
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-        try {
-            table = await icebergApi.loadTable(catalogName, namespaceParts, tableName);
-        } catch (e: any) {
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/[table]/+page.svelte:35:52
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-        <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
-            <a href="/explorer/{encodeURIComponent(catalogName)}" class="hover:text-primary-600 hover:underline">
-                {catalogName}
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/explorer/[catalog]/[namespace]/[table]/+page.svelte:41:57
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string | number | boolean'.
-  Type 'undefined' is not assignable to type 'string | number | boolean'. (ts)
-                <a 
-                    href="/explorer/{encodeURIComponent(catalogName)}/{encodeURIComponent(namespaceParts.slice(0, i+1).join('.'))}"
-                    class="hover:text-primary-600 hover:underline"
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/login/+page.svelte:76:19
-Error: Argument of type '(e: KeyboardEvent) => void' is not assignable to parameter of type '(e: CustomEvent<any>) => void'.
-  Types of parameters 'e' and 'e' are incompatible.
-    Type 'CustomEvent<any>' is missing the following properties from type 'KeyboardEvent': altKey, charCode, code, ctrlKey, and 16 more. (ts)
-					disabled={loading}
-					on:keypress={handleKeyPress}
-				/>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/login/+page.svelte:86:19
-Error: Argument of type '(e: KeyboardEvent) => void' is not assignable to parameter of type '(e: CustomEvent<any>) => void'.
-  Types of parameters 'e' and 'e' are incompatible.
-    Type 'CustomEvent<any>' is missing the following properties from type 'KeyboardEvent': altKey, charCode, code, ctrlKey, and 16 more. (ts)
-					disabled={loading}
-					on:keypress={handleKeyPress}
-				/>
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/permissions/+page.svelte:149:65
 Warn: A form label must be associated with a control
@@ -1303,35 +895,14 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                     <label>Actions</label>
                     <div class="actions-select">
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/+page.svelte:127:11
-Warn: A form label must be associated with a control
-https://svelte.dev/e/a11y_label_has_associated_control (svelte)
-        <div>
-          <label class="label mb-1">Role Name</label>
-          <input
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/+page.svelte:135:11
-Warn: A form label must be associated with a control
-https://svelte.dev/e/a11y_label_has_associated_control (svelte)
-        <div>
-          <label class="label mb-1">Description</label>
-          <textarea
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/+page.svelte:33:33
-Error: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-      const id = $page.params.id;
-      role = await rolesApi.get(id);
-      name = role.name;
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:104:5
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:105:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
 https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 			<div class="flex items-center justify-center py-12">
 				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
 			</div>
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:120:6
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:121:6
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				<div class="space-y-2">
@@ -1340,28 +911,7 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 					</label>
 					<textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/[id]/edit/+page.svelte:27:9
-Error: Type 'string | undefined' is not assignable to type 'string'.
-  Type 'undefined' is not assignable to type 'string'. (ts)
-	async function loadData() {
-        roleId = $page.params.id;
-        if (!roleId) {
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/create/+page.svelte:79:9
-Warn: A form label must be associated with a control
-https://svelte.dev/e/a11y_label_has_associated_control (svelte)
-      <div>
-        <label class="label mb-1">Role Name</label>
-        <input
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/create/+page.svelte:88:9
-Warn: A form label must be associated with a control
-https://svelte.dev/e/a11y_label_has_associated_control (svelte)
-      <div>
-        <label class="label mb-1">Description (Optional)</label>
-        <textarea
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/new/+page.svelte:129:5
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/new/+page.svelte:126:5
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 			<div class="space-y-2">
@@ -1370,7 +920,7 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				</label>
 				<textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/new/+page.svelte:143:6
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/roles/new/+page.svelte:140:6
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				<div class="space-y-2">
@@ -1391,18 +941,137 @@ Warn: Also define the standard property 'line-clamp' for compatibility (css)
     
     .desc { font-size: 0.875rem; color: var(--md-sys-color-on-surface-variant); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 1rem; }
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/search/+page.svelte:42:21
-Error: 'e' is of type 'unknown'. (ts)
-        } catch (e) {
-            error = e.message;
-        } finally {
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:95:6
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+				{:else if column.key === 'actions'}
+					<div class="flex items-center gap-2" on:click|stopPropagation>
+						<Button 
+							size="sm" 
+							variant="secondary" 
+							on:click={() => goto(`/tenants/${row.id}/edit`)}
+							title="Edit Tenant"
+						>
+							<span class="material-icons text-sm">edit</span>
+						</Button>
+						<Button 
+							size="sm" 
+							variant="error" 
+							on:click={() => confirmDelete(row)}
+							title="Delete Tenant"
+						>
+							<span class="material-icons text-sm">delete</span>
+						</Button>
+					</div>
+				{:else}
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/[id]/+page.svelte:96:5
-Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
-https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
-			<div class="flex items-center justify-center py-12">
-				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
-			</div>
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:95:6
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+				{:else if column.key === 'actions'}
+					<div class="flex items-center gap-2" on:click|stopPropagation>
+						<Button 
+							size="sm" 
+							variant="secondary" 
+							on:click={() => goto(`/tenants/${row.id}/edit`)}
+							title="Edit Tenant"
+						>
+							<span class="material-icons text-sm">edit</span>
+						</Button>
+						<Button 
+							size="sm" 
+							variant="error" 
+							on:click={() => confirmDelete(row)}
+							title="Delete Tenant"
+						>
+							<span class="material-icons text-sm">delete</span>
+						</Button>
+					</div>
+				{:else}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:76:4
+Error: Cannot find name 'Button'. (ts)
+		</div>
+		<Button on:click={() => goto('/tenants/new')}>
+			<span class="text-lg mr-2">+</span>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:79:5
+Error: Cannot find name 'Button'. (ts)
+			Create Tenant
+		</Button>
+	</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:82:3
+Error: Cannot find name 'Card'. (ts)
+
+	<Card>
+		<DataTable
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:83:4
+Error: Cannot find name 'DataTable'. (ts)
+	<Card>
+		<DataTable
+			{columns}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:96:8
+Error: Cannot find name 'Button'. (ts)
+					<div class="flex items-center gap-2" on:click|stopPropagation>
+						<Button 
+							size="sm"
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:103:9
+Error: Cannot find name 'Button'. (ts)
+							<span class="material-icons text-sm">edit</span>
+						</Button>
+						<Button
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:104:8
+Error: Cannot find name 'Button'. (ts)
+						</Button>
+						<Button 
+							size="sm"
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:111:9
+Error: Cannot find name 'Button'. (ts)
+							<span class="material-icons text-sm">delete</span>
+						</Button>
+					</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:117:5
+Error: Cannot find name 'DataTable'. (ts)
+			</svelte:fragment>
+		</DataTable>
+	</Card>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:118:4
+Error: Cannot find name 'Card'. (ts)
+		</DataTable>
+	</Card>
+</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:132:4
+Error: Cannot find name 'Button'. (ts)
+	<div slot="footer" class="flex justify-end gap-3">
+		<Button variant="ghost" on:click={() => showDeleteModal = false}>Cancel</Button>
+		<Button variant="error" loading={deleting} on:click={handleDelete}>Delete Tenant</Button>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:132:76
+Error: Cannot find name 'Button'. (ts)
+	<div slot="footer" class="flex justify-end gap-3">
+		<Button variant="ghost" on:click={() => showDeleteModal = false}>Cancel</Button>
+		<Button variant="error" loading={deleting} on:click={handleDelete}>Delete Tenant</Button>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:133:4
+Error: Cannot find name 'Button'. (ts)
+		<Button variant="ghost" on:click={() => showDeleteModal = false}>Cancel</Button>
+		<Button variant="error" loading={deleting} on:click={handleDelete}>Delete Tenant</Button>
+	</div>
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/+page.svelte:133:85
+Error: Cannot find name 'Button'. (ts)
+		<Button variant="ghost" on:click={() => showDeleteModal = false}>Cancel</Button>
+		<Button variant="error" loading={deleting} on:click={handleDelete}>Delete Tenant</Button>
+	</div>
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/+page.svelte:134:5
 Warn: A form label must be associated with a control
@@ -1436,6 +1105,75 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
                         <label class="label text-sm text-surface-400">Email</label>
                         <div class="font-medium">{user.email}</div>
 
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/tokens/+page.svelte:129:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant <span class="text-red-500">*</span></label>
+						<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/tokens/+page.svelte:145:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In</label>
+						<select
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/users/[id]/tokens/+page.svelte:185:4
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+		<div>
+			<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Access Token</label>
+			<div class="relative">
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/+page.svelte:139:6
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+				{:else if column.key === 'actions'}
+					<div class="flex items-center gap-2" on:click|stopPropagation>
+						<Button 
+							size="sm" 
+							variant="secondary" 
+							on:click={() => goto(`/warehouses/${encodeURIComponent(row.name)}/edit`)}
+							title="Edit Warehouse"
+						>
+							<span class="material-icons text-sm">edit</span>
+						</Button>
+						<Button 
+							size="sm" 
+							variant="error" 
+							on:click={() => confirmDelete(row)}
+							title="Delete Warehouse"
+						>
+							<span class="material-icons text-sm">delete</span>
+						</Button>
+					</div>
+				{:else}
+
+/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/+page.svelte:139:6
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+				{:else if column.key === 'actions'}
+					<div class="flex items-center gap-2" on:click|stopPropagation>
+						<Button 
+							size="sm" 
+							variant="secondary" 
+							on:click={() => goto(`/warehouses/${encodeURIComponent(row.name)}/edit`)}
+							title="Edit Warehouse"
+						>
+							<span class="material-icons text-sm">edit</span>
+						</Button>
+						<Button 
+							size="sm" 
+							variant="error" 
+							on:click={() => confirmDelete(row)}
+							title="Delete Warehouse"
+						>
+							<span class="material-icons text-sm">delete</span>
+						</Button>
+					</div>
+				{:else}
+
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/new/+page.svelte:313:9
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
@@ -1446,4 +1184,4 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 								<textarea
 
 ====================================
-svelte-check found 96 errors and 67 warnings in 50 files
+svelte-check found 16 errors and 81 warnings in 36 files

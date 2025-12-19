@@ -7,7 +7,7 @@
 	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
 	import CreateUserForm from '$lib/components/forms/CreateUserForm.svelte';
 	import { usersApi, type User } from '$lib/api/users';
-	import { authStore } from '$lib/stores/auth';
+	import { authStore, isRoot, isTenantAdmin } from '$lib/stores/auth';
 	import { tenantStore } from '$lib/stores/tenant';
 	import { notifications } from '$lib/stores/notifications';
 
@@ -27,7 +27,11 @@
 	const roleColors: Record<string, string> = {
 		root: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
 		'tenant-admin': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-		'tenant-user': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+		'tenant-user': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+        // Add robust fallbacks if needed, or normalize before access
+        'Root': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+        'TenantAdmin': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+        'TenantUser': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
 	};
 
 	const columns = [
@@ -45,7 +49,7 @@
 			user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			user.email.toLowerCase().includes(searchQuery.toLowerCase());
 
-		const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+		const matchesRole = roleFilter === 'all' || user.role.toLowerCase() === roleFilter.replace('-', ''); // Basic normalization check might be needed
 
 		return matchesSearch && matchesRole;
 	});
@@ -53,7 +57,7 @@
 	$: tableData = filteredUsers.map((user) => ({
 		...user,
 		tenant_name: user.tenant_name || 'N/A',
-		created_at: new Date(user.created_at).toLocaleDateString(),
+		created_at: user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A',
 		role_badge: user.role,
 		actions_data: user
 	}));
@@ -112,7 +116,7 @@
 			<p class="text-gray-600 dark:text-gray-400 mt-1">Manage user accounts and permissions</p>
 		</div>
 
-		{#if $authStore.user?.role === 'Root' || $authStore.user?.role === 'TenantAdmin'}
+		{#if $isRoot || $isTenantAdmin}
 			<Button on:click={() => (showCreateModal = true)}>
 				<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
@@ -167,7 +171,7 @@
 	<DataTable {columns} data={tableData} {loading}>
 		<svelte:fragment slot="cell" let:row let:column>
 			{#if column.key === 'role'}
-				<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {roleColors[row.role_badge]}">
+				<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {roleColors[row.role_badge] || 'bg-gray-100 text-gray-800'}">
 					{row.role_badge}
 				</span>
 			{:else if column.key === 'actions'}
@@ -193,7 +197,15 @@
 						</svg>
 					</button>
 
-					{#if $authStore.user?.role === 'Root' || ($authStore.user?.role === 'TenantAdmin' && row.role !== 'Root')}
+					{#if $isRoot || ($isTenantAdmin && row.role !== 'Root')}
+						<button
+							on:click={() => goto(`/users/${row.id}/edit`)}
+							class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+							title="Edit User"
+						>
+							<span class="material-icons text-sm">edit</span>
+						</button>
+
 						<button
 							on:click={() => handleDelete(row.actions_data)}
 							class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"

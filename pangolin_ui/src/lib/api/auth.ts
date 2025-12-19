@@ -27,6 +27,32 @@ export interface AppConfig {
 	auth_enabled: boolean;
 }
 
+export interface GenerateTokenRequest {
+	tenant_id: string;
+	username?: string;
+	roles?: string[];
+	expires_in_hours?: number;
+}
+
+export interface GenerateTokenResponse {
+	token: string;
+	expires_at: string;
+	tenant_id: string;
+}
+
+export interface RevokeTokenRequest {
+	reason?: string;
+}
+
+export interface RevokeTokenResponse {
+	message: string;
+}
+
+export interface CleanupResponse {
+	message: string;
+	count: number;
+}
+
 export const authApi = {
 	async getAppConfig(): Promise<AppConfig> {
 		const response = await apiClient.get<AppConfig>('/api/v1/app-config');
@@ -60,6 +86,30 @@ export const authApi = {
 
 	async initiateOAuth(provider: string): Promise<{ url: string }> {
 		const response = await apiClient.get<{ url: string }>(`/api/v1/oauth/${provider}`);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
+	},
+
+	async generateToken(request: GenerateTokenRequest): Promise<GenerateTokenResponse> {
+		const response = await apiClient.post<GenerateTokenResponse>('/api/v1/tokens', request);
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
+	},
+
+	async revokeCurrentToken(request?: RevokeTokenRequest): Promise<RevokeTokenResponse> {
+		const response = await apiClient.post<RevokeTokenResponse>('/api/v1/auth/revoke', request || {});
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
+	},
+
+	async revokeTokenById(tokenId: string, request?: RevokeTokenRequest): Promise<RevokeTokenResponse> {
+		const response = await apiClient.post<RevokeTokenResponse>(`/api/v1/auth/revoke/${tokenId}`, request || {});
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
+	},
+
+	async cleanupExpiredTokens(): Promise<CleanupResponse> {
+		const response = await apiClient.post<CleanupResponse>('/api/v1/auth/cleanup-tokens');
 		if (response.error) throw new Error(response.error.message);
 		return response.data!;
 	},

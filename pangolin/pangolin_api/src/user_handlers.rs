@@ -58,6 +58,8 @@ pub struct UserInfo {
     pub tenant_id: Option<Uuid>,
     pub role: UserRole,
     pub oauth_provider: Option<OAuthProvider>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_login: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl From<User> for UserInfo {
@@ -69,6 +71,8 @@ impl From<User> for UserInfo {
             tenant_id: user.tenant_id,
             role: user.role,
             oauth_provider: user.oauth_provider,
+            created_at: user.created_at,
+            last_login: user.last_login,
         }
     }
 }
@@ -413,16 +417,24 @@ pub async fn login(
 
 /// Get current user
 pub async fn get_current_user(
-    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
 ) -> Response {
+    // Try to fetch full user details from DB
+    if let Ok(Some(user)) = store.get_user(session.user_id).await {
+         return (StatusCode::OK, Json(UserInfo::from(user))).into_response();
+    }
+
+    // Fallback for Root user or if DB fetch fails (e.g. ephemeral root session)
     let user_info = UserInfo {
         id: session.user_id,
         username: session.username,
-        email: "".to_string(), 
+        email: "root@pangolin.local".to_string(), // Default for root/fallback
         tenant_id: session.tenant_id,
         role: session.role,
         oauth_provider: None,
+        created_at: chrono::Utc::now(),
+        last_login: Some(chrono::Utc::now()),
     };
     
     (StatusCode::OK, Json(user_info)).into_response()

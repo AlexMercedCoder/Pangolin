@@ -22,22 +22,32 @@ export interface StorageConfig {
 	project_id?: string;
 }
 
+export type VendingStrategy = 
+	| { type: 'AwsSts'; role_arn: string; external_id?: string }
+	| { type: 'AwsStatic'; access_key_id: string; secret_access_key: string }
+	| { type: 'AzureSas'; account_name: string; account_key: string }
+	| { type: 'GcpDownscoped'; service_account_email: string; private_key: string }
+	| { type: 'None' };
+
 export interface Warehouse {
 	id: string;
 	name: string;
-	use_sts: boolean;
+	use_sts: boolean; // Deprecated but kept for compatibility
 	storage_config: StorageConfig;
+	vending_strategy?: VendingStrategy;
 }
 
 export interface CreateWarehouseRequest {
 	name: string;
 	use_sts: boolean;
 	storage_config: StorageConfig;
+	vending_strategy?: VendingStrategy;
 }
 
 export interface UpdateWarehouseRequest {
 	use_sts?: boolean;
 	storage_config?: Partial<StorageConfig>;
+	vending_strategy?: VendingStrategy;
 }
 
 export const warehousesApi = {

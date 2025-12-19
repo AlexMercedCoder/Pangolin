@@ -12,7 +12,25 @@
 	let error = '';
 	let loading = false;
 
-	onMount(() => {
+	import { page } from '$app/stores';
+
+	onMount(async () => {
+        // Check for OAuth callback token
+        const token = $page.url.searchParams.get('token');
+        if (token) {
+            loading = true;
+            const result = await authStore.handleOAuthLogin(token);
+            if (result.success) {
+                // Clear URL params
+                window.history.replaceState({}, document.title, '/');
+                goto('/');
+                return;
+            } else {
+                error = result.error || 'OAuth login failed';
+            }
+            loading = false;
+        }
+
 		// If already authenticated, redirect to dashboard
 		if ($authStore.isAuthenticated) {
 			goto('/');
@@ -97,7 +115,7 @@
 				</Button>
 			</form>
 
-			<!-- OAuth Options (placeholder for future) -->
+			<!-- OAuth Options -->
 			<div class="mt-6">
 				<div class="relative">
 					<div class="absolute inset-0 flex items-center">
@@ -108,8 +126,31 @@
 					</div>
 				</div>
 
-				<div class="mt-4 text-center text-sm text-gray-500">
-					OAuth providers coming soon
+				<div class="mt-4 grid grid-cols-2 gap-3">
+                    {#each ['google', 'github', 'microsoft', 'okta'] as provider}
+                        <Button
+                            variant="secondary"
+                            fullWidth
+                            on:click={() => {
+                                // Direct navigation to backend OAuth endpoint
+                                // We use current origin + /login as redirect_uri to come back here and process token
+                                const redirectUri = encodeURIComponent(`${window.location.origin}/login`);
+                                // Assuming API is on relative path /api or simple /oauth if proxied, 
+                                // but safe to use the env var from client.ts logic if possible.
+                                // For now, let's assume relative path /oauth/authorize/ if served from same domain,
+                                // or we need the API_URL.
+                                // Let's use a cleaner approach: construct URL relative to current location if proxied, 
+                                // or strictly use configured API URL.
+                                // Since we don't have API_URL exposed easily here without importing from env,
+                                // let's try relative path assuming proxy setup or modify client to expose it.
+                                // Fallback to hardcoded for now or use window.location.origin if in dev.
+                                const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080';
+                                window.location.href = `${apiUrl}/oauth/authorize/${provider}?redirect_uri=${redirectUri}`;
+                            }}
+                        >
+                            <span class="capitalize">{provider}</span>
+                        </Button>
+                    {/each}
 				</div>
 			</div>
 		</Card>

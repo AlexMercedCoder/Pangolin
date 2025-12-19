@@ -75,13 +75,6 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				</label>
 				<select
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/page.test.ts:48:49
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }[]' is not assignable to parameter of type 'Catalog[]'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.resetAllMocks();
-		vi.mocked(catalogsApi.list).mockResolvedValue(mockCatalogs);
-		vi.mocked(branchesApi.list).mockResolvedValue(mockBranches);
-
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/new/+page.svelte:126:5
 Warn: A form label must be associated with a control
 https://svelte.dev/e/a11y_label_has_associated_control (svelte)
@@ -110,40 +103,12 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 				</label>
 				<textarea
 
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/branches/new/page.test.ts:20:49
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }[]' is not assignable to parameter of type 'Catalog[]'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.resetAllMocks();
-		vi.mocked(catalogsApi.list).mockResolvedValue(mockCatalogs);
-		vi.mocked(branchesApi.create).mockResolvedValue({
-
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/+page.svelte:117:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
 https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
 			<div class="flex items-center justify-center py-12">
 				<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin" />
 			</div>
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/page.test.ts:29:48
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' is not assignable to parameter of type 'Catalog'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.resetAllMocks();
-		vi.mocked(catalogsApi.get).mockResolvedValue(mockCatalog);
-		vi.mocked(catalogsApi.update).mockResolvedValue(mockCatalog);
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/[name]/edit/page.test.ts:30:51
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' is not assignable to parameter of type 'Catalog'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-		vi.mocked(catalogsApi.get).mockResolvedValue(mockCatalog);
-		vi.mocked(catalogsApi.update).mockResolvedValue(mockCatalog);
-	});
-
-/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/catalogs/new/CreateCatalog.test.ts:29:57
-Error: Argument of type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' is not assignable to parameter of type 'Catalog'.
-  Property 'catalog_type' is missing in type '{ id: string; name: string; warehouse_name: string; storage_location: string; properties: {}; }' but required in type 'Catalog'. 
-        ]);
-        vi.mocked(catalogsApi.create).mockResolvedValue({ id: 'cat-1', name: 'my-catalog', warehouse_name: '', storage_location: '', properties: {} });
-    });
 
 /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/tenants/[id]/edit/+page.svelte:99:5
 Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
@@ -959,4 +924,4 @@ https://svelte.dev/e/a11y_label_has_associated_control (svelte)
 								<textarea
 
 ====================================
-svelte-check found 6 errors and 67 warnings in 33 files
+svelte-check found 1 error and 67 warnings in 29 files

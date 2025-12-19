@@ -26,7 +26,7 @@ describe('CreateCatalogPage', () => {
             { id: '1', name: 'warehouse-1', use_sts: false, storage_config: { type: 's3' } },
             { id: '2', name: 'warehouse-2', use_sts: false, storage_config: { type: 's3' } }
         ]);
-        vi.mocked(catalogsApi.create).mockResolvedValue({ id: 'cat-1', name: 'my-catalog', warehouse_name: '', storage_location: '', properties: {} });
+        vi.mocked(catalogsApi.create).mockResolvedValue({ id: 'cat-1', name: 'my-catalog', catalog_type: 'Local' as const, warehouse_name: '', storage_location: '', properties: {} });
     });
 
     it('renders the form correctly', async () => {

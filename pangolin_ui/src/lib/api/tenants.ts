@@ -5,10 +5,7 @@ export interface Tenant {
 	name: string;
 	description?: string;
 	properties?: Record<string, any>;
-	created_at: string;
-	users_count?: number;
-	catalogs_count?: number;
-	warehouses_count?: number;
+	created_at?: string;
 }
 
 export interface CreateTenantRequest {

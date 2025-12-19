@@ -19,6 +19,7 @@ describe('Catalog Edit Page', () => {
 	const mockCatalog = {
 		id: 'cat-1',
 		name: 'test-catalog',
+		catalog_type: 'Local' as const,
 		warehouse_name: 'test-warehouse',
 		storage_location: 's3://bucket/path',
 		properties: {}

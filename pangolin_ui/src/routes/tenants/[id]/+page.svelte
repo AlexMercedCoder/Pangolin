@@ -118,7 +118,7 @@
 				<div>
 					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Created</dt>
 					<dd class="mt-1 text-sm text-gray-900 dark:text-white">
-						{new Date(tenant.created_at).toLocaleString()}
+						{tenant.created_at ? new Date(tenant.created_at).toLocaleString() : 'N/A'}
 					</dd>
 				</div>
 			</dl>
@@ -127,7 +127,7 @@
 		<!-- Statistics Card -->
 		<Card>
 			<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Statistics</h3>
-			<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 				<div class="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
 					<div class="text-3xl font-bold text-primary-600 dark:text-primary-400">
 						{catalogCount}
@@ -139,12 +139,6 @@
 						{warehouseCount}
 					</div>
 					<div class="mt-1 text-sm text-gray-600 dark:text-gray-400">Warehouses</div>
-				</div>
-				<div class="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-					<div class="text-3xl font-bold text-primary-600 dark:text-primary-400">
-						{tenant.users_count || 0}
-					</div>
-					<div class="mt-1 text-sm text-gray-600 dark:text-gray-400">Users</div>
 				</div>
 			</div>
 		</Card>
