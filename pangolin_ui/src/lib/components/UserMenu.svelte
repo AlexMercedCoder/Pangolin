@@ -37,7 +37,7 @@
             {$user?.username.charAt(0).toUpperCase()}
         </div>
         <span class="username">{$user?.username}</span>
-        <span class="material-icons arrow">expand_more</span>
+        <span class="arrow">▼</span>
     </button>
 
     {#if isOpen}
@@ -46,26 +46,31 @@
                 <span class="role-badge">{$user?.role || 'User'}</span>
                 {#if $user?.tenant_id}
                     <div class="tenant-info">
-                        Tenant ID: <span class="mono">{$user.tenant_id.slice(0, 8)}...</span>
+                        Tenant: <span class="mono">{$user.tenant_id.slice(0, 8)}...</span>
                     </div>
                 {/if}
             </div>
             
-            <a href="/profile" class="menu-item">
-                <span class="material-icons">account_circle</span>
-                Profile
+            <a href="/profile/tokens" class="menu-item">
+                <span class="icon">👤</span>
+                <span class="label">Profile</span>
             </a>
             
-            <a href="/settings" class="menu-item">
-                <span class="material-icons">settings</span>
-                Settings
+            <a href="/profile/tokens" class="menu-item">
+                <span class="icon">🔑</span>
+                <span class="label">My Tokens</span>
+            </a>
+
+            <a href="https://www.pangolincatalog.org" target="_blank" rel="noopener noreferrer" class="menu-item">
+                <span class="icon">📚</span>
+                <span class="label">Docs</span>
             </a>
 
             <div class="divider"></div>
 
             <button class="menu-item logout" on:click={handleLogout}>
-                <span class="material-icons">logout</span>
-                Logout
+                <span class="icon">🚪</span>
+                <span class="label">Logout</span>
             </button>
         </div>
     {/if}
@@ -96,8 +101,8 @@
     .avatar {
         width: 32px;
         height: 32px;
-        background-color: var(--md-sys-color-primary);
-        color: var(--md-sys-color-on-primary);
+        background-color: var(--md-sys-color-primary, #6750a4);
+        color: var(--md-sys-color-on-primary, #ffffff);
         border-radius: 50%;
         display: flex;
         justify-content: center;
@@ -112,7 +117,19 @@
     }
 
     .arrow {
+        font-size: 0.8rem;
+        margin-left: 0.25rem;
+    }
+    
+    .icon {
         font-size: 1.25rem;
+        width: 1.5rem;
+        text-align: center;
+    }
+    
+    .label {
+        font-size: 0.9rem;
+        font-weight: 500;
     }
 
     .menu-dropdown {
@@ -120,16 +137,24 @@
         top: 100%;
         right: 0;
         margin-top: 0.5rem;
-        background-color: var(--md-sys-color-surface);
-        color: var(--md-sys-color-on-surface);
+        background-color: white; /* Fallback */
+        background-color: var(--md-sys-color-surface, #ffffff);
+        color: var(--md-sys-color-on-surface, #1d1b20);
         border-radius: 12px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         min-width: 200px;
         overflow: hidden;
         z-index: 100;
-        border: 1px solid rgba(0,0,0,0.05); /* Subtle border */
+        border: 1px solid rgba(0,0,0,0.1);
     }
-
+    
+    :global(.dark) .menu-dropdown {
+        background-color: #2d2d2d;
+        background-color: var(--md-sys-color-surface, #2d2d2d);
+        color: white;
+        color: var(--md-sys-color-on-surface, #e6e1e5);
+        border: 1px solid rgba(255,255,255,0.1);
+    }
     .menu-header {
         padding: 1rem;
         background-color: rgba(0,0,0,0.02);

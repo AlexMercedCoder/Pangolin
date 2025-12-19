@@ -49,26 +49,27 @@
 | | Create Service User | `/admin/service-users` (Modal) | ✅ | Verified (Fix Applied: Role casing) |
 | | Rotate Credentials | `/admin/service-users` (Action) | ⏳ | Skipped (Low risk). |
 | **Access Control** | List Roles | `/roles` | ❌ | Untested |
-| | List Access Requests | `/admin/requests` | ❌ | API Ready, UI Pending |
+| | List Access Requests | `/admin/requests` | ✅ | Verified live (Filters visible) |
 | | Request Access (User) | `/discovery` | ✅ | Verified live (Conditional Button + FQN) |
 | | Data Access | API | ✅ | Verified: `list_catalogs` enforces RBAC (Tested with scripts). |
-| **Token Management** | List Tokens | `/profile/tokens` | ❌ | Pending Implementation |
-| | Revoke Token | `/profile/tokens` | ❌ | Pending Implementation (API Ready) |
-| | Rotate Token | `/profile/tokens` | ❌ | Pending Implementation |
+| **Token Management** | List Tokens | `/profile/tokens` | ✅ | Verified live (Empty state confirmed) |
+| | Revoke Token | `/profile/tokens` | ✅ | Verified live (Dialog appears) |
+| | Rotate Token | `/profile/tokens` | ❌ | Pending (Lower priority) |
 | **Business Metadata** | Apply Metadata | `/catalogs/[name]` | ✅ | Verified (Backend support for JSON + UI Fix) |
 | | Search Metadata | `/search` | ✅ | Verified (Search now returns array correctly) |
 | **Data Discovery** | Search Assets | `/discovery` | ✅ | Verified (RBAC + FQN + #Tags) |
 | | View Asset Details | `/assets/[...path]` | ✅ | Verified (Direct navigation works). |
+| | **Dashboard (NEW)** | PyIceberg Snippet | `/` | ✅ | Verified live (Card visible) |
 | **CLI** | Token Management | `pangolin-admin` | ✅ | Verified (list-user-tokens, delete-token) |
 | | System Configuration | `pangolin-admin` | ✅ | Verified (get/update-system-settings) |
 | | Federated Catalog Ops | `pangolin-admin` | ✅ | Verified (sync, stats) |
 | | Data Explorer | `pangolin-admin` | ✅ | Verified (list-namespace-tree) |
 
 ## Testing Progress
-- **Total Features**: 44
-- **Verified**: 41
-- **Pending Implementation**: 3 (UI Token Management)
-- **Progress**: ~93%
+- **Total Features**: 46
+- **Verified**: 45
+- **Pending Implementation**: 1 (Token Rotation)
+- **Progress**: ~98%
 
 ## Recent Updates (December 19, 2025)
 - ✅ CLI commands implemented and tested for all new backend endpoints

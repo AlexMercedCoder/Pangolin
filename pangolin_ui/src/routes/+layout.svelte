@@ -9,6 +9,7 @@
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
 	import Notification from '$lib/components/ui/Notification.svelte';
 	import HelpPanel from '$lib/components/ui/HelpPanel.svelte';
+	import UserMenu from '$lib/components/UserMenu.svelte';
 	import '../app.css';
 
 	let sidebarOpen = true;
@@ -117,6 +118,7 @@
 
 					<!-- Navigation -->
 					<nav class="flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
+						{#if !$isRoot}
 						<a
 							href="/"
 							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -144,6 +146,7 @@
 								<span>Discovery</span>
 							{/if}
 						</a>
+						{/if}
 						{#if $isRoot}
 						<a
 							href="/root-dashboard"
@@ -263,41 +266,7 @@
 							</button>
 
 							<!-- User menu -->
-							<div class="flex items-center gap-3">
-								<div class="text-right">
-									<p class="text-sm font-medium text-gray-900 dark:text-white">
-										{$authStore.user?.username || 'User'}
-									</p>
-									<p class="text-xs text-gray-500 dark:text-gray-400">
-										{$authStore.user?.role || 'Role'}
-									</p>
-								</div>
-								<button
-                                    on:click={() => {
-                                        const path = $page.url.pathname;
-                                        let doc = 'README';
-                                        if (path.startsWith('/warehouses')) doc = 'features/warehouse_management';
-                                        if (path.startsWith('/catalogs')) doc = 'features/catalog_management'; // Adjust based on actual filenames
-                                        if (path.startsWith('/tenants')) doc = 'features/multi_tenancy';
-                                        if (path.startsWith('/users')) doc = 'authentication'; // or user management if exists
-                                        
-                                        helpStore.open(doc, 'Help & Resources');
-                                    }}
-                                    class="p-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                    title="Contextual Help"
-                                >
-                                    <span class="material-icons">help_outline</span>
-                                </button>
-								<button
-									on:click={() => {
-										authStore.logout();
-										goto('/login');
-									}}
-									class="px-3 py-1.5 text-sm bg-error-600 text-white rounded-lg hover:bg-error-700 transition-colors"
-								>
-									Logout
-								</button>
-							</div>
+							<UserMenu />
 						</div>
 					</div>
 				</header>

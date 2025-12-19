@@ -3,6 +3,7 @@
 	import { authApi, type GenerateTokenRequest } from '$lib/api/auth';
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
 	import { notifications } from '$lib/stores/notifications';
+	import { user, isRoot } from '$lib/stores/auth'; // Import auth stores
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -12,6 +13,9 @@
 
 	let tenants: Tenant[] = [];
 	let loadingTenants = false;
+	
+	// 'user' or 'service'
+	let tokenType: 'user' | 'service' = 'user';
 
 	// Generate Token Form
 	let generateForm: GenerateTokenRequest = {
@@ -32,6 +36,11 @@
 	let generating = false;
 	let generatedToken: string | null = null;
 	let showTokenModal = false;
+
+	// Initial tenant setup
+	$: if ($user?.tenant_id && !$isRoot) {
+		generateForm.tenant_id = $user.tenant_id;
+	}
 
 	// Revoke Token Form
 	let revokeTokenId = '';
@@ -65,13 +74,31 @@
 			return;
 		}
 
+		if (tokenType === 'user' && !generateForm.username) {
+			notifications.error('Username is required for User tokens');
+			return;
+		}
+
+		if (tokenType === 'service' && !rolesInput) {
+			notifications.error('At least one role is required for Service tokens');
+			return;
+		}
+
 		generating = true;
 		try {
-			const roles = rolesInput.split(',').map(r => r.trim()).filter(r => r.length > 0);
+			// Logic:
+			// User Token: username provided, roles = [] (inherit)
+			// Service Token: username ignored (becomes null/api-user), roles provided
 			
+			const roles = tokenType === 'service' 
+				? rolesInput.split(',').map(r => r.trim()).filter(r => r.length > 0)
+				: [];
+			
+			const usernameToSubmit = tokenType === 'user' ? generateForm.username : undefined;
+
 			const response = await authApi.generateToken({
 				tenant_id: generateForm.tenant_id,
-				username: generateForm.username || undefined,
+				username: usernameToSubmit,
 				roles: roles.length > 0 ? roles : undefined,
 				expires_in_hours: selectedExpiry
 			});
@@ -152,9 +179,25 @@
 
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 		<!-- Generate Token Card -->
-		<Card>
 			<h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Generate Token</h2>
+			
+			<div class="mb-6 flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+				<button 
+					class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all {tokenType === 'user' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}"
+					on:click={() => tokenType = 'user'}
+				>
+					User Token
+				</button>
+				<button 
+					class="flex-1 py-1.5 px-3 rounded-md text-sm font-medium transition-all {tokenType === 'service' ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'}"
+					on:click={() => tokenType = 'service'}
+				>
+					Service Token
+				</button>
+			</div>
+
 			<div class="space-y-4">
+				{#if $isRoot}
 				<div>
 					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant <span class="text-red-500">*</span></label>
 					{#if loadingTenants}
@@ -171,18 +214,40 @@
 						</select>
 					{/if}
 				</div>
+				{:else}
+					<!-- Tenant Admin: Hidden Tenant ID (force user's tenant) -->
+					<!-- We rely on default or component init logic to set this -->
+					<!-- Showing it read-only for clarity might be good -->
+					<div>
+						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant</label>
+						<div class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-900 dark:border-gray-700 text-gray-500 dark:text-gray-400">
+							{$user?.tenant_id || 'Current Tenant'}
+						</div>
+					</div>
+				{/if}
 
-				<Input 
-					label="Username (Optional)" 
-					bind:value={generateForm.username} 
-					placeholder="e.g. service-worker"
-				/>
-
-				<Input 
-					label="Roles (Optional, comma separated)" 
-					bind:value={rolesInput} 
-					placeholder="e.g. TenantAdmin, Writer"
-				/>
+				{#if tokenType === 'user'}
+					<Input 
+						label="Username" 
+						bind:value={generateForm.username} 
+						placeholder="e.g. employee.name"
+						required={true}
+					/>
+					<p class="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+						Roles are inherited from the user's assigned roles in this tenant.
+					</p>
+				{:else}
+					<!-- Service Token Mode -->
+					<Input 
+						label="Roles (Comma separated)" 
+						bind:value={rolesInput} 
+						placeholder="e.g. TenantAdmin"
+						required={true}
+					/>
+					<p class="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+						Available roles: <strong>TenantAdmin, TenantUser</strong>
+					</p>
+				{/if}
 
 				<div>
 					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In</label>
@@ -207,7 +272,6 @@
 					</Button>
 				</div>
 			</div>
-		</Card>
 
 		<div class="space-y-6">
 			<!-- Revoke Token Card -->

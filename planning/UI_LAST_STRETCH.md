@@ -43,16 +43,16 @@ Address final outstanding UI/UX requests and close security gaps in data visibil
 
 ## 5. Outstanding Work (The Last Stretch)
 1.  **Dashboard Enhancement**:
-    - [ ] Implement "Getting Started" PyIceberg snippet on the main dashboard (`src/routes/+page.svelte`).
-    - [ ] Dynamic values for Token/TenantID.
+    - [x] Implement "Getting Started" PyIceberg snippet on the main dashboard (`src/routes/+page.svelte`).
+    - [x] Dynamic values for Token/TenantID.
 2.  **Full Token Management (UI)**:
-    - [ ] **List Tokens**: UI to show active tokens for the user (`/profile/tokens`?).
-    - [ ] **Revoke Token**: Button to revoke specific tokens.
+    - [x] **List Tokens**: UI to show active tokens for the user (`/profile/tokens`).
+    - [x] **Revoke Token**: Button to revoke specific tokens.
     - [ ] **Rotate Token**: Feature to cycle credentials.
     - ✅ **CLI Support**: All token management commands implemented in `pangolin-admin` CLI.
 3.  **Access Request Management (Admin UI)**:
-    - [ ] Admin view to list pending requests (`/admin/requests`).
-    - [ ] Approve/Reject actions in UI.
+    - [x] Admin view to list pending requests (`/admin/requests`).
+    - [x] Approve/Reject actions in UI.
 
 ## Execution Order
 1.  **Dashboard**: Implement PyIceberg snippet (Quick win).

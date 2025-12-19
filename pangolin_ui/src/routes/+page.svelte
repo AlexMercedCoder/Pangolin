@@ -5,6 +5,7 @@
     import Input from '$lib/components/ui/Input.svelte';
     import { user, token } from '$lib/stores/auth';
     import { authApi } from '$lib/api/auth';
+    import { goto } from '$app/navigation';
 
     let showTokenModal = false;
     let newToken = '';
@@ -18,14 +19,41 @@
             alert('User session invalid. Please relogin.');
             return;
         }
-        // Handle kebab-case vs camelCase mismatch from backend serialization
-        const tenantId = $user.tenant_id || ($user as any)['tenant-id'];
         
+        // Handle kebab-case vs camelCase mismatch from backend serialization
+        let tenantId = $user.tenant_id || ($user as any)['tenant-id'];
+        
+        // If user is root (no tenant_id), we might need to handle it differently
+        // For now, if they are root, they likely want a system token, or we can prompt them.
+        // But the API might require a tenant_id for MOST operation tokens.
+        // However, root users might need to specify WHICH tenant they want a token for,
+        // OR the backend might accept a token without tenant_id for root operations?
+        // Checking the error "User has no tenant_id", implies the frontend block above.
+        
+        // FIX: If root user, we should probably redirect them to the admin token page
+        // where they can select a tenant, OR we pick the first available tenant, 
+        // OR we just alert them to use the admin tools.
+        
+        // Check detailed user state
+        console.log('GenerateToken Debug:', { tenantId, role: $user.role, user: $user });
+
+        const role = $user.role;
+        const isRoot = role === 'root' || (typeof role === 'string' && role.toLowerCase() === 'root') || 
+                       (typeof role === 'object' && Object.values(role).includes('root'));
+
+        if (!tenantId && isRoot) {
+             // For root users without a tenant, redirect to admin token page
+             alert('Root users must select a tenant to generate a token. You will be redirected to the Admin Token page.');
+             goto('/admin/tokens');
+             return;
+        }
+
         if (!tenantId) {
             console.error('Generatetoken: User has no tenant_id', $user);
             alert('Your user is not associated with a tenant.');
             return;
         }
+        
         generatingToken = true;
         try {
             // Generate a token for the current user (defaulting to 24h)
