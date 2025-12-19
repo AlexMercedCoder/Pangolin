@@ -2,6 +2,9 @@
 
 In a Data Lakehouse, merging branches is more complex than merging code because the underlying data is massive and mutable. Pangolin implements specific strategies to handle these updates safely.
 
+> [!NOTE]
+> For the step-by-step API guide and technical details on the 3-Way Merge algorithm, see the **[Merge Operations](./merge_operations.md)** guide.
+
 ## Types of Changes
 
 Pangolin tracks three types of changes to assets (tables/views) when merging a branch:
@@ -40,26 +43,3 @@ Schedule maintenance jobs (Compaction/Vacuum) on the `main` branch during window
 
 ### 4. Rebase/Sync Often
 If your branch is long-lived, periodically **Rebase** (merge `main` into your feature branch) to resolve conflicts early in your isolated environment rather than at the final merge.
-
-
-## Current Implementation: Fast-Forward Merging
-
-In the current version of Pangolin, the default merge strategy is **Fast-Forward**.
-
-### How it works
-When you merge a `source` branch into a `target` branch:
-1.  Pangolin updates the `target` branch's `head_commit_id` to match the `source` branch.
-2.  The `target` branch effectively "jumps" to the state of the `source` branch.
-
-### Implications
--   **No Conflicts**: Since this is a pointer update, "conflicts" (divergent histories) are not currently enforced. The Source branch state becomes the new Target state.
--   **Best Practice**: Ensure your source branch is up-to-date with the target before working to avoid accidentally reverting changes on the target (though in a data lake, this is less destructive than in code).
-
-> **Roadmap Feature**: Advanced 3-way merge with Optimistic Concurrency Control (OCC) and row-level conflict detection is planned for a future release. The section below describes the *target* architecture for that release.
-
-## Planned: Conflict Resolution (Future)
-
-*The following describes the planned behavior for the upcoming Three-Way Merge support.*
-
-Currently, Pangolin adopts a **Optimistic Concurrency Control** (OCC) model...
-

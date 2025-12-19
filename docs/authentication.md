@@ -1,62 +1,66 @@
 # Authentication & Access Control
 
-Pangolin supports secure authentication via **Basic Auth** (username/password) and **OAuth 2.0 / OIDC** (Google, GitHub, Microsoft).
+Pangolin supports secure authentication via **JWT Tokens**, **API Keys (Service Users)**, and **OAuth 2.0 / OIDC** (Google, GitHub, Microsoft, Okta).
 
-## Supported Methods
+---
 
-### 1. Basic Authentication (Root Only)
-- **Supported for**: The **Root User** only.
-- **Method**: Standard HTTP Basic Auth header (`Authorization: Basic <base64(user:pass)>`).
-- **Use Case**: Initial server setup, creating the first tenant/admin.
+## 🚀 Authentication Modes
 
-### 2. Token Authentication (Standard Users & Service Accounts)
-- **Supported for**: All Tenant Users (including "Service Accounts").
-- **Method**: Bearer Token header (`Authorization: Bearer <jwt_token>`).
-- **Use Case**: Day-to-day operations, PyIceberg connections, Data Engineering workflows.
+Pangolin can be configured in three primary authentication modes via environment variables:
 
-> **Note on Service Accounts**: Pangolin implements service accounts as **Service Users** with API key authentication. See [Service Users](./service_users.md) for details on creating programmatic identities for CI/CD, ETL, and automation.
+### 1. No-Auth Mode (Development Only)
+Disables all authentication checks. All requests are treated as being made by the `root` superadmin.
+- **Environment Variable**: `PANGOLIN_NO_AUTH=true`
+- **Use Case**: Local development, quick prototyping, automated integration tests.
+> [!CAUTION]
+> Never use No-Auth mode in production or any environment accessible from the internet.
 
-## Token Generation Flows
+### 2. JWT Authentication (Standard)
+The default mode for secure, stateless session management.
+- **Root Credentials**: Initial setup uses `PANGOLIN_ROOT_USER` (default: `admin`) and `PANGOLIN_ROOT_PASSWORD` (default: `password`).
+- **Secret Key**: You **must** set `PANGOLIN_JWT_SECRET` to a strong random string (at least 32 characters).
+- **Flow**: POST credentials to `/api/v1/users/login` -> Receive JWT -> Include in header: `Authorization: Bearer <jwt>`.
 
-### A. Native Authentication (Username/Password)
-If you created a user via the UI or API with a password:
+### 3. OAuth 2.0 / OIDC (Enterprise SSO)
+Allows users to sign in with external identity providers.
+- **Supported Providers**: Google, Microsoft (Entra ID), GitHub, Okta.
+- **Configuration**: Requires `FRONTEND_URL` and provider-specific Client IDs/Secrets. See [Provider Setup](#provider-setup) below.
 
-1.  **Request**: POST to `/api/v1/users/login`
-    ```json
-    {
-      "username": "my-service-account",
-      "password": "my-secure-password",
-      "tenant_id": "optional-tenant-uuid"
-    }
-    ```
-2.  **Response**: Returns a JSON object containing the `token` (JWT).
-3.  **Usage**: Use this JWT in the `Authorization: Bearer <token>` header for subsequent requests.
+---
 
-### B. OAuth 2.0 / OIDC (SSO)
-Pangolin integrates with providers like Google, GitHub, etc.
+## 🔑 Service Users & API Keys
 
-**Configuration:**
-Set the following environment variables for your chosen provider (e.g., Google):
-- `OAUTH_GOOGLE_CLIENT_ID`
-- `OAUTH_GOOGLE_CLIENT_SECRET`
-- `OAUTH_GOOGLE_REDIRECT_URI`: e.g., `https://your-pangolin.com/oauth/callback/google`
-- `OAUTH_GOOGLE_AUTH_URL` (Optional override)
-- `OAUTH_GOOGLE_TOKEN_URL` (Optional override)
+For programmatic access (CI/CD, ETL, automation), use **Service Users**.
+- Service users use **X-API-Key** authentication rather than JWTs.
+- They are managed via the UI or the `pangolin-admin service-users` CLI.
+- See the [Service Users Guide](./service_users.md) for details.
 
-**Flow:**
-1. Client redirects user to `/oauth/authorize/{provider}?redirect_uri={client_callback}`.
-2. User authenticates with Provider.
-3. Provider redirects to Pangolin Callback.
-4. Pangolin creates a session and redirects to `client_callback` with `?token={jwt}`.
+---
 
-## Connecting with PyIceberg
+## 🛠️ Provider Setup (OAuth)
 
-PyIceberg connects to Pangolin using the REST catalog interface. You can authenticate using a token (OAuth) or credentials (Basic).
+### Google
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/).
+2. Setup OAuth 2.0 Client ID for a Web Application.
+3. Redirect URI: `https://<api-domain>/oauth/callback/google`.
+- **Env**: `OAUTH_GOOGLE_CLIENT_ID`, `OAUTH_GOOGLE_CLIENT_SECRET`, `OAUTH_GOOGLE_REDIRECT_URI`.
 
-### Option A: Using OAuth Token (Recommended)
+### Microsoft (Azure AD)
+1. Register an app in the [Azure Portal](https://portal.azure.com/).
+2. Add a Web platform and Redirect URI: `https://<api-domain>/oauth/callback/microsoft`.
+- **Env**: `OAUTH_MICROSOFT_CLIENT_ID`, `OAUTH_MICROSOFT_CLIENT_SECRET`, `OAUTH_MICROSOFT_TENANT_ID`, `OAUTH_MICROSOFT_REDIRECT_URI`.
 
-If you have authenticated via the UI or OAuth flow, use the **Access Token** directly.
+### GitHub
+1. Create an OAuth App in **Settings > Developer settings**.
+2. Callback URL: `https://<api-domain>/oauth/callback/github`.
+- **Env**: `OAUTH_GITHUB_CLIENT_ID`, `OAUTH_GITHUB_CLIENT_SECRET`, `OAUTH_GITHUB_REDIRECT_URI`.
 
+---
+
+## 🐍 Connecting with PyIceberg
+
+### Option A: Manual Token (Access Token)
+If you have a JWT from a previous login:
 ```python
 from pyiceberg.catalog import load_catalog
 
@@ -64,78 +68,24 @@ catalog = load_catalog(
     "pangolin",
     **{
         "uri": "http://localhost:8080",
-        "prefix": "analytics",  # Catalog name
-        "token": "YOUR_PANGOLIN_JWT_TOKEN",  # Obtained from login
-        # If accessing storage directly (no vending):
-        # "s3.access-key-id": "...",
-        # "s3.secret-access-key": "...",
+        "prefix": "analytics",
+        "token": "YOUR_JWT_TOKEN",
     }
 )
 ```
 
-### Option B: Credential Vending (Secure S3 Access)
+### Option B: Credential Vending (Recommended)
+Pangolin automatically vends S3/Cloud credentials if the Warehouse is configured with a role. You only need to provide the Pangolin token.
+- See [Credential Vending](./features/security_vending.md) for warehouse setup.
 
-Pangolin supports **Credential Vending**. If configured, Pangolin will provide temporary S3 credentials to PyIceberg automatically.
+---
 
-**Prerequisites:**
-- The requested Table/Namespace must be in a specific Warehouse.
-- The Warehouse must have an associated Role with S3 write permissions.
-- **Client**: You only need to provide the `token`.
-
-### Option C: Basic Auth (Root User Only)
-
-**Only the Root user** can use Basic Auth directly in the client.
-
-```python
-catalog = load_catalog(
-    "pangolin",
-    **{
-        "uri": "http://localhost:8080/iceberg/default",
-        "type": "rest",
-        "credential": "root:root-password", # ONLY for Root
-        # "scope": "test_tenant",           # Ignored for root (root has all access)
-    }
-)
-```
-
-## NO_AUTH Mode (Development Only)
-
-For local development and testing, Pangolin supports a NO_AUTH mode that disables authentication entirely.
-
-### Enabling NO_AUTH Mode
-
-Set the `PANGOLIN_NO_AUTH` environment variable to exactly `"true"` when starting the server:
-
-```bash
-PANGOLIN_NO_AUTH=true cargo run --bin pangolin_api
-```
-
-> **Security**: The value must be exactly `"true"` (case-insensitive). Setting it to `"false"`, `"0"`, or any other value will keep authentication enabled. This prevents accidental data exposure if someone sets `PANGOLIN_NO_AUTH=false` thinking they're disabling it.
-
-### Behavior in NO_AUTH Mode
-
-- **API Server**: All requests are automatically authenticated as Root user
-- **Management UI**: Login page is automatically skipped, user goes directly to dashboard
-- **No credentials required**: No JWT tokens, passwords, or API keys needed
-- **Default tenant**: All operations use the default tenant (`00000000-0000-0000-0000-000000000000`)
-
-### Security Warning
-
-⚠️ **NEVER use NO_AUTH mode in production!** This mode completely disables authentication and authorization, allowing anyone to access and modify all data.
-
-Use NO_AUTH mode only for:
-- Local development
-- Automated testing
-- Quick prototyping
-
-For production deployments, always use proper authentication with JWT tokens or OAuth.
-
-## Troubleshooting
+## 🛡️ Troubleshooting
 
 ### 401 Unauthorized
-- **Cause**: Token is missing, invalid, or expired.
-- **Fix**: Generate a new token via `/api/v1/users/login` or `/api/v1/tokens`.
+- **Cause**: Token missing, expired, or invalid secret.
+- **Fix**: Verify `PANGOLIN_JWT_SECRET` matches across all instances. Regenerate token via login.
 
 ### 403 Forbidden
-- **Cause**: User lacks permissions for the requested resource.
-- **Fix**: Check user's role and permissions. Contact a Tenant Admin to grant access.
+- **Cause**: User lacks RBAC permissions for the resource (Catalog/Namespace/Asset).
+- **Fix**: Verify roles in the Management UI or via `pangolin-admin permissions`.
