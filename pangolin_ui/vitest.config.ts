@@ -3,6 +3,13 @@ import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
 	plugins: [sveltekit()],
+    define: {
+        'import.meta.env': {
+            VITE_API_URL: 'http://localhost:8080',
+            DEV: true,
+            SSR: false
+        }
+    },
 	resolve: {
 		conditions: ['browser']
 	},
@@ -11,6 +18,9 @@ export default defineConfig({
 		globals: true,
 		environment: 'jsdom',
 		setupFiles: ['./src/tests/setup.ts'],
+    env: {
+        VITE_API_URL: 'http://localhost:8080'
+    },
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'json', 'html'],

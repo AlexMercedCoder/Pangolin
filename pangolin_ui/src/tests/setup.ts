@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { vi, afterEach } from 'vitest';
+import * as mocks from './mocks';
 
 // Mock SvelteKit modules
 vi.mock('$app/environment', () => ({
@@ -10,38 +11,64 @@ vi.mock('$app/environment', () => ({
 }));
 
 vi.mock('$app/navigation', () => ({
-	goto: vi.fn(),
-	invalidate: vi.fn(),
-	invalidateAll: vi.fn(),
+	goto: mocks.goto,
+	invalidate: mocks.invalidate,
+	invalidateAll: mocks.invalidateAll,
 	preloadData: vi.fn(),
 	preloadCode: vi.fn(),
 	beforeNavigate: vi.fn(),
 	afterNavigate: vi.fn()
 }));
 
-vi.mock('$app/stores', () => {
-	const getStores = () => ({
-		page: {
-			subscribe: vi.fn()
-		},
-		navigating: {
-			subscribe: vi.fn()
-		},
-		updated: {
-			subscribe: vi.fn()
-		}
-	});
+vi.mock('$app/stores', () => ({
+	getStores: () => ({
+		page: mocks.page,
+		navigating: mocks.navigating,
+		updated: mocks.updated
+	}),
+	page: mocks.page,
+	navigating: mocks.navigating,
+	updated: mocks.updated
+}));
 
-	return {
-		page: {
-			subscribe: vi.fn()
-		},
-		navigating: {
-			subscribe: vi.fn()
-		},
-		updated: {
-			subscribe: vi.fn()
-		},
-		getStores
-	};
+vi.mock('$lib/stores/auth', () => ({
+	authStore: mocks.authStore
+}));
+
+vi.mock('$lib/stores/tenant', () => ({
+	tenantStore: mocks.tenantStore
+}));
+
+vi.mock('$lib/stores/notifications', () => ({
+	notifications: mocks.notifications
+}));
+
+// Mock API modules
+vi.mock('$lib/api/tenants', () => ({
+    tenantsApi: {
+        list: vi.fn().mockResolvedValue([]),
+        get: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+        delete: vi.fn()
+    }
+}));
+
+vi.mock('$lib/api/warehouses', () => ({
+    warehousesApi: {
+        list: vi.fn().mockResolvedValue([]),
+        delete: vi.fn()
+    }
+}));
+
+vi.mock('$lib/api/catalogs', () => ({
+    catalogsApi: {
+        list: vi.fn().mockResolvedValue([]),
+        delete: vi.fn()
+    }
+}));
+
+// Clean up after each test
+afterEach(() => {
+	vi.clearAllMocks();
 });
