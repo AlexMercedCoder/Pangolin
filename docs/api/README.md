@@ -101,6 +101,19 @@ Authentication methods:
 - `POST /api/v1/tokens` - Generate JWT token
 - `POST /api/v1/auth/revoke` - Revoke current token
 - `POST /api/v1/auth/revoke/{token_id}` - Revoke specific token
+- `GET /api/v1/users/{user_id}/tokens` - List user tokens (Admin)
+- `DELETE /api/v1/tokens/{token_id}` - Delete specific token (Admin)
+
+**System Configuration**:
+- `GET /api/v1/config/settings` - Get system settings (Admin)
+- `PUT /api/v1/config/settings` - Update system settings (Admin)
+
+**Federated Catalog Operations**:
+- `POST /api/v1/federated-catalogs/{name}/sync` - Trigger sync
+- `GET /api/v1/federated-catalogs/{name}/stats` - Get sync stats
+
+**Data Explorer**:
+- `GET /api/v1/catalogs/{prefix}/namespaces/tree` - Get namespace tree structure
 
 ## Contents
 

@@ -74,6 +74,28 @@ Pangolin implements the standard Apache Iceberg REST Catalog API.
 | `/api/v1/auth/revoke` | POST | Revoke current user's token. |
 | `/api/v1/auth/revoke/{token_id}` | POST | Revoke a specific token (admin only). |
 | `/api/v1/auth/cleanup-tokens` | POST | Clean up expired tokens (admin only). |
+| `/api/v1/users/{user_id}/tokens` | GET | List all tokens for a specific user (admin only). |
+| `/api/v1/tokens/{token_id}` | DELETE | Delete a specific token by ID (admin only). |
+
+### System Configuration
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/config/settings` | GET | Get system configuration settings (admin only). |
+| `/api/v1/config/settings` | PUT | Update system configuration settings (admin only). |
+
+### Federated Catalog Operations
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/federated-catalogs/{name}/sync` | POST | Trigger immediate metadata sync for federated catalog. |
+| `/api/v1/federated-catalogs/{name}/stats` | GET | Get sync statistics and status for federated catalog. |
+
+### Data Explorer
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/catalogs/{prefix}/namespaces/tree` | GET | Get hierarchical namespace tree structure for a catalog. |
 
 ### OAuth
 

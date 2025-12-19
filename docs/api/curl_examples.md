@@ -15,6 +15,15 @@ This document provides practical curl examples for all Pangolin API endpoints.
 - [Service Users](#service-users-api-keys)
 - [Roles & Permissions](#roles--permissions)
 - [OAuth](#oauth)
+- [Branch Operations](#branch-operations)
+- [Tag Operations](#tag-operations)
+- [Merge Operations & Conflict Resolution](#merge-operations--conflict-resolution)
+- [Business Metadata & Access Requests](#business-metadata--access-requests)
+- [Audit Logs](#audit-logs)
+- [Token Management (Admin)](#token-management-admin)
+- [System Configuration (Admin)](#system-configuration-admin)
+- [Federated Catalog Operations](#federated-catalog-operations)
+- [Data Explorer](#data-explorer)
 
 ---
 
@@ -860,3 +869,195 @@ curl http://localhost:8080/api/v1/audit \
 ]
 ```
 
+---
+
+## Token Management (Admin)
+
+### List User Tokens
+```bash
+# List all tokens for a specific user (admin only)
+curl http://localhost:8080/api/v1/users/USER_ID/tokens \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response**:
+```json
+[
+  {
+    "id": "token-uuid-123",
+    "user_id": "user-uuid-456",
+    "created_at": "2025-12-19T10:00:00Z",
+    "expires_at": "2026-01-19T10:00:00Z",
+    "is_valid": true
+  }
+]
+```
+
+### Delete Token
+```bash
+# Delete a specific token by ID (admin only)
+curl -X DELETE http://localhost:8080/api/v1/tokens/TOKEN_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## System Configuration (Admin)
+
+### Get System Settings
+```bash
+# Get all system configuration settings (admin only)
+curl http://localhost:8080/api/v1/config/settings \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response**:
+```json
+{
+  "allow_public_signup": false,
+  "default_retention_days": 30,
+  "default_warehouse_bucket": "my-default-bucket",
+  "smtp_host": "smtp.example.com",
+  "smtp_port": 587,
+  "smtp_user": "noreply@example.com",
+  "smtp_password": "***"
+}
+```
+
+### Update System Settings
+```bash
+# Update system configuration settings (admin only)
+curl -X PUT http://localhost:8080/api/v1/config/settings \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "allow_public_signup": true,
+    "default_retention_days": 90,
+    "smtp_host": "smtp.newprovider.com"
+  }'
+```
+
+---
+
+## Federated Catalog Operations
+
+### Sync Federated Catalog
+```bash
+# Trigger immediate metadata sync for federated catalog
+curl -X POST http://localhost:8080/api/v1/federated-catalogs/partner-catalog/sync \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response**:
+```json
+{
+  "status": "Sync triggered",
+  "catalog_name": "partner-catalog",
+  "triggered_at": "2025-12-19T10:00:00Z"
+}
+```
+
+### Get Federated Catalog Stats
+```bash
+# Get sync statistics and status for federated catalog
+curl http://localhost:8080/api/v1/federated-catalogs/partner-catalog/stats \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response**:
+```json
+{
+  "catalog_name": "partner-catalog",
+  "last_synced_at": "2025-12-19T09:00:00Z",
+  "sync_status": "success",
+  "tables_synced": 42,
+  "namespaces_synced": 5,
+  "last_error": null,
+  "next_scheduled_sync": "2025-12-19T12:00:00Z"
+}
+```
+
+---
+
+## Data Explorer
+
+### Get Namespace Tree
+```bash
+# Get hierarchical namespace tree structure for a catalog
+curl http://localhost:8080/api/v1/catalogs/production/namespaces/tree \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response**:
+```json
+{
+  "root": [
+    {
+      "name": ["analytics"],
+      "children": [
+        {
+          "name": ["analytics", "sales"],
+          "children": []
+        },
+        {
+          "name": ["analytics", "marketing"],
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": ["staging"],
+      "children": []
+    }
+  ]
+}
+```
+
+---
+
+## Complete Examples
+
+### Token Management Workflow
+```bash
+# 1. List all tokens for a user (admin)
+curl http://localhost:8080/api/v1/users/$USER_ID/tokens \
+  -H "Authorization: Bearer $TOKEN"
+
+# 2. Delete a specific token
+curl -X DELETE http://localhost:8080/api/v1/tokens/$TOKEN_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### System Configuration Workflow
+```bash
+# 1. Get current settings
+SETTINGS=$(curl -s http://localhost:8080/api/v1/config/settings \
+  -H "Authorization: Bearer $TOKEN")
+
+echo $SETTINGS | jq '.'
+
+# 2. Update specific settings
+curl -X PUT http://localhost:8080/api/v1/config/settings \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "allow_public_signup": true,
+    "default_retention_days": 60
+  }'
+```
+
+### Federated Catalog Monitoring
+```bash
+# 1. Check sync stats
+curl http://localhost:8080/api/v1/federated-catalogs/partner-catalog/stats \
+  -H "Authorization: Bearer $TOKEN" | jq '.'
+
+# 2. Trigger manual sync if needed
+curl -X POST http://localhost:8080/api/v1/federated-catalogs/partner-catalog/sync \
+  -H "Authorization: Bearer $TOKEN"
+
+# 3. Wait and check stats again
+sleep 30
+curl http://localhost:8080/api/v1/federated-catalogs/partner-catalog/stats \
+  -H "Authorization: Bearer $TOKEN" | jq '.last_synced_at'
+```
