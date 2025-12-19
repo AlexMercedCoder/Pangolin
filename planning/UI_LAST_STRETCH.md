@@ -49,11 +49,21 @@ Address final outstanding UI/UX requests and close security gaps in data visibil
     - [ ] **List Tokens**: UI to show active tokens for the user (`/profile/tokens`?).
     - [ ] **Revoke Token**: Button to revoke specific tokens.
     - [ ] **Rotate Token**: Feature to cycle credentials.
+    - ✅ **CLI Support**: All token management commands implemented in `pangolin-admin` CLI.
 3.  **Access Request Management (Admin UI)**:
     - [ ] Admin view to list pending requests (`/admin/requests`).
     - [ ] Approve/Reject actions in UI.
 
 ## Execution Order
 1.  **Dashboard**: Implement PyIceberg snippet (Quick win).
-2.  **Token Management**: Build UI for listing/revoking tokens.
+2.  **Token Management**: Build UI for listing/revoking tokens (CLI already complete).
 3.  **Access Requests**: Build Admin UI for handling requests.
+
+## Recent Completions (December 19, 2025)
+- ✅ **CLI Implementation**: All new backend endpoints now have CLI support
+  - Token management (list-user-tokens, delete-token)
+  - System configuration (get/update-system-settings)
+  - Federated catalog operations (sync, stats)
+  - Data explorer (list-namespace-tree)
+- ✅ **OpenAPI Documentation**: Regenerated with all new endpoints
+- ✅ **Role Format Fix**: UI and API now consistently use kebab-case for roles

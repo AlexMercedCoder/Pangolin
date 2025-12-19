@@ -235,6 +235,42 @@ pub enum AdminCommand {
         #[arg(long)]
         id: String,
     },
+    /// List tokens for a specific user (admin only)
+    ListUserTokens {
+        #[arg(long)]
+        user_id: String,
+    },
+    /// Delete a specific token (admin only)
+    DeleteToken {
+        #[arg(long)]
+        token_id: String,
+    },
+    // --- System Configuration ---
+    /// Get system settings (admin only)
+    GetSystemSettings,
+    /// Update system settings (admin only)
+    UpdateSystemSettings {
+        #[arg(long)]
+        allow_public_signup: Option<bool>,
+        #[arg(long)]
+        default_warehouse_bucket: Option<String>,
+        #[arg(long)]
+        default_retention_days: Option<i32>,
+    },
+    // --- Federated Catalog Operations ---
+    /// Trigger sync for a federated catalog
+    SyncFederatedCatalog {
+        name: String,
+    },
+    /// Get sync stats for a federated catalog
+    GetFederatedStats {
+        name: String,
+    },
+    // --- Data Explorer ---
+    /// List namespace tree for a catalog
+    ListNamespaceTree {
+        catalog: String,
+    },
     // --- Merge Operations ---
     /// List merge operations
     ListMergeOperations,

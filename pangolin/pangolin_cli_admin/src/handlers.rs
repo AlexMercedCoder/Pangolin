@@ -1073,6 +1073,152 @@ pub async fn handle_revoke_token_by_id(client: &PangolinClient, id: String) -> R
     Ok(())
 }
 
+pub async fn handle_list_user_tokens(client: &PangolinClient, user_id: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/users/{}/tokens", user_id)).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to list tokens ({}): {}", status, error_text)));
+    }
+    
+    let tokens: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    if tokens.is_empty() {
+        println!("No active tokens found for user {}", user_id);
+        return Ok(());
+    }
+    
+    let rows: Vec<Vec<String>> = tokens.iter().map(|t| {
+        vec![
+            t["token_id"].as_str().unwrap_or("-").to_string(),
+            t["created_at"].as_str().unwrap_or("-").to_string(),
+            t["expires_at"].as_str().unwrap_or("-").to_string(),
+            t["is_valid"].as_bool().map(|b| if b { "Yes" } else { "No" }).unwrap_or("-").to_string(),
+        ]
+    }).collect();
+    
+    print_table(vec!["Token ID", "Created At", "Expires At", "Valid"], rows);
+    Ok(())
+}
+
+pub async fn handle_delete_token(client: &PangolinClient, token_id: String) -> Result<(), CliError> {
+    let res = client.delete(&format!("/api/v1/tokens/{}", token_id)).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to delete token ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Token {} deleted successfully!", token_id);
+    Ok(())
+}
+
+// ==================== System Configuration ====================
+
+pub async fn handle_get_system_settings(client: &PangolinClient) -> Result<(), CliError> {
+    let res = client.get("/api/v1/config/settings").await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to get system settings ({}): {}", status, error_text)));
+    }
+    
+    let settings: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    println!("{}", serde_json::to_string_pretty(&settings).unwrap());
+    Ok(())
+}
+
+pub async fn handle_update_system_settings(
+    client: &PangolinClient,
+    allow_public_signup: Option<bool>,
+    default_warehouse_bucket: Option<String>,
+    default_retention_days: Option<i32>,
+) -> Result<(), CliError> {
+    let mut payload = serde_json::Map::new();
+    
+    if let Some(signup) = allow_public_signup {
+        payload.insert("allow_public_signup".to_string(), Value::Bool(signup));
+    }
+    if let Some(bucket) = default_warehouse_bucket {
+        payload.insert("default_warehouse_bucket".to_string(), Value::String(bucket));
+    }
+    if let Some(days) = default_retention_days {
+        payload.insert("default_retention_days".to_string(), Value::Number(days.into()));
+    }
+    
+    let res = client.put("/api/v1/config/settings", &Value::Object(payload)).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to update system settings ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ System settings updated successfully!");
+    Ok(())
+}
+
+// ==================== Federated Catalog Operations ====================
+
+pub async fn handle_sync_federated_catalog(client: &PangolinClient, name: String) -> Result<(), CliError> {
+    println!("Triggering sync for federated catalog '{}'...", name);
+    
+    let res = client.post(&format!("/api/v1/federated-catalogs/{}/sync", name), &serde_json::json!({})).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to sync catalog ({}): {}", status, error_text)));
+    }
+    
+    println!("✅ Sync triggered successfully for catalog '{}'!", name);
+    Ok(())
+}
+
+pub async fn handle_get_federated_stats(client: &PangolinClient, name: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/federated-catalogs/{}/stats", name)).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to get stats ({}): {}", status, error_text)));
+    }
+    
+    let stats: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("Federated Catalog Stats for '{}':", name);
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("Last Synced: {}", stats["last_synced_at"].as_str().unwrap_or("Never"));
+    println!("Status: {}", stats["status"].as_str().unwrap_or("Unknown"));
+    println!("Tables Synced: {}", stats["tables_synced"].as_i64().unwrap_or(0));
+    if let Some(error) = stats["last_error"].as_str() {
+        println!("Last Error: {}", error);
+    }
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    Ok(())
+}
+
+// ==================== Data Explorer ====================
+
+pub async fn handle_list_namespace_tree(client: &PangolinClient, catalog: String) -> Result<(), CliError> {
+    let res = client.get(&format!("/api/v1/catalogs/{}/namespaces/tree", catalog)).await?;
+    
+    if !res.status().is_success() {
+        let status = res.status();
+        let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(CliError::ApiError(format!("Failed to get namespace tree ({}): {}", status, error_text)));
+    }
+    
+    let tree: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("Namespace Tree for '{}':", catalog);
+    println!("{}", serde_json::to_string_pretty(&tree).unwrap());
+    Ok(())
+}
+
 // ==================== Merge Operations ====================
 
 pub async fn handle_list_merge_operations(client: &PangolinClient) -> Result<(), CliError> {

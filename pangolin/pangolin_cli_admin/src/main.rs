@@ -116,6 +116,13 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::ListAuditEvents { user_id, action, resource_type, result, limit } => handlers::handle_list_audit_events(&client, user_id, action, resource_type, result, limit).await?,
             AdminCommand::CountAuditEvents { user_id, action, resource_type, result } => handlers::handle_count_audit_events(&client, user_id, action, resource_type, result).await?,
             AdminCommand::GetAuditEvent { id } => handlers::handle_get_audit_event(&client, id).await?,
+            AdminCommand::ListUserTokens { user_id } => handlers::handle_list_user_tokens(&client, user_id).await?,
+            AdminCommand::DeleteToken { token_id } => handlers::handle_delete_token(&client, token_id).await?,
+            AdminCommand::GetSystemSettings => handlers::handle_get_system_settings(&client).await?,
+            AdminCommand::UpdateSystemSettings { allow_public_signup, default_warehouse_bucket, default_retention_days } => handlers::handle_update_system_settings(&client, allow_public_signup, default_warehouse_bucket, default_retention_days).await?,
+            AdminCommand::SyncFederatedCatalog { name } => handlers::handle_sync_federated_catalog(&client, name).await?,
+            AdminCommand::GetFederatedStats { name } => handlers::handle_get_federated_stats(&client, name).await?,
+            AdminCommand::ListNamespaceTree { catalog } => handlers::handle_list_namespace_tree(&client, catalog).await?,
             _ => println!("Command not available in non-interactive mode."),
         }
         return Ok(());
@@ -328,6 +335,27 @@ async fn main() -> anyhow::Result<()> {
                                     },
                                     AdminCommand::GetAuditEvent { id } => {
                                         if let Err(e) = handlers::handle_get_audit_event(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListUserTokens { user_id } => {
+                                        if let Err(e) = handlers::handle_list_user_tokens(&client, user_id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::DeleteToken { token_id } => {
+                                        if let Err(e) = handlers::handle_delete_token(&client, token_id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::GetSystemSettings => {
+                                        if let Err(e) = handlers::handle_get_system_settings(&client).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::UpdateSystemSettings { allow_public_signup, default_warehouse_bucket, default_retention_days } => {
+                                        if let Err(e) = handlers::handle_update_system_settings(&client, allow_public_signup, default_warehouse_bucket, default_retention_days).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::SyncFederatedCatalog { name } => {
+                                        if let Err(e) = handlers::handle_sync_federated_catalog(&client, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::GetFederatedStats { name } => {
+                                        if let Err(e) = handlers::handle_get_federated_stats(&client, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::ListNamespaceTree { catalog } => {
+                                        if let Err(e) = handlers::handle_list_namespace_tree(&client, catalog).await { eprintln!("Error: {}", e); }
                                     }
                                 }
                             },

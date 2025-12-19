@@ -14,6 +14,8 @@ use crate::oauth_handlers::*;
 use crate::merge_handlers::*;
 use crate::business_metadata_handlers::*;
 use crate::audit_handlers::*;
+use crate::system_config_handlers::*;
+use crate::iceberg_handlers::*;
 
 // Import all schema types
 use pangolin_core::model::{
@@ -62,6 +64,12 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         generate_token,
         revoke_current_token,
         revoke_token_by_id,
+        list_user_tokens,
+        delete_token,
+        
+        // System Configuration endpoints
+        get_system_settings,
+        update_system_settings,
         
         // Role endpoints
         create_role,
@@ -81,6 +89,11 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         get_federated_catalog,
         delete_federated_catalog,
         test_federated_connection,
+        sync_federated_catalog,
+        get_federated_catalog_stats,
+        
+        // Data Explorer endpoints
+        list_namespaces_tree,
         
         // Service user endpoints
         create_service_user,
@@ -185,6 +198,8 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         (name = "Merge Operations", description = "Merge operation and conflict resolution endpoints"),
         (name = "Business Metadata", description = "Business metadata and asset discovery endpoints"),
         (name = "Audit Logging", description = "Audit log viewing and filtering endpoints"),
+        (name = "System Config", description = "System configuration management endpoints"),
+        (name = "Data Explorer", description = "Data exploration and discovery endpoints"),
     ),
     modifiers(&SecurityAddon),
     info(

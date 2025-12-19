@@ -306,6 +306,22 @@ pub async fn list_namespaces(
     }
 }
 
+/// List namespace tree structure for a catalog
+#[utoipa::path(
+    get,
+    path = "/api/v1/catalogs/{prefix}/namespaces/tree",
+    tag = "Data Explorer",
+    params(
+        ("prefix" = String, Path, description = "Catalog name")
+    ),
+    responses(
+        (status = 200, description = "Namespace tree structure"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_namespaces_tree(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,

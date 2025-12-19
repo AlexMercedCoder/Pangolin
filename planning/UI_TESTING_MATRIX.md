@@ -1,6 +1,6 @@
 # Pangolin UI Live Testing Matrix
 
-**Last Updated**: December 18, 2025
+**Last Updated**: December 19, 2025
 **Scope**: Manual verification of all UI features in a live environment.
 
 ## Legend
@@ -59,9 +59,19 @@
 | | Search Metadata | `/search` | ✅ | Verified (Search now returns array correctly) |
 | **Data Discovery** | Search Assets | `/discovery` | ✅ | Verified (RBAC + FQN + #Tags) |
 | | View Asset Details | `/assets/[...path]` | ✅ | Verified (Direct navigation works). |
+| **CLI** | Token Management | `pangolin-admin` | ✅ | Verified (list-user-tokens, delete-token) |
+| | System Configuration | `pangolin-admin` | ✅ | Verified (get/update-system-settings) |
+| | Federated Catalog Ops | `pangolin-admin` | ✅ | Verified (sync, stats) |
+| | Data Explorer | `pangolin-admin` | ✅ | Verified (list-namespace-tree) |
 
 ## Testing Progress
-- **Total Features**: 40
-- **Verified**: 37
-- **Pending Implementation**: 3
-- **Progress**: ~92%
+- **Total Features**: 44
+- **Verified**: 41
+- **Pending Implementation**: 3 (UI Token Management)
+- **Progress**: ~93%
+
+## Recent Updates (December 19, 2025)
+- ✅ CLI commands implemented and tested for all new backend endpoints
+- ✅ OpenAPI documentation regenerated with new endpoints
+- ✅ UI role format fixed (kebab-case alignment with API)
+- ✅ All backend tests passing

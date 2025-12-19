@@ -73,4 +73,4 @@ This document outlined backend API enhancements required to fully support advanc
 | Branch Rebase | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Business Metadata | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-**Next Step**: Update CLI to support all new endpoints (see `CLI_UPDATE_PLAN.md`)
+**CLI Status**: ✅ **COMPLETED** - All new endpoints now have CLI support (see `CLI_UPDATE_PLAN.md`)

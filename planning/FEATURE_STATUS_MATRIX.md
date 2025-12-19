@@ -1,6 +1,6 @@
 # Pangolin Feature Status Matrix
 
-**Last Updated**: December 18, 2025  
+**Last Updated**: December 19, 2025  
 **Purpose**: Single source of truth for feature completion across API, CLI, and UI
 
 ---
@@ -21,7 +21,8 @@
 | **Authentication & Authorization** |
 | User Login | ✅ | ✅ | ✅ | JWT-based auth working |
 | Token Generation | ✅ | ✅ | ✅ | UI implemented |
-| Token Revocation | ✅ | ❌ | ❌ | API endpoints exist, no CLI/UI |
+| Token Revocation | ✅ | ✅ | ❌ | CLI implemented 2025-12-19 |
+| Token Management | ✅ | ✅ | ❌ | List/delete tokens via CLI |
 | Service Users | ✅ | ✅ | ✅ | UI implemented |
 | OAuth Integration | ✅ | ❌ | ✅ | UI implemented |
 | **Tenant Management** |
@@ -90,6 +91,14 @@
 | AWS Static Vending | ✅ | N/A | N/A | Tested with PyIceberg |
 | Azure SAS Vending | 🚧 | N/A | N/A | Structured, needs SDK |
 | GCP Downscoped Vending | 🚧 | N/A | N/A | Structured, needs SDK |
+| **System Configuration** |
+| Get System Settings | ✅ | ✅ | ❌ | **NEW**: CLI added 2025-12-19 |
+| Update System Settings | ✅ | ✅ | ❌ | **NEW**: CLI added 2025-12-19 |
+| **Federated Catalog Operations** |
+| Sync Federated Catalog | ✅ | ✅ | ❌ | **NEW**: CLI added 2025-12-19 |
+| Get Federated Stats | ✅ | ✅ | ❌ | **NEW**: CLI added 2025-12-19 |
+| **Data Explorer** |
+| List Namespace Tree | ✅ | ✅ | ❌ | **NEW**: CLI added 2025-12-19 |
 
 ---
 
@@ -150,14 +159,17 @@
 - Warehouse Management: Create, List, Delete
 - Catalog Management: Create, List, Delete
 - **Federated Catalogs**: Create, List, Delete, Test (Added 2025-12-18)
+- **Federated Operations**: Sync, Stats (Added 2025-12-19)
 - **Service Users**: Full CRUD + Rotate (Added 2025-12-18)
 - **Token Generation**: Get token (Added 2025-12-18)
+- **Token Management**: List user tokens, Delete token (Added 2025-12-19)
+- **System Configuration**: Get/Update settings (Added 2025-12-19)
+- **Data Explorer**: List namespace tree (Added 2025-12-19)
 - Permissions: Grant, Revoke, List (Fixed 2025-12-18)
 - Metadata: Get, Set
 
 #### ❌ Missing Features
 - Update operations (Tenant, User, Warehouse, Catalog)
-- Token revocation
 - Merge operation management
 - Business metadata (Delete, Access requests)
 - Tag deletion
@@ -176,9 +188,10 @@
 - Access request management
 
 ### Overall CLI Status
-- **Core Features**: ~85% complete
-- **Advanced Features**: ~60% complete
-- **Recent Additions**: Service users, Federated catalogs, Token generation
+- **Core Features**: ~90% complete
+- **Advanced Features**: ~75% complete
+- **Recent Additions** (2025-12-19): Token management, System config, Federated ops, Data explorer
+- **Recent Additions** (2025-12-18): Service users, Federated catalogs, Token generation
 
 ---
 
