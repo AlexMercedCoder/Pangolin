@@ -65,6 +65,16 @@ services:
     depends_on:
       - pangolin-api
 
+  datanotebook:
+    image: alexmerced/datanotebook:latest
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    depends_on:
+      - pangolin-api
+      - minio
+
 volumes:
   minio_data:
   sqlite_data:
