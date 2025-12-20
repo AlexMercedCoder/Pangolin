@@ -1,33 +1,43 @@
 # Administration
 
-Pangolin provides dedicated interfaces for both **Root** and **Tenant** administrators to manage the platform's resources.
+Administrative tools in Pangolin are split between global system owners (Root) and individual team lead (Tenant Admins).
 
-## Root Administration
-*Only available to the system owner.*
+## 🏢 Root-Level Management
+
+Root users have access to the **Root Dashboard** for cross-tenant operations.
 
 ### Tenant Management
-- **List Tenants**: View all active tenants in the system.
-- **Create Tenant**: Provision new isolated environments.
-- **Delete Tenant**: Deprovision environments (requires confirmation).
+- **Lifecycle**: Create, Update, and Delete tenants.
+- **Isolation**: Each tenant represents a fully isolated environment with its own users and catalogs.
 
-## Tenant Administration
-*Available to users with `TenantAdmin` role.*
+### System Settings
+- Configure global properties like JWT secrets, allowed email domains for OAuth, and system-wide maintenance windows.
 
-### 1. User Management
-Manage your team's access to the lakehouse.
-- **Create User**: Add new users with specific roles.
-- **Assign Roles**: Update existing user permissions.
-- **Revoke Access**: Deactivate or delete users.
+---
 
-### 2. Warehouse Configuration
-Connect Pangolin to your cloud object storage.
-- **Supported Providers**: AWS S3, Google Cloud Storage (GCS), Azure Blob Storage, and local filesystem (MinIO).
-- **Credential Vending**: Configure automatic token vending for compliant Iceberg clients.
+## 🏗️ Tenant-Level Management
 
-### 3. Catalog Management
-Create and link Iceberg catalogs to warehouses.
-- **Internal Catalogs**: Managed directly by Pangolin.
-- **Federated Catalogs**: Connect to external REST catalogs (e.g., Snowflake, Tabular, Databricks) and proxy traffic through Pangolin.
+Tenant Admins manage the resources within their specific project or organization.
 
-### 4. RBAC Configuration
-Define granular access policies. [Learn more about RBAC UI](./rbac.md).
+### 1. Warehouse Management
+Warehouses define the connection and authentication to your storage (S3, GCS, Azure, etc.).
+- **Vending Strategy**: Choose between `AwsStatic`, `AwsSts`, `AzureSas`, or `GcpDownscoped` for credential management.
+- **Connection Test**: Verify connectivity to your storage bucket directly from the creation form.
+
+### 2. Catalog Management
+Connect warehouses to your namespace hierarchies.
+- **Internal Catalogs**: Managed by Pangolin's metadata store.
+- **Federated Catalogs**: Proxy external REST catalogs (e.g., Tabular, Snowflake). The UI allows you to configure secret headers for these connections.
+
+### 3. Service Users
+For machine-to-machine integrations (CI/CD, internal tools).
+- **API Keys**: Generate and rotate long-lived API keys for non-human users.
+- **Scoped Identity**: Service users inherit specific roles just like regular users.
+
+---
+
+## 🛠️ UI Dashboard
+The **Dashboard** tab provides quick metrics:
+- **Tenant Health**: Total catalogs and active users.
+- **Storage Metrics**: (Feature plan) Usage statistics per warehouse.
+- **Recent Operations**: A subset of the audit logs showing recent management actions.

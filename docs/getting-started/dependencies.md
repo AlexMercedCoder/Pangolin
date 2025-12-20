@@ -79,12 +79,12 @@ cargo build --features gcp-oauth
 ## System Requirements
 
 ### Minimum
-- Rust 1.92+
+- Rust 1.75+
 - 2GB RAM (for development)
 - Linux, macOS, or Windows
 
 ### Recommended (Production)
-- Rust 1.92+
+- Rust 1.82+
 - 4GB+ RAM
 - Linux (Ubuntu 20.04+ or similar)
 - **Backend Storage** (choose one):

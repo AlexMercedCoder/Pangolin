@@ -76,24 +76,39 @@ DATABASE_URL=sqlite:////home/user/pangolin/data/pangolin.db
 
 ### Schema Initialization
 
-Pangolin automatically creates the schema on first startup. The schema includes:
+Pangolin automatically initializes the SQLite schema on first startup using the bundled `sqlite_schema.sql`.
 
-**Tables**:
-- `tenants` - Tenant information
-- `warehouses` - Storage warehouse configurations
-- `catalogs` - Catalog definitions
-- `namespaces` - Namespace hierarchies
-- `assets` - Table and view metadata
-- `branches` - Branch information
-- `tags` - Tag information
-- `commits` - Commit history
-- `metadata_locations` - Iceberg metadata file locations
-- `audit_logs` - Audit trail
+The comprehensive schema includes:
+
+**Core Infrastructure**:
+- `tenants` - Multi-tenant isolation records
+- `warehouses` - Storage configurations (S3, Azure, GCP)
+- `catalogs` - Iceberg catalog definitions
+- `namespaces` - Namespace hierarchies and properties
+- `assets` - Table and view metadata pointers
+- `branches` - Git-like branch definitions
+- `tags` - Immutable commit pointers (snapshots)
+- `commits` - Detailed operation history
+- `metadata_locations` - Physical Iceberg metadata file path tracking
+
+**Governance & Security**:
+- `users` - Root and Tenant user accounts
+- `roles` - RBAC role definitions
+- `user_roles` - Role assignments to users
+- `permissions` - Direct (TBAC/RBAC) permission grants
+- `access_requests` - Data discovery access workflows
+- `audit_logs` - Comprehensive tamper-evident trail
+- `active_tokens` - Session tracking for active tokens
+
+**System & Maintenance**:
+- `business_metadata` - Rich discovery metadata for assets
+- `system_settings` - Tenant-specific configuration overrides
+- `federated_sync_stats` - Status tracking for cross-tenant federation
 
 **Indexes**:
+- Pragma-enforced Foreign Keys
 - Primary keys on all tables
-- Foreign key indexes
-- Composite indexes for common queries
+- Composite indexes for common listing operations
 
 ### Manual Schema Application
 

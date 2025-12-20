@@ -1,6 +1,6 @@
 # PyIceberg: No Auth with Client Credentials
 
-In this scenario, the Pangolin server is running in `NO_AUTH` mode, and the client provides S3 credentials directly.
+In this scenario, the Pangolin server is running in `NO_AUTH` mode, and the client provides storage credentials directly.
 
 ## Configuration
 
@@ -8,21 +8,21 @@ In this scenario, the Pangolin server is running in `NO_AUTH` mode, and the clie
 from pyiceberg.catalog import load_catalog
 
 catalog = load_catalog(
-    "local",
+    "pangolin",
     **{
         "type": "rest",
         "uri": "http://localhost:8080/v1/my_catalog",
         
-        # Client-Provided Credentials
-        "s3.access-key-id": "YOUR_ACCESS_KEY",
-        "s3.secret-access-key": "YOUR_SECRET_KEY",
+        # Client-Provided Storage Credentials
+        "s3.access-key-id": "minioadmin",
+        "s3.secret-access-key": "minioadmin",
         "s3.region": "us-east-1",
-        "s3.endpoint": "http://minio:9000", # Optional: Only if using custom S3/MinIO
-        "s3.path-style-access": "true",     # Optional: For MinIO compatibility
+        "s3.endpoint": "http://localhost:9000", # Required for local MinIO
+        "s3.path-style-access": "true",        # Required for local MinIO
     }
 )
 ```
 
 ## When to use
-- Development / Testing.
-- Trusted internal networks where authentication is handled at the network layer.
+- Initial development and local testing against a MinIO container.
+- Simple integration tests where complex auth/vending flows are out of scope.

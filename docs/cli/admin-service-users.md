@@ -267,11 +267,11 @@ Use descriptive names that indicate:
 
 ### "Unknown variant TenantUser"
 
-**Cause**: Role format is incorrect
+**Cause**: Role format is incorrect or case-sensitive.
 
-**Solution**: Use kebab-case format:
-- ✅ `--role "tenant-user"`
-- ❌ `--role "TenantUser"`
+**Solution**: Use the exact case expected by the API (e.g., `TenantUser`, `TenantAdmin`, `Root`).
+- ✅ `--role "TenantUser"`
+- ❌ `--role "tenant-user"`
 
 ---
 

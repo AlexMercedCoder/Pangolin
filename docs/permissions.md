@@ -1,69 +1,75 @@
 # Permissions System
 
-Pangolin implements a flexible Role-Based Access Control (RBAC) system enhanced with Tag-Based Access Control (TBAC) and specific logic for Branching strategies.
+Pangolin implements a hierarchical, additive Role-Based Access Control (RBAC) system. It ensures that data is highly secure by default while providing flexibility through cascading grants and Tag-Based Access Control (TBAC).
 
-## 0. User Roles & The Root User
+---
 
-Pangolin strictly separates **Platform Administration** from **Data Governance**.
+## 🏛️ Permission Hierarchy & Cascading
 
-### Root User
-The `Root` user is a pure **Platform Administrator**. Their capabilities are strictly limited to multi-tenancy management.
+Permissions in Pangolin are inherited downwards. A grant at a higher level automatically applies to all resources contained within that scope.
 
--   **Allowed**: Create Tenant, Create Initial Tenant Admin.
--   **Forbidden**: Create Warehouse, Create Catalog, Manage Data, Grant Granular Permissions, Create regular Tenant Users.
--   **Context**: The Root user cannot "switch context" to a tenant to view or modify data.
+| Scope | Includes | Use Case |
+| :--- | :--- | :--- |
+| **Catalog** | All Namespaces & Assets | Full access for a specific Data Team. |
+| **Namespace** | All child Assets (Tables/Views) | Access to a specific "Schema" or project area. |
+| **Asset** | Specific Table/View only | Granular access to a single sensitive dataset. |
 
-### Tenant Admin
-The `TenantAdmin` is the **Data Governor** for their specific tenant.
+### 🌊 Cascading Logic
+- If you grant `Read` on a **Namespace**, the user can read **every table** existing now OR created in the future within that namespace.
+- Grants are **Additive**: If a user is denied `Write` at the Catalog level but granted `Write` on a specific Table, they **can** write to that table.
 
--   **Allowed**: Create Warehouses, Catalogs, Namespaces, Tenant Users.
--   **Responsibility**: Manage all data assets and permissions within their tenant.
+---
 
+## 🛠️ Usage Guides
 
-## 1. Role-Based Access Control (RBAC)
+### 1. Via CLI (`pangolin-admin`)
+The admin tool is the primary way to manage grants.
 
-Permissions are assigned to **Users** directly or via **Roles** (which group permissions for easier management).
+**Grant Permission:**
+```bash
+# Grant Read on a specific namespace to a user
+pangolin-admin grant-permission <user-id> \
+  --action read \
+  --scope namespace \
+  --catalog production \
+  --namespace sales
+```
 
-### Scope Hierarchy
-Permissions can be granted at different levels of the hierarchy:
-1.  **Catalog**: Applies to the entire catalog.
-2.  **Namespace**: Applies to a namespace and all its tables.
-3.  **Asset (Table/View)**: Applies to a specific table or view.
+**Revoke Permission:**
+```bash
+pangolin-admin revoke-permission <permission-id>
+```
 
-### Standard Actions
-- `read`: Read data and metadata.
-- `write`: specific modifications.
-- `create`/`delete`: Lifecycle management.
-- `all`: Full control.
+**List Permissions:**
+```bash
+pangolin-admin list-permissions --user <user-id>
+```
 
-## 2. Tag-Based Access Control (TBAC)
+### 2. Via Management UI
+1. Log in as a **Tenant Admin**.
+2. Navigate to **Identity -> Users** or **Identity -> Roles**.
+3. Select a User/Role and click the **Permissions** tab.
+4. Click **Add Permission** and select the Scope (Catalog, Namespace, or Asset) and the allowed Actions.
 
-Tag-based permissions allow you to enforce security policies across disparate assets based on their classification (e.g., "PII", "Sensitive", "Finance").
+---
 
-### How it Works
-1.  **Tagging**: An admin adds a tag (e.g., `PII`) to an asset's business metadata.
-2.  **Granting**: A Role is granted permission on the **Tag Scope** (e.g., `PermissionScope::Tag { tag_name: "PII" }`).
-3.  **Enforcement**: Any user with that Role can access *any* asset that has the `PII` tag, regardless of their direct table permissions.
+## 🏷️ Tag-Based Access Control (TBAC)
 
-*Note: Tag permissions are additive. If a user has `read` access to a Namespace but an asset in it is tagged `Confidential`, they might ALSo need the `Confidential` tag permission depending on your policy configuration (typically Pangolin permissions are additive: if you have ANY valid path to access, you get access).*
+Manage access at scale using classification tags rather than individual table grants.
 
-## 3. Branching Permissions
+1.  **Tag an Asset**: (e.g., Tag `orders` as `FINANCIAL`).
+2.  **Grant Tag Access**: Grant a role `Read` on the `Tag` scope for `FINANCIAL`.
+3.  **Result**: Any user with that role can access all assets tagged `FINANCIAL` across all catalogs.
 
-Pangolin treats branches as first-class citizens with their own permission requirements, specifically distinguishing between "Experimental" and "Ingestion" workflows.
+---
 
-### Branch Types & Permissions
--   **Experimental Branches**: Used for "what-if" analysis.
-    -   **Action Required**: `experimental_branching`
-    -   **Scope**: `Catalog` (User needs this permission on the Catalog to create experimental branches).
--   **Ingest Branches**: Used for data ingestion pipelines (mergable).
-    -   **Action Required**: `ingest_branching`
-    -   **Scope**: `Catalog`.
+## 🧪 Advanced Activity Tracking
 
-### Why the distinction?
--   **Data Engineers** conducting experiments should not accidentally create merge-ready branches that could corrupt the main data lake.
--   **ETL Service Accounts** need rights to create Ingest branches but may not need to run ad-hoc experiments.
+Pangolin tracks "Who granted What to Whom" in the **Audit Logs**. Every permission change is a first-class event, allowing security teams to reconstruct the history of access for any dataset.
 
-## 4. Best Practices
--   **Least Privilege**: Grant permissions at the lowest necessary scope (Asset > Namespace > Catalog).
--   **Use Roles**: Avoid assigning direct permissions to users. Create functional roles (e.g., `FinanceAnalyst`, `DataEngineer`) and assign those.
--   **Leverage Tags**: Use tags for cross-functional governance (e.g., GDPR compliance) rather than managing thousands of individual table grants.
+---
+
+## 🚦 Best Practices
+- **Favor Roles over Users**: Create a role like `Data_Analyst` and grant it permissions, then assign users to that role.
+- **Start Specific**: Start with `Asset` or `Namespace` level grants before jumping to `Catalog` wide access.
+- **Audit Regularly**: Use the `Audit Logs` to verify that permissions are being used as intended.

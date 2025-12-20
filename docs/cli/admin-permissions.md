@@ -66,15 +66,15 @@ pangolin-admin grant-permission audit_bot read tag:compliance
 ```
 
 ### Revoke Permission
-Remove a previously granted permission. The arguments must match exactly.
+Remove a previously granted permission from a **Role**.
 
 **Syntax**:
 ```bash
-pangolin-admin revoke-permission <username> <action> <resource>
+pangolin-admin revoke-permission <role_name> <action> <resource>
 ```
 
 **Examples**:
 ```bash
-# Remove write access for 'analyst_user' on the sales catalog
-pangolin-admin revoke-permission analyst_user write catalog:sales
+# Remove write access for 'analyst' on the sales catalog
+pangolin-admin revoke-permission analyst write catalog:sales
 ```

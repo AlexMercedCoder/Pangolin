@@ -41,14 +41,13 @@ catalog = load_catalog(
     **{
         "type": "rest",
         "uri": "http://127.0.0.1:8080/api/v1/catalogs/my_catalog/iceberg",
-        "token": "eyJ0eXAiOiJKV1QiLCJ...",  <-- Your Auto-Generated Token
-        "header.X-Pangolin-Tenant": "00000000-0000-0000-0000-000000000000"
+        "token": "eyJ0eXAiOiJKV1QiLCJ...",  # <-- Your Auto-Generated Token
     }
 )
 ========================================================
 ```
 
-Simply **copy and paste** that Python snippet into your script or notebook, and you are ready to interact with Pangolin as an Iceberg REST Catalog!
+Simply **copy and paste** that Python snippet into your script or notebook. Pangolin uses the JWT token to carry your Tenant context, which is the standard way to interact with the Iceberg REST API.
 
 ## 3. Using the CLI
 

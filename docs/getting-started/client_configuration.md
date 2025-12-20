@@ -85,14 +85,15 @@ catalog = load_catalog(
     **{
         "uri": "http://localhost:8080",
         "prefix": "analytics",  # Catalog name
-        "token": token,  # Bearer token authentication
-        "s3.endpoint": "http://localhost:9000",
-        "s3.access-key-id": "minioadmin",
-        "s3.secret-access-key": "minioadmin",
-        "s3.region": "us-east-1",
+        "token": token,         # Bearer token authentication
+        # S3 configuration is Optional here! 
+        # If the warehouse has Vending enabled, Pangolin will provide credentials.
     }
 )
 ```
+
+> [!TIP]
+> **Credential Vending**: If your Pangolin warehouse is configured with a `vending_strategy` (like `AwsStatic` or `AwsSts`), you **do not** need to provide `s3.access-key-id` or `s3.secret-access-key` in your client configuration. Pangolin will automatically vend temporary credentials to the client.
 
 #### Step 3: Generate Token Programmatically
 

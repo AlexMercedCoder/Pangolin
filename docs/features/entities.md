@@ -29,21 +29,31 @@ A logical grouping of assets, similar to a database or schema.
 
 ### Asset
 A tracked object in the lakehouse (Table, View, Model, etc.).
+- **ID**: UUID
 - **Name**: String
-- **Kind**: `IcebergTable`, `DeltaTable`, `View`, `MlModel`, etc.
+- **Kind**: `IcebergTable`, `DeltaTable`, `HudiTable`, `ParquetTable`, `View`, `MlModel`, etc.
 - **Location**: Storage URI
 - **Properties**: Key-Value map
 
 ### Branch
 A named pointer to a specific commit history.
-- **Name**: String (e.g., `main`, `dev`, `feature-1`)
-- **Type**: `Ingest` (write-only) or `Experimental`
+- **Name**: String (e.g., `main`, `dev`)
+- **Type**: `Ingest` (production-ready) or `Experimental` (isolated testing)
 - **Head Commit**: Pointer to the latest commit on this branch.
+- **Assets**: List of asset names tracked by this branch (for partial branching).
 
 ### Commit
 An immutable record of a state change.
 - **ID**: UUID
-- **Parent ID**: UUID of the previous commit
-- **Timestamp**: Epoch time
+- **Parent ID**: UUID of the previous commit (optional)
+- **Timestamp**: Unix timestamp
 - **Author**: User who made the change
-- **Operations**: List of changes (Put Asset, Delete Asset)
+- **Message**: Description of the change
+- **Operations**: List of changes (`Put Asset` or `Delete Asset`)
+
+### Merge Operation
+Tracked process for integrating changes between branches.
+- **ID**: UUID
+- **Status**: `Pending`, `Conflicted`, `Resolving`, `Ready`, `Completed`, or `Aborted`.
+- **Conflicts**: List of detected conflicts requiring resolution.
+- **Resolution Strategy**: `AutoMerge`, `TakeSource`, `TakeTarget`, `Manual`, `ThreeWayMerge`.

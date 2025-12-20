@@ -19,18 +19,19 @@ pangolin-user search "sales_data"
 ## Data Discovery
 - `list-catalogs`: View available catalogs.
 - `search <query>`: Search for tables and views.
-- `generate-code --language <pyiceberg|pyspark|dremio|sql> --table <table_name>`: Generate connection snippets with syntax highlighting.
+- `generate-code --language <pyiceberg|pyspark|dremio|sql> --table <table_name>`: Generate connection snippets.
+- `get-token [--description <text>] [--expires-in <days>]`: Generate personal API key.
 
 ## Data Engineering
 ### Branching
-- `list-branches --catalog <catalog>`: View branches.
-- `create-branch --catalog <catalog> --name <name> --from <source_branch>`: Create a new branch.
-- `merge-branch --catalog <catalog> --source <src> --target <tgt>`: Merge branches.
+- `list-branches --catalog <catalog>`: View branch history.
+- `create-branch --catalog <catalog> <name> [--from <branch>] [--branch-type <type>]`: Create new fork.
+- `merge-branch --catalog <catalog> --source <src> --target <tgt>`: Promote/Integrate changes.
 
 ### Tags
-- `list-tags --catalog <catalog>`: View commit tags.
-- `create-tag --catalog <catalog> --name <name> --commit-id <id>`: Tag a specific commit.
+- `list-tags --catalog <catalog>`: View immutable release/snapshot tags.
+- `create-tag --catalog <catalog> --name <name> --commit-id <id>`: Tag a specific version.
 
 ## Access Management
-- `request-access --resource <res> --role <role> --reason <text>`: Submit an access request.
-- `list-requests`: View status of your access requests.
+- `request-access --resource <res> --role <role> --reason <text>`: Request permission to an asset.
+- `list-requests`: View status of your pending/historical requests.

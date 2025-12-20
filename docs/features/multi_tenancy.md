@@ -26,8 +26,9 @@ Identifiers (Catalogs, Namespaces, Assets) are scoped to the tenant. Two differe
 
 Multi-tenancy is managed by the **Root** user (Platform Administrator).
 
-- **Root User**: Can create, list, and delete tenants.
-- **Tenant Admin**: A user within a tenant with the `admin` role, capable of managing users, warehouses, and catalogs for that specific tenant.
+- **Root User (Platform Admin)**: Global administrator with full access to all tenants. Responsible for tenant creation, listing, and deletion, as well as global system settings.
+- **Tenant Admin**: A highly privileged user within a specific tenant. Capable of managing all resources within their tenant, including users, service users, warehouses, catalogs, and permissions.
+- **Tenant User**: A standard user within a tenant, with access dictated by assigned RBAC policies.
 
 ## Configuration
 

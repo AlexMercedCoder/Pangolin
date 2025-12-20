@@ -82,6 +82,7 @@ curl -X POST http://localhost:8080/api/v1/tenants \
 ### 2. Create a Warehouse
 A warehouse stores storage credentials and configuration for **Iceberg table data**.
 
+> [!TIP]
 > **Storage Clarification**:
 > - **Catalog Metadata Storage** (controlled by `PANGOLIN_STORAGE_TYPE` env var): Where Pangolin stores its catalog metadata (tenants, catalogs, branches, etc.)
 > - **Table Data Storage** (controlled by warehouse config): Where Iceberg table data files are stored
@@ -94,15 +95,18 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "main_warehouse",
-    "use_sts": false,
+    "vending_strategy": {"type": "AwsStatic"},
     "storage_config": {
       "type": "s3",
       "bucket": "demo-bucket",
-      "region": "us-east-1"
+      "region": "us-east-1",
+      "access_key_id": "minioadmin",
+      "secret_access_key": "minioadmin",
+      "endpoint": "http://localhost:9000"
     }
   }'
 ```
-*Note: We use `use_sts: false` for this quick start. For production with STS credential vending, see [Warehouse Management](../features/../features/warehouse_management.md).*
+*Note: We use `vending_strategy: AwsStatic` for this quick start. For production with IAM Role assumption, see [Credential Vending](../features/iam_roles.md).*
 
 ### 3. Create a Catalog
 A catalog references a warehouse and specifies a storage location. The catalog name is what clients use in their connection URIs.
@@ -211,8 +215,7 @@ Now, `main` will contain the schema updates made in `dev`.
 ## Next Steps
 
 - Explore [Branch Management](../features/branch_management.md) for advanced strategies.
-- Configure [S3 Storage](../warehouse/s3.md) for production data.
-- Learn about [Warehouse Management](../features/warehouse_management.md) and credential vending.
+- Learn about [Credential Vending](../features/iam_roles.md).
 - Set up [Client Configuration](client_configuration.md) for PyIceberg, PySpark, Trino, or Dremio.
 
 ## Production Setup
@@ -286,5 +289,5 @@ Response (403 Forbidden):
 
 - [PyIceberg Testing Guide](../features/pyiceberg_testing.md) - Comprehensive PyIceberg testing
 - [Client Configuration](./client_configuration.md) - Configure various Iceberg clients
-- [Warehouse Management](./../features/warehouse_management.md) - Manage warehouses and catalogs
+- [Warehouse Management](../features/warehouse_management.md) - Manage warehouses and catalogs
 - [API Reference](../api/) - Complete API documentation

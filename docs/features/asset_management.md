@@ -66,7 +66,17 @@ Works for both Tables and Views.
 }
 ```
 
+### Update Asset
+`POST /v1/{prefix}/namespaces/{namespace}/tables/{table}` (Tables)
+`POST /v1/{prefix}/namespaces/{namespace}/views/{view}` (Views)
+
 ### Delete Asset
 `DELETE /v1/{prefix}/namespaces/{namespace}/tables/{asset_name}`
+
+> [!TIP]
+> While the Iceberg REST specification often separates Table and View endpoints for creation and retrieval, deletion is typically performed via the generic resource path. Pangolin's `delete_table` handler internally handles any asset type tracked by the catalog.
+
+### Rename Asset
+`POST /v1/{prefix}/tables/rename`
 
 Works for both Tables and Views.

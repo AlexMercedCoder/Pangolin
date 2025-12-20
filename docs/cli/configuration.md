@@ -4,9 +4,9 @@ The Pangolin CLI tools (`pangolin-admin` and `pangolin-user`) share a common con
 
 ## File Location
 
-The configuration file is stored in `config.json` within your system's standard configuration directory:
+The configuration file is stored in `config.json` within your system's standard configuration directory (using the `com.pangolin.cli` namespace):
 
-- **Linux**: `~/.config/pangolin/cli/config.json`
+- **Linux**: `~/.config/pangolin-cli/config.json`
 - **macOS**: `~/Library/Application Support/com.pangolin.cli/config.json`
 - **Windows**: `C:\Users\<User>\AppData\Roaming\pangolin\cli\config.json`
 
@@ -19,7 +19,8 @@ The file is a standard JSON object with the following properties:
 | `base_url` | String | The URL of the Pangolin API server. | `http://localhost:8080` |
 | `auth_token` | String | The JWT token for the currently logged-in session. | `null` |
 | `username` | String | The username of the logged-in user. | `null` |
-| `tenant_id` | String | The ID of the currently active tenant (for tenant admins). | `null` |
+| `tenant_id` | String | The Unique Identifier of the active tenant. | `null` |
+| `tenant_name`| String | The human-readable name of the active tenant. | `null` |
 
 ## Example `config.json`
 
@@ -28,7 +29,8 @@ The file is a standard JSON object with the following properties:
   "base_url": "http://localhost:8080",
   "auth_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "username": "admin",
-  "tenant_id": "123e4567-e89b-12d3-a456-426614174000"
+  "tenant_id": "123e4567-e89b-12d3-a456-426614174000",
+  "tenant_name": "AcmeCorp"
 }
 ```
 

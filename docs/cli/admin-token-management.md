@@ -36,10 +36,6 @@ You have been logged out. Please login again to continue.
 
 ---
 
-## Revoke Token By ID (Admin)
-
-Revoke any user's token by ID (admin only).
-
 ### Syntax
 ```bash
 pangolin-admin revoke-token-by-id --id <TOKEN_ID>
@@ -59,11 +55,35 @@ pangolin-admin revoke-token-by-id --id "token-uuid"
 ✅ Token token-uuid revoked successfully!
 ```
 
-### Notes
-- Requires admin privileges
-- Forces logout for the token owner
-- Useful for security incidents
-- Token ID must be a valid UUID
+---
+
+## List User Tokens (Admin)
+List all active tokens for a specific user.
+
+### Syntax
+```bash
+pangolin-admin list-user-tokens --user-id <USER_ID>
+```
+
+### Example
+```bash
+pangolin-admin list-user-tokens --user-id "user-uuid"
+```
+
+---
+
+## Delete Token (Admin)
+Forcefully delete a token record.
+
+### Syntax
+```bash
+pangolin-admin delete-token --token-id <TOKEN_ID>
+```
+
+### Example
+```bash
+pangolin-admin delete-token --token-id "token-uuid"
+```
 
 ---
 

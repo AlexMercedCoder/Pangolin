@@ -1,41 +1,44 @@
-# Configuration
+# Configuration Overview
 
-Pangolin is primarily configured via Environment Variables. 
+Pangolin follow a "Configuration-over-Code" philosophy, allowing for flexible deployments across different infrastructures.
 
 ## Runtime Configuration
-The application loads configuration at startup. Currently, the following behaviors are configurable:
 
-- **Storage Backend**: Controlled by `PANGOLIN_STORAGE_TYPE` (e.g., `s3`, `memory`).
-- **Logging**: Controlled by `RUST_LOG`.
+Most settings are managed via **Environment Variables** at startup. This includes everything from the port number to the metadata persistence backend.
 
-## Storage Configuration
+- For a complete list of variables, see **[Environment Variables](./env_vars.md)**.
+- For deployment-specific patterns, see **[Deployment Guide](./deployment.md)**.
 
-### S3 / MinIO
-To use S3-compatible storage, set `PANGOLIN_STORAGE_TYPE=s3` and configure the following environment variables:
+## Client Configuration Discovery
 
-- `AWS_ACCESS_KEY_ID`: Access key.
-- `AWS_SECRET_ACCESS_KEY`: Secret key.
-- `AWS_REGION`: Region (e.g., `us-east-1`).
-- `AWS_ENDPOINT_URL`: (Optional) Custom endpoint for MinIO or other S3-compatible services.
+Pangolin implements the Iceberg REST specification for **Config Discovery**. Clients (like Spark or PyIceberg) can query the `/v1/config` endpoint to receive default properties and overrides.
 
-### Memory
-Set `PANGOLIN_STORAGE_TYPE=memory` for an ephemeral in-memory store (default). No further configuration is required.
+This is particularly useful for:
+1. **S3 Endpoint Overrides**: Telling clients to use a local MinIO instance.
+2. **IO Implementation**: Specifying the storage driver (e.g., `S3FileIO`).
+3. **Warehouse Context**: Providing default warehouse identifiers.
 
-### Postgres
-Set `PANGOLIN_STORAGE_TYPE=postgres` and configure:
-- `DATABASE_URL`: Connection string (e.g., `postgres://user:password@localhost:5432/pangolin`).
+### Example Discovery Call
 
-### MongoDB
-Set `PANGOLIN_STORAGE_TYPE=mongo` and configure:
-- `DATABASE_URL`: Connection string (e.g., `mongodb://localhost:27017`).
+```bash
+GET http://localhost:8080/v1/config?warehouse=main
+```
 
-## Iceberg Client Configuration
-Clients connecting to Pangolin should use the `/v1/config` endpoint to discover defaults and overrides.
-
-Example response from `GET /v1/config`:
+**Response:**
 ```json
 {
-  "defaults": {},
-  "overrides": {}
+  "defaults": {
+    "s3.endpoint": "http://minio:9000",
+    "s3.path-style-access": "true"
+  },
+  "overrides": {
+    "io-impl": "org.apache.iceberg.aws.s3.S3FileIO"
+  }
 }
 ```
+
+## Storage Management
+
+While core system configuration uses environment variables, **Storage Connectors** (Warehouses) are configured dynamically via the Admin API/CLI. This allows you to add or modify storage locations without restarting the Pangolin service.
+
+- To learn how to configure storage, see **[Warehouse Management](../features/warehouse_management.md)**.

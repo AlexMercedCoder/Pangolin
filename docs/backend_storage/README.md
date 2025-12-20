@@ -15,20 +15,8 @@ Backend storage is where Pangolin stores **catalog metadata** including:
 
 > **Note**: Backend storage is separate from **warehouse storage** (S3, Azure, GCS) which stores the actual data files.
 
-## Available Backends
-
-| Backend | Status | Best For | Production Ready |
-|---------|--------|----------|------------------|
-| [In-Memory](memory.md) | ✅ Stable | Development, testing, CI/CD | No (ephemeral) |
-| [SQLite](sqlite.md) | ✅ Stable | Development, embedded, edge deployments | Yes |
-| [PostgreSQL](postgresql.md) | ✅ Stable | Production deployments | Yes |
-| [MongoDB](mongodb.md) | ✅ Stable | Cloud-native, scalable deployments | Yes |
-
 ## Quick Comparison
 
-| Feature | In-Memory | SQLite | PostgreSQL | MongoDB |
-|---------|-----------|--------|------------|---------|
-| **Setup Complexity** | None | Low | Medium | Medium |
 | **Scalability** | Low | Low | High | Very High |
 | **Transactions** | ✅ ACID | ✅ ACID | ✅ ACID | ✅ ACID |
 | **Foreign Keys** | ✅ Yes | ✅ Yes | ✅ Yes | ❌ No |

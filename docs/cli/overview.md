@@ -1,15 +1,53 @@
 # Pangolin CLI Tools Overview
 
-Pangolin provides two command-line interface (CLI) tools to interact with the catalog ecosystem:
+Pangolin provides two command-line interface (CLI) tools designed for different operational personas. Both tools feature a synchronized **REPL (Interactive)** mode and a **Non-Interactive** mode for scripting.
 
-1.  **`pangolin-admin`**: For Root Admins and Tenant Admins to manage infrastructure, users, and tenants.
-2.  **`pangolin-user`**: For data engineers and analysts to discover data, request access, and generate code.
+---
 
-## Architecture
-Both tools are built on a shared core (`pangolin_cli_common`) and provide an interactive REPL (Read-Eval-Print Loop) experience.
+## 🛠️ The Tools
 
-## Configuration
-Session configuration is stored in your user configuration directory:
-- Linux: `~/.config/pangolin/config.json`
-- macOS: `~/Library/Application Support/com.pangolin.cli/config.json`
-- Windows: `C:\Users\<User>\AppData\Roaming\pangolin\cli\config.json`
+### 1. `pangolin-admin` (The Platform Tool)
+Targeted at Root and Tenant Admins for infrastructure and identity management.
+
+**Core Commands:**
+| Command | Usage | Role |
+| :--- | :--- | :--- |
+| `list-tenants` | Manage platform organizations and isolation. | Root |
+| `create-user` | Onboard Tenant Admins or standard Users. | Root / Admin |
+| `create-warehouse`| Connect S3/Azure/GCS storage providers. | Admin |
+| `create-catalog` | Provision Iceberg or Federated catalogs. | Admin |
+| `grant-permission`| Assign RBAC/TBAC roles and access levels. | Admin |
+| `list-audit-events`| Comprehensive forensic and security tracking. | Admin |
+
+### 2. `pangolin-user` (The Data Tool)
+Targeted at Data Engineers and Analysts for discovery and versioning.
+
+**Core Commands:**
+| Command | Usage | Role |
+| :--- | :--- | :--- |
+| `search` | Discover tables/views via metadata engines. | All Users |
+| `create-branch` | Fork catalogs for dev/testing isolation. | Engineer |
+| `merge-branch` | Promote changes across catalog environments. | Engineer |
+| `create-tag` | Mark immutable snapshot versions. | Analyst |
+| `generate-code` | Get Spark/PyIceberg connection config. | All Users |
+| `get-token` | Manage personal API keys and sessions. | All Users |
+
+---
+
+## 📂 Architecture & Config
+Both tools share the same configuration layer.
+- **Interactive Mode**: Simply run `pangolin-admin` or `pangolin-user` to enter the shell.
+- **Non-Interactive Mode**: Pass the command directly: `pangolin-user search --query "sales"`.
+
+**Config Paths:**
+- **Linux**: `~/.config/pangolin/config.json`
+- **macOS**: `~/Library/Application Support/com.pangolin.cli/config.json`
+- **Windows**: `C:\Users\<User>\AppData\Roaming\pangolin\cli\config.json`
+
+---
+
+## 🚀 Quick Tip
+Use the `--profile` flag to manage multiple Pangolin environments (e.g., `dev` vs `prod`).
+```bash
+pangolin-user login --profile prod --username "me@company.com"
+```

@@ -1,6 +1,6 @@
 # PyIceberg: No Auth with Credential Vending
 
-In this scenario, Pangolin `NO_AUTH` mode is on, but it securely vends scoped credentials to PyIceberg. The client needs NO storage credentials.
+In this scenario, Pangolin's `NO_AUTH` mode is enabled (for evaluation), but it still securely vends scoped credentials to PyIceberg. 
 
 ## Configuration
 
@@ -8,7 +8,7 @@ In this scenario, Pangolin `NO_AUTH` mode is on, but it securely vends scoped cr
 from pyiceberg.catalog import load_catalog
 
 catalog = load_catalog(
-    "local",
+    "pangolin",
     **{
         "type": "rest",
         "uri": "http://localhost:8080/v1/my_catalog",
@@ -16,12 +16,14 @@ catalog = load_catalog(
         # Enable Credential Vending
         "header.X-Iceberg-Access-Delegation": "vended-credentials",
         
-        # No S3 keys required!
-        # Note: If running locally with Docker, you might still need s3.endpoint
-        # so your host machine knows how to resolve the container hostname.
+        # No storage keys required!
     }
 )
 ```
 
 ## When to use
-- Internal scenarios where you want to hide long-lived storage keys from clients.
+- Internal scenarios where you want to evaluate the vending workflow without setting up full JWT authentication.
+- Demonstration and local development where you want to mimic production credentials behavior.
+
+> [!IMPORTANT]
+> Even in `NO_AUTH` mode, Pangolin requires a tenant context. If no token is provided, it defaults to the system tenant (`00000000-0000-0000-0000-000000000000`).

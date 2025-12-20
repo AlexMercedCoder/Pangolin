@@ -1,122 +1,79 @@
 # Pangolin Architecture
 
 ## Overview
-Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is designed to be compatible with the Apache Iceberg REST API while providing extended capabilities for branching, tagging, and managing non-Iceberg assets.
+Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is fully compatible with the Apache Iceberg REST API while providing enterprise-grade extensions for Git-like branching, unified discovery, and cross-catalog federation.
 
 ## Core Components
 
 ### 1. API Layer (`pangolin_api`)
 - **Framework**: Axum (Async Rust).
-- **Responsibility**: Handles HTTP requests, routing, serialization, and auth.
+- **Core Engine**: Handles HTTP routing, JSON (de)serialization, and OpenAPI schema generation via `utoipa`.
 - **Key Modules**:
-    - `iceberg_handlers`: Standard Iceberg REST specification implementation.
-    - `pangolin_handlers`: Extended capabilities (branching, commits).
-    - `business_metadata_handlers`: Business catalog features (metadata, access requests).
-    - `user_handlers`, `permission_handlers`: RBAC and user management.
-    - `service_user_handlers`: Service user management and API key operations.
-    - `middleware`: JWT authentication, API key authentication, and tenant context resolution.
+    - `iceberg_handlers`: Faithful implementation of the Iceberg REST specification (Namespaces, Tables, Scans).
+    - `branch_handlers`: Logic for Git-like workflows (Branching, Tagging, Merging).
+    - `business_metadata_handlers`: Business catalog features (Search, Tags, Access Requests).
+    - `auth_handlers`: Multi-mode authentication logic (JWT, API Keys, OAuth2).
+    - `management_handlers`: Administrative CRUD for Tenants, Warehouses, and Users.
+    - `federated_handlers`: Proxy logic for external REST catalogs.
 
 ### 2. Core Domain (`pangolin_core`)
-- **Responsibility**: Defines shared data models, traits, and business logic.
+- **Responsibility**: Defines the system's "Source of Truth" models and validation logic.
 - **Key Models**:
-    - `Tenant`: Multi-tenancy root entity.
-    - `Asset`: Unified representation of Tables, Views, and other resources.
-    - `BusinessMetadata`: Descriptive metadata, tags, and properties.
-    - `User`, `Role`, `Permission`: RBAC entities.
-    - `ServiceUser`: Programmatic identities with API key authentication.
-    - `Branch`: Git-like commit history reference.
+    - `Tenant`: The root multi-tenancy unit; all data is isolated by Tenant ID.
+    - `Asset`: Unified representation of `IcebergTable`, `View`, and other data resources.
+    - `Branch`: References to commit chains (`Ingest` vs `Experimental` types).
+    - `Commit`: Immutable snapshots of catalog state tracking `Put` and `Delete` operations.
+    - `PermissionScope`: Granular target definitions (Tenant, Catalog, Namespace, Asset, Tag).
 
 ### 3. Storage Layer (`pangolin_store`)
-- **Responsibility**: Abstract persistence layer via `CatalogStore` trait.
-- **Backend Storage (Metadata)**:
-    - `MemoryStore`: High-performance, concurrent in-memory store (using `DashMap`) for testing/dev.
-    - `PostgresStore`: ✅ Production-ready relational storage with ACID guarantees.
-    - `MongoStore`: ✅ Production-ready NoSQL document storage with horizontal scalability.
-    - `SqliteStore`: ✅ Production-ready embedded storage for development and edge deployments.
-- **Optimization**:
-    - `assets_by_id`: Auxiliary direct index (O(1)) for fast asset authorization and lookup.
-- **Warehouse Storage (Data)**:
-    - S3/GCS/Azure: Object storage for Iceberg table data files (via `object_store` crate).
-    - **Credential Vending**: AWS STS AssumeRole, Azure OAuth2, GCP service account tokens.
-    - **Cloud Features**: Optional feature flags (`aws-sts`, `azure-oauth`, `gcp-oauth`) for production credential vending.
-- **Merge Operations**: Tracks merge operations with automated 3-way base commit detection.
+- **Metadata Persistence**: Abstracted via the `CatalogStore` trait.
+    - `MemoryStore`: Concurrent in-memory store for rapid development/testing.
+    - `PostgresStore`: SQL backend using `sqlx` for relational scale.
+    - `MongoStore`: Document backend for high-availability deployments.
+    - `SqliteStore`: Embedded backend for local dev and edge use cases.
+- **Performance**: Direct `assets_by_id` lookup for O(1) authorization checks.
+- **Data Storage**: Object storage (S3/GCS/Azure) via the `object_store` crate.
+- **Credential Vending**: Integrated `Signer` trait to vend temporary tokens (AWS STS, Azure SAS, GCP Downscoped).
 
-### 4. Security & Authentication
-- **Modes**:
-    - **No Auth**: Open access for development (`PANGOLIN_NO_AUTH=true`).
-    - **JWT**: Bearer token authentication with `bcrypt` password hashing.
-    - **API Keys**: Service user authentication via `X-API-Key` header.
-    - **OAuth 2.0**: OIDC integration with Google, Microsoft, GitHub, Okta.
+### 4. Security & Isolation
+- **Authentication**:
+    - **JWT**: Standard for UI and human CLI access.
+    - **API Keys**: Distributed via **Service Users** for programmatic/CI-CD access.
+    - **OAuth 2.0**: OIDC integration with Google, Microsoft, GitHub, and Okta.
 - **Authorization**:
-    - **RBAC**: 3-tier role system (Root, TenantAdmin, TenantUser).
-    - **Service Users**: Dedicated programmatic identities for CI/CD, ETL, and automation.
-    - **Granular Logic**: Scope-based permissions (Catalog, Namespace, Asset, Tag).
+    - **RBAC**: Role-based access control with 3 default tiers (Root, TenantAdmin, TenantUser).
+    - **TBAC**: Tag-based access control allowing permissions to flow to assets with specific labels.
+- **Tenant Isolation**: Strictly enforced at the middleware layer; storage queries always include `tenant_id`.
 
-### 5. Merge Conflict Resolution
-- **Conflict Detection**: Automatic detection of schema, deletion, metadata, and data overlap conflicts.
-- **Conflict Types**: 4 categories with specific detection algorithms.
-- **Resolution Strategies**: Manual (TakeSource, TakeTarget, Custom) and automatic resolution.
-- **Lifecycle Management**: Full tracking from initiation to completion/abort.
-- **API Endpoints**: 6 dedicated endpoints for managing merge operations and conflicts.
+### 5. Git-like Data Lifecycle
+- **Branching Engine**: Supports full and partial catalog branching.
+- **Fork-on-Write**: Writes to a branch create new commits without affecting the parent branch until merged.
+- **3-Way Merging**: Automated conflict detection using common ancestor (base commit) analysis.
+- **Conflict Types**: Detects Schema, Data (partition overlap), Metadata, and Deletion conflicts.
 
-### 6. Federated Catalogs
-- **Transparent Proxy**: Connect to external Iceberg REST catalogs seamlessly.
-- **Unified Authentication**: Users authenticate to Pangolin, not individual catalogs.
-- **Cross-Tenant Federation**: Tenant A can access Tenant B's catalogs through Pangolin.
-- **Multiple Auth Types**: Support for None, BasicAuth, BearerToken, and ApiKey.
-- **RBAC Integration**: Pangolin permissions apply to federated catalogs.
-- **Management API**: 5 endpoints for creating, listing, testing, and deleting federated catalogs.
+### 6. Catalog Federation
+- **REST Proxy**: Pangolin acts as a unified entry point, proxying requests to external Iceberg REST catalogs.
+- **Auth Translation**: Translates Pangolin credentials to the authentication required by remote catalogs (Basic, Bearer, ApiKey).
+- **Global Governance**: Apply Pangolin RBAC and Audit policies even to external federated data.
 
-### 7. Business Catalog & Discovery
-- **Metadata Management**: Tags, Descriptions, Properties for any asset.
-- **Discovery Portal**: Search interface for finding data assets.
-- **Access Requests**: Integrated workflow for requesting and approving access to restricted data.
-- **Integration**: Works seamlessly with RBAC to filter search results and enforce access.
+## Management Interfaces
 
-### 8. Core System Management
-- **All Entities**: Full create, read, update, delete operations for:
-    - Tenants: 5 endpoints (list, create, get, update, delete)
-    - Warehouses: 5 endpoints (list, create, get, update, delete)
-    - Catalogs: 5 endpoints (list, create, get, update, delete)
-    - Users: 5 endpoints (list, create, get, update, delete)
-    - Roles & Permissions: 8 endpoints (full RBAC management)
-- **Backend Support**: All operations implemented across Memory, SQLite, PostgreSQL, and MongoDB stores.
-- **Production Ready**: Comprehensive error handling, validation, and logging.
+### 1. Management UI (`pangolin_ui`)
+- **Stack**: SvelteKit + Vanilla CSS (modern, glassmorphic design).
+- **Features**: Visual management of Users, Permissions, Audit Logs, and the Data Discovery portal.
 
-### 9. Management UI (`pangolin_ui`)
-- **Framework**: SvelteKit + TailwindCSS.
-- **Goal**: Provide a modern visual interface for catalog management, RBAC, and data discovery.
-- **Status**: Beta (Discovery Portal, Access Request Workflows, RBAC, Data Explorer implemented).
-- **Documentation**: [UI Overview](docs/ui/overview.md)
-
-### 10. CLI Tools
-- **Pangolin Admin (`pangolin-admin`)**: Administrative CLI for managing tenants, warehouses, catalogs, users, and permissions.
-- **Pangolin User (`pangolin-user`)**: User-facing CLI for discovery, branching, and access requests.
-- **Architecture**:
-    - `pangolin_cli_common`: Shared configuration and API client code.
-    - `pangolin_cli_admin`: Admin specific commands.
-    - `pangolin_cli_user`: User specific commands.
-
-## Data Model
-
-### Branching Model
-Pangolin uses a Git-like branching model:
-- **Main Branch**: The default branch for production data.
-- **Ingest Branch**: For isolating write operations.
-- **Experimental Branch**: For testing and experimentation.
-
-### Asset Identification
-Assets are identified by `Tenant -> Namespace -> Name`.
-To support branching in standard Iceberg clients, we use a `table@branch` syntax in the table name.
+### 2. CLI Tools
+- **pangolin-admin**: High-level system administration (Tenants, Warehouses, Roles).
+- **pangolin-user**: Engineering workflow tool (Branching, Code generation, Search).
 
 ## Request Flow
-1. **Request**: Client sends HTTP request (e.g., `GET /v1/ns/tables/mytable@dev`).
-2. **Middleware**: Resolves Tenant ID from Auth header.
-3. **Handler**: Parses `mytable@dev` to extract table name `mytable` and branch `dev`.
-4. **Store**: Queries the `CatalogStore` for the asset on the specified branch.
-5. **Response**: Returns metadata or error.
+1. **Auth Middleware**: Resolves user identity from Header. Validates JWT or API Key.
+2. **Tenant Middleware**: Resolves `X-Pangolin-Tenant` or extracts it from User session.
+3. **Handler**: Executes business logic. Interacts with `CatalogStore` for metadata.
+4. **Vending (Optional)**: If requesting a table load, vends temporary S3/Cloud credentials.
+5. **Audit Middleware**: Asynchronously logs the operation result (Success/Failure) to the audit store.
 
 ## Testing Strategy
-- **Unit Tests**: Cover core logic in `pangolin_core` (serialization) and `pangolin_store` (CRUD operations).
-- **Integration Tests**: End-to-end API tests in `pangolin_api` using `axum::test` and `tower::ServiceExt`.
-- **Manual Verification**: `curl` based verification for new features.
+- **Store Tests**: Generic test suite run against all 4 backends (Memory, PG, Mongo, SQLite).
+- **API Tests**: Axum integration tests covering all RBAC permutations.
+- **Live Verification**: End-to-end scripts using PyIceberg, Spark, and the Pangolin CLI.

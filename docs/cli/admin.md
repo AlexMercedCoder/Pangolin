@@ -27,34 +27,40 @@ pangolin-admin --profile prod create-user --username newuser
 
 ## Core Management
 ### Tenants
-- `create-tenant --name <name>`: Create a new tenant.
-- `list-tenants`: List all tenants.
-- `delete-tenant <id>`: Delete a tenant.
+- `create-tenant --name <name> --admin-username <user> --admin-password <pass>`: Create a new tenant.
+- `list-tenants`: List all platform tenants (Root only).
+- `update-tenant --id <id> [--name <name>]`: Update tenant properties.
+- `delete-tenant <id>`: Remove a tenant and its data.
 
 ### Users
-- `create-user --username <user> --role <role>`: Create a new user. Role defaults to `user`.
+- `create-user <username> --email <email> --role <role>`: Create a new user.
 - `list-users`: List all registered users.
-- `delete-user <username>`: Delete a user.
+- `update-user --id <id> [--username <name>] [--email <email>] [--active <bool>]`: Modify user profile.
+- `delete-user <username>`: Delete a user account.
 
 ### Warehouses
-- `create-warehouse --name <name> --type <s3|gcs|azure>`: Create a storage warehouse.
+- `create-warehouse --name <name> --type <s3|gcs|azure|local> ...`: Configure physical storage.
 - `list-warehouses`: List defined warehouses.
-- `delete-warehouse <name>`: Delete a warehouse.
+- `update-warehouse --id <id> [--name <name>]`: Rename a warehouse.
+- `delete-warehouse <name>`: Detach a storage location.
 
 ### Catalogs
-- `create-catalog --name <name> --warehouse <warehouse_name>`: Create a catalog linked to a warehouse.
-- `list-catalogs`: List all catalogs.
-- `delete-catalog <name>`: Delete a catalog.
+- `create-catalog <name> --warehouse <warehouse_name>`: provision an Iceberg catalog.
+- `list-catalogs`: View logical catalogs.
+- `update-catalog --id <id> [--name <name>]`: Rename a catalog.
+- `delete-catalog <name>`: Remove a catalog reference.
 
 ## Governance
 ### Permissions
-- `list-permissions --role <role> --user <user>`: View active permissions.
-- `grant-permission <role> <action> <resource>`: Grant a permission.
-- `revoke-permission <role> <action> <resource>`: Revoke a permission.
+- `list-permissions --role <role> --user <user>`: View active access policies.
+- `grant-permission <username> <action> <resource>`: Grant user a specific permission.
+- `revoke-permission <role> <action> <resource>`: Revoke permission from a role.
 
 ### Metadata
-- `get-metadata --entity-type <type> --entity-id <id>`: detailed JSON metadata.
-- `set-metadata --entity-type <type> --entity-id <id> <key> <value>`: Attach key-value metadata.
+See [Metadata Management Guide](./admin-metadata.md) for detailed attribution and explorer commands.
+- `get-metadata --entity-type <type> --entity-id <id>`: Get entity properties.
+- `set-metadata --entity-type <type> --entity-id <id> <key> <value>`: Set entity properties.
+- `list-namespace-tree <catalog>`: Browse catalog structure.
 
 ## Update Operations
 

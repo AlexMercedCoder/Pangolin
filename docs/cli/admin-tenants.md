@@ -13,20 +13,38 @@ pangolin-admin list-tenants
 ```
 
 ### Create Tenant
-Initialize a new tenant environment.
+Initialize a new tenant environment. (Root Admin only)
 
-**Syntax**:
+**Syntax (Interactive)**:
 ```bash
-pangolin-admin create-tenant --name <name>
+create-tenant --name <name> --admin-username <username> --admin-password <password>
+```
+
+**Syntax (Non-Interactive)**:
+```bash
+pangolin-admin create-tenant --name <name> --admin-username <username> --admin-password <password>
 ```
 
 **Example**:
 ```bash
-pangolin-admin create-tenant --name acme_corp
+pangolin-admin create-tenant --name acme_corp --admin-username admin --admin-password "p@ssword123"
+```
+
+### Update Tenant
+Modify properties of an existing tenant. (Root Admin only)
+
+**Syntax**:
+```bash
+pangolin-admin update-tenant --id <uuid> [--name <new_name>]
+```
+
+**Example**:
+```bash
+pangolin-admin update-tenant --id 123e4567-e89b-12d3 --name acme_holdings
 ```
 
 ### Delete Tenant
-Permanently remove a tenant and all associated data. **Irreversible**.
+Permanently remove a tenant and all associated data. **Irreversible**. (Root Admin only)
 
 **Syntax**:
 ```bash

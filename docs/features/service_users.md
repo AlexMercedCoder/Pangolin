@@ -1,0 +1,60 @@
+# Service Users
+
+Service Users are dedicated programmatic identities designed for secure machine-to-machine access. They bypass the standard JWT session flow in favor of long-lived, high-entropy API keys.
+
+---
+
+## 🛠️ Usage Guides
+
+### 1. Via CLI (`pangolin-admin`)
+Administrators can provision and rotate keys directly from the terminal.
+
+**Create Service User:**
+```bash
+pangolin-admin create-service-user \
+  --name "etl-pipeline" \
+  --role "TenantUser" \
+  --expires-in-days 365
+```
+
+**Rotate API Key:**
+```bash
+pangolin-admin rotate-service-user-key --id <service-user-uuid>
+```
+
+### 2. Via Management UI
+1. Navigate to **Identity -> Service Users**.
+2. Click **Create Service User**.
+3. **Important**: Copy your API key immediately. For security, it will never be displayed again.
+4. To deactivate a key, simply toggle the **Active** switch in the user list.
+
+---
+
+## 🔐 Authentication
+Service users authenticate by sending the `X-API-Key` header with every request.
+
+```bash
+curl -H "X-API-Key: pgl_YOUR_SECRET_KEY" \
+     https://your-pangolin-api.com/api/v1/catalogs
+```
+
+### Integration: PyIceberg
+```python
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "https://api.pangolin.io",
+        "header.X-API-Key": "pgl_YOUR_SECRET_KEY",
+    }
+)
+```
+
+---
+
+## 🚦 Best Practices
+- **Never Share Keys**: Treat API keys exactly like root passwords.
+- **Rotation**: Rotate keys at least every 90 days. If a key is potentially exposed, rotate it immediately.
+- **Least Privilege**: Only grant `TenantAdmin` to service users that specifically need to manage other users or infrastructure. Most pipelines only need `TenantUser`.
+- **Monitor Usage**: Check the `last_used` timestamp in the UI to identify and prune stale identities.

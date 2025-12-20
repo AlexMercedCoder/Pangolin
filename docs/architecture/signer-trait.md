@@ -1,101 +1,69 @@
 # Signer Trait
 
 ## Overview
+The `Signer` trait provides a secure mechanism for Pangolin to vend temporary, downscoped credentials or presigned URLs to clients (like PyIceberg or Spark) for direct access to object storage.
 
-The `Signer` trait provides an abstraction for generating pre-signed URLs for cloud storage access. It enables secure, temporary access to S3-compatible storage without exposing long-term credentials.
+**Source**: `pangolin_store/src/signer.rs`
 
-**Location**: `pangolin_store/src/signer.rs`
+---
 
-## Purpose
+## Credentials Enum
+The `Credentials` enum encapsulates provider-specific access tokens.
 
-The `Signer` trait provides:
-- **Credential Vending**: Generate temporary, scoped credentials for S3 access
-- **Pre-signed URLs**: Create time-limited URLs for direct object access
-- **Multi-cloud Support**: Abstract interface works with AWS S3, Azure Blob, GCP Storage
-- **Security**: Implements least-privilege access with expiration
+```rust
+pub enum Credentials {
+    // AWS S3 credentials (STS or Static)
+    Aws {
+        access_key_id: String,
+        secret_access_key: String,
+        session_token: Option<String>,
+        expiration: Option<DateTime<Utc>>,
+    },
+    // Azure SAS token
+    Azure {
+        sas_token: String,
+        account_name: String,
+        expiration: DateTime<Utc>,
+    },
+    // GCP OAuth2 token
+    Gcp {
+        access_token: String,
+        expiration: DateTime<Utc>,
+    },
+}
+```
 
-## Implementations
+---
 
-- **SignerImpl** (`pangolin_store/src/signer.rs`) - AWS S3 signer using AWS SDK
-- **AzureSigner** (`pangolin_store/src/azure_signer.rs`) - Azure Blob Storage signer
-- **GcpSigner** (`pangolin_store/src/gcp_signer.rs`) - Google Cloud Storage signer
-
-## Trait Definition
+## The Signer Trait
+Implementations of this trait interact with cloud IAM services to generate temporary tokens.
 
 ```rust
 #[async_trait]
 pub trait Signer: Send + Sync {
-    async fn generate_presigned_url(
-        &self,
-        bucket: &str,
-        key: &str,
-        expiration_secs: u64,
-    ) -> Result<String>;
-    
-    async fn vend_credentials(
-        &self,
-        warehouse_config: &std::collections::HashMap<String, String>,
-        prefix: &str,
-    ) -> Result<VendedCredentials>;
+    /// Get temporary credentials for accessing a specific table location.
+    /// Implementation should scope permissions to the provided location prefix.
+    async fn get_table_credentials(&self, location: &str) -> Result<Credentials>;
+
+    /// Generate a presigned URL for a specific file location.
+    async fn presign_get(&self, location: &str) -> Result<String>;
 }
 ```
 
-## Methods
+### Key Behaviors
+1.  **Downscoping**: Credentials vended via `get_table_credentials` are typically scoped to the specific S3/GCS prefix of the Iceberg table to prevent unauthorized access to other data in the bucket.
+2.  **Expiration handling**: Clients are expected to refresh credentials based on the `expiration` field provided in the response.
+3.  **Transport Security**: Vended credentials should only be transmitted over HTTPS.
 
-### `generate_presigned_url`
+---
 
-```rust
-async fn generate_presigned_url(
-    &self,
-    bucket: &str,
-    key: &str,
-    expiration_secs: u64,
-) -> Result<String>;
-```
-
-Generates a pre-signed URL for direct object access.
-
-**Parameters**:
-- `bucket`: S3 bucket name
-- `key`: Object key/path within the bucket
-- `expiration_secs`: URL validity duration in seconds
-
-**Returns**: `Result<String>` - Pre-signed URL
-
-**Usage**:
-```rust
-let url = signer.generate_presigned_url(
-    "my-bucket",
-    "path/to/metadata.json",
-    3600, // 1 hour
-).await?;
-```
-
-**Use Cases**:
-- Providing read access to table metadata files
-- Allowing direct downloads of data files
-- Temporary access for external tools
-
-### `vend_credentials`
-
-```rust
-async fn vend_credentials(
-    &self,
-    warehouse_config: &std::collections::HashMap<String, String>,
-    prefix: &str,
-) -> Result<VendedCredentials>;
-```
-
-Generates temporary, scoped credentials for S3 access.
-
-**Parameters**:
-- `warehouse_config`: Warehouse configuration containing storage settings
+## SignerImpl
+A default implementation of the `Signer` trait is provided for basic setups, though full cloud integrations typically require the `aws-sts`, `azure-oauth`, or `gcp-oauth` feature flags.
 - `prefix`: S3 prefix to scope credentials to (e.g., "warehouse1/catalog1/")
 
 **Returns**: `Result<VendedCredentials>` - Temporary credentials
 
 **VendedCredentials Structure**:
-```rust
 pub struct VendedCredentials {
     pub access_key_id: String,
     pub secret_access_key: String,

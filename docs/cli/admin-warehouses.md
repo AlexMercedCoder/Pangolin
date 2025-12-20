@@ -13,31 +13,38 @@ pangolin-admin list-warehouses
 ```
 
 ### Create Warehouse
-Configure a new storage location. The CLI may prompt for additional configuration depending on the type.
+Configure a new storage location.
 
 > [!IMPORTANT]
 > This command requires **Tenant Admin** privileges. The Root User cannot create warehouses.
 
-
-**Syntax**:
+**Syntax (Full)**:
 ```bash
-pangolin-admin create-warehouse --name <name> --type <type>
+pangolin-admin create-warehouse --name <name> --type <type> --bucket <bucket> --access-key <key> --secret-key <secret> --region <region> [--endpoint <url>]
 ```
 
-**Supported Types**:
-- `s3`: Amazon S3 or MinIO
-- `gcs`: Google Cloud Storage
-- `azure`: Azure Blob Storage
-- `local`: Local filesystem
+**Supported Types**: `s3`, `gcs`, `azure`, `local`.
 
 **Example**:
 ```bash
-pangolin-admin create-warehouse --name main_lake --type s3
-# Prompts for Bucket, Region, Access Key, Secret Key will follow...
+pangolin-admin create-warehouse --name production --type s3 --bucket "my-data" --region "us-east-1" ...
+```
+
+### Update Warehouse
+Modify a warehouse configuration.
+
+**Syntax**:
+```bash
+pangolin-admin update-warehouse --id <uuid> [--name <new_name>]
+```
+
+**Example**:
+```bash
+pangolin-admin update-warehouse --id "warehouse-uuid" --name "legacy-storage"
 ```
 
 ### Delete Warehouse
-Remove a warehouse configuration. Does not delete the actual data in storage, only the reference.
+Remove a warehouse configuration. Does not delete the actual data in storage.
 
 **Syntax**:
 ```bash

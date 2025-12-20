@@ -96,9 +96,10 @@ aws rds create-db-instance \
 ```bash
 # Connection string format:
 # postgresql://username:password@host:port/database
+# postgres://username:password@host:port/database
 
 # Local development
-DATABASE_URL=postgresql://pangolin:your_password@localhost:5432/pangolin
+DATABASE_URL=postgres://pangolin:your_password@localhost:5432/pangolin
 
 # Production (RDS)
 DATABASE_URL=postgresql://pangolin:password@pangolin-prod.xxxxx.us-east-1.rds.amazonaws.com:5432/pangolin
@@ -114,35 +115,53 @@ DATABASE_CONNECT_TIMEOUT=30
 
 ### Schema Initialization
 
-Pangolin automatically creates the schema on first startup. The schema includes:
+Pangolin automatically initializes and migrates the PostgreSQL schema on startup using `sqlx`. Manual schema application is generally not required unless you are performing a custom installation or troubleshooting.
 
-**Tables**:
-- `tenants` - Tenant information
-- `warehouses` - Storage warehouse configurations
-- `catalogs` - Catalog definitions
-- `namespaces` - Namespace hierarchies
-- `assets` - Table and view metadata
-- `branches` - Branch information
-- `tags` - Tag information
-- `commits` - Commit history
-- `metadata_locations` - Iceberg metadata file locations
-- `audit_logs` - Audit trail
+The comprehensive schema includes:
+
+**Core Infrastructure**:
+- `tenants` - Multi-tenant isolation records
+- `warehouses` - Storage configurations (S3, Azure, GCP)
+- `catalogs` - Iceberg catalog definitions
+- `namespaces` - Namespace hierarchies and properties
+- `assets` - Table and view metadata pointers
+- `branches` - Git-like branch definitions
+- `tags` - Immutable commit pointers (snapshots)
+- `commits` - Detailed operation history
+- `metadata_locations` - Physical Iceberg metadata file path tracking
+
+**Governance & Security**:
+- `users` - Root and Tenant user accounts
+- `roles` - RBAC role definitions
+- `user_roles` - Role assignments to users
+- `permissions` - Direct (TBAC/RBAC) permission grants
+- `access_requests` - Data discovery access workflows
+- `audit_logs` - Comprehensive tamper-evident trail
+- `revoked_tokens` - Blacklisted JWT identifiers
+- `active_tokens` - (Internal) Session tracking for active tokens
+
+**System & Maintenance**:
+- `system_settings` - Tenant-specific configuration overrides
+- `federated_sync_stats` - Status tracking for cross-tenant federation
 
 **Indexes**:
 - Primary keys on all tables
-- Foreign key indexes for joins
-- Composite indexes for common queries
-- GIN indexes for array/JSONB columns
+- Foreign key indexes for joining tenant/catalog/namespace context
+- Composite indexes for optimized listing (e.g., `idx_assets_tenant_catalog`)
+- GIN indexes for efficient JSONB and Array searches (PostgreSQL specific)
 
 ### Manual Schema Application
 
-If you need to apply the schema manually:
+> [!WARNING]
+> Manual application of `postgres_schema.sql` may bypass migration tracking. It is recommended to let Pangolin handle initialization automatically.
+
+If you must apply the schema manually:
 
 ```bash
-# Download schema
+# Download the current consolidated schema
 curl -O https://raw.githubusercontent.com/AlexMercedCoder/Pangolin/main/pangolin/pangolin_store/sql/postgres_schema.sql
 
-# Apply schema
+# Apply to your database
 psql -h localhost -U pangolin -d pangolin -f postgres_schema.sql
 ```
 

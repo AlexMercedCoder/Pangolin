@@ -1,40 +1,36 @@
 # Getting Started with Pangolin
 
-This directory contains guides to help you get started with Pangolin.
+Welcome to Pangolin! This directory contains everything you need to set up, configure, and evaluate the platform.
 
-## Quick Start
+## 🚀 Onboarding
+Get up and running in minutes.
+- **[Quick Start Guide](./getting_started.md)**: A step-by-step walkthrough of your first tenant, catalog, and table.
+- **[Evaluating Pangolin](./evaluating-pangolin.md)**: Using `NO_AUTH` mode for rapid local testing.
 
-1. [Getting Started Guide](getting_started.md) - Complete introduction to Pangolin
-2. **[Evaluating Pangolin](evaluating-pangolin.md)** - Fast track for testing (NO_AUTH mode)
-3. [Configuration](configuration.md) - Basic configuration options
-3. [Environment Variables](env_vars.md) - Environment variable reference
+## ⚙️ Configuration
+Fine-tune Pangolin for your environment.
+- **[Environment Variables](./env_vars.md)**: Comprehensive list of all configuration options.
+- **[Configuration Overview](./configuration.md)**: Principles of runtime and storage setup.
+- **[Dependencies](./dependencies.md)**: System requirements and library overview.
 
-## Deployment
+## 🔌 Client Integration
+Connect your favorite tools to the Pangolin REST Catalog.
+- **[Client Configuration](./client_configuration.md)**: Setup guides for PyIceberg, PySpark, and Trino.
 
-- [Deployment Guide](deployment.md) - General deployment instructions
-- [Docker Deployment](docker_deployment.md) - Running with Docker
-- [Dependencies](dependencies.md) - Required dependencies
+## 🚢 Deployment
+Move from local testing to production.
+- **[Deployment Guide](./deployment.md)**: instructions for local, Docker, and production environments.
 
-## Client Configuration
+---
 
-- [Client Configuration](client_configuration.md) - Detailed client setup guide
+### Quick Launch Reference
+If you have [Docker](https://www.docker.com/) installed, the fastest way to see Pangolin in action is:
 
-## Contents
+```bash
+# Clone and start with Docker Compose
+git clone https://github.com/your-org/pangolin.git
+cd pangolin
+docker-compose up -d
+```
 
-| Document | Description |
-|----------|-------------|
-| [getting_started.md](getting_started.md) | Complete getting started guide with examples |
-| [evaluating-pangolin.md](evaluating-pangolin.md) | **Easiest WAY to Test**: Guide for NO_AUTH mode and auto-provisioning |
-| [configuration.md](configuration.md) | Configuration options and settings |
-| [env_vars.md](env_vars.md) | Environment variable reference |
-| [deployment.md](deployment.md) | Deployment instructions |
-| [docker_deployment.md](docker_deployment.md) | Docker-specific deployment |
-| [dependencies.md](dependencies.md) | Required dependencies and setup |
-| [client_configuration.md](client_configuration.md) | Client configuration details |
-
-## Next Steps
-
-After getting started, explore:
-- [Storage Options](../warehouse/) - Configure S3, Azure, or GCS storage
-- [API Documentation](../api/) - REST API reference
-- [Features](../features/) - Advanced features like branching and time travel
+Visit the [Quick Start Guide](./getting_started.md) to perform your first data operations!

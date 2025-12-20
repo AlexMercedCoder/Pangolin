@@ -13,23 +13,37 @@ pangolin-admin list-users
 ```
 
 ### Create User
-Create a new user account. You will be prompted for a password securely.
+Create a new user account.
 
 > [!WARNING]
 > The **Root User** can ONLY create a `tenant-admin` for a new tenant. They cannot create regular `tenant-user` accounts. Regular user management is the responsibility of the Tenant Admin.
 
-
 **Syntax**:
 ```bash
-pangolin-admin create-user <username> [--role <role>]
+pangolin-admin create-user <username> --email <email> --role <role> [--password <password>] [--tenant-id <uuid>]
 ```
 
 **Options**:
-- `--role`: Assign an initial role (default: `tenant-user`).
+- `--role`: Assign a role (`Root`, `TenantAdmin`, `TenantUser`).
+- `--password`: Provide password directly (omitting will trigger a secure prompt).
+- `--tenant-id`: Target a specific tenant (Root only).
 
 **Example**:
 ```bash
-pangolin-admin create-user alice --role tenant-user
+pangolin-admin create-user alice --email alice@acme.com --role TenantUser
+```
+
+### Update User
+Modify an existing user's profile or status.
+
+**Syntax**:
+```bash
+pangolin-admin update-user --id <uuid> [--username <name>] [--email <email>] [--active <true|false>]
+```
+
+**Example**:
+```bash
+pangolin-admin update-user --id "user-uuid" --active false
 ```
 
 ### Delete User

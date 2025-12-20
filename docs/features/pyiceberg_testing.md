@@ -1,6 +1,6 @@
 # PyIceberg Testing Guide
 
-This guide provides step-by-step instructions for testing Pangolin with PyIceberg.
+This guide provides instructions for testing Pangolin with PyIceberg. For detailed configuration options (Auth, Vending, Azure, GCP), see the **[PyIceberg Integration Guides](../pyiceberg/README.md)**.
 
 ## Prerequisites
 

@@ -59,15 +59,15 @@ RUST_LOG=info
 
 ### Explicit Configuration
 
-If you want to be explicit:
+If you want to be explicit, or if `DATABASE_URL` is set globally and you want to override it to use in-memory:
 
 ```bash
-# In your environment or .env file
-# Simply omit DATABASE_URL or set it to empty
-DATABASE_URL=
-
-# Or in code, the MemoryStore is used when no DATABASE_URL is provided
+# Set storage type explicitly
+PANGOLIN_STORAGE_TYPE=memory
 ```
+
+> [!NOTE]
+> If `DATABASE_URL` is completely omitted, Pangolin defaults to the In-Memory store.
 
 ## Usage
 

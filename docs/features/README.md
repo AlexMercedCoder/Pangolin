@@ -1,106 +1,50 @@
-# Features
+# Pangolin Features Guide
 
-Advanced features and capabilities of Pangolin catalog.
+This directory contains detailed documentation for the core features of the Pangolin platform.
 
-## Git-Like Features
+## 🗂️ Asset & Data Management
+Basic data operations and lifecycle management.
+- **[Entities](./entities.md)**: Understanding the Pangolin core models.
+- **[Asset Management](./asset_management.md)**: Handling Tables, Views, and other assets.
+- **[Warehouse Management](./warehouse_management.md)**: Configuring storage backends.
+- **[Time Travel](./time_travel.md)**: Querying historical data states.
+- **[Tag Management](./tag_management.md)**: Versioning with tags.
 
-### [Branch Management](branch_management.md)
-- Create and manage branches
-- Merge branches
-- Branch-specific table versions
-- Isolated development environments
+## 🌿 Versioning & Branches
+Git-like workflows for your data lake.
+- **[Branch Management](./branch_management.md)**: Creating and managing branches.
+- **[Merge Operations](./merge_operations.md)**: Workflow for 3-way merges.
+- **[Merge Conflicts](./merge_conflicts.md)**: Principles of data conflict resolution.
 
-### [Tag Management](tag_management.md)
-- Create immutable tags
-- Reference specific points in time
-- Release management
+## 🛡️ Security & Access
+Governance and authentication mechanisms.
+- **[Multi-Tenancy](./multi_tenancy.md)**: Isolation principles and tenant management.
+- **[RBAC](./rbac.md)**: Role-Based Access Control system.
+- **[Credential Vending](./iam_roles.md)**: Cloud IAM and STS integration.
+- **[Security Concepts](./security_vending.md)**: Concept guide for vending and signing.
 
-### [Time Travel](time_travel.md)
-- Query historical data
-- Access previous table versions
-- Snapshot-based queries
+## 🔍 Discovery & Audit
+Finding data and tracking changes.
+- **[Business Catalog](./business_catalog.md)**: Data discovery portal and business metadata.
+- **[Audit Logging](./audit_logs.md)**: Comprehensive action tracking and compliance.
 
-## Data Management
+## 🧪 Integration & Testing
+Using Pangolin with other tools.
+- **[PyIceberg Integration](./pyiceberg_testing.md)**: Guide for Python users.
 
-### [Warehouse Management](warehouse_management.md)
-- Create and configure warehouses
-- Multi-cloud storage support
-- Credential management
+---
 
-### [Asset Management](asset_management.md)
-- Manage tables and views
-- Asset metadata
-- Asset lifecycle
+## Feature Status Matrix
 
-### [Maintenance](maintenance.md)
-- Table optimization
-- Snapshot expiration
-- Orphan file removal
-
-## Security & Access
-
-### [Security & Credential Vending](security_vending.md)
-- Automatic credential vending
-- Warehouse-based credentials
-- Multi-cloud support
-
-### [Audit Logs](audit_logs.md)
-- Track all operations
-- Compliance and monitoring
-- Event history
-
-## Integration
-
-### [PyIceberg Testing](pyiceberg_testing.md)
-- PyIceberg integration guide
-- Testing scenarios
-- Example workflows
-- Credential vending with PyIceberg
-
-## System
-
-### [Entities](entities.md)
-- Core data model
-- Entity relationships
-- Schema definitions
-
-### [RBAC UI](rbac_ui.md)
-- Role-based access control
-- UI management
-- Permission system
-
-## Feature Status
-
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Branch Management | ✅ Working | Git-like branching |
-| Tag Management | ✅ Working | Immutable tags |
-| Time Travel | ✅ Working | Snapshot queries |
-| Credential Vending | ✅ Working | S3, Azure, GCS |
-| PyIceberg Integration | ✅ Working | Full compatibility |
-| Audit Logs | ✅ Working | Event tracking |
-| Warehouse Management | ✅ Working | Multi-cloud |
-| Maintenance | 📝 Documented | Optimization tools |
-| RBAC | 📝 Documented | Access control |
-
-## Contents
-
-| Document | Description |
-|----------|-------------|
-| [branch_management.md](branch_management.md) | Git-like branch operations |
-| [tag_management.md](tag_management.md) | Immutable tag management |
-| [time_travel.md](time_travel.md) | Historical queries |
-| [warehouse_management.md](warehouse_management.md) | Warehouse configuration |
-| [asset_management.md](asset_management.md) | Table and view management |
-| [maintenance.md](maintenance.md) | Table maintenance operations |
-| [security_vending.md](security_vending.md) | Credential vending |
-| [audit_logs.md](audit_logs.md) | Audit logging |
-| [pyiceberg_testing.md](pyiceberg_testing.md) | PyIceberg integration |
-| [entities.md](entities.md) | Data model entities |
-| [rbac_ui.md](rbac_ui.md) | RBAC and UI |
-
-## See Also
-
-- [Getting Started](../getting-started/) - Setup guide
-- [Storage](../warehouse/) - Storage configuration
-- [API](../api/) - REST API reference
+| Feature | Category | Status |
+|---------|----------|--------|
+| Multi-Tenancy | System | ✅ Implemented |
+| Branching | Versioning | ✅ Implemented |
+| 3-Way Merge | Versioning | ✅ Implemented |
+| RBAC | Security | ✅ Implemented |
+| Audit Logging | Security | ✅ Implemented |
+| Business Catalog | Discovery | ✅ Implemented |
+| Credential Vending (Static) | Security | ✅ Implemented |
+| Credential Vending (STS) | Security | 🚧 Beta |
+| Federated Catalogs | Integration | ✅ Implemented |
+| View Management | Data | ✅ Implemented |

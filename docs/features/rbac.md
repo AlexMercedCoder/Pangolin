@@ -128,7 +128,7 @@ Content-Type: application/json
 }
 ```
 
-### Assign Role
+### Assign Role to User
 
 ```bash
 POST /api/v1/users/{user_id}/roles
@@ -136,11 +136,11 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "role": "TenantAdmin"
+  "role_id": "role-uuid"
 }
 ```
 
-### Grant Permission
+### Grant Permission (to User or Role)
 
 ```bash
 POST /api/v1/permissions
@@ -148,7 +148,8 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "user_id": "uuid",
+  "user_id": "optional-user-uuid",
+  "role_id": "optional-role-uuid",
   "scope": "Catalog",
   "resource": "analytics",
   "action": "Read"

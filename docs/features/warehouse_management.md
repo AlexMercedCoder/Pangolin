@@ -44,20 +44,20 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "production_warehouse",
-    "use_sts": true,
-    "storage_config": {
-      "type": "s3",
-      "bucket": "my-prod-bucket",
-      "region": "us-east-1",
+    "vending_strategy": {
+      "type": "AwsSts",
       "role_arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
+    },
+    "storage_config": {
+      "s3.bucket": "my-prod-bucket",
+      "s3.region": "us-east-1"
     }
   }'
 ```
 
 **Configuration**:
-- `use_sts: true` - Pangolin vends temporary STS credentials to clients
-- Recommended for production environments
-- Requires IAM role with S3 access permissions
+- `vending_strategy`: Defines how Pangolin provisions temporary credentials (STS, SAS, OAuth).
+- Required for production environments where direct IAM access is prohibited.
 
 ---
 

@@ -4,16 +4,29 @@
 
 Pangolin is a multi-tenant Apache Iceberg REST Catalog with advanced features including federated catalogs, credential vending, fine-grained permissions, and Git-like branching.
 
-## Architecture Documentation
+## Pangolin Architecture Documentation
 
-This directory contains comprehensive architecture documentation for the Pangolin project.
+This directory contains technical documentation for the Pangolin architecture, core data models, and primary abstraction layers.
 
-### Core Documentation
+## Documentation Index
 
-- **[System Architecture](./architecture.md)** - High-level system design and component overview
-- **[Data Models](./models.md)** - Complete catalog of all data models
-- **[CatalogStore Trait](./catalog-store-trait.md)** - Core storage abstraction interface
-- **[Signer Trait](./signer-trait.md)** - Credential vending and pre-signed URL generation
+### 1. [Architecture Overview](./architecture.md)
+High-level system design, core components, security logic, and request flow. Start here to understand how Pangolin works.
+
+### 2. [Data Models](./models.md)
+Detailed reference for all core structs and enums across the `model`, `user`, `permission`, `business_metadata`, and `audit` domains.
+
+### 3. [CatalogStore Trait](./catalog-store-trait.md)
+Reference for the primary storage abstraction layer, covering multi-tenant isolation and metadata lifecycle operations.
+
+### 4. [Signer Trait](./signer-trait.md)
+Documentation of the cloud credential vending logic, used to provide temporary access to S3, GCS, and Azure storage.
+
+## Target Audience
+This documentation is intended for:
+- **Core Contributors**: Developers extending the backend or adding new storage engines.
+- **Security Auditors**: Engineers reviewing tenant isolation and credential vending patterns.
+- **Enterprise Integrators**: Teams deploying Pangolin in custom cloud environments.
 
 ### Quick Links
 

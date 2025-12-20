@@ -33,7 +33,7 @@ Allows users to sign in with external identity providers.
 For programmatic access (CI/CD, ETL, automation), use **Service Users**.
 - Service users use **X-API-Key** authentication rather than JWTs.
 - They are managed via the UI or the `pangolin-admin service-users` CLI.
-- See the [Service Users Guide](./service_users.md) for details.
+- See the [Service Users Guide](./features/service_users.md) for details.
 
 ---
 

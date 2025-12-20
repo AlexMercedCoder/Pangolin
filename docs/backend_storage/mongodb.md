@@ -104,25 +104,22 @@ MONGO_MAX_POOL_SIZE=10
 MONGO_MIN_POOL_SIZE=2
 ```
 
-### Collections
+### Schema Initialization
 
-Pangolin creates the following collections:
-- `tenants` - Tenant information
+> [!IMPORTANT]
+> Unlike PostgreSQL and SQLite backends, Pangolin **does not** automatically create indexes for MongoDB collections. You must create them manually or via a separate script for optimal performance.
+
+Pangolin uses the following collections:
+
+**Core Collections**:
+- `tenants` - Tenant records
 - `warehouses` - Storage configurations
-- `catalogs` - Catalog definitions
+- `catalogs` - Catalog metadata
 - `namespaces` - Namespace hierarchies
 - `assets` - Table and view metadata
-- `branches` - Branch information
-- `tags` - Tag information
+- `branches` - Branching information
+- `tags` - Snapshot tags
 - `commits` - Commit history
-- `metadata_locations` - Metadata file locations
-- `audit_logs` - Audit trail
-
-### Indexes
-
-Automatically created indexes:
-```javascript
-// Tenants
 db.tenants.createIndex({ "name": 1 }, { unique: true })
 
 // Warehouses

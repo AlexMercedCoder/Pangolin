@@ -1,38 +1,71 @@
 # Table Maintenance
 
-Pangolin provides maintenance utilities to optimize storage and manage metadata for Iceberg tables. These operations help keep your data lake healthy and performant.
+Maintaining your Iceberg tables is critical for both storage efficiency and query performance. Pangolin provides built-in utilities to manage metadata growth and clean up unreferenced data files.
 
-## Features
+---
+
+## 🛠️ Available Operations
 
 ### 1. Expire Snapshots
-Removes old snapshots that are no longer needed, freeing up space and reducing metadata size.
+Over time, Iceberg tables accumulate snapshots. Expiring old snapshots reduces the size of the metadata files and allows for the deletion of data files that are no longer part of any valid state.
 
--   **API Endpoint**: `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/maintenance`
--   **Action**: `expire_snapshots`
--   **Parameters**:
-    -   `older_than_timestamp`: (Optional) Timestamp (ms) to expire snapshots created before this time.
-    -   `retain_last`: (Optional) Number of recent snapshots to keep regardless of age.
+-   **Endpoint**: `POST /v1/{prefix}/namespaces/{ns}/tables/{table}/maintenance`
+-   **Payload**:
+    ```json
+    {
+      "action": "expire_snapshots",
+      "older_than_timestamp": 1735689600000,
+      "retain_last": 10
+    }
+    ```
+-   **Logic**: 
+    1.  Identifies snapshots older than the timestamp OR outside the `retain_last` count.
+    2.  Removes these snapshots from the metadata.
+    3.  Triggers the underlying storage provider (S3/Azure/GCS) to delete unreferenced manifests and data files.
 
 ### 2. Remove Orphan Files
-Identifies and deletes files in the storage layer (e.g., S3) that are not referenced by any valid snapshot in the table metadata. This cleans up data left behind by failed jobs or uncommitted writes.
+Failed write jobs or uncommitted transactions can leave "orphan" files in your storage bucket that aren't tracked by any metadata.
 
--   **API Endpoint**: `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/maintenance`
--   **Action**: `remove_orphan_files`
--   **Parameters**:
-    -   `older_than_timestamp`: (Optional) Safety buffer; only remove files older than this timestamp.
+-   **Endpoint**: `POST /v1/{prefix}/namespaces/{ns}/tables/{table}/maintenance`
+-   **Payload**:
+    ```json
+    {
+      "action": "remove_orphan_files",
+      "older_than_timestamp": 1735689600000
+    }
+    ```
+-   **Logic**: 
+    1.  Scans the table's storage location.
+    2.  Compares files on disk with those referenced in *all* valid snapshots.
+    3.  Deletes files not mentioned in metadata (subject to the `older_than` safety buffer).
 
-## Usage Example
+---
 
-```bash
-curl -X POST http://localhost:8080/v1/my_catalog/namespaces/db/tables/my_table/maintenance \
-  -H "Content-Type: application/json" \
-  -d '{
-    "action": "expire_snapshots",
-    "retain_last": 5
-  }'
-```
+## 🔐 Permissions Required
 
-## Implementation Details
+To run maintenance operations, the user must have the following permissions:
 
--   **S3Store**: Implements physical deletion of objects from S3.
--   **Postgres/Mongo**: Metadata updates are transactional. Physical file deletion depends on the underlying object store configuration.
+| Operation | Action | Scope |
+| :--- | :--- | :--- |
+| **All Maintenance** | `write` | Asset or Namespace |
+
+> [!IMPORTANT]
+> Because maintenance operations can physically delete data from your cloud storage, it is highly recommended to only grant these permissions to **Service Users** or **Data Administrators**.
+
+---
+
+## 🛠️ Tooling Status
+
+| Interface | Status |
+| :--- | :--- |
+| **REST API** | ✅ Fully Supported |
+| **Python SDK** | ✅ Supported via `table.expire_snapshots()` |
+| **Pangolin CLI** | 🏗️ Coming Soon |
+| **Management UI** | ✅ Supported in Asset Details view |
+
+---
+
+## 🚦 Best Practices
+- **Retention Policy**: Set a standard retention (e.g., 7 days or 100 snapshots) to avoid metadata bloat.
+- **Safety Buffers**: When removing orphan files, always use an `older_than` buffer of at least 24 hours to avoid deleting files from currently running ingest jobs.
+- **Audit Trails**: Monitor maintenance actions in the **Audit Logs** to ensure they are running as scheduled.

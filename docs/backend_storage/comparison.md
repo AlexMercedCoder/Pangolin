@@ -135,9 +135,19 @@ Detailed comparison of PostgreSQL, MongoDB, and SQLite for Pangolin metadata sto
 |---------|-----------|---------|--------|
 | Full-Text Search | ✅ tsvector | ✅ Text indexes | ✅ FTS5 |
 | Geospatial | ✅ PostGIS | ✅ Built-in | ⚠️ Extension |
-| Time Series | ⚠️ TimescaleDB | ✅ Time series | ❌ No |
-| Graph Queries | ⚠️ Extensions | ⚠️ $graphLookup | ❌ No |
+| Multi-Tenancy | ✅ SQL Isolation | ✅ Collection Level | ✅ SQL Isolation |
+| RBAC / TBAC | ✅ Built-in (Migs) | ✅ Supported | ✅ Built-in (Schema) |
+| Audit Logging | ✅ Automated | ✅ Supported | ✅ Automated |
+| Federated Catalogs| ✅ Supported | ✅ Supported | ✅ Supported |
 | JSON Queries | ✅ JSONB operators | ✅ Native | ✅ JSON1 |
+
+### Schema Management
+
+| Feature | PostgreSQL | MongoDB | SQLite |
+|---------|-----------|---------|--------|
+| Auto-Initialization | ✅ Yes (sqlx migs) | ⚠️ Partial (coll only) | ✅ Yes (embedded) |
+| Auto-Migrations | ✅ Yes (sqlx) | ❌ Manual | ❌ Manual (reset req) |
+| Manual Indexing | ❌ Not required | ✅ Essential | ❌ Not required |
 
 ## Decision Matrix
 

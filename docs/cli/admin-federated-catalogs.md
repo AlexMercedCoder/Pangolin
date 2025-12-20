@@ -101,18 +101,45 @@ Testing connection to federated catalog 'fed_catalog_b'...
 Namespaces accessible: ['db_a', 'db_b']
 ```
 
-## Delete Federated Catalog
+### Delete Federated Catalog
+Delete a federated catalog.
 
-Delete a federated catalog (with confirmation):
+**Syntax**:
+```bash
+pangolin-admin delete-federated-catalog <name>
+```
 
+**Example**:
 ```bash
 pangolin-admin delete-federated-catalog fed_catalog_b
 ```
 
-**Example Output:**
+## Operations
+
+### Sync Federated Catalog
+Trigger a manual synchronization of metadata from the remote catalog.
+
+**Syntax**:
+```bash
+pangolin-admin sync-federated-catalog <name>
 ```
-Are you sure you want to delete federated catalog 'fed_catalog_b'? (yes/no): yes
-✅ Federated catalog 'fed_catalog_b' deleted successfully!
+
+**Example**:
+```bash
+pangolin-admin sync-federated-catalog fed_catalog_b
+```
+
+### Get Federated Stats
+View synchronization statistics and health metrics for a federated catalog.
+
+**Syntax**:
+```bash
+pangolin-admin get-federated-stats <name>
+```
+
+**Example**:
+```bash
+pangolin-admin get-federated-stats fed_catalog_b
 ```
 
 ## Use Cases
