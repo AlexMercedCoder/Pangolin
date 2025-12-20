@@ -126,6 +126,7 @@ catalog = load_catalog(
         "uri": "http://localhost:8080",
         "warehouse": "production",
         "token": "your-jwt-token",
+        "header.X-Iceberg-Access-Delegation": "vended-credentials",
     }
 )
 
