@@ -10,121 +10,108 @@ This scenario demonstrates Pangolin's multi-tenant capabilities with authenticat
 
 ## Usage
 
-1. Start the stack:
-   ```bash
-   docker compose up -d
-   ```
-
-2. Access the services:
-   - **Pangolin UI**: http://localhost:3000
-   - **Pangolin API**: http://localhost:8080
-   - **Jupyter Notebook**: http://localhost:8888
-   - **MinIO Console**: http://localhost:9001 (user: `minioadmin`, pass: `minioadmin`)
-
-3. Initial Setup via UI:
-   - Login with `admin` / `password`
-   - Create a Tenant
-   - Create a Tenant Admin user
-   - Create Warehouses and Catalogs within that Tenant
-
-## Getting a Token
-
-You need a JWT token to authenticate with Pangolin. You can get one via:
-
-### Option 1: Via UI
-1. Login to http://localhost:3000
-2. Navigate to your profile
-3. Generate a new token
-4. Copy the token value
-
-### Option 2: Via API
+### 1. Start the Stack
 ```bash
-curl -X POST http://localhost:8080/api/v1/users/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "password": "password"
-  }'
+docker compose up -d
 ```
+*Note: If you encounter "table warehouses has no column named vending_strategy", run `docker compose down -v` to clear stale volumes.*
 
-## Testing with Jupyter Notebook
+### 2. Configure Resources (UI)
+You must create a Tenant and a specific Tenant Admin user to manage resources.
 
-The included Jupyter notebook server has PyIceberg pre-installed and can access Pangolin and MinIO via Docker DNS.
+#### Part A: Create Tenant & Admin
+1. Open **Pangolin UI**: http://localhost:3000
+2. Login as **Root**:
+   - Username: `admin`
+   - Password: `password`
+3. Go to **Tenants** → **Create Tenant**
+   - **Name**: `Acme`
+   - Click **Create**
+4. Go to **Users** (Click "Users" in sidebar or go to http://localhost:3000/users)
+   - Click **Create User**
+   - **Username**: `acme_admin`
+   - **Email**: `admin@acme.com`
+   - **Password**: `Password123`
+   - **Role**: `TenantAdmin` (or `tenant-admin`)
+   - **Tenant**: Select `Acme` (Important!)
+   - Click **Create**
+5. **Logout** (User Icon -> Logout)
 
-1. Open Jupyter at http://localhost:8888
+#### Part B: Create Warehouse & Catalog
+1. Login as **Tenant Admin**:
+   - Username: `acme_admin`
+   - Password: `Password123`
+2. Go to **Warehouses** → **Create Warehouse**
+   - **Name**: `acme_wh`
+   - **Provider**: `AWS S3`
+   - **Bucket**: `warehouse`
+   - **Region**: `us-east-1`
+   - **Endpoint**: `http://minio:9000`
+   - **Access Key**: `minioadmin`
+   - **Secret Key**: `minioadmin`
+   - **Vending Strategy**: `AWS Static` (Ensure "Use STS" is **UNCHECKED**)
+   - Click **Create**
+3. Go to **Catalogs** → **Create Catalog**
+   - **Name**: `acme_cat`
+   - **Warehouse**: `acme_wh`
+   - **Storage Location**: `s3://warehouse/acme`
+   - Click **Create**
 
-2. Get your token (see above)
+#### Part C: Get Access Token
+1. Click **User Icon** (top right) → **Profile**
+2. Click **Generate Token**
+3. Copy the token string.
 
-3. Create a new Python notebook and test the connection:
+### 3. Run PyIceberg Test (Jupyter)
+
+1. Open **Jupyter Notebook**: http://localhost:8888
+2. Create a new **Python 3** notebook.
+3. Run the following code (replace `<YOUR_TOKEN>`):
 
 ```python
 from pyiceberg.catalog import load_catalog
+from pyiceberg.schema import Schema
+from pyiceberg.types import NestedField, StringType, IntegerType
 
-# Replace with your actual token
-TOKEN = "YOUR_JWT_TOKEN_HERE"
+# REPLACE THIS WITH YOUR COPIED TOKEN
+TOKEN = "<YOUR_TOKEN>"
 
-# Connect to Pangolin with authentication
+# Connect to Pangolin
 catalog = load_catalog(
     "pangolin",
     **{
         "type": "rest",
-        "uri": "http://pangolin-api:8080/v1/my_catalog",
+        "uri": "http://pangolin-api:8080/v1/acme_cat",
         "token": TOKEN,
         "header.X-Iceberg-Access-Delegation": "vended-credentials",
     }
 )
 
 # List namespaces
-print(catalog.list_namespaces())
+print(f"Namespaces: {catalog.list_namespaces()}")
 
-# Create a namespace
-catalog.create_namespace("demo")
+# Create namespace
+print("Creating namespace 'acme_ns'...")
+catalog.create_namespace("acme_ns")
 
-# Create a table
-from pyiceberg.schema import Schema
-from pyiceberg.types import NestedField, StringType, IntegerType
-
+# Define Schema
 schema = Schema(
     NestedField(1, "id", IntegerType(), required=True),
-    NestedField(2, "name", StringType(), required=False),
+    NestedField(2, "data", StringType(), required=False),
 )
 
-table = catalog.create_table(
-    "demo.users",
-    schema=schema,
-)
-
+# Create table
+print("Creating table 'acme_ns.test_table'...")
+table = catalog.create_table("acme_ns.test_table", schema=schema)
 print(f"Created table: {table}")
 ```
 
-## PyIceberg Configuration (External)
+## Service URLs
+- **Pangolin UI**: http://localhost:3000
+- **Pangolin API**: http://localhost:8080
+- **Jupyter Notebook**: http://localhost:8888
+- **MinIO Console**: http://localhost:9001 (user: `minioadmin`, pass: `minioadmin`)
 
-If you want to connect from your host machine instead of the Jupyter notebook:
-
-```python
-from pyiceberg.catalog import load_catalog
-
-catalog = load_catalog(
-    "pangolin",
-    **{
-        "type": "rest",
-        "uri": "http://localhost:8080/v1/my_catalog",
-        "token": "YOUR_JWT_TOKEN_HERE",
-        "header.X-Iceberg-Access-Delegation": "vended-credentials",
-        # For external access, you may need to provide S3 credentials
-        # since vended credentials might not work from outside Docker network
-        "s3.endpoint": "http://localhost:9000",
-        "s3.access-key-id": "minioadmin",
-        "s3.secret-access-key": "minioadmin",
-        "s3.region": "us-east-1",
-        "s3.path-style-access": "true",
-    }
-)
-```
-
-## Notes
-
-- Metadata persists in SQLite database stored in Docker volume
-- MinIO data persists in a Docker volume
-- Use the UI to manage tenants, users, and permissions
-- Tokens can be revoked and rotated via the UI
+## Database Info
+- Metadata persists in a SQLite database at `/data/pangolin.db` inside the container.
+- This maps to the `sqlite_data` Docker volume.
