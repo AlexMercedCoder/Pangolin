@@ -1,13 +1,13 @@
 import { apiClient } from './client';
 
 export type PermissionScope = 
-	| { Global: null }
-	| { Catalog: string }
-	| { Namespace: { catalog: string; namespace: string[] } }
-	| { Table: { catalog: string; namespace: string[]; table: string } }
-	| { Tag: string }; // ABAC/TBAC: Tag-based access control
+	| { type: 'tenant' }
+	| { type: 'catalog'; catalog_id: string }
+	| { type: 'namespace'; catalog_id: string; namespace: string }
+	| { type: 'asset'; catalog_id: string; namespace: string; asset_id: string }
+	| { type: 'tag'; tag_name: string };
 
-export type Action = 'Read' | 'Write' | 'Delete' | 'Admin' | 'Create' | 'Update' | 'List' | 'All' | 'IngestBranching' | 'ExperimentalBranching';
+export type Action = 'read' | 'write' | 'delete' | 'create' | 'update' | 'list' | 'all' | 'ingest-branching' | 'experimental-branching' | 'manage-discovery';
 
 export interface Permission {
 	id: string;
@@ -19,7 +19,7 @@ export interface Permission {
 }
 
 export interface GrantPermissionRequest {
-	user_id: string;
+	'user-id': string;
 	scope: PermissionScope;
 	actions: Action[];
 }
@@ -45,25 +45,18 @@ export const permissionsApi = {
 
 // Helper functions for permission scope display
 export function getScopeDisplay(scope: PermissionScope): string {
-	if ('Global' in scope) return 'Global';
-	if ('Catalog' in scope) return `Catalog: ${scope.Catalog}`;
-	if ('Namespace' in scope) {
-		const ns = scope.Namespace;
-		return `Namespace: ${ns.catalog}.${ns.namespace.join('.')}`;
+	if (scope.type === 'tenant') return 'Tenant';
+	if (scope.type === 'catalog') return `Catalog: ${scope.catalog_id.slice(0, 8)}...`;
+	if (scope.type === 'namespace') {
+		return `Namespace: ${scope.catalog_id.slice(0, 8)}.../${scope.namespace}`;
 	}
-	if ('Table' in scope) {
-		const t = scope.Table;
-		return `Table: ${t.catalog}.${t.namespace.join('.')}.${t.table}`;
+	if (scope.type === 'asset') {
+		return `Asset: ${scope.catalog_id.slice(0, 8)}.../${scope.namespace}/${scope.asset_id.slice(0, 8)}...`;
 	}
-	if ('Tag' in scope) return `Tag: ${scope.Tag}`;
+	if (scope.type === 'tag') return `Tag: ${scope.tag_name}`;
 	return 'Unknown';
 }
 
-export function getScopeType(scope: PermissionScope): 'Global' | 'Catalog' | 'Namespace' | 'Table' | 'Tag' {
-	if ('Global' in scope) return 'Global';
-	if ('Catalog' in scope) return 'Catalog';
-	if ('Namespace' in scope) return 'Namespace';
-	if ('Table' in scope) return 'Table';
-	if ('Tag' in scope) return 'Tag';
-	return 'Global';
+export function getScopeType(scope: PermissionScope): 'tenant' | 'catalog' | 'namespace' | 'asset' | 'tag' {
+	return scope.type;
 }

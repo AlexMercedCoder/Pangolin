@@ -62,7 +62,7 @@
 		}
 
 		// Admin-only routes (Root or TenantAdmin)
-		const adminRoutes = ['/users', '/warehouses', '/roles', '/admin/requests'];
+		const adminRoutes = ['/users', '/warehouses', '/roles', '/admin/requests', '/admin/audit'];
 		if (adminRoutes.some(r => path === r || path.startsWith(r + '/')) && !$isRoot && !$isTenantAdmin) {
 			goto('/');
 		}
@@ -166,6 +166,33 @@
 								<span>Tenants</span>
 							{/if}
 						</a>
+						<a
+							href="/admin/settings"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">⚙️</span>
+							{#if sidebarOpen}
+								<span>System Config</span>
+							{/if}
+						</a>
+						<a
+							href="/admin/tokens"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">🔑</span>
+							{#if sidebarOpen}
+								<span>Tokens</span>
+							{/if}
+						</a>
+						<a
+							href="/admin/audit"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">📋</span>
+							{#if sidebarOpen}
+								<span>Audit Logs</span>
+							{/if}
+						</a>
 						{/if}
 						
 						{#if !$isRoot}
@@ -214,6 +241,42 @@
 							<span class="text-xl">📫</span>
 							{#if sidebarOpen}
 								<span>Access Requests</span>
+							{/if}
+						</a>
+						<a
+							href="/admin/service-users"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">🤖</span>
+							{#if sidebarOpen}
+								<span>Service Users</span>
+							{/if}
+						</a>
+						<a
+							href="/admin/tokens"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">🔑</span>
+							{#if sidebarOpen}
+								<span>Tokens</span>
+							{/if}
+						</a>
+						<a
+							href="/admin/settings"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">⚙️</span>
+							{#if sidebarOpen}
+								<span>System Config</span>
+							{/if}
+						</a>
+						<a
+							href="/admin/audit"
+							class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+						>
+							<span class="text-xl">📋</span>
+							{#if sidebarOpen}
+								<span>Audit Logs</span>
 							{/if}
 						</a>
 						{/if}

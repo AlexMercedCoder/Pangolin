@@ -19,4 +19,10 @@ export const tokensApi = {
 		const response = await apiClient.delete<void>(`/api/v1/tokens/${tokenId}`);
 		if (response.error) throw new Error(response.error.message);
 	},
+
+	async rotate(): Promise<{ token: string; expires_at: string; tenant_id: string }> {
+		const response = await apiClient.post<{ token: string; expires_at: string; tenant_id: string }>('/api/v1/tokens/rotate', {});
+		if (response.error) throw new Error(response.error.message);
+		return response.data!;
+	}
 };

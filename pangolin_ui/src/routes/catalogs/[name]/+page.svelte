@@ -4,15 +4,35 @@
 	import { page } from '$app/stores';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
-	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
-	import { icebergApi } from '$lib/api/iceberg';
+    import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+    import { icebergApi } from '$lib/api/iceberg';
     import Input from '$lib/components/ui/Input.svelte';
     import Modal from '$lib/components/ui/Modal.svelte';
+    import FederatedControls from '$lib/components/catalogs/FederatedControls.svelte';
+    import { catalogsApi, type Catalog } from '$lib/api/catalogs';
+    import { branchesApi, type Branch } from '$lib/api/branches';
+    import { notifications } from '$lib/stores/notifications';
+    import { isTenantAdmin } from '$lib/stores/auth';
+    import MergeBranchModal from '$lib/components/merges/MergeBranchModal.svelte';
+
+    let catalog: Catalog | null = null;
+    let loading = false;
+    let deleting = false;
+    let showDeleteDialog = false;
+    let showMergeModal = false;
+    let branches: any[] = [];
+    let selectedBranch = 'main';
 
     let namespaces: string[] = [];
     let showNamespaceModal = false;
     let newNamespaceName = '';
     let creatingNamespace = false;
+
+    $: catalogName = $page.params.name || '';
+
+    $: if (catalogName) {
+        loadCatalog();
+    }
 
 	async function loadCatalog() {
 		if (!catalogName) return;
@@ -223,6 +243,16 @@
 				</dl>
 			</Card>
 		{/if}
+
+        {#if catalog.catalog_type === 'Federated'}
+            <FederatedControls 
+                {catalogName} 
+                on:sync={() => {
+                    loadNamespaces();
+                    loadBranches();
+                }}
+            />
+        {/if}
 
 		<!-- Branch Management Card -->
 		<Card>

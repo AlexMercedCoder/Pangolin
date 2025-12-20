@@ -19,7 +19,7 @@
 
     // Grant State
     let newPerm = {
-        scopeType: 'Catalog',
+        scopeType: 'catalog' as 'tenant' | 'catalog' | 'namespace' | 'asset' | 'tag',
         catalogId: '',
         namespace: '',
         assetId: '',
@@ -27,8 +27,8 @@
         actions: [] as string[]
     };
 
-    const SCOPES = ['Catalog', 'Namespace', 'Asset', 'Tag'];
-    const ACTIONS = ['read', 'write', 'delete', 'create', 'update', 'list', 'all', 'ingest-branching', 'experimental-branching'];
+    const SCOPES = ['tenant', 'catalog', 'namespace', 'asset', 'tag'];
+    const ACTIONS = ['read', 'write', 'delete', 'create', 'update', 'list', 'all', 'ingest-branching', 'experimental-branching', 'manage-discovery'];
 
     async function fetchUsers() {
         const res = await fetch('/api/v1/users', { headers: { 'Authorization': `Bearer ${$token}` } });
@@ -38,7 +38,7 @@
     async function fetchPermissions(userId: string) {
         loading = true;
         try {
-            const res = await fetch(`/api/v1/permissions/user/${userId}`, { headers: { 'Authorization': `Bearer ${$token}` } });
+            const res = await fetch(`/api/v1/users/${userId}/permissions`, { headers: { 'Authorization': `Bearer ${$token}` } });
             if (res.ok) userPermissions = await res.json();
         } finally { loading = false; }
     }
@@ -52,13 +52,14 @@
         if (!selectedUser) return;
         
         let scope: any = { type: newPerm.scopeType };
-        if (newPerm.scopeType === 'Catalog') scope.catalog_id = newPerm.catalogId;
-        if (newPerm.scopeType === 'Namespace') { scope.catalog_id = newPerm.catalogId; scope.namespace = newPerm.namespace; }
-        if (newPerm.scopeType === 'Asset') { scope.catalog_id = newPerm.catalogId; scope.namespace = newPerm.namespace; scope.asset_id = newPerm.assetId; }
-        if (newPerm.scopeType === 'Tag') { scope.tag_name = newPerm.tagName; }
+        if (newPerm.scopeType === 'catalog') scope.catalog_id = newPerm.catalogId;
+        if (newPerm.scopeType === 'namespace') { scope.catalog_id = newPerm.catalogId; scope.namespace = newPerm.namespace; }
+        if (newPerm.scopeType === 'asset') { scope.catalog_id = newPerm.catalogId; scope.namespace = newPerm.namespace; scope.asset_id = newPerm.assetId; }
+        if (newPerm.scopeType === 'tag') { scope.tag_name = newPerm.tagName; }
+        if (newPerm.scopeType === 'tenant') { /* no additional fields */ }
 
         const payload = {
-            user_id: selectedUser.id,
+            'user-id': selectedUser.id,
             scope,
             actions: newPerm.actions
         };
@@ -191,28 +192,31 @@
                     </select>
                 </div>
                 
-                {#if newPerm.scopeType === 'Catalog' || newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                {#if newPerm.scopeType === 'catalog' || newPerm.scopeType === 'namespace' || newPerm.scopeType === 'asset'}
                     <div class="form-group">
-                        <label>Catalog ID</label>
-                        <input bind:value={newPerm.catalogId} placeholder="UUID" />
+                        <label>Catalog ID (UUID)</label>
+                        <input bind:value={newPerm.catalogId} placeholder="e.g., 550e8400-e29b-41d4-a716-446655440000" />
+                        <small class="hint">Get catalog ID from the catalogs list page</small>
                     </div>
                 {/if}
-                {#if newPerm.scopeType === 'Namespace' || newPerm.scopeType === 'Asset'}
+                {#if newPerm.scopeType === 'namespace' || newPerm.scopeType === 'asset'}
                     <div class="form-group">
                         <label>Namespace</label>
-                        <input bind:value={newPerm.namespace} placeholder="marketing.sales" />
+                        <input bind:value={newPerm.namespace} placeholder="e.g., data or marketing.sales" />
+                        <small class="hint">Use dot notation for nested namespaces</small>
                     </div>
                 {/if}
-                {#if newPerm.scopeType === 'Asset'}
+                {#if newPerm.scopeType === 'asset'}
                     <div class="form-group">
-                        <label>Asset ID</label>
-                        <input bind:value={newPerm.assetId} placeholder="UUID" />
+                        <label>Asset ID (UUID)</label>
+                        <input bind:value={newPerm.assetId} placeholder="e.g., 660e8400-e29b-41d4-a716-446655440001" />
+                        <small class="hint">Get asset ID from the asset detail page</small>
                     </div>
                 {/if}
-                {#if newPerm.scopeType === 'Tag'}
+                {#if newPerm.scopeType === 'tag'}
                      <div class="form-group">
                         <label>Tag Name</label>
-                        <input bind:value={newPerm.tagName} placeholder="pii" />
+                        <input bind:value={newPerm.tagName} placeholder="e.g., pii, public, sensitive" />
                     </div>
                 {/if}
                 
@@ -322,6 +326,7 @@
     .form-group { margin-bottom: 1rem; }
     .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.875rem; }
     .form-group input, select { width: 100%; padding: 0.75rem; border-radius: 4px; border: 1px solid var(--md-sys-color-outline); background: var(--md-sys-color-surface-container-highest); color: inherit; box-sizing: border-box; }
+    .form-group .hint { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); font-style: italic; }
 
     .actions-select { display: flex; flex-wrap: wrap; gap: 0.5rem; }
     .chip {

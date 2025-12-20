@@ -2,156 +2,99 @@
 
 Pangolin supports the following environment variables for configuration:
 
-## Core Configuration
+## Core API Configuration
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `RUST_LOG` | Log level (`error`, `warn`, `info`, `debug`, `trace`) | `info` | No |
+| `PORT` | The port the API server will listen on. | `8080` | No |
+| `RUST_LOG` | Log level (`error`, `warn`, `info`, `debug`, `trace`). | `info` | No |
 
 ## Backend Storage (Metadata Persistence)
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `DATABASE_URL` | Full connection string (e.g., `postgresql://...`, `mongodb://...`, `sqlite://...`). Primary driver for storage selection. | - | Yes |
-| `PANGOLIN_STORAGE_TYPE` | Legacy backend selector (falling back to `DATABASE_URL` if present). Options: `memory`, `postgres`, `mongo`, `sqlite`. | `memory` | No |
+Pangolin determines the storage backend based on the following variables (in order of priority):
 
-**Supported Backends**:
-- **PostgreSQL**: `postgresql://user:password@host:port/database`
-- **MongoDB**: `mongodb://user:password@host:port/database`
-- **SQLite**: `sqlite:///path/to/pangolin.db` or `sqlite::memory:`
+1. **`DATABASE_URL`**: If present, the driver is inferred from the scheme:
+   - `postgresql://` or `postgres://` -> **PostgreSQL**
+   - `mongodb://` or `mongodb+srv://` -> **MongoDB**
+   - `sqlite://` or a path ending in `.db` -> **SQLite**
+2. **`PANGOLIN_STORAGE_TYPE`**: Fallback if `DATABASE_URL` is missing. Options: `memory` (default), `postgres`, `mongo`, `sqlite`.
 
-See [Backend Storage Documentation](../backend_storage/README.md) for detailed configuration.
+### Specific Backend Vars:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MONGO_DB_NAME` | Database name to use when using MongoDB. | `pangolin` |
+
+---
 
 ## Authentication & Security
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `PANGOLIN_NO_AUTH` | Enable "Evaluation Mode" (disables JWT/Key checks, defaults to TenantAdmin in `default` tenant). Must be set to exactly `"true"` (case-insensitive) to enable. | `false` | No |
-| `PANGOLIN_JWT_SECRET` | Secret key for signing and verifying JWT tokens. | `default_secret` | For JWT auth |
-| `PANGOLIN_ADMIN_USER` | Auto-provisioned Tenant Admin for `default` tenant when `PANGOLIN_NO_AUTH=true`. | `tenant_admin` | No |
-| `PANGOLIN_ADMIN_PASSWORD`| Password for the auto-provisioned Tenant Admin. | `password123` | No |
-| `PANGOLIN_ROOT_USER` | Global Root User (enables Basic Auth and fallback login for system management). | `admin` | For initial setup |
-| `PANGOLIN_ROOT_PASSWORD` | Password for the Global Root User. | `password` | For initial setup |
+| `PANGOLIN_NO_AUTH` | **Evaluation Mode**. Disables JWT/Key checks and auto-provision a default session. MUST be `"true"` to enable. | `false` | No |
+| `PANGOLIN_JWT_SECRET` | Secret key for signing/verifying JWT tokens. Should be a long random string. | `default_secret` | For JWT Auth |
+| `PANGOLIN_SEED_ADMIN` | If `"true"`, auto-provision a Tenant Admin on startup (even if `NO_AUTH` is false). | `false` | No |
+| `PANGOLIN_ADMIN_USER` | Username for auto-provisioned Admin (used with `NO_AUTH` or `SEED_ADMIN`). | `tenant_admin` | No |
+| `PANGOLIN_ADMIN_PASSWORD`| Password for auto-provisioned Admin. | `password123` | No |
+| `PANGOLIN_ROOT_USER` | Initial Root user for multi-tenant management bootstrapping. | `admin` | No |
+| `PANGOLIN_ROOT_PASSWORD` | Password for the initial Root user. | `password` | No |
+
+---
 
 ## OAuth 2.0 Configuration
+Used for User/Provider authentication flows.
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth client ID | - | For Google OAuth |
-| `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth client secret | - | For Google OAuth |
-| `OAUTH_MICROSOFT_CLIENT_ID` | Microsoft OAuth client ID | - | For Microsoft OAuth |
-| `OAUTH_MICROSOFT_CLIENT_SECRET` | Microsoft OAuth client secret | - | For Microsoft OAuth |
-| `OAUTH_GITHUB_CLIENT_ID` | GitHub OAuth client ID | - | For GitHub OAuth |
-| `OAUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth client secret | - | For GitHub OAuth |
+| Variable | Description |
+|----------|-------------|
+| `OAUTH_GOOGLE_CLIENT_ID` | Google OAuth Client ID |
+| `OAUTH_GOOGLE_CLIENT_SECRET` | Google OAuth Secret |
+| `OAUTH_MICROSOFT_CLIENT_ID` | Microsoft OAuth Client ID |
+| `OAUTH_MICROSOFT_CLIENT_SECRET` | Microsoft OAuth Secret |
+| `OAUTH_GITHUB_CLIENT_ID` | GitHub OAuth Client ID |
+| `OAUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth Secret |
 
-## S3 Storage Configuration
+---
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `PANGOLIN_S3_BUCKET` | S3 bucket name | `pangolin` | For S3 storage |
-| `PANGOLIN_S3_PREFIX` | S3 prefix for data | `data` | No |
-| `AWS_ACCESS_KEY_ID` | AWS access key ID | - | For S3 storage |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret access key | - | For S3 storage |
-| `AWS_REGION` | AWS region | `us-east-1` | No |
-| `AWS_ENDPOINT_URL` | S3 endpoint URL (for MinIO) | - | For MinIO |
-| `AWS_ALLOW_HTTP` | Allow HTTP for S3 (true/false) | `false` | No |
+## Default Storage (fallback for Local Catalog)
+These variables configure the default S3-compatible storage if no specific warehouse is configured.
 
-## Azure Blob Storage Configuration
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `PANGOLIN_S3_BUCKET` | Default S3 bucket name. | `pangolin` |
+| `PANGOLIN_S3_PREFIX` | Default prefix for data files. | `data` |
+| `AWS_ACCESS_KEY_ID` | AWS/MinIO access key. | - |
+| `AWS_SECRET_ACCESS_KEY` | AWS/MinIO secret key. | - |
+| `AWS_REGION` | AWS region. | `us-east-1` |
+| `AWS_ENDPOINT_URL` | S3 endpoint override (required for MinIO). | - |
+| `AWS_ALLOW_HTTP` | Set to `true` to allow non-HTTPS connections. | `false` |
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `AZURE_STORAGE_ACCOUNT_NAME` | Azure storage account name | - | For Azure storage |
-| `AZURE_STORAGE_ACCOUNT_KEY` | Azure storage account key | - | For Azure storage |
-| `AZURE_STORAGE_CONTAINER` | Azure blob container name | `pangolin` | No |
+---
 
-## Google Cloud Storage Configuration
+## Warehouse Providers (Per-Warehouse Config)
+Most storage settings (Azure Account Key, GCP Key, AWS STS Role) are configured **per-warehouse** via the API/CLI and stored in the metadata backend, rather than environment variables.
 
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `GOOGLE_SERVICE_ACCOUNT_PATH` | Path to GCP service account JSON | - | For GCS storage |
-| `GCS_BUCKET` | GCS bucket name | `pangolin` | For GCS storage |
+### Azure Blob Storage
+Configured in Warehouse `storage_config`:
+- `AZURE_STORAGE_ACCOUNT_NAME`
+- `AZURE_STORAGE_ACCOUNT_KEY`
+- `AZURE_STORAGE_CONTAINER`
 
-## Cloud Provider Credential Vending
+### Google Cloud Storage
+Configured in Warehouse `storage_config`:
+- `GOOGLE_SERVICE_ACCOUNT_PATH`
+- `GCS_BUCKET`
 
-### AWS STS Configuration
-
-For AWS STS AssumeRole credential vending:
-
-| Variable | Description | Default | Required |
-|----------|-------------|---------|----------|
-| `AWS_ACCESS_KEY_ID` | AWS access key for STS API calls | - | For AWS STS |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key for STS API calls | - | For AWS STS |
-| `AWS_REGION` | AWS region | `us-east-1` | No |
-
-**Note**: Warehouse-specific configuration (role ARN, external ID) is stored in the warehouse `storage_config`.
-
-### Azure OAuth2 Configuration
-
-Azure OAuth2 credentials are configured per-warehouse in the `storage_config`:
-- `tenant_id` - Azure AD tenant ID
-- `client_id` - Azure AD application (client) ID
-- `client_secret` - Azure AD client secret
-
-### GCP Service Account Configuration
-
-GCP service account keys are configured per-warehouse in the `storage_config`:
-- `service_account_key` - GCP service account JSON key
-- `project_id` - GCP project ID
-
-## Service Users (New)
-
-Service users use API keys for authentication. No additional environment variables required - API keys are managed via the API.
-
-## Federated Catalogs (New)
-
-Federated catalog credentials are stored in the catalog configuration. No additional environment variables required.
-
-## Example Configuration
-
-### Development (Memory Store, No Auth)
-```bash
-export RUST_LOG=debug
-export PANGOLIN_NO_AUTH=true  # Must be exactly "true" (case-insensitive)
-export PANGOLIN_STORAGE_TYPE=memory
-```
-
-> **Security Note**: `PANGOLIN_NO_AUTH` must be set to exactly `"true"` (case-insensitive) to enable NO_AUTH mode. Setting it to `"false"`, `"0"`, or any other value will keep authentication enabled. This prevents accidental exposure of data.
-
-### Production (S3 Storage, JWT Auth)
-```bash
-export RUST_LOG=info
-export PANGOLIN_STORAGE_TYPE=s3
-export PANGOLIN_S3_BUCKET=my-lakehouse-bucket
-export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-export AWS_REGION=us-west-2
-export PANGOLIN_JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-export PANGOLIN_ROOT_USER=admin
-export PANGOLIN_ROOT_PASSWORD=secure-password
-```
-
-### Production (PostgreSQL, OAuth)
-```bash
-export RUST_LOG=info
-export PANGOLIN_STORAGE_TYPE=postgres
-export DATABASE_URL=postgresql://user:password@localhost:5432/pangolin
-export PANGOLIN_JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-export OAUTH_GOOGLE_CLIENT_ID=your-google-client-id
-export OAUTH_GOOGLE_CLIENT_SECRET=your-google-client-secret
-```
+---
 
 ## Security Best Practices
 
-1. **Never commit secrets to version control**
-2. **Use strong JWT secrets** (minimum 32 characters, random)
-3. **Rotate credentials regularly**
-4. **Use environment-specific configurations**
-5. **Enable HTTPS in production**
-6. **Disable `PANGOLIN_NO_AUTH` in production**
+1. **Production Mode**: Ensure `PANGOLIN_NO_AUTH` is NOT set or set to `false`.
+2. **JWT Secret**: Use a 32+ character random string in production.
+3. **Database Security**: Prefer `DATABASE_URL` with encrypted connections for production backends.
+4. **Bootstrapping**: Use `PANGOLIN_ROOT_USER/PASSWORD` only for the first login to create your real Tenant Admins, then consider rotating or disabling it.
 
-## Related Documentation
+---
 
-- [Configuration](./configuration.md) - Detailed configuration guide
-- [Authentication Setup](../setup/authentication.md) - JWT and OAuth setup
-- [Service Users](../service_users.md) - API key authentication
-- [Deployment](./deployment.md) - Production deployment guide
+**Related Documentation**:
+- [Architecture Overview](../architecture/architecture.md)
+- [Authentication Guide](../authentication.md)
+- [Deployment Guide](./deployment.md)

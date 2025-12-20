@@ -3,16 +3,22 @@
 	import { page } from '$app/stores';
 	import { authApi } from '$lib/api/auth';
 	import { usersApi, type User } from '$lib/api/users';
+	import { tokensApi, type TokenInfo } from '$lib/api/tokens'; // Added
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
 	import { notifications } from '$lib/stores/notifications';
+	import { authStore } from '$lib/stores/auth'; // Added
+	import { get } from 'svelte/store'; // Added
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Modal from '$lib/components/ui/Modal.svelte';
+	import TokenList from '$lib/components/tokens/TokenList.svelte'; // Added
+	import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte'; // Added
 
 	const userId = $page.params.id as string;
 	let user: User | null = null;
 	let tenants: Tenant[] = [];
-	
+	let tokens: TokenInfo[] = []; // Added
+
 	let loading = true;
 	let generating = false;
 	
@@ -20,6 +26,9 @@
 	let selectedExpiry = 24;
 	let generatedToken: string | null = null;
 	let showTokenModal = false;
+	
+	let showConfirmDialog = false; // Added
+	let tokenToRevoke: TokenInfo | null = null; // Added
 
 	let expiryOptions = [
 		{ value: 1, label: '1 Hour' },
@@ -36,14 +45,15 @@
 	async function loadData() {
 		loading = true;
 		try {
-			const [userData, tenantsData] = await Promise.all([
+			const [userData, tenantsData, tokensData] = await Promise.all([
 				usersApi.get(userId),
-				tenantsApi.list()
+				tenantsApi.list(),
+				tokensApi.listUserTokens(userId) // Added
 			]);
 			user = userData;
 			tenants = tenantsData;
+			tokens = tokensData; // Added
 			
-			// Pre-select tenant if user belongs to one
 			if (user?.tenant_id && tenants.find(t => t.id === user?.tenant_id)) {
 				selectedTenantId = user.tenant_id;
 			} else if (tenants.length > 0) {
@@ -55,6 +65,15 @@
 			loading = false;
 		}
 	}
+    
+    // Added function to reload only tokens
+    async function loadTokens() {
+        try {
+            tokens = await tokensApi.listUserTokens(userId);
+        } catch (e) {
+            console.error('Failed to reload tokens', e);
+        }
+    }
 
 	async function handleGenerate() {
 		if (!selectedTenantId) {
@@ -69,13 +88,13 @@
 			const response = await authApi.generateToken({
 				tenant_id: selectedTenantId,
 				username: user.username,
-				// We don't specify roles, letting the backend assign the user's current role
 				expires_in_hours: selectedExpiry
 			});
 
 			generatedToken = response.token;
 			showTokenModal = true;
 			notifications.success('Token generated successfully');
+            await loadTokens(); // Reload list
 		} catch (error: any) {
 			notifications.error(`Failed to generate token: ${error.message}`);
 		} finally {
@@ -98,6 +117,51 @@
 			}
 		}
 	}
+
+    // Added revocation logic
+    function handleRevoke(event: CustomEvent<TokenInfo>) {
+        tokenToRevoke = event.detail;
+        showConfirmDialog = true;
+    }
+
+    async function confirmRevoke() {
+        if (!tokenToRevoke) return;
+        try {
+            await tokensApi.deleteToken(tokenToRevoke.id);
+            notifications.success('Token revoked successfully');
+            await loadTokens();
+        } catch (e: any) {
+             notifications.error(`Failed to revoke token: ${e.message}`);
+        } finally {
+            showConfirmDialog = false;
+            tokenToRevoke = null;
+        }
+    }
+
+    let showRotateConfirmDialog = false;
+    async function confirmRotate() {
+        loading = true;
+        showRotateConfirmDialog = false;
+        try {
+            const res = await tokensApi.rotate();
+            
+            authStore.updateSession(res.token, {
+                id: get(authStore).user?.id || '',
+                username: get(authStore).user?.username || '',
+                email: get(authStore).user?.email || '',
+                role: get(authStore).user?.role || 'tenant-user',
+                tenant_id: res.tenant_id,
+                created_at: get(authStore).user?.created_at || new Date().toISOString()
+            } as any);
+            
+            notifications.success('Token rotated successfully. Session updated.');
+            await loadTokens();
+        } catch (e: any) {
+            notifications.error(`Failed to rotate token: ${e.message}`);
+        } finally {
+            loading = false;
+        }
+    }
 </script>
 
 <svelte:head>
@@ -114,6 +178,13 @@
 				</p>
 			{/if}
 		</div>
+		<div class="flex gap-2">
+			{#if user && user.id === get(authStore).user?.id}
+				<Button variant="secondary" on:click={() => showRotateConfirmDialog = true} disabled={loading}>
+					Rotate Current Session
+				</Button>
+			{/if}
+		</div>
 	</div>
 
 	{#if loading}
@@ -121,50 +192,61 @@
 			<div class="w-8 h-8 border-3 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
 		</div>
 	{:else if user}
-		<div class="max-w-xl">
+		<div class="space-y-6">
 			<Card>
-				<h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Generate New Token</h2>
-				<div class="space-y-4">
-					<div>
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant <span class="text-red-500">*</span></label>
-						<select 
-							bind:value={selectedTenantId}
-							class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500"
-						>
-							<option value="" disabled>Select a tenant</option>
-							{#each tenants as tenant}
-								<option value={tenant.id}>{tenant.name}</option>
-							{/each}
-						</select>
-						{#if !selectedTenantId}
-							<p class="mt-1 text-xs text-red-500">Please select a tenant context for this token.</p>
-						{/if}
-					</div>
-
-					<div>
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In</label>
-						<select 
-							bind:value={selectedExpiry}
-							class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500"
-						>
-							{#each expiryOptions as option}
-								<option value={option.value}>{option.label}</option>
-							{/each}
-						</select>
-					</div>
-
-					<div class="pt-2">
-						<Button 
-							variant="primary" 
-							fullWidth={true} 
-							disabled={generating || !selectedTenantId}
-							on:click={handleGenerate}
-						>
-							{generating ? 'Generating...' : 'Generate Token'}
-						</Button>
-					</div>
-				</div>
+				<h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Active Tokens</h2>
+				<TokenList 
+					{tokens} 
+					{loading} 
+					on:revoke={handleRevoke} 
+				/>
 			</Card>
+
+			<div class="max-w-xl">
+				<Card>
+					<h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Generate New Token</h2>
+					<div class="space-y-4">
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant <span class="text-red-500">*</span></label>
+							<select 
+								bind:value={selectedTenantId}
+								class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+							>
+								<option value="" disabled>Select a tenant</option>
+								{#each tenants as tenant}
+									<option value={tenant.id}>{tenant.name}</option>
+								{/each}
+							</select>
+							{#if !selectedTenantId}
+								<p class="mt-1 text-xs text-red-500">Please select a tenant context for this token.</p>
+							{/if}
+						</div>
+
+						<div>
+							<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Expires In</label>
+							<select 
+								bind:value={selectedExpiry}
+								class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+							>
+								{#each expiryOptions as option}
+									<option value={option.value}>{option.label}</option>
+								{/each}
+							</select>
+						</div>
+
+						<div class="pt-2">
+							<Button 
+								variant="primary" 
+								fullWidth={true} 
+								disabled={generating || !selectedTenantId}
+								on:click={handleGenerate}
+							>
+								{generating ? 'Generating...' : 'Generate Token'}
+							</Button>
+						</div>
+					</div>
+				</Card>
+			</div>
 		</div>
 	{:else}
 		<div class="text-center py-12 text-gray-500">
@@ -172,6 +254,28 @@
 		</div>
 	{/if}
 </div>
+
+{#if showConfirmDialog}
+	<ConfirmDialog
+		bind:open={showConfirmDialog}
+		title="Revoke Token"
+		message="Are you sure you want to revoke this token? This action cannot be undone."
+		confirmText="Revoke"
+		variant="danger"
+		onConfirm={confirmRevoke}
+	/>
+{/if}
+
+{#if showRotateConfirmDialog}
+	<ConfirmDialog
+		bind:open={showRotateConfirmDialog}
+		title="Rotate Current Session"
+		message="Are you sure you want to rotate your current session token? A new token will be generated and your session will be updated locally."
+		confirmText="Rotate"
+		variant="primary"
+		onConfirm={confirmRotate}
+	/>
+{/if}
 
 <Modal open={showTokenModal} title="Token Generated" on:close={closeTokenModal}>
 	<div class="space-y-4">

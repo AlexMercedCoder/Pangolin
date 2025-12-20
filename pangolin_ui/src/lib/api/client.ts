@@ -2,7 +2,7 @@ import { TENANT_STORAGE_KEY } from '$lib/stores/tenant';
 
 import { env } from '$env/dynamic/public';
 
-const API_URL = env.PUBLIC_API_URL || 'http://127.0.0.1:8080';
+const API_URL = env.PUBLIC_API_URL || 'http://localhost:8080';
 
 export interface ApiError {
 	message: string;

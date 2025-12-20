@@ -18,7 +18,7 @@ export interface AccessRequest {
     asset_id: string; // UUID
     reason?: string;
     requested_at: string;
-    status: 'Pending' | 'Approved' | 'Rejected';
+    status: 'pending' | 'approved' | 'rejected';
     reviewed_by?: string; // UUID
     reviewed_at?: string;
     review_comment?: string;
@@ -29,7 +29,7 @@ export interface CreateAccessRequestPayload {
 }
 
 export interface UpdateRequestStatus {
-    status: 'Approved' | 'Rejected';
+    status: 'approved' | 'rejected';
     comment?: string;
 }
 
@@ -55,7 +55,7 @@ export const businessMetadataApi = {
 
     // Access Request Operations
     requestAccess: async (assetId: string, payload: CreateAccessRequestPayload): Promise<AccessRequest> => {
-        const response = await apiClient.post<AccessRequest>(`/api/v1/assets/${assetId}/request-access`, payload);
+        const response = await apiClient.post<AccessRequest>(`/api/v1/assets/${assetId}/access-requests`, payload);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
     },

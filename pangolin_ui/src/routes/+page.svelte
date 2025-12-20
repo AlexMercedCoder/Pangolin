@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Card from '$lib/components/ui/Card.svelte';
+	import GettingStarted from '$lib/components/dashboard/GettingStarted.svelte';
     import Button from '$lib/components/ui/Button.svelte';
     import Modal from '$lib/components/ui/Modal.svelte';
     import Input from '$lib/components/ui/Input.svelte';
@@ -98,48 +99,7 @@
 	</div>
 
 	<div class="grid grid-cols-1 gap-6">
-		<Card title="Getting Started with PyIceberg">
-			<div class="space-y-4">
-				<p class="text-gray-600 dark:text-gray-400">
-					Use the following configuration to connect to your Pangolin catalog using PyIceberg.
-				</p>
-				
-				<div class="bg-gray-900 rounded-lg p-4 overflow-x-auto relative group">
-                    <button 
-                        class="absolute top-2 right-2 p-2 bg-gray-800 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-700"
-                        on:click={() => {
-                            const code = `from pyiceberg.catalog import load_catalog
-
-catalog = load_catalog("pangolin", **{
-    "uri": "http://${location.hostname}:8080",
-    "s3.endpoint": "http://${location.hostname}:9000",
-    "py-iceberg.catalog-impl": "pyiceberg.catalog.rest.RestCatalog",
-    "header.X-Pangolin-Tenant": "${$user?.tenant_id || '<YOUR_TENANT_ID>'}",
-    "token": "<YOUR_ACCESS_TOKEN>"
-})`;
-                            navigator.clipboard.writeText(code);
-                        }}
-                    >
-                        Copy
-                    </button>
-					<pre class="text-sm text-gray-300 font-mono"><code>from pyiceberg.catalog import load_catalog
-
-catalog = load_catalog("pangolin", **{"{"}
-    "uri": "http://{typeof location !== 'undefined' ? location.hostname : 'localhost'}:8080/api/v1/catalogs/&lt;CATALOG_NAME&gt;",
-    "s3.endpoint": "http://{typeof location !== 'undefined' ? location.hostname : 'localhost'}:9000",
-    "py-iceberg.catalog-impl": "pyiceberg.catalog.rest.RestCatalog",
-    "header.X-Pangolin-Tenant": "{$user?.tenant_id || '&lt;YOUR_TENANT_ID&gt;'}",
-    "token": "&lt;YOUR_ACCESS_TOKEN&gt;"
-{"}"})</code></pre>
-				</div>
-                
-                <div class="bg-blue-50 dark:bg-blue-900/30 p-4 rounded-md border border-blue-200 dark:border-blue-800">
-                    <p class="text-sm text-blue-700 dark:text-blue-300">
-                        <strong>Note:</strong> Generate a token above to authenticate your client. Replace <code>&lt;CATALOG_NAME&gt;</code> with your specific catalog.
-                    </p>
-                </div>
-			</div>
-		</Card>
+		<GettingStarted />
 	</div>
 </div>
 

@@ -194,6 +194,19 @@ function createAuthStore() {
 				localStorage.removeItem('auth_user');
 			}
 		},
+		updateSession(token: string, user: User) {
+			update(state => ({
+				...state,
+				token,
+				user,
+				isAuthenticated: true,
+			}));
+
+			if (browser) {
+				localStorage.setItem('auth_token', token);
+				localStorage.setItem('auth_user', JSON.stringify(user));
+			}
+		},
 	};
 }
 

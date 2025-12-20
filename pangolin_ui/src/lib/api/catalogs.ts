@@ -79,4 +79,23 @@ export const catalogsApi = {
 		if (response.error) throw new Error(response.error.message);
 		return response.data!;
 	},
+
+    async getStats(name: string): Promise<SyncStats> {
+        const response = await apiClient.get<SyncStats>(`/api/v1/federated-catalogs/${encodeURIComponent(name)}/stats`);
+        if (response.error) throw new Error(response.error.message);
+        return response.data!;
+    },
+
+    async sync(name: string): Promise<void> {
+        const response = await apiClient.post<void>(`/api/v1/federated-catalogs/${encodeURIComponent(name)}/sync`, {});
+        if (response.error) throw new Error(response.error.message);
+    }
 };
+
+export interface SyncStats {
+    last_synced_at?: string;
+    sync_status: string;
+    tables_synced: number;
+    namespaces_synced: number;
+    error_message?: string;
+}

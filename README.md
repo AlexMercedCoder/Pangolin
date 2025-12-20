@@ -55,33 +55,30 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 
 ## 📚 Documentation Index
 
-### 🎯 1. Getting Started
-- [Quick Start Guide](docs/getting-started/getting_started.md) - Get running in 5 minutes.
-- [Configuration](docs/getting-started/configuration.md) - Server configuration options.
-- [Environment Variables](docs/getting-started/env_vars.md) - Complete env var reference.
-- [Client Configuration](docs/getting-started/client_configuration.md) - PyIceberg, Spark, and Trino setup.
+### 🏁 1. Getting Started
+- **[Installation & Setup](docs/getting-started/getting_started.md)** - Get running in 5 minutes.
+- **[Auth Modes](docs/authentication.md)** - Understanding Auth vs No-Auth and OAuth.
+- **[User Scopes](docs/getting-started/getting_started.md#user-scopes)** - Roles: Root, Tenant Admin, and Tenant User.
+- **[Configuration](docs/getting-started/configuration.md)** - Server configuration options.
+- **[Environment Variables](docs/getting-started/env_vars.md)** - Complete metadata and storage reference.
 
-### 🔐 2. Security & Authentication
-- [Authentication Setup](docs/authentication.md) - JWT, OAuth, and No-Auth modes.
-- [Service Users](docs/service_users.md) - Programmatic API key access.
-- [Permissions & RBAC](docs/permissions.md) - Granular asset-level access control.
-- [Credential Vending](docs/features/security_vending.md) - Secure data access management.
+### 🏗️ 2. Core Infrastructure
+- **[Warehouses](docs/warehouse/README.md)** - Managing S3, Azure, and GCS storage.
+- **[Catalogs](docs/features/asset_management.md)** - Creating Local and Federated catalogs.
+- **[Backend Storage](docs/backend_storage/README.md)** - Metadata persistence with Postgres, Mongo, or SQLite.
 
-### ⚡ 3. Core Features
-- [Git-like Branching](docs/features/branch_management.md) - Workflows for data versioning.
-- [Merging & Conflicts](docs/features/merge_operations.md) - Understanding data reconciliation.
-- [Audit Logging](docs/features/audit_logs.md) - Comprehensive security and compliance tracking.
-- [Federated Catalogs](docs/federated_catalogs.md) - Unified access to remote catalogs.
+### 🧪 3. Data Management (API, CLI, UI)
+- **[Branching & Versioning](docs/features/branch_management.md)** - Git-style workflows and auto-add nuances.
+- **[Permissions & RBAC](docs/permissions.md)** - Asset-level access and cascading grants.
+- **[Business Metadata](docs/features/business_catalog.md)** - Tags, search, and data discovery.
+- **[Audit Logging](docs/features/audit_logs.md)** - Security tracking across all tools.
+- **[Maintenance](docs/features/maintenance.md)** - Snapshots, orphan files, and storage optimization.
 
-### 💻 4. CLI Reference
-- [CLI Overview](docs/cli/overview.md) - Introduction to `pangolin-admin` and `pangolin-user`.
-- **Admin**: [Tenants](docs/cli/admin-tenants.md), [Users](docs/cli/admin-users.md), [Warehouses](docs/cli/admin-warehouses.md), [Catalogs](docs/cli/admin-catalogs.md).
-- **User**: [Discovery](docs/cli/user-discovery.md), [Branches](docs/cli/user-branches.md), [Tags](docs/cli/user-tags.md).
-
-### 🖥️ 5. Management UI
-- [UI Overview](docs/ui/overview.md) - Layout, navigation, and authentication.
-- [Administration](docs/ui/administration.md) - Managing Tenants and Infrastructure.
-- [Data Explorer](docs/ui/explorer.md) - Browsing and managing data assets.
+### 🛠️ 4. Tooling & APIs
+- **[CLI Reference](docs/cli/overview.md)** - Full guide for `pangolin-admin` and `pangolin-user`.
+- **[API Reference](docs/api/api_overview.md)** - Iceberg REST and Pangolin Management APIs.
+- **[Management UI](docs/ui/overview.md)** - Visual administration and data discovery.
+- **[Client Setup](docs/getting-started/client_configuration.md)** - Connecting PyIceberg, Spark, and Trino.
 
 ---
 
@@ -90,27 +87,33 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 **Current Version**: Alpha
 
 **Production-Ready Features**:
-- ✅ Iceberg REST Catalog API
+- ✅ Iceberg REST Catalog API (100% Compliant)
 - ✅ Multi-Tenancy & Tenant Isolation
-- ✅ Branch & Tag Management
-- ✅ Advanced Audit Logging
+- ✅ Git-like Branching & Tagging
+- ✅ Advanced Audit Logging (UI/CLI/API)
 - ✅ Service Users & API Keys
 - ✅ PostgreSQL, MongoDB, and SQLite Backends
-- ✅ AWS S3 Warehouse Support & STS Vending
-- ✅ Management UI (Core Administrative & Explorer Features)
+- ✅ Multi-Cloud Storage (S3, Azure, GCS)
+- ✅ Management UI for Admins & Explorers
 
 ---
 
 ## 📖 Quick Examples
 
-### Create a Catalog
+### Create a Catalog (API)
 ```bash
-POST /api/v1/catalogs
-{
+curl -X POST http://localhost:8080/api/v1/catalogs \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
   "name": "production",
-  "warehouse_name": "s3_warehouse",
+  "warehouse_name": "main_s3",
   "storage_location": "s3://my-bucket/warehouse"
-}
+}'
+```
+
+### Create a Branch (CLI)
+```bash
+pangolin-user create-branch dev --from main --catalog production
 ```
 
 ### Use with PyIceberg
@@ -126,7 +129,8 @@ catalog = load_catalog(
     }
 )
 
-table = catalog.load_table("analytics.sales")
+# Load a table on the 'dev' branch
+table = catalog.load_table("analytics.sales@dev")
 df = table.scan().to_pandas()
 ```
 

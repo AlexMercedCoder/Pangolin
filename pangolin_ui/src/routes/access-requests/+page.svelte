@@ -40,7 +40,7 @@
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ status: status === 'Approve' ? 'Approved' : 'Rejected', comment: `${status} by admin` })
+                body: JSON.stringify({ status: status === 'Approve' ? 'approved' : 'rejected', comment: `${status} by admin` })
             });
 
             if (res.ok) {
@@ -54,7 +54,7 @@
     });
     
     $: filteredRequests = requests.filter(r => {
-        if (filter === 'pending') return r.status === 'Pending';
+        if (filter === 'pending') return r.status === 'pending';
         return true;
     });
 </script>
@@ -100,7 +100,7 @@
                     {/if}
                 </div>
 
-                {#if req.status === 'Pending' && (user?.role === 'tenant-admin' || user?.role === 'root')}
+                {#if req.status === 'pending' && (user?.role === 'tenant-admin' || user?.role === 'root')}
                     <div class="req-actions">
                         <button class="action-btn approve" on:click={() => updateStatus(req, 'Approve')}>
                             <span class="material-icons">check</span>

@@ -217,10 +217,24 @@ pub async fn search_assets(
                 let has_read = if crate::authz::is_admin(&session.role) {
                     true
                 } else if let Some(catalog_id) = catalog_map.get(&catalog_name) {
-                     user_perms.iter().any(|p| 
-                         p.actions.contains(&Action::Read) && 
-                         matches!(&p.scope, PermissionScope::Catalog { catalog_id: cid } if cid == catalog_id)
-                     )
+                     user_perms.iter().any(|p| {
+                         // Check if permission allows Read (or implies it)
+                         if !p.allows(&Action::Read) {
+                             return false;
+                         }
+                         
+                         match &p.scope {
+                             PermissionScope::Tenant => true,
+                             PermissionScope::Catalog { catalog_id: cid } => cid == catalog_id,
+                             PermissionScope::Namespace { catalog_id: cid, namespace: ns } => {
+                                 cid == catalog_id && (ns == &namespace || namespace.starts_with(&format!("{}.", ns)))
+                             },
+                             PermissionScope::Asset { catalog_id: cid, asset_id: aid, .. } => {
+                                 cid == catalog_id && aid == &asset.id
+                             },
+                             _ => false,
+                         }
+                     })
                 } else {
                     false
                 };

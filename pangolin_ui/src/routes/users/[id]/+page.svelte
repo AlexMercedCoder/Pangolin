@@ -108,6 +108,15 @@
                         <label class="label text-sm text-surface-400">Email</label>
                         <div class="font-medium">{user.email}</div>
                     </div>
+                    <div class="pt-2">
+                        <Button 
+                            variant="secondary" 
+                            fullWidth={true} 
+                            on:click={() => goto(`/users/${user?.id}/tokens`)}
+                        >
+                            Manage Tokens
+                        </Button>
+                    </div>
                 </div>
             </Card>
         </div>

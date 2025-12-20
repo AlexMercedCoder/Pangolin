@@ -2,49 +2,44 @@
 
 This guide will walk you through setting up Pangolin and performing an end-to-end workflow.
 
-## Quick Start (NO_AUTH Mode)
+## 🔐 Authentication Modes
 
-The fastest way to get started is using NO_AUTH mode for testing:
+Pangolin supports two primary operational modes: **No-Auth Mode** and **Auth Mode**.
 
-1. **Start the server:**
-   ```bash
-   PANGOLIN_NO_AUTH=true cargo run --bin pangolin_api
-   ```
+### 1. No-Auth Mode (`PANGOLIN_NO_AUTH=true`)
+Designed for rapid local evaluation and testing.
+- **Single Tenant**: All operations are automatically tied to a fixed "default" tenant.
+- **No Headers Required**: You don't need `Authorization` or `X-Pangolin-Tenant` headers.
+- **Anonymous Access**: Direct access to all catalog features.
+- **Limitations**: Only one tenant allowed; no RBAC enforcement.
 
-2. **Test with PyIceberg:**
-   ```python
-   from pyiceberg.catalog import load_catalog
-   
-   catalog = load_catalog(
-       "pangolin",
-       **{
-           "uri": "http://localhost:8080",
-           "prefix": "analytics",  # Catalog name
-       }
-   )
-   
-   # Create namespace
-   catalog.create_namespace("my_namespace")
-   
-   # List namespaces
-   print(catalog.list_namespaces())
-   ```
+### 2. Auth Mode (`PANGOLIN_NO_AUTH=false`)
+The standard mode for multi-tenant production environments.
+- **Tenant Isolation**: Every request MUST include a valid `Authorization: Bearer <JWT>` token.
+- **RBAC Enforcement**: Permissions are checked at the Catalog, Namespace, and Asset levels.
+- **Tenant Context**: Users only see resources belonging to their specific tenant.
+- **Multiple Tenants**: Supports infinite logical isolation across different organizations.
 
-3. **Test with curl:**
-   ```bash
-   # List namespaces (uses default tenant automatically)
-   curl http://localhost:8080/v1/analytics/namespaces
-   ```
+---
 
-> **Note:** NO_AUTH mode is for testing only. It uses a single default tenant and disables authentication. For production, see the [Production Setup](#production-setup) section below.
+## 👥 User Scopes
 
-## Prerequisites
+Pangolin uses a three-tier identity model to balance platform oversight with organizational autonomy.
 
-- **Rust**: Version 1.92 or later ([Install Rust](https://www.rust-lang.org/tools/install))
-- **Docker** (Optional): For running dependencies like MinIO, Postgres, or MongoDB.
-- **curl**: For making API requests.
+| Scope | Typical ID | Key Responsibilities | Focus |
+| :--- | :--- | :--- | :--- |
+| **Root User** | `admin` | Create Tenants, Configure Global Settings, System Metrics. | Platform |
+| **Tenant Admin** | Organization Lead | Manage Users, Warehouses, Catalogs, Audit Logs. | Governance |
+| **Tenant User** | Analyst / Engineer | Create Namespaces, Manage Tables, Branching, Tagging. | Data |
 
-## Installation & Setup
+### Role Details:
+- **Root**: Has "god mode" over the platform but cannot see into tenant table data directly unless granted a role.
+- **Tenant Admin**: Controls everything *within* their tenant. They set up the warehouses (S3/Azure) and the catalogs.
+- **Tenant User**: Restricted to the data assets. They cannot manage other users or infrastructure.
+
+---
+
+## 🏗️ Installation & Setup
 
 1.  **Clone the Repository**
     ```bash

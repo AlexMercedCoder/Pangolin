@@ -2,17 +2,27 @@
 	import { onMount } from 'svelte';
 	import { authApi, type GenerateTokenRequest } from '$lib/api/auth';
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
+	import { usersApi, type User } from '$lib/api/users'; // Added
+    import { tokensApi, type TokenInfo } from '$lib/api/tokens'; // Added
 	import { notifications } from '$lib/stores/notifications';
-	import { user, isRoot } from '$lib/stores/auth'; // Import auth stores
+	import { user, isRoot } from '$lib/stores/auth';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
-	import Select from '$lib/components/ui/Select.svelte';
-	import Textarea from '$lib/components/ui/Textarea.svelte';
+	import TokenList from '$lib/components/tokens/TokenList.svelte'; // Added
 	import Modal from '$lib/components/ui/Modal.svelte';
+    import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte'; // Added
 
 	let tenants: Tenant[] = [];
 	let loadingTenants = false;
+    
+    // User Selection Logic
+    let allUsers: User[] = [];
+    let selectedUserId = '';
+    let userTokens: TokenInfo[] = [];
+    let loadingTokens = false;
+    let showRevokeDialog = false;
+    let tokenToRevoke: TokenInfo | null = null;
 	
 	// 'user' or 'service'
 	let tokenType: 'user' | 'service' = 'user';
@@ -41,8 +51,15 @@
 	$: if ($user?.tenant_id && !$isRoot) {
 		generateForm.tenant_id = $user.tenant_id;
 	}
+    
+    // Watch for user selection change
+    $: if (selectedUserId) {
+        loadUserTokens();
+    } else {
+        userTokens = [];
+    }
 
-	// Revoke Token Form
+	// Revoke Token Form (Manual ID)
 	let revokeTokenId = '';
 	let revokeReason = '';
 	let revoking = false;
@@ -51,7 +68,7 @@
 	let cleaning = false;
 
 	onMount(async () => {
-		await loadTenants();
+		await Promise.all([loadTenants(), loadUsers()]);
 	});
 
 	async function loadTenants() {
@@ -67,6 +84,47 @@
 			loadingTenants = false;
 		}
 	}
+    
+    async function loadUsers() {
+        try {
+            allUsers = await usersApi.list();
+        } catch (error: any) {
+             notifications.error(`Failed to load users: ${error.message}`);
+        }
+    }
+    
+    async function loadUserTokens() {
+        if (!selectedUserId) return;
+        loadingTokens = true;
+        try {
+            userTokens = await tokensApi.listUserTokens(selectedUserId);
+        } catch (error: any) {
+            notifications.error(`Failed to load user tokens: ${error.message}`);
+            userTokens = [];
+        } finally {
+            loadingTokens = false;
+        }
+    }
+    
+    function initiateRevoke(event: CustomEvent<TokenInfo>) {
+        tokenToRevoke = event.detail;
+        showRevokeDialog = true;
+    }
+    
+    async function confirmRevokeUserToken() {
+        if (!tokenToRevoke) return;
+        try {
+            await tokensApi.deleteToken(tokenToRevoke.id);
+            notifications.success('Token revoked successfully');
+            await loadUserTokens();
+        } catch (e: any) {
+            notifications.error(`Failed to revoke token: ${e.message}`);
+        } finally {
+            showRevokeDialog = false;
+            tokenToRevoke = null;
+        }
+    }
+
 
 	async function handleGenerate() {
 		if (!generateForm.tenant_id) {
@@ -106,6 +164,15 @@
 			generatedToken = response.token;
 			showTokenModal = true;
 			notifications.success('Token generated successfully');
+            
+            // If the generated token was for the currently selected user, reload their list
+            if (tokenType === 'user' && selectedUserId) {
+                 const selectedUserObj = allUsers.find(u => u.id === selectedUserId);
+                 if (selectedUserObj && selectedUserObj.username === generateForm.username) {
+                     await loadUserTokens();
+                 }
+            }
+            
 		} catch (error: any) {
 			notifications.error(`Failed to generate token: ${error.message}`);
 		} finally {
@@ -129,7 +196,7 @@
 		}
 	}
 
-	async function handleRevoke() {
+	async function handleManualRevoke() {
 		if (!revokeTokenId) {
 			notifications.error('Token ID is required');
 			return;
@@ -145,6 +212,8 @@
 			notifications.success(response.message);
 			revokeTokenId = '';
 			revokeReason = '';
+            // If currently viewing a user's tokens, reload them to be safe
+            if (selectedUserId) await loadUserTokens();
 		} catch (error: any) {
 			notifications.error(`Failed to revoke token: ${error.message}`);
 		} finally {
@@ -178,7 +247,37 @@
 	</div>
 
 	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- User Tokens Management (New) -->
+        <Card>
+            <h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">User Tokens</h2>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select User</label>
+                <select 
+                    bind:value={selectedUserId}
+                    class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500"
+                >
+                    <option value="">-- Select a User --</option>
+                    {#each allUsers as u}
+                        <option value={u.id}>{u.username} ({u.tenant_name || 'No Tenant'})</option>
+                    {/each}
+                </select>
+            </div>
+            
+            {#if selectedUserId}
+                <TokenList 
+                    tokens={userTokens} 
+                    loading={loadingTokens} 
+                    on:revoke={initiateRevoke} 
+                />
+            {:else}
+                <div class="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    Select a user to view their active tokens.
+                </div>
+            {/if}
+        </Card>
+
 		<!-- Generate Token Card -->
+        <Card>
 			<h2 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">Generate Token</h2>
 			
 			<div class="mb-6 flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
@@ -215,9 +314,7 @@
 					{/if}
 				</div>
 				{:else}
-					<!-- Tenant Admin: Hidden Tenant ID (force user's tenant) -->
-					<!-- We rely on default or component init logic to set this -->
-					<!-- Showing it read-only for clarity might be good -->
+					<!-- Tenant Admin: Hidden Tenant ID -->
 					<div>
 						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tenant</label>
 						<div class="w-full px-3 py-2 border rounded-md bg-gray-50 dark:bg-gray-900 dark:border-gray-700 text-gray-500 dark:text-gray-400">
@@ -272,6 +369,7 @@
 					</Button>
 				</div>
 			</div>
+        </Card>
 
 		<div class="space-y-6">
 			<!-- Revoke Token Card -->
@@ -295,7 +393,7 @@
 							variant="error" 
 							fullWidth={true} 
 							disabled={revoking || !revokeTokenId}
-							on:click={handleRevoke}
+							on:click={handleManualRevoke}
 						>
 							{revoking ? 'Revoking...' : 'Revoke Token'}
 						</Button>
@@ -356,3 +454,14 @@
 		<Button on:click={closeTokenModal}>Close</Button>
 	</div>
 </Modal>
+
+{#if showRevokeDialog}
+	<ConfirmDialog
+		bind:open={showRevokeDialog}
+		title="Revoke User Token"
+		message="Are you sure you want to revoke this user's token?"
+		confirmText="Revoke"
+		variant="danger"
+		onConfirm={confirmRevokeUserToken}
+	/>
+{/if}

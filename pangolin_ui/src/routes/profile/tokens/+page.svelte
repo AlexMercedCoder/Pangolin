@@ -17,6 +17,7 @@
 	let success = '';
 	let showConfirmDialog = false;
 	let tokenToRevoke: TokenInfo | null = null;
+	let showRotateConfirmDialog = false;
 	
 	// Token generation state
 	let generatingToken = false;
@@ -121,6 +122,36 @@
 		showConfirmDialog = false;
 		tokenToRevoke = null;
 	}
+
+	function handleRotateClick() {
+		showRotateConfirmDialog = true;
+	}
+
+	async function confirmRotate() {
+		loading = true; // Show full page loading or just disable button
+		showRotateConfirmDialog = false;
+		try {
+			const res = await tokensApi.rotate();
+			// Update local storage / cookie if client handles it directly, 
+			// but usually authStore or client.ts handles the bearer token.
+			// Ideally we should update the authStore with the new token.
+			authStore.updateSession(res.token, {
+				id: get(authStore).user?.id || '',
+				username: get(authStore).user?.username || '',
+				email: get(authStore).user?.email || '',
+				role: get(authStore).user?.role || 'tenant-user',
+				tenant_id: res.tenant_id,
+				created_at: get(authStore).user?.created_at || new Date().toISOString()
+			} as any); // Cast as any because UserInfo match might be strict
+			
+			success = 'Token rotated successfully. Session updated.';
+			await loadTokens();
+		} catch (e: any) {
+			error = e.message || 'Failed to rotate token';
+		} finally {
+			loading = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -135,9 +166,14 @@
 				Manage your active access tokens. Revoking a token will immediately invalidate it.
 			</p>
 		</div>
-		<Button variant="primary" on:click={handleGenerateToken} disabled={generatingToken}>
-			{generatingToken ? 'Generating...' : 'Generate New Token'}
-		</Button>
+		<div class="flex gap-2">
+			<Button variant="secondary" on:click={handleRotateClick} disabled={generatingToken || loading}>
+				Rotate Current Session
+			</Button>
+			<Button variant="primary" on:click={handleGenerateToken} disabled={generatingToken}>
+				{generatingToken ? 'Generating...' : 'Generate New Token'}
+			</Button>
+		</div>
 	</div>
 
 	{#if error}
@@ -161,6 +197,17 @@
 		confirmVariant="error"
 		on:confirm={confirmRevoke}
 		on:cancel={cancelRevoke}
+	/>
+{/if}
+
+{#if showRotateConfirmDialog}
+	<ConfirmDialog
+		title="Rotate Current Session"
+		message="Are you sure you want to rotate your current session token? A new token will be generated and your session will be updated locally."
+		confirmText="Rotate"
+		confirmVariant="primary"
+		on:confirm={confirmRotate}
+		on:cancel={() => showRotateConfirmDialog = false}
 	/>
 {/if}
 
