@@ -4,43 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deployment Guide - Pangolin</title>
+    <meta name="description" content="Deploy Pangolin - the OSS Lakehouse Catalog. Download binaries, Docker images, and production configurations.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <script defer src="script.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 2rem 1rem;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-        }
-
-        header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 3rem 2rem;
-            text-align: center;
-        }
-
-        header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-
+        /* Additional styles specific to deployment page */
         .alpha-badge {
             display: inline-block;
             background: #fbbf24;
@@ -52,105 +23,44 @@
             margin-top: 1rem;
         }
 
-        .content {
-            padding: 2rem;
-        }
-
-        .section {
-            margin-bottom: 3rem;
-        }
-
-        .section h2 {
-            color: #667eea;
-            font-size: 1.8rem;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid #667eea;
-        }
-
-        .section h3 {
-            color: #764ba2;
-            font-size: 1.3rem;
-            margin: 1.5rem 0 0.75rem 0;
-        }
-
-        .card-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-            margin-top: 1.5rem;
-        }
-
-        .card {
-            background: #f9fafb;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
-        }
-
-        .card:hover {
-            border-color: #667eea;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
-            transform: translateY(-2px);
-        }
-
-        .card h4 {
-            color: #667eea;
-            margin-bottom: 0.75rem;
-            font-size: 1.1rem;
-        }
-
-        .card p {
-            color: #6b7280;
-            font-size: 0.95rem;
-            margin-bottom: 1rem;
-        }
-
-        .card a {
-            display: inline-block;
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
-            padding: 0.5rem 1rem;
-            border: 2px solid #667eea;
-            border-radius: 6px;
-            transition: all 0.3s ease;
-        }
-
-        .card a:hover {
-            background: #667eea;
-            color: white;
-        }
-
         .warning-box {
             background: #fef3c7;
             border-left: 4px solid #f59e0b;
-            padding: 1rem 1.5rem;
-            margin: 1.5rem 0;
-            border-radius: 4px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 8px;
         }
 
         .warning-box h4 {
             color: #92400e;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
         }
 
-        .warning-box p {
+        .warning-box p, .warning-box ul {
             color: #78350f;
+        }
+
+        .warning-box ul {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+            list-style: disc;
+        }
+
+        .warning-box li {
+            margin-bottom: 0.5rem;
         }
 
         .info-box {
             background: #dbeafe;
             border-left: 4px solid #3b82f6;
-            padding: 1rem 1.5rem;
-            margin: 1.5rem 0;
-            border-radius: 4px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 8px;
         }
 
         .info-box h4 {
             color: #1e40af;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
         }
 
         .info-box p {
@@ -165,7 +75,7 @@
         }
 
         .quick-link {
-            background: #667eea;
+            background: var(--color-primary);
             color: white;
             padding: 0.75rem 1.5rem;
             border-radius: 6px;
@@ -175,22 +85,93 @@
         }
 
         .quick-link:hover {
-            background: #764ba2;
+            background: var(--color-accent);
             transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 4px 12px rgba(223, 141, 83, 0.3);
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .card {
+            background: var(--color-surface);
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: var(--color-primary);
+            box-shadow: 0 4px 12px rgba(223, 141, 83, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .card h4 {
+            color: var(--color-primary);
+            margin-bottom: 0.75rem;
+            font-size: 1.1rem;
+        }
+
+        .card p {
+            color: var(--color-text-light);
+            font-size: 0.95rem;
+            margin-bottom: 1rem;
+        }
+
+        .card ul {
+            list-style: disc;
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .card li {
+            margin-bottom: 0.5rem;
+            color: var(--color-text-light);
+        }
+
+        .card a {
+            display: inline-block;
+            color: var(--color-primary);
+            text-decoration: none;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            border: 2px solid var(--color-primary);
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .card a:hover {
+            background: var(--color-primary);
+            color: white;
         }
 
         .community-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
             color: white;
             padding: 2rem;
-            border-radius: 8px;
+            border-radius: 12px;
             margin-top: 2rem;
         }
 
         .community-section h3 {
             color: white;
             margin-bottom: 1rem;
+        }
+
+        .community-section h4 {
+            color: white;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .community-section ul {
+            list-style: disc;
+            margin-left: 1.5rem;
         }
 
         .community-section a {
@@ -203,22 +184,6 @@
             text-decoration: underline;
         }
 
-        footer {
-            background: #1f2937;
-            color: #9ca3af;
-            padding: 2rem;
-            text-align: center;
-        }
-
-        footer a {
-            color: #667eea;
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
-        }
-
         code {
             background: #f3f4f6;
             padding: 0.2rem 0.4rem;
@@ -227,26 +192,50 @@
             font-size: 0.9em;
         }
 
-        ul {
-            margin-left: 1.5rem;
-            margin-top: 0.5rem;
-        }
-
-        li {
-            margin-bottom: 0.5rem;
+        pre {
+            background: #1f2937;
+            color: #10b981;
+            padding: 1rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 1rem 0;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🐧 Pangolin Deployment Guide</h1>
-            <p>Cloud-Native Apache Iceberg REST Catalog</p>
-            <span class="alpha-badge">⚠️ ALPHA VERSION</span>
-        </header>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">Pangolin</a>
+            <button class="mobile-menu-btn" aria-label="Toggle Menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <ul class="nav-links">
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="index.html#gallery">Gallery</a></li>
+                <li><a href="deployment.html">Deployment</a></li>
+                <li><a href="index.html#ecosystem">Ecosystem</a></li>
+                <li><a href="https://github.com/AlexMercedCoder/Pangolin" class="btn btn-primary">Star on GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
 
-        <div class="content">
-            <!-- Alpha Warning -->
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="container">
+            <div class="hero-text" style="text-align: center; max-width: 800px; margin: 0 auto;">
+                <h1>🐧 Deployment Guide</h1>
+                <p>Get Pangolin running in minutes with Docker, binaries, or production-ready configurations.</p>
+                <span class="alpha-badge">⚠️ ALPHA VERSION</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Alpha Warning -->
+    <section class="section">
+        <div class="container">
             <div class="warning-box">
                 <h4>⚠️ Alpha Software Notice</h4>
                 <p>Pangolin is currently in <strong>alpha</strong> status. This means:</p>
@@ -258,92 +247,99 @@
                 </ul>
                 <p style="margin-top: 1rem;">We encourage you to test, provide feedback, and contribute!</p>
             </div>
+        </div>
+    </section>
 
-            <!-- Quick Start -->
-            <div class="section">
-                <h2>🚀 Quick Start</h2>
-                <p>Choose your deployment method:</p>
-                <div class="quick-links">
-                    <a href="#demo" class="quick-link">Try Demo (5 min)</a>
-                    <a href="#binaries" class="quick-link">Download Binaries</a>
-                    <a href="#docker" class="quick-link">Docker Images</a>
-                    <a href="#production" class="quick-link">Production Setup</a>
+    <!-- Quick Start -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">🚀 Quick Start</h2>
+            <p style="text-align: center; margin-bottom: 2rem;">Choose your deployment method:</p>
+            <div class="quick-links" style="justify-content: center;">
+                <a href="#demo" class="quick-link">Try Demo (5 min)</a>
+                <a href="#binaries" class="quick-link">Download Binaries</a>
+                <a href="#docker" class="quick-link">Docker Images</a>
+                <a href="#production" class="quick-link">Production Setup</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pre-compiled Binaries -->
+    <section id="binaries" class="section">
+        <div class="container">
+            <h2 class="section-title">📦 Pre-compiled Binaries</h2>
+            <p style="text-align: center; margin-bottom: 2rem;">Download ready-to-run binaries for your platform:</p>
+            
+            <div class="info-box">
+                <h4>📍 Binary Locations</h4>
+                <p>Binaries are automatically built for all platforms via GitHub Actions and attached to each release.</p>
+            </div>
+
+            <div class="card-grid">
+                <div class="card">
+                    <h4>🐧 Linux (x86_64)</h4>
+                    <p>Ready to use! Includes API server and CLI tools.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/releases/latest">Download from Releases</a>
+                </div>
+                <div class="card">
+                    <h4>🍎 macOS (Intel & ARM)</h4>
+                    <p>Native binaries for both Intel and Apple Silicon Macs.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/releases/latest">Download from Releases</a>
+                </div>
+                <div class="card">
+                    <h4>🪟 Windows (x86_64)</h4>
+                    <p>Windows executables with .exe extensions.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/releases/latest">Download from Releases</a>
                 </div>
             </div>
 
-            <!-- Pre-compiled Binaries -->
-            <div class="section" id="binaries">
-                <h2>📦 Pre-compiled Binaries</h2>
-                <p>Download ready-to-run binaries for your platform:</p>
-                
-                <div class="info-box">
-                    <h4>📍 Binary Locations</h4>
-                    <p>Binaries are automatically built for all platforms via GitHub Actions and attached to each release.</p>
+            <h3 style="margin-top: 2rem;">What's Included</h3>
+            <ul style="margin-left: 1.5rem; list-style: disc;">
+                <li><code>pangolin_api</code> - REST API server (~60MB)</li>
+                <li><code>pangolin-admin</code> - Admin CLI tool (~10MB)</li>
+                <li><code>pangolin-user</code> - User CLI tool (~10MB)</li>
+            </ul>
+
+            <p style="margin-top: 1rem;">
+                <strong>Documentation:</strong> 
+                <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/deployment_assets/bin/README.md" style="color: var(--color-primary);">Binary Usage Guide</a>
+            </p>
+        </div>
+    </section>
+
+    <!-- Demo Setups -->
+    <section id="demo" class="section" style="background-color: #faf9f8;">
+        <div class="container">
+            <h2 class="section-title">🎯 Demo Setups (Docker Compose)</h2>
+            <p class="section-subtitle">Get started in minutes with pre-configured Docker Compose environments</p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <h4>Single Tenant (No Auth)</h4>
+                    <p>Perfect for quick evaluation and testing. Includes Jupyter notebook for PyIceberg testing.</p>
+                    <ul>
+                        <li>No authentication required</li>
+                        <li>Memory-based storage</li>
+                        <li>MinIO for S3-compatible storage</li>
+                        <li>Jupyter notebook on port 8888</li>
+                    </ul>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/demo/evaluate_single_tenant">View Setup</a>
                 </div>
-
-                <div class="card-grid">
-                    <div class="card">
-                        <h4>🐧 Linux (x86_64)</h4>
-                        <p>Ready to use! Includes API server and CLI tools.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/releases/latest">Download from Releases</a>
-                    </div>
-                    <div class="card">
-                        <h4>🍎 macOS (Intel & ARM)</h4>
-                        <p>Native binaries for both Intel and Apple Silicon Macs.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/releases/latest">Download from Releases</a>
-                    </div>
-                    <div class="card">
-                        <h4>🪟 Windows (x86_64)</h4>
-                        <p>Windows executables with .exe extensions.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/releases/latest">Download from Releases</a>
-                    </div>
+                <div class="card">
+                    <h4>Multi-Tenant (Authenticated)</h4>
+                    <p>Full-featured setup with authentication and persistent storage.</p>
+                    <ul>
+                        <li>JWT authentication enabled</li>
+                        <li>SQLite for persistent metadata</li>
+                        <li>MinIO for S3-compatible storage</li>
+                        <li>Jupyter notebook on port 8888</li>
+                    </ul>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/demo/evaluate_multi_tenant">View Setup</a>
                 </div>
-
-                <h3>What's Included</h3>
-                <ul>
-                    <li><code>pangolin_api</code> - REST API server (~60MB)</li>
-                    <li><code>pangolin-admin</code> - Admin CLI tool (~10MB)</li>
-                    <li><code>pangolin-user</code> - User CLI tool (~10MB)</li>
-                </ul>
-
-                <p style="margin-top: 1rem;">
-                    <strong>Documentation:</strong> 
-                    <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/deployment_assets/bin/README.md">Binary Usage Guide</a>
-                </p>
             </div>
 
-            <!-- Demo Setups -->
-            <div class="section" id="demo">
-                <h2>🎯 Demo Setups (Docker Compose)</h2>
-                <p>Get started in minutes with pre-configured Docker Compose environments:</p>
-
-                <div class="card-grid">
-                    <div class="card">
-                        <h4>Single Tenant (No Auth)</h4>
-                        <p>Perfect for quick evaluation and testing. Includes Jupyter notebook for PyIceberg testing.</p>
-                        <ul style="font-size: 0.9rem; color: #6b7280;">
-                            <li>No authentication required</li>
-                            <li>Memory-based storage</li>
-                            <li>MinIO for S3-compatible storage</li>
-                            <li>Jupyter notebook on port 8888</li>
-                        </ul>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/demo/evaluate_single_tenant">View Setup</a>
-                    </div>
-                    <div class="card">
-                        <h4>Multi-Tenant (Authenticated)</h4>
-                        <p>Full-featured setup with authentication and persistent storage.</p>
-                        <ul style="font-size: 0.9rem; color: #6b7280;">
-                            <li>JWT authentication enabled</li>
-                            <li>SQLite for persistent metadata</li>
-                            <li>MinIO for S3-compatible storage</li>
-                            <li>Jupyter notebook on port 8888</li>
-                        </ul>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/demo/evaluate_multi_tenant">View Setup</a>
-                    </div>
-                </div>
-
-                <h3>Quick Start Command</h3>
-                <pre style="background: #1f2937; color: #10b981; padding: 1rem; border-radius: 6px; overflow-x: auto;">cd deployment_assets/demo/evaluate_single_tenant
+            <h3 style="margin-top: 2rem;">Quick Start Command</h3>
+            <pre>cd deployment_assets/demo/evaluate_single_tenant
 docker compose up -d
 
 # Access:
@@ -351,139 +347,148 @@ docker compose up -d
 # - API: http://localhost:8080
 # - Jupyter: http://localhost:8888
 # - MinIO: http://localhost:9001</pre>
-            </div>
+        </div>
+    </section>
 
-            <!-- Docker Images -->
-            <div class="section" id="docker">
-                <h2>🐳 Docker Images</h2>
-                <p>Official Docker images published to Docker Hub:</p>
+    <!-- Docker Images -->
+    <section id="docker" class="section">
+        <div class="container">
+            <h2 class="section-title">🐳 Docker Images</h2>
+            <p class="section-subtitle">Official Docker images published to Docker Hub</p>
 
-                <div class="card-grid">
-                    <div class="card">
-                        <h4>API Server</h4>
-                        <p><code>alexmerced/pangolin-api:0.1.0</code></p>
-                        <a href="https://hub.docker.com/r/alexmerced/pangolin-api">View on Docker Hub</a>
-                    </div>
-                    <div class="card">
-                        <h4>CLI Tools</h4>
-                        <p><code>alexmerced/pangolin-cli:0.1.0</code></p>
-                        <a href="https://hub.docker.com/r/alexmerced/pangolin-cli">View on Docker Hub</a>
-                    </div>
-                    <div class="card">
-                        <h4>Management UI</h4>
-                        <p><code>alexmerced/pangolin-ui:0.1.0</code></p>
-                        <a href="https://hub.docker.com/r/alexmerced/pangolin-ui">View on Docker Hub</a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Production Deployments -->
-            <div class="section" id="production">
-                <h2>🏭 Production Deployments</h2>
-                <p>Production-ready configurations for various cloud providers and databases:</p>
-
-                <h3>Docker Compose (Production)</h3>
-                <div class="card-grid">
-                    <div class="card">
-                        <h4>AWS S3 + PostgreSQL</h4>
-                        <p>Production setup for AWS with RDS PostgreSQL.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/s3_postgres">View Config</a>
-                    </div>
-                    <div class="card">
-                        <h4>AWS S3 + MongoDB</h4>
-                        <p>Production setup for AWS with MongoDB Atlas.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/s3_mongo">View Config</a>
-                    </div>
-                    <div class="card">
-                        <h4>Azure Blob + PostgreSQL</h4>
-                        <p>Production setup for Azure with PostgreSQL.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/azure_postgres">View Config</a>
-                    </div>
-                    <div class="card">
-                        <h4>Azure Blob + MongoDB</h4>
-                        <p>Production setup for Azure with MongoDB.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/azure_mongo">View Config</a>
-                    </div>
-                    <div class="card">
-                        <h4>GCP GCS + PostgreSQL</h4>
-                        <p>Production setup for Google Cloud with Cloud SQL.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/gcp_postgres">View Config</a>
-                    </div>
-                    <div class="card">
-                        <h4>GCP GCS + MongoDB</h4>
-                        <p>Production setup for Google Cloud with MongoDB.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/gcp_mongo">View Config</a>
-                    </div>
-                </div>
-
-                <h3>Kubernetes (Helm Charts)</h3>
-                <p>Deploy to Kubernetes using our Helm charts:</p>
+            <div class="card-grid">
                 <div class="card">
-                    <h4>Pangolin Helm Chart</h4>
-                    <p>Production-ready Helm chart with configurable values for different cloud providers.</p>
-                    <ul style="font-size: 0.9rem; color: #6b7280;">
-                        <li>Supports PostgreSQL and MongoDB backends</li>
-                        <li>Configurable resource limits and autoscaling</li>
-                        <li>Example values for AWS, Azure, and GCP</li>
-                        <li>Ingress and TLS support</li>
-                    </ul>
-                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/helm">View Helm Charts</a>
+                    <h4>API Server</h4>
+                    <p><code>alexmerced/pangolin-api:0.1.0</code></p>
+                    <a href="https://hub.docker.com/r/alexmerced/pangolin-api">View on Docker Hub</a>
                 </div>
+                <div class="card">
+                    <h4>CLI Tools</h4>
+                    <p><code>alexmerced/pangolin-cli:0.1.0</code></p>
+                    <a href="https://hub.docker.com/r/alexmerced/pangolin-cli">View on Docker Hub</a>
+                </div>
+                <div class="card">
+                    <h4>Management UI</h4>
+                    <p><code>alexmerced/pangolin-ui:0.1.0</code></p>
+                    <a href="https://hub.docker.com/r/alexmerced/pangolin-ui">View on Docker Hub</a>
+                </div>
+            </div>
+        </div>
+    </section>
 
-                <h3>Infrastructure as Code (Terraform)</h3>
-                <p>Provision cloud infrastructure with Terraform:</p>
-                <div class="card-grid">
-                    <div class="card">
-                        <h4>AWS Module</h4>
-                        <p>Provisions S3 bucket and RDS PostgreSQL.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/terraform/aws">View Module</a>
-                    </div>
-                    <div class="card">
-                        <h4>Azure Module</h4>
-                        <p>Provisions Blob Storage and Azure Database for PostgreSQL.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/terraform/azure">View Module</a>
-                    </div>
-                    <div class="card">
-                        <h4>GCP Module</h4>
-                        <p>Provisions GCS bucket and Cloud SQL PostgreSQL.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/terraform/gcp">View Module</a>
-                    </div>
+    <!-- Production Deployments -->
+    <section id="production" class="section" style="background-color: #faf9f8;">
+        <div class="container">
+            <h2 class="section-title">🏭 Production Deployments</h2>
+            <p class="section-subtitle">Production-ready configurations for various cloud providers and databases</p>
+
+            <h3>Docker Compose (Production)</h3>
+            <div class="card-grid">
+                <div class="card">
+                    <h4>AWS S3 + PostgreSQL</h4>
+                    <p>Production setup for AWS with RDS PostgreSQL.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/s3_postgres">View Config</a>
+                </div>
+                <div class="card">
+                    <h4>AWS S3 + MongoDB</h4>
+                    <p>Production setup for AWS with MongoDB Atlas.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/s3_mongo">View Config</a>
+                </div>
+                <div class="card">
+                    <h4>Azure Blob + PostgreSQL</h4>
+                    <p>Production setup for Azure with PostgreSQL.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/azure_postgres">View Config</a>
+                </div>
+                <div class="card">
+                    <h4>Azure Blob + MongoDB</h4>
+                    <p>Production setup for Azure with MongoDB.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/azure_mongo">View Config</a>
+                </div>
+                <div class="card">
+                    <h4>GCP GCS + PostgreSQL</h4>
+                    <p>Production setup for Google Cloud with Cloud SQL.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/gcp_postgres">View Config</a>
+                </div>
+                <div class="card">
+                    <h4>GCP GCS + MongoDB</h4>
+                    <p>Production setup for Google Cloud with MongoDB.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/production/gcp_mongo">View Config</a>
                 </div>
             </div>
 
-            <!-- Documentation -->
-            <div class="section">
-                <h2>📚 Documentation</h2>
-                <div class="card-grid">
-                    <div class="card">
-                        <h4>Getting Started</h4>
-                        <p>Installation, configuration, and first steps.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/getting-started">Read Docs</a>
-                    </div>
-                    <div class="card">
-                        <h4>PyIceberg Integration</h4>
-                        <p>Connect PyIceberg to Pangolin with examples.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/pyiceberg">Read Docs</a>
-                    </div>
-                    <div class="card">
-                        <h4>Management UI Guide</h4>
-                        <p>Visual guide to the administration portal.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/ui">Read Docs</a>
-                    </div>
-                    <div class="card">
-                        <h4>API Reference</h4>
-                        <p>Complete REST API documentation.</p>
-                        <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/api">Read Docs</a>
-                    </div>
-                </div>
+            <h3 style="margin-top: 3rem;">Kubernetes (Helm Charts)</h3>
+            <p>Deploy to Kubernetes using our Helm charts:</p>
+            <div class="card" style="margin-top: 1.5rem;">
+                <h4>Pangolin Helm Chart</h4>
+                <p>Production-ready Helm chart with configurable values for different cloud providers.</p>
+                <ul>
+                    <li>Supports PostgreSQL and MongoDB backends</li>
+                    <li>Configurable resource limits and autoscaling</li>
+                    <li>Example values for AWS, Azure, and GCP</li>
+                    <li>Ingress and TLS support</li>
+                </ul>
+                <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/helm">View Helm Charts</a>
             </div>
 
-            <!-- Community & Contribution -->
+            <h3 style="margin-top: 3rem;">Infrastructure as Code (Terraform)</h3>
+            <p>Provision cloud infrastructure with Terraform:</p>
+            <div class="card-grid" style="margin-top: 1.5rem;">
+                <div class="card">
+                    <h4>AWS Module</h4>
+                    <p>Provisions S3 bucket and RDS PostgreSQL.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/terraform/aws">View Module</a>
+                </div>
+                <div class="card">
+                    <h4>Azure Module</h4>
+                    <p>Provisions Blob Storage and Azure Database for PostgreSQL.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/terraform/azure">View Module</a>
+                </div>
+                <div class="card">
+                    <h4>GCP Module</h4>
+                    <p>Provisions GCS bucket and Cloud SQL PostgreSQL.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/terraform/gcp">View Module</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Documentation -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">📚 Documentation</h2>
+            <div class="card-grid">
+                <div class="card">
+                    <h4>Getting Started</h4>
+                    <p>Installation, configuration, and first steps.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/getting-started">Read Docs</a>
+                </div>
+                <div class="card">
+                    <h4>PyIceberg Integration</h4>
+                    <p>Connect PyIceberg to Pangolin with examples.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/pyiceberg">Read Docs</a>
+                </div>
+                <div class="card">
+                    <h4>Management UI Guide</h4>
+                    <p>Visual guide to the administration portal.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/ui">Read Docs</a>
+                </div>
+                <div class="card">
+                    <h4>API Reference</h4>
+                    <p>Complete REST API documentation.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/api">Read Docs</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Community & Contribution -->
+    <section class="section">
+        <div class="container">
             <div class="community-section">
                 <h3>🤝 Join the Community</h3>
                 <p>Pangolin is open source and we welcome contributions!</p>
                 
-                <h4 style="margin-top: 1.5rem; color: white;">How to Contribute:</h4>
+                <h4>How to Contribute:</h4>
                 <ul>
                     <li><strong>Report Bugs:</strong> Found an issue? <a href="https://github.com/AlexMercedCoder/Pangolin/issues/new">File an issue</a></li>
                     <li><strong>Request Features:</strong> Have an idea? <a href="https://github.com/AlexMercedCoder/Pangolin/issues/new">Open a feature request</a></li>
@@ -492,7 +497,7 @@ docker compose up -d
                     <li><strong>Share Feedback:</strong> Tell us about your experience</li>
                 </ul>
 
-                <h4 style="margin-top: 1.5rem; color: white;">Resources:</h4>
+                <h4>Resources:</h4>
                 <ul>
                     <li><a href="https://github.com/AlexMercedCoder/Pangolin">GitHub Repository</a></li>
                     <li><a href="https://github.com/AlexMercedCoder/Pangolin/issues">Issue Tracker</a></li>
@@ -501,16 +506,36 @@ docker compose up -d
                 </ul>
             </div>
         </div>
+    </section>
 
-        <footer>
-            <p>Pangolin - Cloud-Native Apache Iceberg REST Catalog</p>
-            <p style="margin-top: 0.5rem;">
-                <a href="https://github.com/AlexMercedCoder/Pangolin">GitHub</a> | 
-                <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/LICENSE">License</a> | 
-                <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/README.md">Documentation</a>
-            </p>
-            <p style="margin-top: 1rem; font-size: 0.9rem;">Version 0.1.0 (Alpha) | Built with ❤️ by the Pangolin community</p>
-        </footer>
-    </div>
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-content">
+            <div class="footer-sections">
+                <div class="footer-col">
+                    <h4>Pangolin</h4>
+                    <p>OSS Lakehouse Catalog in Rust.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Tools</h4>
+                    <ul>
+                        <li><a href="https://pypi.org/project/dremioframe/">Dremioframe</a></li>
+                        <li><a href="https://pypi.org/project/iceframe/">Iceframe</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Connect</h4>
+                    <ul>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin">GitHub</a></li>
+                        <li><a href="https://alexmerced.com">AlexMerced.com</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Alex Merced. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
 </body>
 </html>
