@@ -9,6 +9,7 @@ Detailed comparison of PostgreSQL, MongoDB, and SQLite for Pangolin metadata sto
 | **Type** | Relational (SQL) | Document (NoSQL) | Relational (SQL) |
 | **Setup** | Medium | Medium | None |
 | **Production Ready** | ✅ Yes | ✅ Yes | ✅ Yes (small scale) |
+| **Persistence** | ❌ Catalog: No / ✅ Data: Yes | ✅ Yes | ✅ Yes |
 | **Scalability** | Vertical | Horizontal | Single machine |
 | **Concurrent Writes** | High | Very High | Low |
 | **Concurrent Reads** | Very High | Very High | Very High |

@@ -38,16 +38,22 @@ A **warehouse** in Pangolin is a named configuration that specifies:
 - **Credentials**: How to authenticate (static credentials or STS/IAM roles)
 - **Region**: Geographic location of storage
 
-### Example Warehouse
+> [!TIP]
+> **Flat Key Support**: As of v0.1.0, `storage_config` supports flat keys (e.g., `"s3.bucket": "mybucket"`) as an alternative to nested objects. This is often easier to pass via CLI or environment-driven scripts.
+
+### Example Warehouse (Flat Keys)
 
 ```json
 {
   "name": "production-s3",
-  "storage_type": "s3",
-  "bucket": "my-company-datalake",
-  "region": "us-east-1",
-  "use_sts": true,
-  "role_arn": "arn:aws:iam::123456789:role/PangolinDataAccess"
+  "storage_config": {
+    "s3.bucket": "my-company-datalake",
+    "s3.region": "us-east-1"
+  },
+  "vending_strategy": {
+    "type": "AwsSts",
+    "role_arn": "arn:aws:iam::123456789:role/PangolinDataAccess"
+  }
 }
 ```
 

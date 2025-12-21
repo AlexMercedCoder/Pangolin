@@ -23,11 +23,11 @@ The in-memory store uses `DashMap` (concurrent HashMap) to store all catalog met
 - **Deterministic**: Fresh state on every restart
 
 ### ⚠️ Considerations
-- **Data Loss on Restart**: All data is ephemeral
-- **Memory Usage**: Entire catalog in RAM
-- **Single Instance**: No clustering or replication
-- **Not for Production**: Data persistence required
-- **Limited Scale**: Constrained by available RAM
+- **Catalog Metadata Loss on Restart**: Tenants, Warehouses, and Catalog configurations are lost.
+- **Improved Data Safety**: Iceberg tables' `metadata.json` and data files **are persisted** if a persistent [Warehouse](../warehouse/README.md) is configured.
+- **Memory Usage**: All catalog metadata (not data files) is stored in RAM.
+- **Single Instance**: No clustering or replication.
+- **Not for Production**: The catalog structure itself is ephemeral.
 
 ## Use Cases
 
@@ -324,12 +324,36 @@ RUST_LOG=pangolin_store=debug cargo run --bin pangolin_api
 3. ✅ Parallel test execution safe
 4. ✅ Deterministic test results
 
+## Hybrid Persistence (Development Mode)
+
+Starting with version 0.1.0, the In-Memory store supports a "Hybrid" mode when paired with a persistent [Warehouse](../warehouse/README.md).
+
+### How it works:
+1.  **Ephemeral Catalog**: Your tenants, warehouses, and catalog settings exist only in RAM.
+2.  **Persistent Iceberg Metadata**: When you create a table, Pangolin writes the Iceberg `metadata.json` directly to your configured object storage (S3/Azure/GCP).
+3.  **Resilience**: If you restart the API, you must recreate the Warehouse and Catalog with the same settings. Once recreated, you can "load" existing tables from storage because the `metadata.json` was never lost.
+
+### Configuration for Hybrid Mode:
+Ensure your `Warehouse` is configured with a real bucket/container:
+
+```bash
+# Create Warehouse with real S3 bucket
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -d '{
+    "name": "prod-s3",
+    "storage_config": { "s3.bucket": "my-persistent-bucket" },
+    "vending_strategy": { ... }
+  }'
+```
+
+---
+
 ## Comparison with Other Backends
 
 | Feature | In-Memory | SQLite | PostgreSQL | MongoDB |
 |---------|-----------|--------|------------|---------|
 | **Setup Time** | 0 seconds | 0 seconds | Minutes | Minutes |
-| **Persistence** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |
+| **Persistence** | ❌ Catalog: No / ✅ Data: Yes | ✅ Yes | ✅ Yes | ✅ Yes |
 | **Performance** | Excellent | Excellent | Very Good | Very Good |
 | **Memory Usage** | High | Low | Medium | Medium |
 | **Production Ready** | ❌ No | ✅ Yes | ✅ Yes | ✅ Yes |

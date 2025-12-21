@@ -53,8 +53,11 @@ docker build -t pangolin:latest .
 docker run -p 8080:8080 \
   -e PANGOLIN_STORAGE_TYPE=memory \
   -e PANGOLIN_NO_AUTH=true \
-  pangolin:latest
+  alexmerced/pangolin-api:latest
 ```
+
+> [!NOTE]
+> For production deployments, we recommend pinning to a specific version, e.g., `alexmerced/pangolin-api:0.1.0`.
 
 ---
 
