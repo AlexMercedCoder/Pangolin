@@ -28,6 +28,7 @@ pub mod federated_proxy;
 pub mod federated_catalog_handlers;
 pub mod tests_common;
 pub mod audit_handlers;
+#[cfg(test)]
 pub mod verification_tests;
 
 

@@ -10,6 +10,7 @@
     use serde_json::json;
     use crate::tests_common::EnvGuard;
     use uuid::Uuid;
+    use serial_test::serial;
 
     // Helper to generic test app
     fn app() -> Router {
@@ -42,6 +43,7 @@
 
     // 1. Authentication Tests
     #[tokio::test]
+    #[serial]
     async fn test_auth_root_login() {
         // Use unique env var names to avoid conflicts with other tests
         let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin_test_unique");
@@ -68,6 +70,7 @@
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_auth_failure() {
         let app = app();
 
@@ -91,6 +94,7 @@
 
     // 2. User Restriction Tests
     #[tokio::test]
+    #[serial]
     async fn test_root_cannot_create_warehouse() {
         let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
@@ -125,6 +129,7 @@
 
     // 3. Full Flow: Create Tenant Admin -> Create Warehouse -> Create Catalog -> PyIceberg Config
     #[tokio::test]
+    #[serial]
     async fn test_verified_flow_regression() {
         let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
@@ -220,6 +225,7 @@
 
     // 4. Namespace Creation (Iceberg)
     #[tokio::test]
+    #[serial]
     async fn test_iceberg_namespace_creation() {
          let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");

@@ -125,7 +125,7 @@ mod sqlite_new_endpoints_tests {
         let catalog = pangolin_core::model::Catalog {
             id: Uuid::new_v4(),
             name: catalog_name.to_string(),
-            catalog_type: pangolin_core::model::CatalogType::Iceberg,
+            catalog_type: pangolin_core::model::CatalogType::Local,
             warehouse_name: None,
             storage_location: None,
             federated_config: None,

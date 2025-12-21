@@ -8,7 +8,7 @@ mod tests {
     use tower::ServiceExt;
     use pangolin_api::app;
     use pangolin_store::CatalogStore;
-    use pangolin_api::auth_middleware::Claims;
+    use pangolin_api::auth::Claims;
     use pangolin_core::user::UserRole; // Use Core UserRole
     use pangolin_store::memory::MemoryStore;
     use std::sync::Arc;
@@ -73,7 +73,7 @@ mod tests {
     #[serial]
     async fn test_bearer_token_authentication() {
         use jsonwebtoken::{encode, EncodingKey, Header};
-        use pangolin_api::auth_middleware::Claims; // Use proper Claims
+        use pangolin_api::auth::Claims; // Use proper Claims
         use chrono::Utc;
 
         let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
@@ -151,7 +151,7 @@ mod tests {
     #[serial]
     async fn test_expired_token_rejected() {
         use jsonwebtoken::{encode, EncodingKey, Header};
-        use pangolin_api::auth_middleware::Claims;
+        use pangolin_api::auth::Claims;
         use chrono::Utc;
 
         let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");

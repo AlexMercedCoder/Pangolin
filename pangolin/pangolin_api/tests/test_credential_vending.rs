@@ -29,7 +29,10 @@ async fn test_aws_sts_vending_strategy() {
             ("s3.bucket".to_string(), "test-bucket".to_string()),
             ("s3.region".to_string(), "us-east-1".to_string()),
         ]),
-        vending_strategy: Some(VendingStrategy::AwsSts),
+        vending_strategy: Some(VendingStrategy::AwsSts { 
+            role_arn: "arn:aws:iam::123456789012:role/role-name".to_string(),
+            external_id: None 
+        }),
     };
     store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
     
@@ -37,7 +40,16 @@ async fn test_aws_sts_vending_strategy() {
     let retrieved = store.get_warehouse(tenant_id, "sts_warehouse".to_string()).await.unwrap();
     assert!(retrieved.is_some());
     let wh = retrieved.unwrap();
-    assert_eq!(wh.vending_strategy, Some(VendingStrategy::AwsSts));
+    // Use pattern matching to ignore internal fields if strictly testing enum variant, 
+    // or assert full equality if we constructed it with specific values.
+    // Since we constructed it, let's match the construction.
+    match wh.vending_strategy {
+        Some(VendingStrategy::AwsSts { role_arn, external_id }) => {
+            assert_eq!(role_arn, "arn:aws:iam::123456789012:role/role-name");
+            assert_eq!(external_id, None);
+        },
+        _ => panic!("Expected AwsSts strategy"),
+    }
     assert_eq!(wh.use_sts, true);
 }
 
@@ -65,7 +77,10 @@ async fn test_aws_static_vending_strategy() {
             ("s3.access-key-id".to_string(), "AKIAIOSFODNN7EXAMPLE".to_string()),
             ("s3.secret-access-key".to_string(), "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string()),
         ]),
-        vending_strategy: Some(VendingStrategy::AwsStatic),
+        vending_strategy: Some(VendingStrategy::AwsStatic {
+            access_key_id: "AKIAIOSFODNN7EXAMPLE".to_string(),
+            secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string()
+        }),
     };
     store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
     
@@ -73,7 +88,13 @@ async fn test_aws_static_vending_strategy() {
     let retrieved = store.get_warehouse(tenant_id, "static_warehouse".to_string()).await.unwrap();
     assert!(retrieved.is_some());
     let wh = retrieved.unwrap();
-    assert_eq!(wh.vending_strategy, Some(VendingStrategy::AwsStatic));
+    match wh.vending_strategy {
+        Some(VendingStrategy::AwsStatic { access_key_id, secret_access_key }) => {
+            assert_eq!(access_key_id, "AKIAIOSFODNN7EXAMPLE");
+            assert_eq!(secret_access_key, "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY");
+        },
+        _ => panic!("Expected AwsStatic strategy"),
+    }
     assert_eq!(wh.use_sts, false);
 }
 

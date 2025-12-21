@@ -14,7 +14,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_tenant_creation_blocked_in_no_auth_mode() {
-        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "1");
+        let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
         let store = Arc::new(MemoryStore::new());
         let app = pangolin_api::app(store);
@@ -35,8 +35,8 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-        assert_eq!(json["error"], "Cannot create additional tenants in NO_AUTH mode");
-        assert!(json["message"].as_str().unwrap().contains("evaluation and testing"));
+        assert_eq!(json["error"], "Tenant creation is disabled in NO_AUTH mode");
+
         assert!(json["hint"].as_str().unwrap().contains("PANGOLIN_NO_AUTH"));
     }
 
@@ -72,7 +72,7 @@ mod tests {
     async fn test_list_tenants_works_in_no_auth_mode() {
         use base64::{Engine as _, engine::general_purpose::STANDARD};
 
-        let _no_auth_guard = EnvGuard::new("PANGOLIN_NO_AUTH", "1");
+        let _no_auth_guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
         let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
 

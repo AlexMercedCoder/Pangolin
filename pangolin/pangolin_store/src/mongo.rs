@@ -798,7 +798,28 @@ impl CatalogStore for MongoStore {
     }
 
     // File Operations
+
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                match store.get(&object_store::path::Path::from(key)).await {
+                    Ok(result) => return Ok(result.bytes().await?.to_vec()),
+                    Err(e) => {
+                         tracing::warn!("Failed to read from warehouse-configured store for {}, falling back to global env: {}", path, e);
+                    }
+                }
+            }
+        }
+
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
@@ -829,7 +850,24 @@ impl CatalogStore for MongoStore {
         }
     }
 
+
     async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                store.put(&object_store::path::Path::from(key), data.into()).await?;
+                return Ok(());
+            }
+        }
+
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
@@ -1560,5 +1598,44 @@ impl MongoStore {
         let cursor = self.users().find(filter).await?;
         let users: Vec<User> = cursor.try_collect().await?;
         Ok(users)
+    }
+
+    async fn get_warehouse_for_location(&self, location: &str) -> Result<Option<Warehouse>> {
+         let bucket = if let Some(rest) = location.strip_prefix("s3://") {
+             rest.split('/').next().unwrap_or("")
+         } else if let Some(rest) = location.strip_prefix("az://") {
+             rest.split('/').next().unwrap_or("")
+         } else if let Some(rest) = location.strip_prefix("gs://") {
+             rest.split('/').next().unwrap_or("")
+         } else {
+             return Ok(None);
+         };
+
+         if bucket.is_empty() { return Ok(None); }
+
+         let cursor = self.warehouses().find(doc! {}).await.map_err(|e| anyhow::anyhow!(e))?;
+         let warehouses: Vec<Warehouse> = cursor.try_collect().await.map_err(|e| anyhow::anyhow!(e))?;
+
+         for warehouse in warehouses {
+             let s3_match = warehouse.storage_config.get("s3.bucket").map(|b| b == bucket).unwrap_or(false);
+             // Also check nested if passing full config
+             let s3_nested = if !s3_match {
+                  // Try to see if we can parse it as nested? No, storage_config is HashMap<String, String>.
+                  // So it's ALWAYS flat in the struct.
+                  // If it was stored as nested BSON, deserialization to HashMap might fail or flatten it?
+                  // pangolin_core::model::Warehouse defines storage_config as HashMap<String, String>.
+                  // So it IS flat.
+                  false
+             } else { false };
+             
+             let azure_match = warehouse.storage_config.get("azure.container").map(|c| c == bucket).unwrap_or(false);
+             let gcp_match = warehouse.storage_config.get("gcp.bucket").map(|b| b == bucket).unwrap_or(false);
+             
+             if s3_match || azure_match || gcp_match {
+                 return Ok(Some(warehouse));
+             }
+         }
+         
+         Ok(None)
     }
 }

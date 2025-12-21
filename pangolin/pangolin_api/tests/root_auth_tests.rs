@@ -25,7 +25,7 @@ fn setup_app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/app-config", get(get_app_config))
         .route("/api/v1/warehouses", post(create_warehouse))
         .route("/api/v1/catalogs", post(create_catalog))
-        .layer(middleware::from_fn(crate::auth_middleware::auth_middleware_wrapper))
+        .layer(middleware::from_fn(pangolin_api::auth_middleware::auth_middleware_wrapper))
         .with_state(store)
 }
 

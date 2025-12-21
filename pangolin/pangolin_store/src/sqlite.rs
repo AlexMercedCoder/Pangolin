@@ -1575,7 +1575,28 @@ impl CatalogStore for SqliteStore {
         Ok(perms)
     }
 
+
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                match store.get(&object_store::path::Path::from(key)).await {
+                    Ok(result) => return Ok(result.bytes().await?.to_vec()),
+                    Err(e) => {
+                         tracing::warn!("Failed to read from warehouse-configured store for {}, falling back to global env: {}", path, e);
+                    }
+                }
+            }
+        }
+
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
@@ -1605,7 +1626,24 @@ impl CatalogStore for SqliteStore {
         }
     }
 
+
     async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                store.put(&object_store::path::Path::from(key), data.into()).await?;
+                return Ok(());
+            }
+        }
+
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
@@ -1954,5 +1992,47 @@ impl SqliteStore {
         .await?
         .rows_affected();
         Ok(rows_affected as usize)
+    }
+
+    async fn get_warehouse_for_location(&self, location: &str) -> Result<Option<Warehouse>> {
+         let bucket = if let Some(rest) = location.strip_prefix("s3://") {
+             rest.split('/').next().unwrap_or("")
+         } else if let Some(rest) = location.strip_prefix("az://") {
+             rest.split('/').next().unwrap_or("")
+         } else if let Some(rest) = location.strip_prefix("gs://") {
+             rest.split('/').next().unwrap_or("")
+         } else {
+             return Ok(None);
+         };
+
+         if bucket.is_empty() { return Ok(None); }
+
+        let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config, vending_strategy FROM warehouses")
+            .fetch_all(&self.pool)
+            .await?;
+        
+        for row in rows {
+            let config_str: String = row.get("storage_config");
+            if let Ok(config) = serde_json::from_str::<std::collections::HashMap<String, String>>(&config_str) {
+                 let s3_match = config.get("s3.bucket").map(|b| b == bucket).unwrap_or(false);
+                 let azure_match = config.get("azure.container").map(|c| c == bucket).unwrap_or(false);
+                 let gcp_match = config.get("gcp.bucket").map(|b| b == bucket).unwrap_or(false);
+                 
+                 if s3_match || azure_match || gcp_match {
+                      let vending_strategy_str: Option<String> = row.get("vending_strategy");
+                      let vending_strategy = vending_strategy_str.and_then(|s| serde_json::from_str(&s).ok());
+                      
+                      return Ok(Some(Warehouse {
+                          id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                          tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
+                          name: row.get("name"),
+                          use_sts: row.get::<i32, _>("use_sts") != 0,
+                          storage_config: config,
+                          vending_strategy,
+                      }));
+                 }
+            }
+        }
+        Ok(None)
     }
 }

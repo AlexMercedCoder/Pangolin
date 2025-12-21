@@ -64,7 +64,7 @@ async fn test_tenant_user_create_namespace_denied() {
     let stored_user = store.get_user_by_username("tenant_user").await.unwrap().expect("User not found in store");
     assert_eq!(stored_user.username, "tenant_user");
     let stored_hash = stored_user.password_hash.as_ref().expect("No password hash");
-    let verify_result = crate::auth_middleware::verify_password(password, stored_hash).expect("Verification error");
+    let verify_result = pangolin_api::auth_middleware::verify_password(password, stored_hash).expect("Verification error");
     assert!(verify_result, "Password verification failed internally");
     println!("DEBUG: User verified in store with valid password hash");
 
@@ -74,11 +74,11 @@ async fn test_tenant_user_create_namespace_denied() {
         .route("/api/v1/users/login", post(login))
         // Target Route (Protected)
         .route("/v1/:prefix/namespaces", post(iceberg_handlers::create_namespace))
-        .layer(axum::middleware::from_fn(crate::auth_middleware::auth_middleware_wrapper))
+        .layer(axum::middleware::from_fn(pangolin_api::auth_middleware::auth_middleware_wrapper))
         .with_state(store.clone());
 
     // 3. Login to get Token
-    let login_req = crate::user_handlers::LoginRequest {
+    let login_req = pangolin_api::user_handlers::LoginRequest {
         username: "tenant_user".to_string(),
         password: password.to_string(),
     };
@@ -104,7 +104,7 @@ async fn test_tenant_user_create_namespace_denied() {
     let token = login_res["token"].as_str().unwrap();
 
     // 4. Attempt Create Namespace (Should Fail)
-    let create_req = crate::iceberg_handlers::CreateNamespaceRequest {
+    let create_req = pangolin_api::iceberg_handlers::CreateNamespaceRequest {
         namespace: vec!["db1".to_string()],
         properties: None,
     };

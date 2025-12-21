@@ -7,6 +7,7 @@ mod iceberg_endpoint_tests {
     use tower::ServiceExt;
     use pangolin_store::memory::MemoryStore;
     use pangolin_store::CatalogStore;
+use std::collections::HashMap;
     use pangolin_api::app;
     use std::sync::Arc;
     use pangolin_core::model::{Tenant, Warehouse, Catalog};
@@ -34,8 +35,12 @@ mod iceberg_endpoint_tests {
             id: Uuid::new_v4(),
             name: "test_warehouse".to_string(),
             tenant_id,
-            storage_config,
+            storage_config: HashMap::from([
+                ("s3.bucket".to_string(), "test-bucket".to_string()),
+                ("s3.region".to_string(), "us-east-1".to_string()),
+            ]),
             use_sts: false,
+            vending_strategy: None,
         }).await.unwrap();
 
         // Create catalog

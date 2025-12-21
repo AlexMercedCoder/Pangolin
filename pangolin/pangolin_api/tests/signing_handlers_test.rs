@@ -1,4 +1,4 @@
-use super::*;
+
 use pangolin_api::signing_handlers::{StorageCredential, LoadCredentialsResponse};
 use pangolin_api::iceberg_handlers::TableResponse;
 use axum::http::StatusCode;
@@ -297,7 +297,7 @@ fn test_table_response_without_credentials() {
 #[tokio::test]
 async fn test_assume_role_aws_placeholder() {
     // Test the placeholder implementation (without aws-sts feature)
-    let result = crate::signing_handlers::assume_role_aws(
+    let result: Result<(String, String, String, String), _> = pangolin_api::signing_handlers::assume_role_aws(
         "arn:aws:iam::123456789:role/TestRole",
         Some("external-id-123"),
         "test-session"
@@ -316,7 +316,7 @@ async fn test_assume_role_aws_placeholder() {
 #[tokio::test]
 async fn test_get_azure_token_placeholder() {
     // Test the placeholder implementation (without azure-oauth feature)
-    let result = crate::signing_handlers::get_azure_token(
+    let result: Result<String, _> = pangolin_api::signing_handlers::get_azure_token(
         "tenant-id-123",
         "client-id-456",
         "client-secret-789"
@@ -333,7 +333,7 @@ async fn test_get_azure_token_placeholder() {
 async fn test_get_gcp_token_placeholder() {
     // Test the placeholder implementation (without gcp-oauth feature)
     let service_account_json = r#"{"type":"service_account","project_id":"test"}"#;
-    let result = crate::signing_handlers::get_gcp_token(service_account_json).await;
+    let result: Result<String, _> = pangolin_api::signing_handlers::get_gcp_token(service_account_json).await;
     
     assert!(result.is_ok());
     let token = result.unwrap();
@@ -345,7 +345,7 @@ async fn test_get_gcp_token_placeholder() {
 #[tokio::test]
 async fn test_assume_role_aws_with_external_id() {
     // Test that external ID is properly handled
-    let result = crate::signing_handlers::assume_role_aws(
+    let result: Result<(String, String, String, String), _> = pangolin_api::signing_handlers::assume_role_aws(
         "arn:aws:iam::123456789:role/TestRole",
         Some("my-external-id"),
         "test-session-with-external-id"
@@ -357,7 +357,7 @@ async fn test_assume_role_aws_with_external_id() {
 #[tokio::test]
 async fn test_assume_role_aws_without_external_id() {
     // Test that external ID is optional
-    let result = crate::signing_handlers::assume_role_aws(
+    let result: Result<(String, String, String, String), _> = pangolin_api::signing_handlers::assume_role_aws(
         "arn:aws:iam::123456789:role/TestRole",
         None,
         "test-session-no-external-id"

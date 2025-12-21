@@ -10,7 +10,7 @@ mod tests {
     use pangolin_store::memory::MemoryStore;
     use pangolin_store::CatalogStore;
     use uuid::Uuid;
-    use pangolin_api::auth_middleware::Claims;
+    use pangolin_api::auth::Claims;
     use std::sync::Arc;
     use jsonwebtoken::{encode, EncodingKey, Header};
     use chrono::Utc;

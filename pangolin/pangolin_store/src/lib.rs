@@ -11,6 +11,7 @@ pub use memory::MemoryStore;
 pub use postgres::PostgresStore;
 pub use mongo::MongoStore;
 pub use sqlite::SqliteStore;
+pub mod object_store_factory;
 pub use signer::SignerImpl;
 
 use async_trait::async_trait;

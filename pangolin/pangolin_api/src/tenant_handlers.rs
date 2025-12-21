@@ -10,9 +10,10 @@ use std::collections::HashMap;
 use pangolin_store::CatalogStore;
 use pangolin_core::model::Tenant;
 use uuid::Uuid;
-use crate::auth::{TenantId, RootUser};
+use crate::auth::TenantId;
 use crate::iceberg_handlers::AppState;
 use utoipa::ToSchema;
+use pangolin_core::user::{UserSession, UserRole};
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateTenantRequest {
@@ -57,8 +58,16 @@ impl From<Tenant> for TenantResponse {
 )]
 pub async fn list_tenants(
     State(store): State<AppState>,
-    Extension(_root): Extension<RootUser>,
+    Extension(session): Extension<UserSession>,
 ) -> impl IntoResponse {
+    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+
+    if !no_auth_enabled && session.role != UserRole::Root {
+         return (StatusCode::FORBIDDEN, "Only Root can list tenants").into_response();
+    }
+
     match store.list_tenants().await {
         Ok(tenants) => {
             let response: Vec<TenantResponse> = tenants.into_iter().map(|t: Tenant| TenantResponse::from(t)).collect();
@@ -82,11 +91,10 @@ pub async fn list_tenants(
 )]
 pub async fn create_tenant(
     State(store): State<AppState>,
-    Extension(_root): Extension<RootUser>,
+    Extension(session): Extension<UserSession>,
     Json(payload): Json<CreateTenantRequest>,
 ) -> impl IntoResponse {
     // Check if running in no-auth mode
-    // Check if NO_AUTH mode is enabled (must be exactly "true" for security)
     let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
         .map(|v| v.to_lowercase() == "true")
         .unwrap_or(false);
@@ -100,6 +108,10 @@ pub async fn create_tenant(
             })),
         )
             .into_response();
+    }
+
+    if session.role != UserRole::Root {
+         return (StatusCode::FORBIDDEN, "Only Root can create tenants").into_response();
     }
     
     let tenant = Tenant {
@@ -158,9 +170,21 @@ pub async fn create_tenant(
 )]
 pub async fn get_tenant(
     State(store): State<AppState>,
-    Extension(_tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+
+    if !no_auth_enabled && session.role != UserRole::Root {
+        // Tenants can view themselves? Usually yes.
+        // If session tenant_id matches requested id
+        if session.tenant_id != Some(id) {
+             return (StatusCode::FORBIDDEN, "Forbidden").into_response();
+        }
+    }
+
     match store.get_tenant(id).await {
         Ok(Some(tenant)) => (StatusCode::OK, Json(TenantResponse::from(tenant))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Tenant not found").into_response(),
@@ -185,10 +209,15 @@ pub async fn get_tenant(
 )]
 pub async fn update_tenant(
     State(store): State<AppState>,
-    Extension(_root): Extension<RootUser>,
+    Extension(session): Extension<UserSession>,
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateTenantRequest>,
 ) -> impl IntoResponse {
+    // Only root can update tenants (for now)
+    if session.role != UserRole::Root {
+         return (StatusCode::FORBIDDEN, "Only Root can update tenants").into_response();
+    }
+
     let updates = pangolin_core::model::TenantUpdate {
         name: payload.name,
         properties: payload.properties,
@@ -222,9 +251,13 @@ pub async fn update_tenant(
 )]
 pub async fn delete_tenant(
     State(store): State<AppState>,
-    Extension(_root): Extension<RootUser>,
+    Extension(session): Extension<UserSession>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
+    if session.role != UserRole::Root {
+         return (StatusCode::FORBIDDEN, "Only Root can delete tenants").into_response();
+    }
+
     match store.delete_tenant(id).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => {

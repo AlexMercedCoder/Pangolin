@@ -604,6 +604,34 @@ impl CatalogStore for MemoryStore {
 
 
     async fn read_file(&self, location: &str) -> Result<Vec<u8>> {
+        // Try to read from object store first if configured
+        if let Some(warehouse) = self.get_warehouse_for_location(location) {
+             // Basic heuristic to skip memory-only locations if any
+             if location.starts_with("s3://") || location.starts_with("az://") || location.starts_with("gs://") {
+                 match crate::object_store_factory::create_object_store(&warehouse.storage_config, location) {
+                     Ok(store) => {
+                         let path = if let Some(rest) = location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")) {
+                              if let Some((_, key)) = rest.split_once('/') {
+                                  object_store::path::Path::from(key)
+                              } else {
+                                  object_store::path::Path::from(rest)
+                              }
+                         } else {
+                             object_store::path::Path::from(location)
+                         };
+                         
+                         match store.get(&path).await {
+                             Ok(result) => return Ok(result.bytes().await?.to_vec()),
+                             Err(e) => {
+                                 tracing::warn!("Failed to read from object store for {}, falling back to memory: {}", location, e);
+                             }
+                         }
+                     },
+                     Err(e) => tracing::warn!("Failed to create object store for {}, falling back to memory: {}", location, e),
+                 }
+             }
+        }
+
         if let Some(data) = self.files.get(location) {
             Ok(data.value().clone())
         } else {
@@ -612,7 +640,25 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()> {
-        self.files.insert(location.to_string(), content);
+        // Dual write: Memory + Object Store
+        self.files.insert(location.to_string(), content.clone());
+        
+        if let Some(warehouse) = self.get_warehouse_for_location(location) {
+             if location.starts_with("s3://") || location.starts_with("az://") || location.starts_with("gs://") {
+                 let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, location)?;
+                 let path = if let Some(rest) = location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")) {
+                      if let Some((_, key)) = rest.split_once('/') {
+                          object_store::path::Path::from(key)
+                      } else {
+                          object_store::path::Path::from(rest)
+                      }
+                 } else {
+                     object_store::path::Path::from(location)
+                 };
+                 store.put(&path, content.into()).await?;
+             }
+        }
+        
         Ok(())
     }
 
@@ -1202,6 +1248,35 @@ impl CatalogStore for MemoryStore {
     }
 }
 
+
+
+impl MemoryStore {
+    fn get_warehouse_for_location(&self, location: &str) -> Option<Warehouse> {
+        let warehouses_map: Vec<Warehouse> = self.warehouses
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        for warehouse in warehouses_map {
+            if let Some(bucket) = warehouse.storage_config.get("s3.bucket") {
+                if location.contains(bucket) {
+                    return Some(warehouse);
+                }
+            }
+            if let Some(container) = warehouse.storage_config.get("azure.container") {
+                if location.contains(container) {
+                     return Some(warehouse);
+                }
+            }
+            if let Some(bucket) = warehouse.storage_config.get("gcp.bucket") {
+                if location.contains(bucket) {
+                    return Some(warehouse);
+                }
+            }
+        }
+        None
+    }
+}
 
 #[async_trait]
 impl Signer for MemoryStore {

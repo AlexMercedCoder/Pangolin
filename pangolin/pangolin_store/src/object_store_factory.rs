@@ -1,0 +1,95 @@
+use anyhow::Result;
+use object_store::ObjectStore;
+use std::collections::HashMap;
+use std::sync::Arc;
+
+pub fn create_object_store(
+    storage_config: &HashMap<String, String>,
+    location: &str,
+) -> Result<Box<dyn ObjectStore>> {
+    if location.starts_with("s3://") {
+        create_s3_store(storage_config, location)
+    } else if location.starts_with("az://") || location.starts_with("abfs://") {
+        create_azure_store(storage_config, location)
+    } else if location.starts_with("gs://") {
+        create_gcp_store(storage_config, location)
+    } else {
+        Err(anyhow::anyhow!("Unsupported scheme for location: {}", location))
+    }
+}
+
+fn create_s3_store(
+    config: &HashMap<String, String>,
+    location: &str,
+) -> Result<Box<dyn ObjectStore>> {
+    let (bucket, _) = location
+        .strip_prefix("s3://")
+        .unwrap()
+        .split_once('/')
+        .ok_or_else(|| anyhow::anyhow!("Invalid S3 path structure"))?;
+
+    let region = config
+        .get("s3.region")
+        .map(|s| s.as_str())
+        .unwrap_or("us-east-1");
+    let access_key = config
+        .get("s3.access-key-id")
+        .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id"))?;
+    let secret_key = config
+        .get("s3.secret-access-key")
+        .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key"))?;
+    let endpoint = config.get("s3.endpoint");
+
+    let mut builder = object_store::aws::AmazonS3Builder::new()
+        .with_region(region)
+        .with_bucket_name(bucket)
+        .with_access_key_id(access_key)
+        .with_secret_access_key(secret_key)
+        .with_allow_http(true); // Useful for MinIO
+
+    if let Some(ep) = endpoint {
+        builder = builder.with_endpoint(ep);
+    }
+
+    Ok(Box::new(builder.build()?))
+}
+
+fn create_azure_store(
+    config: &HashMap<String, String>,
+    location: &str,
+) -> Result<Box<dyn ObjectStore>> {
+    // Basic Azure implementation (can expand as needed)
+    let container = if location.starts_with("az://") {
+        location.strip_prefix("az://").unwrap().split('/').next().unwrap()
+    } else {
+        location.strip_prefix("abfs://").unwrap().split('@').next().unwrap()
+    };
+
+    let account = config.get("azure.account-name").ok_or_else(|| anyhow::anyhow!("Missing azure.account-name"))?;
+    let key = config.get("azure.account-key").ok_or_else(|| anyhow::anyhow!("Missing azure.account-key"))?;
+
+    let builder = object_store::azure::MicrosoftAzureBuilder::new()
+        .with_account(account)
+        .with_access_key(key)
+        .with_container_name(container);
+        
+    Ok(Box::new(builder.build()?))
+}
+
+fn create_gcp_store(
+    config: &HashMap<String, String>,
+    location: &str,
+) -> Result<Box<dyn ObjectStore>> {
+    let bucket = location.strip_prefix("gs://").unwrap().split('/').next().unwrap();
+    let service_account = config.get("gcp.service-account").ok_or_else(|| anyhow::anyhow!("Missing gcp.service-account"))?; // Path to key file or json content? Usually path or env.
+
+    // object_store crate for GCP usually expects GOOGLE_APPLICATION_CREDENTIALS env or path.
+    // Builder has `with_service_account_path` or `with_service_account_key`.
+    
+    // For now assuming service-account points to a file path
+    let builder = object_store::gcp::GoogleCloudStorageBuilder::new()
+        .with_bucket_name(bucket)
+        .with_service_account_path(service_account);
+
+    Ok(Box::new(builder.build()?))
+}

@@ -565,18 +565,36 @@ pub async fn create_table(
     
     let ns_vec = vec![ns_name];
 
-    // Resolve warehouse bucket if possible
-    let mut bucket_name = "warehouse".to_string();
-    if let Some(warehouse_name) = &catalog.warehouse_name {
-        if let Ok(Some(wh)) = store.get_warehouse(tenant_id, warehouse_name.clone()).await {
-             if let Some(b) = wh.storage_config.get("bucket") {
-                 bucket_name = b.clone();
-             }
-        }
-    }
-
+    // Resolve location
     let table_uuid = Uuid::new_v4();
-    let location = payload.location.unwrap_or_else(|| format!("s3://{}/{}/{}/{}", bucket_name, catalog_name, ns_vec.join("/"), tbl_name));
+    let location = if let Some(loc) = payload.location {
+        loc
+    } else if let Some(base_loc) = &catalog.storage_location {
+         format!("{}/{}/{}", base_loc.trim_end_matches('/'), ns_vec.join("/"), tbl_name)
+    } else {
+        // Fallback: Resolve warehouse bucket if possible
+        let mut bucket_name = "warehouse".to_string();
+        let mut scheme = "s3";
+        
+        if let Some(warehouse_name) = &catalog.warehouse_name {
+            if let Ok(Some(wh)) = store.get_warehouse(tenant_id, warehouse_name.clone()).await {
+                 if let Some(b) = wh.storage_config.get("s3.bucket") {
+                     bucket_name = b.clone();
+                     scheme = "s3";
+                 } else if let Some(c) = wh.storage_config.get("azure.container") {
+                     bucket_name = c.clone();
+                     scheme = "abfss"; // Azure
+                 } else if let Some(b) = wh.storage_config.get("gcp.bucket") {
+                     bucket_name = b.clone();
+                     scheme = "gs"; // GCP
+                 } else if let Some(b) = wh.storage_config.get("bucket") {
+                     // Legacy fallback
+                     bucket_name = b.clone();
+                 }
+            }
+        }
+        format!("{}://{}/{}/{}/{}", scheme, bucket_name, catalog_name, ns_vec.join("/"), tbl_name)
+    };
 
     
     // Parse schema from payload if provided, otherwise create empty schema

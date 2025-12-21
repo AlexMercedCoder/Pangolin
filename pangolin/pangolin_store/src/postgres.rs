@@ -894,7 +894,29 @@ impl CatalogStore for PostgresStore {
     // But `CatalogStore` trait has `read_file`/`write_file`.
     // Let's implement a simple `files` table for small metadata files.
     
+
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                match store.get(&object_store::path::Path::from(key)).await {
+                    Ok(result) => return Ok(result.bytes().await?.to_vec()),
+                    Err(e) => {
+                         tracing::warn!("Failed to read from warehouse-configured store for {}, falling back to global env: {}", path, e);
+                    }
+                }
+            }
+        }
+
+        // Fallback to existing logic (Global Env Vars)
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
@@ -924,7 +946,25 @@ impl CatalogStore for PostgresStore {
         }
     }
 
+
     async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                store.put(&object_store::path::Path::from(key), data.into()).await?;
+                return Ok(());
+            }
+        }
+
+        // Fallback to existing logic (Global Env Vars)
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
@@ -1921,4 +1961,46 @@ impl Signer for PostgresStore {
     }
 
 
+}
+
+impl PostgresStore {
+    async fn get_warehouse_for_location(&self, location: &str) -> Result<Option<Warehouse>> {
+         let bucket = if let Some(rest) = location.strip_prefix("s3://") {
+             rest.split('/').next().unwrap_or("")
+         } else if let Some(rest) = location.strip_prefix("az://") {
+             rest.split('/').next().unwrap_or("")
+         } else if let Some(rest) = location.strip_prefix("gs://") {
+             rest.split('/').next().unwrap_or("")
+         } else {
+             return Ok(None);
+         };
+
+         if bucket.is_empty() { return Ok(None); }
+
+        let row = sqlx::query("SELECT id, name, tenant_id, storage_config, use_sts, vending_strategy FROM warehouses WHERE 
+            storage_config->'s3'->>'bucket' = $1 OR 
+            storage_config->>'s3.bucket' = $1 OR
+            storage_config->'azure'->>'container' = $1 OR 
+            storage_config->>'azure.container' = $1 OR
+            storage_config->'gcp'->>'bucket' = $1 OR
+            storage_config->>'gcp.bucket' = $1 LIMIT 1")
+            .bind(bucket)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            Ok(Some(Warehouse {
+                id: row.get("id"),
+                name: row.get("name"),
+                tenant_id: row.get("tenant_id"),
+                use_sts: row.try_get("use_sts").unwrap_or(false),
+                storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+                vending_strategy: row.try_get("vending_strategy")
+                    .ok()
+                    .and_then(|v: serde_json::Value| serde_json::from_value(v).ok()),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
 }

@@ -98,7 +98,7 @@ async fn test_auth_flow() {
             // Mock handler that returns the session user
             Json(session)
         }))
-        .layer(middleware::from_fn(crate::auth_middleware::auth_middleware_wrapper))
+        .layer(middleware::from_fn(pangolin_api::auth_middleware::auth_middleware_wrapper))
         .with_state(store.clone());
         
     // Set JWT secret for test

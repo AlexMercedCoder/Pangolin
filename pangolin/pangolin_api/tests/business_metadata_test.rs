@@ -35,7 +35,7 @@ async fn test_business_metadata_flow() {
         .route("/api/v1/assets/:id/request-access", post(request_access))
         .route("/api/v1/access-requests", get(list_access_requests))
         .route("/api/v1/access-requests/:id", put(update_access_request).get(get_access_request))
-        .layer(axum::middleware::from_fn(crate::auth_middleware::auth_middleware_wrapper))
+        .layer(axum::middleware::from_fn(pangolin_api::auth_middleware::auth_middleware_wrapper))
         .with_state(store.clone());
 
     // 3. Create Tenant & User
@@ -106,14 +106,14 @@ async fn test_business_metadata_flow() {
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
     };
     
-    let token = crate::auth_middleware::generate_token(session, secret).unwrap();
+    let token = pangolin_api::auth_middleware::generate_token(session, secret).unwrap();
     let auth_header = format!("Bearer {}", token);
 
     // 6. Test Add Metadata
     let metadata_req = AddMetadataRequest {
         description: Some("Test description".to_string()),
         tags: vec!["pii".to_string()],
-        properties: HashMap::new(),
+        properties: serde_json::json!({}),
         discoverable: true,
     };
     
