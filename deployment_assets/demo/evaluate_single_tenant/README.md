@@ -83,8 +83,11 @@ The included Jupyter notebook server has PyIceberg pre-installed.
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import NestedField, StringType, IntegerType
+import pyarrow as pa
 
-# Connect to Pangolin (using the 'demo' catalog created above)
+# 1. Connect to Pangolin
+# We use the 'demo' catalog we created earlier.
+# credentials are 'vended-credentials' to use the API's S3 vending.
 catalog = load_catalog(
     "pangolin",
     **{
@@ -94,29 +97,20 @@ catalog = load_catalog(
     }
 )
 
-# Create a namespace
+# 2. Create Namespace
 print("Creating namespace 'test_ns'...")
 try:
     catalog.create_namespace("test_ns")
-except Exception:
-    print("Namespace already exists")
+    print("Namespace created.")
+except Exception as e:
+    print(f"Namespace likely exists: {e}")
 
-# Define Schema
+# 3. Define Schema and Create/Load Table
 schema = Schema(
     NestedField(1, "id", IntegerType(), required=True),
     NestedField(2, "data", StringType(), required=False),
 )
 
-# Create table
-print("Creating table 'test_ns.test_table'...")
-try:
-    table = catalog.create_table("test_ns.test_table", schema=schema)
-    print(f"Created table: {table}")
-except Exception:
-    print("Table already exists, loading...")
-    table = catalog.load_table("test_ns.test_table")
-
-# Verify read
 print(f"Successfully loaded table: {table}")
 ```
 
