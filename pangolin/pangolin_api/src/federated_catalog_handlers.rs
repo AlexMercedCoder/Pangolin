@@ -28,9 +28,7 @@ pub struct CreateFederatedCatalogRequest {
 pub struct FederatedCatalogResponse {
     pub id: Uuid,
     pub name: String,
-    pub base_url: String,
-    pub auth_type: String,
-    pub timeout_seconds: u64,
+    pub properties: std::collections::HashMap<String, String>,
 }
 
 impl From<Catalog> for FederatedCatalogResponse {
@@ -42,9 +40,7 @@ impl From<Catalog> for FederatedCatalogResponse {
         Self {
             id: catalog.id,
             name: catalog.name,
-            base_url: config.base_url,
-            auth_type: format!("{:?}", config.auth_type),
-            timeout_seconds: config.timeout_seconds,
+            properties: config.properties,
         }
     }
 }
@@ -407,7 +403,7 @@ pub async fn test_federated_connection(
             Json(serde_json::json!({
                 "status": "connected",
                 "catalog": catalog_name,
-                "base_url": config.base_url
+                "base_url": config.properties.get("uri").unwrap_or(&"unknown".to_string())
             })),
         )
             .into_response(),

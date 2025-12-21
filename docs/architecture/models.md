@@ -41,6 +41,11 @@ Defines how Pangolin provides temporary data access credentials to clients.
 ### Catalog
 Standard Iceberg or Federated proxy catalog.
 ```rust
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct FederatedCatalogConfig {
+    pub properties: HashMap<String, String>, // Flexible configuration (uri, token, warehouse, etc.)
+}
+
 pub struct Catalog {
     pub id: Uuid,
     pub name: String,

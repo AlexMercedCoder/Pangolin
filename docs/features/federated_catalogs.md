@@ -12,10 +12,9 @@ Manage external connections directly from your terminal.
 **Create Federated Catalog:**
 ```bash
 pangolin-admin create-federated-catalog partner_prod \
-  --base-url "https://api.partner.io/v1/catalog" \
+  -P uri="https://api.partner.io/v1/catalog" \
   --storage-location "s3://partner-bucket/data" \
-  --auth-type BearerToken \
-  --token "secret_partner_token"
+  -P token="secret_partner_token"
 ```
 
 **Test Connectivity:**

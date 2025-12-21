@@ -2,20 +2,10 @@ import { apiClient, type ApiResponse } from './client';
 
 export type CatalogType = 'Local' | 'Federated';
 
-export type FederatedAuthType = 'None' | 'BasicAuth' | 'BearerToken' | 'ApiKey';
-
-export interface FederatedCredentials {
-	username?: string;
-	password?: string;
-	token?: string;
-	api_key?: string;
-}
+// Types removed: FederatedAuthType, FederatedCredentials
 
 export interface FederatedCatalogConfig {
-	base_url: string;
-	auth_type: FederatedAuthType;
-	credentials?: FederatedCredentials;
-	timeout_seconds: number;
+	properties: Record<string, string>;
 }
 
 export interface Catalog {

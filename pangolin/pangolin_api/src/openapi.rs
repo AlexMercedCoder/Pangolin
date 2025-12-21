@@ -21,7 +21,6 @@ use crate::iceberg_handlers::*;
 use pangolin_core::model::{
     Tenant, TenantUpdate, Warehouse, WarehouseUpdate, VendingStrategy,
     Catalog, CatalogUpdate, CatalogType, FederatedCatalogConfig,
-    FederatedAuthType, FederatedCredentials,
     MergeOperation, MergeConflict, ConflictResolution, ResolutionStrategy, MergeStatus, ConflictType,
 };
 use pangolin_core::user::{User, UserRole, UserSession, ServiceUser, OAuthProvider, ApiKeyResponse};
@@ -149,7 +148,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             Tenant, TenantUpdate,
             Warehouse, WarehouseUpdate, VendingStrategy,
             Catalog, CatalogUpdate, CatalogType,
-            FederatedCatalogConfig, FederatedAuthType, FederatedCredentials,
+            FederatedCatalogConfig,
             
             // User models
             User, UserRole, UserSession, ServiceUser, OAuthProvider, ApiKeyResponse,

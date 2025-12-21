@@ -421,9 +421,8 @@ curl -X POST http://localhost:8080/api/v1/federated-catalogs \
   -d '{
     "name": "partner-catalog",
     "config": {
-      "base_url": "https://partner.example.com",
-      "auth_type": "BearerToken",
-      "credentials": {
+      "properties": {
+        "uri": "https://partner.example.com",
         "token": "partner-api-token"
       }
     }

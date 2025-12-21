@@ -54,28 +54,9 @@ pub enum CatalogType {
     Federated,  // External Iceberg REST catalog (proxy)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
-pub enum FederatedAuthType {
-    None,           // No authentication required
-    BasicAuth,      // Username/password
-    BearerToken,    // JWT token
-    ApiKey,         // X-API-Key header
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct FederatedCredentials {
-    pub username: Option<String>,
-    pub password: Option<String>,
-    pub token: Option<String>,
-    pub api_key: Option<String>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct FederatedCatalogConfig {
-    pub base_url: String,
-    pub auth_type: FederatedAuthType,
-    pub credentials: Option<FederatedCredentials>,
-    pub timeout_seconds: u64,
+    pub properties: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

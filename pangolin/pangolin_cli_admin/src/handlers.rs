@@ -584,47 +584,28 @@ pub async fn handle_set_metadata(client: &PangolinClient, _entity_type: String, 
 pub async fn handle_create_federated_catalog(
     client: &PangolinClient,
     name: String,
-    base_url: String,
     storage_location: String,
-    auth_type: String,
-    token: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
-    api_key: Option<String>,
-    timeout: u32,
+    properties_raw: Vec<String>,
 ) -> Result<(), CliError> {
     if client.config.tenant_id.is_none() {
         return Err(CliError::ApiError("Root user cannot create federated catalogs. Please login as Tenant Admin.".to_string()));
     }
 
-    // Build credentials based on auth_type
-    let credentials = match auth_type.as_str() {
-        "BearerToken" => {
-            let t = token.ok_or_else(|| CliError::ApiError("--token required for BearerToken auth".to_string()))?;
-            serde_json::json!({ "token": t })
-        },
-        "BasicAuth" => {
-            let u = username.ok_or_else(|| CliError::ApiError("--username required for BasicAuth".to_string()))?;
-            let p = password.ok_or_else(|| CliError::ApiError("--password required for BasicAuth".to_string()))?;
-            serde_json::json!({ "username": u, "password": p })
-        },
-        "ApiKey" => {
-            let k = api_key.ok_or_else(|| CliError::ApiError("--api-key required for ApiKey auth".to_string()))?;
-            serde_json::json!({ "api_key": k })
-        },
-        "None" => serde_json::json!({}),
-        _ => return Err(CliError::ApiError(format!("Invalid auth_type: {}. Use None, BasicAuth, BearerToken, or ApiKey", auth_type))),
-    };
+    let mut properties = serde_json::Map::new();
+    for prop in properties_raw {
+        if let Some((key, value)) = prop.split_once('=') {
+            properties.insert(key.to_string(), Value::String(value.to_string()));
+        } else {
+             println!("Warning: Ignoring invalid property '{}'. format must be key=value", prop);
+        }
+    }
 
     let body = serde_json::json!({
         "name": name,
         "catalog_type": "Federated",
         "storage_location": storage_location,
         "federated_config": {
-            "base_url": base_url,
-            "auth_type": auth_type,
-            "credentials": credentials,
-            "timeout_seconds": timeout
+            "properties": properties
         }
     });
 
@@ -637,8 +618,6 @@ pub async fn handle_create_federated_catalog(
     }
 
     println!("✅ Federated catalog '{}' created successfully!", name);
-    println!("   Base URL: {}", base_url);
-    println!("   Auth Type: {}", auth_type);
     Ok(())
 }
 
@@ -664,14 +643,18 @@ pub async fn handle_list_federated_catalogs(client: &PangolinClient) -> Result<(
     
     let rows: Vec<Vec<String>> = federated.iter().map(|c| {
         let config = &c["federated_config"];
+        let props = config["properties"].as_object();
+        let uri = props.and_then(|p| p.get("uri")).and_then(|v| v.as_str()).unwrap_or("-");
+        let prop_count = props.map(|p| p.len()).unwrap_or(0);
+        
         vec![
             c["name"].as_str().unwrap_or("-").to_string(),
-            config["base_url"].as_str().unwrap_or("-").to_string(),
-            config["auth_type"].as_str().unwrap_or("-").to_string(),
+            uri.to_string(),
+            format!("{} props", prop_count),
         ]
     }).collect();
     
-    print_table(vec!["Name", "Base URL", "Auth Type"], rows);
+    print_table(vec!["Name", "URI", "Properties"], rows);
     Ok(())
 }
 

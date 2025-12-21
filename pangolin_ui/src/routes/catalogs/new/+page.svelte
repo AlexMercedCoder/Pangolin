@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { catalogsApi, type CreateCatalogRequest, type FederatedAuthType } from '$lib/api/catalogs';
+	import { catalogsApi, type CreateCatalogRequest } from '$lib/api/catalogs';
 	import { warehousesApi, type Warehouse } from '$lib/api/warehouses';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -24,20 +24,16 @@
 	let storageLocation = '';
 
 	// Federated Catalog State
-	let fedBaseUrl = '';
-	let fedAuthType: FederatedAuthType = 'None';
-	let fedUsername = '';
-	let fedPassword = '';
-	let fedToken = '';
-	let fedApiKey = '';
-	let fedTimeout = 30;
+	// Federated Catalog State
+	let properties: { key: string; value: string }[] = [{ key: 'uri', value: '' }];
 
-	const authTypeOptions = [
-		{ value: 'None', label: 'None' },
-		{ value: 'BasicAuth', label: 'Basic Auth' },
-		{ value: 'BearerToken', label: 'Bearer Token' },
-		{ value: 'ApiKey', label: 'API Key' }
-	];
+	function addProperty() {
+		properties = [...properties, { key: '', value: '' }];
+	}
+
+	function removeProperty(index: number) {
+		properties = properties.filter((_, i) => i !== index);
+	}
 
 	onMount(async () => {
 		try {
@@ -81,25 +77,17 @@
 			let request: CreateCatalogRequest;
 
 			if (isFederated) {
-				const credentials: any = {};
-				if (fedAuthType === 'BasicAuth') {
-					credentials.username = fedUsername;
-					credentials.password = fedPassword;
-				} else if (fedAuthType === 'BearerToken') {
-					credentials.token = fedToken;
-				} else if (fedAuthType === 'ApiKey') {
-					credentials.api_key = fedApiKey;
+				const propsMap: Record<string, string> = {};
+				for (const p of properties) {
+					if (p.key.trim()) {
+						propsMap[p.key.trim()] = p.value;
+					}
 				}
 
 				request = {
 					name,
 					catalog_type: 'Federated',
-					federated_config: {
-						base_url: fedBaseUrl,
-						auth_type: fedAuthType,
-						credentials: fedAuthType === 'None' ? undefined : credentials,
-						timeout_seconds: fedTimeout
-					},
+					federated_config: { properties: propsMap },
 					properties: {}
 				};
 			} else {
@@ -216,55 +204,56 @@
 					</div>
 				{:else}
 					<!-- Federated Catalog Fields -->
-					<div class="space-y-6 transition-all duration-300">
-						<Input
-							label="Base URL"
-							bind:value={fedBaseUrl}
-							placeholder="https://rest-catalog.example.com/api/v1"
-							required
-							disabled={loading}
-						/>
+					<!-- Federated Catalog Fields -->
+					<div class="space-y-4 transition-all duration-300">
+						<div class="flex items-center justify-between">
+							<h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Configuration Properties</h3>
+							<Button variant="secondary" size="sm" type="button" on:click={addProperty}>
+								+ Add Property
+							</Button>
+						</div>
 
-						<Select
-							label="Authentication Type"
-							bind:value={fedAuthType}
-							options={authTypeOptions}
-							disabled={loading}
-						/>
+						<div class="space-y-3">
+							{#each properties as prop, i}
+								<div class="flex gap-2 items-start">
+									<div class="flex-1">
+										<Input
+											placeholder="Key (e.g. uri)"
+											bind:value={prop.key}
+											disabled={loading}
+										/>
+									</div>
+									<div class="flex-1">
+										<Input
+											placeholder="Value"
+											bind:value={prop.value}
+											disabled={loading}
+										/>
+									</div>
+									<button 
+										type="button"
+										class="mt-2 text-gray-400 hover:text-red-500 transition-colors"
+										on:click={() => removeProperty(i)}
+										disabled={loading}
+										title="Remove property"
+									>
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+											<path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+										</svg>
+									</button>
+								</div>
+							{/each}
+						</div>
 
-						{#if fedAuthType === 'BasicAuth'}
-							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<Input
-									label="Username"
-									bind:value={fedUsername}
-									required
-									disabled={loading}
-								/>
-								<Input
-									label="Password"
-									type="password"
-									bind:value={fedPassword}
-									required
-									disabled={loading}
-								/>
-							</div>
-						{:else if fedAuthType === 'BearerToken'}
-							<Input
-								label="Bearer Token"
-								type="password"
-								bind:value={fedToken}
-								required
-								disabled={loading}
-							/>
-						{:else if fedAuthType === 'ApiKey'}
-							<Input
-								label="API Key"
-								type="password"
-								bind:value={fedApiKey}
-								required
-								disabled={loading}
-							/>
-						{/if}
+						<div class="text-xs text-gray-500 mt-2">
+							<p>Common properties:</p>
+							<ul class="list-disc pl-4 mt-1 space-y-1">
+								<li><code>uri</code>: The URL of the external catalog (Required)</li>
+								<li><code>warehouse</code>: The warehouse name to use</li>
+								<li><code>token</code>: Authentication token</li>
+								<li><code>credential</code>: Client credential (id:secret)</li>
+							</ul>
+						</div>
 					</div>
 				{/if}
 			</div>
@@ -282,7 +271,7 @@
 					variant="primary"
 					type="submit"
 					{loading}
-					disabled={loading || !name || (!isFederated && !storageLocation) || (isFederated && !fedBaseUrl)}
+					disabled={loading || !name || (!isFederated && !storageLocation) || (isFederated && properties.every(p => !p.key || !p.value))}
 				>
 					{loading ? 'Creating...' : 'Create Catalog'}
 				</Button>

@@ -116,34 +116,16 @@ pub enum AdminCommand {
         name: Option<String>,
     },
     // --- Federated Catalogs ---
-    /// Create a federated catalog that proxies to another Iceberg REST catalog
+    /// Create a federated catalog with flexible properties
     CreateFederatedCatalog {
         /// Name of the federated catalog
         name: String,
-        /// Base URL of the remote catalog (e.g., http://remote:8080/v1/catalog_name)
-        #[arg(long)]
-        base_url: String,
-        /// Storage location (required even for federated catalogs)
+        /// Storage location (required)
         #[arg(long)]
         storage_location: String,
-        /// Authentication type: None, BasicAuth, BearerToken, ApiKey
-        #[arg(long, default_value = "None")]
-        auth_type: String,
-        /// Bearer token (required if auth_type is BearerToken)
-        #[arg(long)]
-        token: Option<String>,
-        /// Username (required if auth_type is BasicAuth)
-        #[arg(long)]
-        username: Option<String>,
-        /// Password (required if auth_type is BasicAuth)
-        #[arg(long)]
-        password: Option<String>,
-        /// API key (required if auth_type is ApiKey)
-        #[arg(long)]
-        api_key: Option<String>,
-        /// Timeout in seconds
-        #[arg(long, default_value = "30")]
-        timeout: u32,
+        /// Configuration properties (key=value). E.g. -P uri=http://... -P token=...
+        #[arg(short = 'P', long = "property")]
+        properties: Vec<String>,
     },
     /// List all federated catalogs
     ListFederatedCatalogs,

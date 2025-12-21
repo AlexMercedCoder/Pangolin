@@ -1,6 +1,6 @@
 use axum::http::StatusCode;
 use pangolin_api::*;
-use pangolin_core::model::{Catalog, CatalogType, FederatedAuthType, FederatedCatalogConfig, FederatedCredentials, Tenant};
+use pangolin_core::model::{Catalog, CatalogType, FederatedCatalogConfig, Tenant};
 use pangolin_store::memory::MemoryStore;
 use pangolin_store::CatalogStore;
 use std::collections::HashMap;
@@ -53,15 +53,12 @@ async fn test_cross_tenant_federation() {
         warehouse_name: None,
         storage_location: None,
         federated_config: Some(FederatedCatalogConfig {
-            base_url: "http://localhost:8080".to_string(), // Would be Tenant B's URL
-            auth_type: FederatedAuthType::ApiKey,
-            credentials: Some(FederatedCredentials {
-                username: None,
-                password: None,
-                token: None,
-                api_key: Some("tenant_b_service_user_key_xyz123".to_string()),
-            }),
-            timeout_seconds: 30,
+            properties: {
+                let mut props = HashMap::new();
+                props.insert("uri".to_string(), "http://localhost:8080".to_string());
+                props.insert("api_key".to_string(), "tenant_b_service_user_key_xyz123".to_string());
+                props
+            },
         }),
         properties: HashMap::new(),
     };
@@ -89,9 +86,8 @@ async fn test_cross_tenant_federation() {
         .unwrap();
     assert!(retrieved_federated.federated_config.is_some());
     let config = retrieved_federated.federated_config.unwrap();
-    assert_eq!(config.base_url, "http://localhost:8080");
-    assert_eq!(config.auth_type, FederatedAuthType::ApiKey);
-    assert_eq!(config.timeout_seconds, 30);
+    assert_eq!(config.properties.get("uri"), Some(&"http://localhost:8080".to_string()));
+    assert_eq!(config.properties.get("api_key"), Some(&"tenant_b_service_user_key_xyz123".to_string()));
 
     println!("✅ Cross-tenant federation test passed!");
     println!("   - Tenant A created with federated catalog 'partner_production'");
@@ -121,15 +117,12 @@ async fn test_federated_catalog_crud() {
         warehouse_name: None,
         storage_location: None,
         federated_config: Some(FederatedCatalogConfig {
-            base_url: "https://external.example.com".to_string(),
-            auth_type: FederatedAuthType::BearerToken,
-            credentials: Some(FederatedCredentials {
-                username: None,
-                password: None,
-                token: Some("jwt_token_xyz".to_string()),
-                api_key: None,
-            }),
-            timeout_seconds: 60,
+            properties: {
+                let mut props = HashMap::new();
+                props.insert("uri".to_string(), "https://external.example.com".to_string());
+                props.insert("token".to_string(), "jwt_token_xyz".to_string());
+                props
+            },
         }),
         properties: HashMap::new(),
     };

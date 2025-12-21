@@ -2,7 +2,7 @@ use anyhow::Result;
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
-use pangolin_core::model::{FederatedAuthType, FederatedCatalogConfig};
+use pangolin_core::model::FederatedCatalogConfig;
 use reqwest::RequestBuilder;
 use std::time::Duration;
 
@@ -30,7 +30,10 @@ impl FederatedCatalogProxy {
         body: Option<Bytes>,
         headers: HeaderMap,
     ) -> Result<Response> {
-        let url = format!("{}{}", config.base_url, path);
+        let base_url = config.properties.get("uri")
+            .ok_or_else(|| anyhow::anyhow!("Federated catalog missing 'uri' property"))?;
+            
+        let url = format!("{}{}", base_url, path);
         
         // Convert axum::http::Method to reqwest::Method
         let reqwest_method = match method {
@@ -89,35 +92,22 @@ impl FederatedCatalogProxy {
         Ok((status, response_headers, body_bytes).into_response())
     }
     
-    /// Add authentication to the request based on config
+    /// Add authentication to the request based on config properties
     fn add_auth(&self, mut request: RequestBuilder, config: &FederatedCatalogConfig) -> RequestBuilder {
-        match &config.auth_type {
-            FederatedAuthType::None => request,
-            FederatedAuthType::BasicAuth => {
-                if let Some(creds) = &config.credentials {
-                    if let (Some(username), Some(password)) = (&creds.username, &creds.password) {
-                        request = request.basic_auth(username, Some(password));
-                    }
-                }
-                request
-            }
-            FederatedAuthType::BearerToken => {
-                if let Some(creds) = &config.credentials {
-                    if let Some(token) = &creds.token {
-                        request = request.bearer_auth(token);
-                    }
-                }
-                request
-            }
-            FederatedAuthType::ApiKey => {
-                if let Some(creds) = &config.credentials {
-                    if let Some(api_key) = &creds.api_key {
-                        request = request.header("X-API-Key", api_key);
-                    }
-                }
-                request
-            }
+        // Bearer Token
+        if let Some(token) = config.properties.get("token") {
+             request = request.bearer_auth(token);
+        } 
+        // Basic Auth (username/password)
+        else if let (Some(username), Some(password)) = (config.properties.get("username"), config.properties.get("password")) {
+            request = request.basic_auth(username, Some(password));
         }
+        // X-API-Key
+        else if let Some(api_key) = config.properties.get("api_key").or_else(|| config.properties.get("x-api-key")) {
+             request = request.header("X-API-Key", api_key);
+        }
+        
+        request
     }
     
     /// Check if a header is an authentication header that should not be forwarded
@@ -138,7 +128,6 @@ impl Default for FederatedCatalogProxy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pangolin_core::model::FederatedCredentials;
 
     #[test]
     fn test_is_auth_header() {
