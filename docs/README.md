@@ -61,7 +61,8 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 ## 🏗️ 6. Architecture & Internals
 *Deep-dives for developers and contributors.*
 
-- **[System Architecture](./architecture/architecture.md)** - Design and component interaction.
+- [Architecture Overview](./architecture/architecture.md) - System design and component interaction.
+- [Technical Logic Deep-Dive](./architecture/README.md) - Caching, Branching (Git-for-Data), and Trait details.
 - **[Data Models](./architecture/models.md)** - Understanding the internal schema.
 - **[CatalogStore Trait](./architecture/catalog-store-trait.md)** - Extending Pangolin storage.
 

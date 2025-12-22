@@ -15,6 +15,14 @@ Backend storage is where Pangolin stores **catalog metadata** including:
 
 > **Note**: Backend storage is separate from **warehouse storage** (S3, Azure, GCS) which stores the actual data files.
 
+## Performance Features
+
+All backends (including Memory/SQLite) now feature:
+
+1.  **Metadata Cache**: In-memory LRU cache (`moka`) for high-latency Iceberg metadata files (manifests, snapshots), defaulting to 5-minute TTL.
+2.  **Object Store Connection Pooling**: Reuses S3/GCS/Azure connections to reduce handshake overhead.
+3.  **Unified Search**: Optimized full-text search across Catalogs, Namespaces, and Tables regardless of the backing store.
+
 ## Quick Comparison
 
 | **Scalability** | Low | Low | High | Very High |

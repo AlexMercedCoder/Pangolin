@@ -32,6 +32,7 @@ Pangolin provides two CLI tools:
 - [Update Operations](admin-update-operations.md) - Update existing resources
 - [Business Metadata](admin-metadata.md) - Manage business metadata
 - [Audit Logging](admin-audit-logging.md) - Query audit logs
+- [Optimization Commands](admin-optimization-commands.md) - Stats, Search, and Validation
 
 ## User CLI (`pangolin-user`)
 

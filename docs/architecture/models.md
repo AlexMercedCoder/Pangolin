@@ -1,200 +1,114 @@
-# Pangolin Data Models
+# Pangolin Core Models
 
-## Overview
-This document serves as the technical reference for all core data models used within Pangolin. These models are defined in the `pangolin_core` crate and are consistently implemented across all storage backends.
+This document details the core data structures (Structs) defined in `pangolin_core`.
 
----
-
-## Core Infrastructure (`model.rs`)
+## Identity & Storage
 
 ### Tenant
-The root unit of multi-tenancy.
-```rust
-pub struct Tenant {
-    pub id: Uuid,
-    pub name: String,
-    pub properties: HashMap<String, String>,
-}
-```
+Top-level isolation boundary for multitenancy.
+- **id**: `Uuid` - Unique identifier.
+- **name**: `String` - Tenant name (e.g., "acme-corp").
+- **properties**: `HashMap<String, String>` - Custom metadata.
 
 ### Warehouse
-Configurations for underlying object storage.
-```rust
-pub struct Warehouse {
-    pub id: Uuid,
-    pub name: String,
-    pub tenant_id: Uuid,
-    pub storage_config: HashMap<String, String>,
-    pub use_sts: bool, // Deprecated in favor of vending_strategy
-    pub vending_strategy: Option<VendingStrategy>,
-}
-```
-
-### VendingStrategy
-Defines how Pangolin provides temporary data access credentials to clients.
-- `AwsSts`: AWS Role Assumption.
-- `AwsStatic`: Direct access keys.
-- `AzureSas`: Shared Access Signatures.
-- `GcpDownscoped`: Service Account impersonation.
-- `None`: No credentials provided (server-side only or client-managed).
+Defines the connection to physical object storage (S3, GCS, Azure).
+- **id**: `Uuid`
+- **name**: `String` - Unique name within a tenant.
+- **tenant_id**: `Uuid` - Owner tenant.
+- **storage_config**: `HashMap<String, String>` - Endpoint, region, bucket.
+- **vending_strategy**: `Option<VendingStrategy>` - Logic for vending temporary credentials.
 
 ### Catalog
-Standard Iceberg or Federated proxy catalog.
-```rust
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct FederatedCatalogConfig {
-    pub properties: HashMap<String, String>, // Flexible configuration (uri, token, warehouse, etc.)
-}
-
-pub struct Catalog {
-    pub id: Uuid,
-    pub name: String,
-    pub catalog_type: CatalogType, // Local | Federated
-    pub warehouse_name: Option<String>,
-    pub storage_location: Option<String>,
-    pub federated_config: Option<FederatedCatalogConfig>,
-    pub properties: HashMap<String, String>,
-}
-```
+A logical grouping of assets, maps to an Iceberg Catalog.
+- **id**: `Uuid`
+- **name**: `String`
+- **catalog_type**: `CatalogType` (Local or Federated)
+- **warehouse_name**: `Option<String>` - Link to the storage backend.
+- **storage_location**: `Option<String>` - Base path prefix.
+- **federated_config**: `Option<FederatedCatalogConfig>` - Upstream catalog details.
 
 ---
 
-## Data Lifecycle & Assets (`model.rs`)
+## Asset Management
+
+### Namespace
+Hierarchical container for assets (equivalent to Schema/Database).
+- **name**: `Vec<String>` - Parts of the path (e.g., `["accounting", "finance"]`).
+- **properties**: `HashMap<String, String>`.
 
 ### Asset
-A unified representation of data resources.
-```rust
-pub struct Asset {
-    pub id: Uuid,
-    pub name: String,
-    pub kind: AssetType, // IcebergTable, View, MlModel, etc.
-    pub location: String,
-    pub properties: HashMap<String, String>,
-}
-```
+Represents a managed data artifact (Table, View, Model).
+- **id**: `Uuid`
+- **name**: `String`
+- **kind**: `AssetType` (e.g., IcebergTable, View).
+- **location**: `String` - Absolute object store path.
+- **properties**: `HashMap<String, String>`.
 
-### Branch & Tag
-References to commit chains for versioning.
-```rust
-pub struct Branch {
-    pub name: String,
-    pub head_commit_id: Option<Uuid>,
-    pub branch_type: BranchType, // Ingest | Experimental
-    pub assets: Vec<String>, // Assets strictly tracked by this branch
-}
+---
 
-pub struct Tag {
-    pub name: String,
-    pub commit_id: Uuid,
-}
-```
+## Version Control
+
+### Branch
+A pointer to a specific commit history, enabling Git-like data versioning.
+- **name**: `String` (e.g., "main", "dev").
+- **head_commit_id**: `Option<Uuid>` - Latest commit on this branch.
+- **branch_type**: `BranchType`.
+- **assets**: `Vec<String>` - List of asset names currently tracked on this branch.
+
+### Tag
+A named reference to a specific commit (immutable).
+- **name**: `String` (e.g., "v1.0").
+- **commit_id**: `Uuid`.
 
 ### Commit
-Immutable snapshots of state.
-```rust
-pub struct Commit {
-    pub id: Uuid,
-    pub parent_id: Option<Uuid>,
-    pub timestamp: i64,
-    pub author: String,
-    pub operations: Vec<CommitOperation>, // Put { asset } | Delete { name }
-}
-```
+An immutable record of a state change.
+- **id**: `Uuid`
+- **parent_id**: `Option<Uuid>` - Previous commit.
+- **timestamp**: `i64` - Epoch time.
+- **author**: `String` - User who made the change.
+- **operations**: `Vec<CommitOperation>` - List of atomic changes (Put/Delete).
 
 ---
 
-## Identity & Access (`user.rs`, `permission.rs`)
+## Merge Operations
 
-### User
-```rust
-pub struct User {
-    pub id: Uuid,
-    pub username: String,
-    pub email: String,
-    pub tenant_id: Option<Uuid>, // None for Root
-    pub role: UserRole, // Root | TenantAdmin | TenantUser
-    pub active: bool,
-    pub oauth_provider: Option<OAuthProvider>,
-}
-```
+### MergeOperation
+Tracks the state of merging one branch into another.
+- **id**: `Uuid`
+- **source_branch**: `String`.
+- **target_branch**: `String`.
+- **base_commit_id**: `Option<Uuid>` - Common ancestor.
+- **status**: `MergeStatus`.
+- **conflicts**: `Vec<Uuid>` - List of `MergeConflict` IDs to resolve.
+- **result_commit_id**: `Option<Uuid>` - The final commit ID if successful.
 
-### ServiceUser
-Programmatic identities for automation.
-```rust
-pub struct ServiceUser {
-    pub id: Uuid,
-    pub name: String,
-    pub tenant_id: Uuid,
-    pub api_key_hash: String,
-    pub role: UserRole,
-    pub expires_at: Option<DateTime<Utc>>,
-    pub active: bool,
-}
-```
+### MergeConflict
+Represents a specific issue preventing an automatic merge.
+- **id**: `Uuid`
+- **conflict_type**: `ConflictType`.
+- **description**: `String` - Human-readable detail.
+- **resolution**: `Option<ConflictResolution>` - Records how it was fixed.
 
-### Permission Scope
-Defines the target range for a grant.
-```rust
-pub enum PermissionScope {
-    Tenant,
-    Catalog { catalog_id: Uuid },
-    Namespace { catalog_id: Uuid, namespace: String },
-    Asset { catalog_id: Uuid, namespace: String, asset_id: Uuid },
-    Tag { tag_name: String }, // TBAC
-}
-```
-
-### Action
-Atomic operations allowed on a scope.
-- `Read`, `Write`, `Delete`, `Create`, `Update`, `List`, `All`.
-- `IngestBranching`: Can merge changes back to parent.
-- `ExperimentalBranching`: Isolated dev-only branches.
-- `ManageDiscovery`: Permission to edit business metadata.
+### ConflictResolution
+Details on how a conflict was resolved.
+- **strategy**: `ResolutionStrategy` (e.g., TakeSource).
+- **resolved_by**: `Uuid` - User ID.
+- **resolved_value**: `Option<serde_json::Value>` - The final data/schema used.
 
 ---
 
-## Business & Discovery (`business_metadata.rs`, `audit.rs`)
+## System Entities
 
-### BusinessMetadata
-Descriptive layers for data assets.
-```rust
-pub struct BusinessMetadata {
-    pub asset_id: Uuid,
-    pub description: Option<String>,
-    pub tags: Vec<String>,
-    pub properties: serde_json::Value,
-    pub discoverable: bool,
-}
-```
+### Credentials
+Temporary access tokens returned to clients.
+- **Aws**: AccessKey, SecretKey, SessionToken.
+- **Azure**: SAS Token, Account Name.
+- **Gcp**: Access Token.
 
 ### AuditLogEntry
-Comprehensive tracking of every system action.
-```rust
-pub struct AuditLogEntry {
-    pub id: Uuid,
-    pub tenant_id: Uuid,
-    pub user_id: Option<Uuid>,
-    pub username: String,
-    pub action: AuditAction,
-    pub resource_type: ResourceType,
-    pub resource_name: String,
-    pub result: AuditResult, // Success | Failure
-    pub timestamp: DateTime<Utc>,
-}
-```
-
----
-
-## System State (`model.rs`)
-
-### SystemSettings
-Tenant-specific system configurations.
-- `allow_public_signup`: Boolean toggle.
-- `default_warehouse_bucket`: Fallback storage.
-- `default_retention_days`: Maintenance policy.
-
-### SyncStats
-Real-time metrics for Federated catalogs.
-- `last_synced_at`: Timestamp.
-- `sync_status`: Status indicator.
-- `tables_synced`: Count.
+Record of system activity.
+- **id**: `Uuid`.
+- **actor_id**: `Uuid` - User ID.
+- **action**: `String` - (e.g., "create_table").
+- **resource**: `String` - (e.g., "namespace/table").
+- **status**: `String` ("Success", "Failed").

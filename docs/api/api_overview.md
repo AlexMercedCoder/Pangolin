@@ -59,6 +59,15 @@ Pangolin is 100% compliant with the [Apache Iceberg REST Specification](https://
 | `merge-operations` | GET | Track progress of active or past merges. |
 | `conflicts/{id}/resolve`| POST | Apply conflict resolution strategies (Source Wins/Target Wins). |
 
+### 4. Search & Optimization
+| Endpoint | Method | Use Case |
+| :--- | :--- | :--- |
+| `search` | GET | Unified search across Catalogs, Namespaces, and Tables. |
+| `search/assets` | GET | Optimized lookup for specific tables/views by name. |
+| `validate/names` | POST | Check if an asset name is valid and available. |
+| `bulk/assets/delete` | POST | Bulk deletion of assets. |
+
+
 ---
 
 ## 🧬 OAuth 2.0 Flow

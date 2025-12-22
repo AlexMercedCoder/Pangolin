@@ -16,7 +16,13 @@ The **Discovery Portal** (`/discovery`) is a search-centric interface designed f
 - **Filtering**: Narrow results by Catalog, Namespace, or Tags.
 - **Discoverability**: Assets can be marked as "Discoverable" to appear in global searches even if the user doesn't have explicit read access.
 
-### 3. Access Request Workflow
+### 3. Unified Search API
+Powering the Discovery Portal is the high-performance `/api/v1/search` endpoint:
+- **Universal Scope**: Searches across all Catalogs, Namespaces, and Tables simultaneously.
+- **Optimized**: Uses backend-specific optimizations (In-Memory iteration, SQL `LIKE` indexes, MongoDB text search).
+- **Secure**: Automatically filters results based on user permissions and "Discoverable" flags.
+
+### 4. Access Request Workflow
 Streamline data access governance:
 - **Request Access**: Users can request access to discoverable tables directly from the search results.
 - **Approval Workflow**: Tenant Admins receive access requests in the Admin Console (`/admin/requests`).

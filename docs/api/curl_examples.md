@@ -24,6 +24,7 @@ This document provides practical curl examples for all Pangolin API endpoints.
 - [System Configuration (Admin)](#system-configuration-admin)
 - [Federated Catalog Operations](#federated-catalog-operations)
 - [Data Explorer](#data-explorer)
+- [Search & Optimization](#search--optimization)
 
 ---
 
@@ -1060,3 +1061,29 @@ sleep 30
 curl http://localhost:8080/api/v1/federated-catalogs/partner-catalog/stats \
   -H "Authorization: Bearer $TOKEN" | jq '.last_synced_at'
 ```
+
+---
+
+## Search & Optimization
+
+### Unified Search
+Search across catalogs, namespaces, and tables.
+
+```bash
+curl "http://localhost:8080/api/v1/search?q=sales&tenant_id=550e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Validate Table Name
+Check if a name is valid and available.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/validate/names \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "new_table_v2",
+    "type": "asset"
+  }'
+```
+

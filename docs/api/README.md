@@ -62,7 +62,9 @@ Authentication methods:
 
 **Business Metadata & Access Requests**:
 - `GET/POST/DELETE /api/v1/assets/{id}/metadata` - Manage business metadata
-- `GET /api/v1/assets/search` - Search assets
+- `GET /api/v1/search` - Unified search (Catalogs, Namespaces, Assets)
+- `GET /api/v1/search/assets` - Search assets by name
+
 - `GET /api/v1/assets/{id}` - Get asset details
 - `POST /api/v1/assets/{id}/request-access` - Request access
 - `GET /api/v1/access-requests` - List access requests

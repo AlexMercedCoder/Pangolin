@@ -1,0 +1,1116 @@
+pub mod memory;
+pub mod signer;
+pub mod postgres;
+pub mod mongo;
+pub mod sqlite;
+pub mod tests;
+pub mod azure_signer;
+pub mod gcp_signer;
+
+pub use memory::MemoryStore;
+pub use postgres::PostgresStore;
+pub use mongo::MongoStore;
+pub use sqlite::SqliteStore;
+pub mod object_store_factory;
+pub mod object_store_cache;
+pub mod metadata_cache;
+pub use signer::SignerImpl;
+pub use object_store_cache::ObjectStoreCache;
+pub use metadata_cache::MetadataCache;
+
+use async_trait::async_trait;
+use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalog, Warehouse};
+use uuid::Uuid;
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+
+use crate::signer::Signer;
+
+#[async_trait]
+pub trait CatalogStore: Send + Sync + Signer {
+    // Tenant Operations
+    async fn create_tenant(&self, tenant: Tenant) -> Result<()>;
+    async fn get_tenant(&self, tenant_id: Uuid) -> Result<Option<Tenant>>;
+    async fn list_tenants(&self) -> Result<Vec<Tenant>>;
+    async fn update_tenant(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant>;
+    async fn delete_tenant(&self, tenant_id: Uuid) -> Result<()>;
+
+    // Warehouse Operations
+    async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()>;
+    async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>>;
+    async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>>;
+    async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse>;
+    async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()>;
+
+    // Catalog Operations
+    async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()>;
+    async fn get_catalog(&self, tenant_id: Uuid, name: String) -> Result<Option<Catalog>>;
+    async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog>;
+    async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()>;
+    async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>>;
+
+    // Namespace Operations
+    async fn create_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Namespace) -> Result<()>;
+    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>) -> Result<Vec<Namespace>>;
+    async fn get_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<Option<Namespace>>;
+    async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()>;
+    async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()>;
+
+    // Asset Operations
+    async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()>;
+    async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>>;
+    async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>>;
+    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>>;
+    async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()>;
+
+    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()>;
+    async fn count_namespaces(&self, tenant_id: Uuid) -> Result<usize>;
+    async fn count_assets(&self, tenant_id: Uuid) -> Result<usize>;
+
+    // Branch Operations
+    async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()>;
+    async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>>;
+    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>>;
+    async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()>;
+    
+    /// Find assets that exist in both branches (potential conflicts)
+    /// Returns pairs of (source_asset, target_asset) for assets with same namespace+name
+    async fn find_conflicting_assets(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        source_branch: &str,
+        target_branch: &str,
+    ) -> Result<Vec<(Asset, Asset)>> {
+        // Default implementation: iterate and compare
+        // Backends can override with optimized queries
+        let source_assets_with_ns = self.list_all_assets_in_branch(tenant_id, catalog_name, source_branch).await?;
+        let mut conflicts = Vec::new();
+        
+        for (source_asset, namespace) in source_assets_with_ns {
+            // Try to find matching asset in target branch
+            if let Some(target_asset) = self.get_asset(
+                tenant_id,
+                catalog_name,
+                Some(target_branch.to_string()),
+                namespace,
+                source_asset.name.clone()
+            ).await? {
+                conflicts.push((source_asset, target_asset));
+            }
+        }
+        
+        Ok(conflicts)
+    }
+    
+    /// Helper method to list all assets in a branch across all namespaces
+    /// Returns (Asset, namespace) pairs
+    async fn list_all_assets_in_branch(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: &str,
+    ) -> Result<Vec<(Asset, Vec<String>)>> {
+        // Default implementation: iterate through namespaces
+        let namespaces = self.list_namespaces(tenant_id, catalog_name, None).await?;
+        let mut all_assets = Vec::new();
+        
+        for ns in namespaces {
+            let assets = self.list_assets(
+                tenant_id,
+                catalog_name,
+                Some(branch.to_string()),
+                ns.name.clone()
+            ).await?;
+            for asset in assets {
+                all_assets.push((asset, ns.name.clone()));
+            }
+        }
+        
+        Ok(all_assets)
+    }
+
+    // Tag Operations
+    async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()>;
+    async fn get_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Tag>>;
+    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Tag>>;
+    async fn delete_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()>;
+
+    // Commit Operations
+    async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()>;
+    async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>>;
+
+    // Metadata IO
+    async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>>;
+    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()>;
+    
+    // Generic File IO (for metadata files)
+    async fn read_file(&self, location: &str) -> Result<Vec<u8>>;
+    async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()>;
+
+    // Maintenance Operations
+    async fn expire_snapshots(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, retention_ms: i64) -> Result<()>;
+    async fn remove_orphan_files(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, older_than_ms: i64) -> Result<()>;
+
+    // Audit Operations
+    async fn log_audit_event(&self, tenant_id: Uuid, event: pangolin_core::audit::AuditLogEntry) -> Result<()>;
+    async fn list_audit_events(&self, tenant_id: Uuid, filter: Option<pangolin_core::audit::AuditLogFilter>) -> Result<Vec<pangolin_core::audit::AuditLogEntry>>;
+    async fn get_audit_event(&self, tenant_id: Uuid, event_id: Uuid) -> Result<Option<pangolin_core::audit::AuditLogEntry>>;
+    async fn count_audit_events(&self, tenant_id: Uuid, filter: Option<pangolin_core::audit::AuditLogFilter>) -> Result<usize>;
+
+    // User Operations
+    async fn create_user(&self, _user: pangolin_core::user::User) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_user(&self, _user_id: Uuid) -> Result<Option<pangolin_core::user::User>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_user_by_username(&self, _username: &str) -> Result<Option<pangolin_core::user::User>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_users(&self, _tenant_id: Option<Uuid>) -> Result<Vec<pangolin_core::user::User>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn update_user(&self, _user: pangolin_core::user::User) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn delete_user(&self, _user_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    // Role Operations
+    async fn create_role(&self, _role: pangolin_core::permission::Role) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_role(&self, _role_id: Uuid) -> Result<Option<pangolin_core::permission::Role>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_roles(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Role>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn assign_role(&self, _user_role: pangolin_core::permission::UserRole) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn revoke_role(&self, _user_id: Uuid, _role_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_user_roles(&self, _user_id: Uuid) -> Result<Vec<pangolin_core::permission::UserRole>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn delete_role(&self, _role_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_role(&self, _role: pangolin_core::permission::Role) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Direct Permission Operations
+    async fn create_permission(&self, _permission: pangolin_core::permission::Permission) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn revoke_permission(&self, _permission_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_user_permissions(&self, _user_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_permissions(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Business Metadata Operations
+    async fn upsert_business_metadata(&self, _metadata: pangolin_core::business_metadata::BusinessMetadata) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_business_metadata(&self, _asset_id: Uuid) -> Result<Option<pangolin_core::business_metadata::BusinessMetadata>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn delete_business_metadata(&self, _asset_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>, String, Vec<String>)>> {
+        Ok(vec![])
+    }
+
+    async fn search_catalogs(&self, _tenant_id: Uuid, _query: &str) -> Result<Vec<Catalog>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn search_namespaces(&self, _tenant_id: Uuid, _query: &str) -> Result<Vec<(Namespace, String)>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn search_branches(&self, _tenant_id: Uuid, _query: &str) -> Result<Vec<(Branch, String)>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Access Request Operations
+    async fn create_access_request(&self, _request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_access_request(&self, _id: Uuid) -> Result<Option<pangolin_core::business_metadata::AccessRequest>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_access_requests(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_access_request(&self, _request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Service User Operations
+    async fn create_service_user(&self, _service_user: pangolin_core::user::ServiceUser) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_service_user(&self, _id: Uuid) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn get_service_user_by_api_key_hash(&self, _api_key_hash: &str) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn list_service_users(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_service_user(
+        &self,
+        _id: Uuid,
+        _name: Option<String>,
+        _description: Option<String>,
+        _active: Option<bool>,
+    ) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn delete_service_user(&self, _id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    async fn update_service_user_last_used(&self, _id: Uuid, _timestamp: DateTime<Utc>) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Merge Operation Methods
+    async fn create_merge_operation(&self, _operation: pangolin_core::model::MergeOperation) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn get_merge_operation(&self, _operation_id: Uuid) -> Result<Option<pangolin_core::model::MergeOperation>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn list_merge_operations(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn update_merge_operation_status(&self, _operation_id: Uuid, _status: pangolin_core::model::MergeStatus) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn complete_merge_operation(&self, _operation_id: Uuid, _result_commit_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn abort_merge_operation(&self, _operation_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Merge Conflict Methods
+    async fn create_merge_conflict(&self, _conflict: pangolin_core::model::MergeConflict) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn get_merge_conflict(&self, _conflict_id: Uuid) -> Result<Option<pangolin_core::model::MergeConflict>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn list_merge_conflicts(&self, _operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn resolve_merge_conflict(&self, _conflict_id: Uuid, _resolution: pangolin_core::model::ConflictResolution) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    async fn add_conflict_to_operation(&self, _operation_id: Uuid, _conflict_id: Uuid) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Token Revocation Operations
+    /// Revoke a token by adding it to the blacklist
+    async fn revoke_token(&self, _token_id: Uuid, _expires_at: DateTime<Utc>, _reason: Option<String>) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    /// Check if a token has been revoked
+    async fn is_token_revoked(&self, _token_id: Uuid) -> Result<bool> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    /// Clean up expired revoked tokens and return count of cleaned tokens
+    async fn cleanup_expired_tokens(&self) -> Result<usize> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    /// List active tokens for a user (not revoked)
+    async fn list_active_tokens(&self, _tenant_id: Uuid, _user_id: Uuid) -> Result<Vec<pangolin_core::token::TokenInfo>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    /// Store a newly generated token for listing purposes
+    async fn store_token(&self, _token: pangolin_core::token::TokenInfo) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // System Configuration
+    async fn get_system_settings(&self, _tenant_id: Uuid) -> Result<pangolin_core::model::SystemSettings> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+    
+    
+    async fn update_system_settings(&self, _tenant_id: Uuid, _settings: pangolin_core::model::SystemSettings) -> Result<pangolin_core::model::SystemSettings> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    // Federated Catalog Operations
+    async fn sync_federated_catalog(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<()> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn get_federated_catalog_stats(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<pangolin_core::model::SyncStats> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+}
+use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
+pub enum Credentials {
+    // AWS S3 credentials (STS or Static)
+    Aws {
+        access_key_id: String,
+        secret_access_key: String,
+        session_token: Option<String>,
+        expiration: Option<DateTime<Utc>>,
+    },
+    // Azure SAS token
+    Azure {
+        sas_token: String,
+        account_name: String, // Added account_name as it's often needed by clients
+        expiration: DateTime<Utc>,
+    },
+    // GCP OAuth2 token
+    Gcp {
+        access_token: String,
+        expiration: DateTime<Utc>,
+    },
+}
+
+#[async_trait]
+pub trait Signer: Send + Sync {
+    /// Get temporary credentials for accessing a specific table location.
+    /// In a real implementation, this might scope permissions to that prefix.
+    async fn get_table_credentials(&self, location: &str) -> Result<Credentials>;
+
+    /// Generate a presigned URL for a specific file location.
+    async fn presign_get(&self, location: &str) -> Result<String>;
+}
+
+#[derive(Clone)]
+pub struct SignerImpl {
+    key: String,
+}
+
+impl SignerImpl {
+    pub fn new(key: String) -> Self {
+        Self { key }
+    }
+}
+
+#[async_trait]
+impl Signer for SignerImpl {
+    async fn get_table_credentials(&self, _location: &str) -> Result<Credentials> {
+        Err(anyhow::anyhow!("Credential vending not supported by bare SignerImpl"))
+    }
+
+    async fn presign_get(&self, _location: &str) -> Result<String> {
+        Err(anyhow::anyhow!("Presigning not supported by bare SignerImpl"))
+    }
+}
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
+use utoipa::ToSchema;
+use chrono::{DateTime, Utc};
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Tenant {
+    pub id: Uuid,
+    pub name: String,
+    pub properties: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub enum VendingStrategy {
+    /// AWS S3 with STS temporary credentials
+    AwsSts {
+        role_arn: String,
+        external_id: Option<String>,
+    },
+    /// AWS S3 with static credentials
+    AwsStatic {
+        access_key_id: String,
+        secret_access_key: String,
+    },
+    /// Azure Blob Storage with SAS tokens
+    AzureSas {
+        account_name: String,
+        account_key: String,
+    },
+    /// GCP with downscoped credentials
+    GcpDownscoped {
+        service_account_email: String,
+        private_key: String,
+    },
+    /// No credential vending (client-provided only)
+    None,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Warehouse {
+    pub id: Uuid,
+    pub name: String,
+    pub tenant_id: Uuid,
+    pub storage_config: std::collections::HashMap<String, String>,
+    pub use_sts: bool, // Deprecated in favor of vending_strategy, kept for backward compatibility
+    pub vending_strategy: Option<VendingStrategy>,
+}
+
+// Federated Catalog Support
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+pub enum CatalogType {
+    Local,      // Native Pangolin catalog
+    Federated,  // External Iceberg REST catalog (proxy)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct FederatedCatalogConfig {
+    pub properties: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Catalog {
+    pub id: Uuid, // Added ID for permission scoping
+    pub name: String,
+    pub catalog_type: CatalogType, // Local or Federated
+    pub warehouse_name: Option<String>, // Reference to warehouse for credential vending (Local only)
+    pub storage_location: Option<String>, // Base path for this catalog in the warehouse (Local only)
+    pub federated_config: Option<FederatedCatalogConfig>, // Configuration for federated catalogs
+    pub properties: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Namespace {
+    pub name: Vec<String>,
+    pub properties: HashMap<String, String>,
+}
+
+impl Namespace {
+    pub fn new(name: Vec<String>) -> Self {
+        Self {
+            name,
+            properties: HashMap::new(),
+        }
+    }
+    
+    pub fn to_string(&self) -> String {
+        self.name.join(".")
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AssetType {
+    IcebergTable,
+    DeltaTable,
+    HudiTable,
+    ParquetTable,
+    CsvTable,
+    JsonTable,
+    View,
+    MlModel,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Asset {
+    pub id: Uuid,
+    pub name: String,
+    pub kind: AssetType,
+    pub location: String,
+    pub properties: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Commit {
+    pub id: Uuid,
+    pub parent_id: Option<Uuid>,
+    pub timestamp: i64,
+    pub author: String,
+    pub message: String,
+    pub operations: Vec<CommitOperation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CommitOperation {
+    Put { asset: Asset },
+    Delete { name: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BranchType {
+    Ingest,
+    Experimental,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Branch {
+    pub name: String,
+    pub head_commit_id: Option<Uuid>,
+    pub branch_type: BranchType,
+    pub assets: Vec<String>, // List of asset names tracked by this branch
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Tag {
+    pub name: String,
+    pub commit_id: Uuid,
+}
+
+// Merge Conflict Resolution Models
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+pub enum ConflictType {
+    SchemaChange {
+        asset_name: String,
+        source_schema: serde_json::Value,
+        target_schema: serde_json::Value,
+    },
+    DataOverlap {
+        asset_name: String,
+        overlapping_partitions: Vec<String>,
+    },
+    MetadataConflict {
+        asset_name: String,
+        conflicting_properties: Vec<String>,
+    },
+    DeletionConflict {
+        asset_name: String,
+        deleted_in: String, // "source" or "target"
+        modified_in: String, // "source" or "target"
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub enum ResolutionStrategy {
+    AutoMerge,          // Automatically merge non-conflicting changes
+    TakeSource,         // Use source branch version
+    TakeTarget,         // Use target branch version
+    Manual,             // Requires manual resolution
+    ThreeWayMerge,      // Merge using base commit as reference
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ConflictResolution {
+    pub conflict_id: Uuid,
+    pub strategy: ResolutionStrategy,
+    pub resolved_value: Option<serde_json::Value>,
+    pub resolved_by: Uuid,
+    pub resolved_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MergeConflict {
+    pub id: Uuid,
+    pub merge_operation_id: Uuid,
+    pub conflict_type: ConflictType,
+    pub asset_id: Option<Uuid>,
+    pub description: String,
+    pub resolution: Option<ConflictResolution>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl MergeConflict {
+    pub fn new(
+        merge_operation_id: Uuid,
+        conflict_type: ConflictType,
+        asset_id: Option<Uuid>,
+        description: String,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            merge_operation_id,
+            conflict_type,
+            asset_id,
+            description,
+            resolution: None,
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    pub fn is_resolved(&self) -> bool {
+        self.resolution.is_some()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+pub enum MergeStatus {
+    Pending,        // Merge initiated, conflicts being detected
+    Conflicted,     // Conflicts detected, awaiting resolution
+    Resolving,      // Manual resolution in progress
+    Ready,          // All conflicts resolved, ready to complete
+    Completed,      // Merge successfully completed
+    Aborted,        // Merge aborted by user
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MergeOperation {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub catalog_name: String,
+    pub source_branch: String,
+    pub target_branch: String,
+    pub base_commit_id: Option<Uuid>, // Common ancestor for 3-way merge
+    pub status: MergeStatus,
+    pub conflicts: Vec<Uuid>, // IDs of MergeConflict records
+    pub initiated_by: Uuid,
+    pub initiated_at: chrono::DateTime<chrono::Utc>,
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub result_commit_id: Option<Uuid>, // Commit ID if merge completed
+}
+
+impl MergeOperation {
+    pub fn new(
+        tenant_id: Uuid,
+        catalog_name: String,
+        source_branch: String,
+        target_branch: String,
+        base_commit_id: Option<Uuid>,
+        initiated_by: Uuid,
+    ) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            tenant_id,
+            catalog_name,
+            source_branch,
+            target_branch,
+            base_commit_id,
+            status: MergeStatus::Pending,
+            conflicts: Vec::new(),
+            initiated_by,
+            initiated_at: chrono::Utc::now(),
+            completed_at: None,
+            result_commit_id: None,
+        }
+    }
+
+    pub fn has_conflicts(&self) -> bool {
+        !self.conflicts.is_empty()
+    }
+
+    pub fn can_complete(&self) -> bool {
+        self.status == MergeStatus::Ready || (self.status == MergeStatus::Pending && !self.has_conflicts())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_asset_serialization() {
+        let asset = Asset {
+            id: Uuid::new_v4(),
+            name: "test_view".to_string(),
+            kind: AssetType::View,
+            location: "s3://bucket/path".to_string(),
+            properties: HashMap::new(),
+        };
+        let json = serde_json::to_string(&asset).unwrap();
+        let deserialized: Asset = serde_json::from_str(&json).unwrap();
+        assert_eq!(asset.name, deserialized.name);
+        assert!(matches!(deserialized.kind, AssetType::View));
+    }
+
+    #[test]
+    fn test_tenant_serialization() {
+        let tenant = Tenant {
+            id: Uuid::new_v4(),
+            name: "acme".to_string(),
+            properties: HashMap::new(),
+        };
+        let json = serde_json::to_string(&tenant).unwrap();
+        let deserialized: Tenant = serde_json::from_str(&json).unwrap();
+        assert_eq!(tenant.name, deserialized.name);
+    }
+}
+
+// Update structs for CRUD operations
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TenantUpdate {
+    pub name: Option<String>,
+    pub properties: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct WarehouseUpdate {
+    pub name: Option<String>,
+    pub storage_config: Option<HashMap<String, String>>,
+    pub use_sts: Option<bool>,
+    pub vending_strategy: Option<VendingStrategy>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CatalogUpdate {
+    pub warehouse_name: Option<String>,
+    pub storage_location: Option<String>,
+    pub properties: Option<HashMap<String, String>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SystemSettings {
+    pub allow_public_signup: Option<bool>,
+    pub default_warehouse_bucket: Option<String>,
+    pub default_retention_days: Option<i32>,
+    pub smtp_host: Option<String>,
+    pub smtp_port: Option<i32>,
+    pub smtp_user: Option<String>,
+    pub smtp_password: Option<String>, // Should be encrypted in real app
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SyncStats {
+    pub last_synced_at: Option<DateTime<Utc>>,
+    pub sync_status: String, // "Success", "Failed", "Syncing"
+    pub tables_synced: i32,
+    pub namespaces_synced: i32,
+    pub error_message: Option<String>,
+}
+
+impl Default for SystemSettings {
+    fn default() -> Self {
+        Self {
+            allow_public_signup: Some(false),
+            default_warehouse_bucket: None,
+            default_retention_days: Some(30),
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_password: None,
+        }
+    }
+}
+use utoipa::ToSchema;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use uuid::Uuid;
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct TableMetadata {
+    pub format_version: i32,
+    pub table_uuid: Uuid,
+    pub location: String,
+    pub last_sequence_number: i64,
+    pub last_updated_ms: i64,
+    pub last_column_id: i32,
+    pub current_schema_id: i32,
+    pub schemas: Vec<Schema>,
+    pub current_partition_spec_id: i32,
+    pub partition_specs: Vec<PartitionSpec>,
+    pub default_sort_order_id: i32,
+    pub sort_orders: Vec<SortOrder>,
+    pub properties: Option<HashMap<String, String>>,
+    pub current_snapshot_id: Option<i64>,
+    pub snapshots: Option<Vec<Snapshot>>,
+    pub snapshot_log: Option<Vec<SnapshotLogEntry>>,
+    pub metadata_log: Option<Vec<MetadataLogEntry>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct Schema {
+    pub schema_id: i32,
+    pub identifier_field_ids: Option<Vec<i32>>,
+    pub fields: Vec<NestedField>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct NestedField {
+    pub id: i32,
+    pub name: String,
+    pub required: bool,
+    #[serde(rename = "type")]
+    pub field_type: Type,
+    pub doc: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(untagged)]
+pub enum Type {
+    Primitive(String),
+    Struct {
+        #[serde(rename = "type")]
+        type_name: String, // "struct"
+        fields: Vec<NestedField>,
+    },
+    List {
+        #[serde(rename = "type")]
+        type_name: String, // "list"
+        element_id: i32,
+        element_required: bool,
+        element: Box<Type>,
+    },
+    Map {
+        #[serde(rename = "type")]
+        type_name: String, // "map"
+        key_id: i32,
+        key: Box<Type>,
+        value_id: i32,
+        value_required: bool,
+        value: Box<Type>,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct PartitionSpec {
+    pub spec_id: i32,
+    pub fields: Vec<PartitionField>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct PartitionField {
+    pub source_id: i32,
+    pub field_id: i32,
+    pub name: String,
+    pub transform: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct SortOrder {
+    pub order_id: i32,
+    pub fields: Vec<SortField>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct SortField {
+    pub source_id: i32,
+    pub transform: String,
+    pub direction: String,
+    pub null_order: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct Snapshot {
+    pub snapshot_id: i64,
+    pub parent_snapshot_id: Option<i64>,
+    pub sequence_number: i64,
+    pub timestamp_ms: i64,
+    pub manifest_list: String,
+    pub summary: HashMap<String, String>,
+    pub schema_id: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct SnapshotLogEntry {
+    pub timestamp_ms: i64,
+    pub snapshot_id: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct MetadataLogEntry {
+    pub timestamp_ms: i64,
+    pub metadata_file: String,
+}
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use std::collections::HashSet;
+use utoipa::ToSchema;
+
+/// Permission scope - where the permission applies
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "kebab-case", tag = "type")]
+pub enum PermissionScope {
+    /// Applies to entire catalog
+    Catalog { catalog_id: Uuid },
+    /// Applies to namespace and all assets within
+    Namespace { catalog_id: Uuid, namespace: String },
+    /// Applies to specific asset
+    Asset { catalog_id: Uuid, namespace: String, asset_id: Uuid },
+    /// Applies to all assets with specific tag
+    Tag { tag_name: String },
+    /// Applies to everything in the tenant
+    Tenant,
+}
+
+impl PermissionScope {
+    pub fn covers(&self, other: &PermissionScope) -> bool {
+        match (self, other) {
+            // Exact match
+            (a, b) if a == b => true,
+
+            // Tenant covers everything
+            (PermissionScope::Tenant, _) => true,
+            
+            // Catalog covers everything in it
+            (PermissionScope::Catalog { catalog_id: id1 }, PermissionScope::Catalog { catalog_id: id2 }) => id1 == id2,
+            (PermissionScope::Catalog { catalog_id: id1 }, PermissionScope::Namespace { catalog_id: id2, .. }) => id1 == id2,
+            (PermissionScope::Catalog { catalog_id: id1 }, PermissionScope::Asset { catalog_id: id2, .. }) => id1 == id2,
+            
+            // Namespace covers assets in it (and sub-namespaces?)
+            (PermissionScope::Namespace { catalog_id: id1, namespace: ns1 }, PermissionScope::Namespace { catalog_id: id2, namespace: ns2 }) => {
+                id1 == id2 && (ns1 == ns2 || ns2.starts_with(&format!("{}.", ns1)))
+            },
+            (PermissionScope::Namespace { catalog_id: id1, namespace: ns1 }, PermissionScope::Asset { catalog_id: id2, namespace: ns2, .. }) => {
+                id1 == id2 && (ns1 == ns2 || ns2.starts_with(&format!("{}.", ns1)))
+            },
+            
+            _ => false,
+        }
+    }
+}
+
+/// Actions that can be performed
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum Action {
+    Read,
+    Write,
+    Delete,
+    Create,
+    Update,
+    List,
+    All,
+    /// Can create ingest branches (can be merged back)
+    IngestBranching,
+    /// Can create experimental branches (cannot be merged back)
+    ExperimentalBranching,
+    /// Can mark assets as discoverable in a catalog
+    ManageDiscovery,
+}
+
+impl Action {
+    /// Check if this action implies another action
+    pub fn implies(&self, other: &Action) -> bool {
+        if self == other { return true; }
+        
+        match self {
+            Action::All => true,
+            Action::Write => matches!(other, Action::Read | Action::Update | Action::Delete | Action::Create),
+            _ => false,
+        }
+    }
+}
+
+/// A single permission grant
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct Permission {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub scope: PermissionScope,
+    pub actions: HashSet<Action>,
+    pub granted_by: Uuid,
+    pub granted_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl Permission {
+    pub fn new(user_id: Uuid, scope: PermissionScope, actions: HashSet<Action>, granted_by: Uuid) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            user_id,
+            scope,
+            actions,
+            granted_by,
+            granted_at: chrono::Utc::now(),
+        }
+    }
+
+    /// Check if this permission allows a specific action
+    pub fn allows(&self, action: &Action) -> bool {
+        self.actions.iter().any(|a| a.implies(action))
+    }
+}
+
+/// A role that groups permissions
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct Role {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub tenant_id: Uuid,
+    pub permissions: Vec<PermissionGrant>,
+    pub created_by: Uuid,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Permission grant within a role
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct PermissionGrant {
+    pub scope: PermissionScope,
+    pub actions: HashSet<Action>,
+}
+
+impl Role {
+    pub fn new(name: String, description: Option<String>, tenant_id: Uuid, created_by: Uuid) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name,
+            description,
+            tenant_id,
+            permissions: Vec::new(),
+            created_by,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    pub fn add_permission(&mut self, scope: PermissionScope, actions: HashSet<Action>) {
+        self.permissions.push(PermissionGrant { scope, actions });
+        self.updated_at = chrono::Utc::now();
+    }
+}
+
+/// User-Role assignment
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub struct UserRole {
+    pub user_id: Uuid,
+    pub role_id: Uuid,
+    pub assigned_by: Uuid,
+    pub assigned_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl UserRole {
+    pub fn new(user_id: Uuid, role_id: Uuid, assigned_by: Uuid) -> Self {
+        Self {
+            user_id,
+            role_id,
+            assigned_by,
+            assigned_at: chrono::Utc::now(),
+        }
+    }
+}

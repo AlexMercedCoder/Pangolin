@@ -124,6 +124,27 @@
         ]
       }
     },
+    "/api/v1/app/config": {
+      "get": {
+        "tags": [
+          "System Config"
+        ],
+        "summary": "Get public application configuration",
+        "operationId": "get_app_config",
+        "responses": {
+          "200": {
+            "description": "App config",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assets/search": {
       "get": {
         "tags": [
@@ -258,60 +279,6 @@
           },
           "404": {
             "description": "Metadata not found"
-          },
-          "500": {
-            "description": "Internal server error"
-          }
-        },
-        "security": [
-          {
-            "bearer_auth": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Business Metadata"
-        ],
-        "operationId": "add_business_metadata",
-        "parameters": [
-          {
-            "name": "asset_id",
-            "in": "path",
-            "description": "Asset ID",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddMetadataRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Metadata added",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MetadataResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Asset not found"
           },
           "500": {
             "description": "Internal server error"
@@ -723,6 +690,37 @@
         ]
       }
     },
+    "/api/v1/auth/tokens/cleanup": {
+      "post": {
+        "tags": [
+          "Tokens"
+        ],
+        "summary": "Admin endpoint to clean up expired tokens",
+        "description": "Admin endpoint to clean up expired tokens",
+        "operationId": "cleanup_expired_tokens",
+        "responses": {
+          "200": {
+            "description": "Cleaned up expired tokens",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/branches": {
       "get": {
         "tags": [
@@ -875,12 +873,13 @@
         ]
       }
     },
-    "/api/v1/branches/{name}/commits": {
-      "get": {
+    "/api/v1/branches/{name}/rebase": {
+      "post": {
         "tags": [
           "Branches"
         ],
-        "operationId": "list_commits",
+        "summary": "Rebase a branch onto main (merge main into branch)",
+        "operationId": "rebase_branch",
         "parameters": [
           {
             "name": "name",
@@ -892,9 +891,19 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBranchRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
-            "description": "List of commits"
+            "description": "Rebase successful"
           },
           "500": {
             "description": "Internal server error"
@@ -1258,6 +1267,75 @@
           },
           "404": {
             "description": "Catalog not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/catalogs/{prefix}/namespaces/{namespace}/tables/{table}/maintenance": {
+      "post": {
+        "tags": [
+          "Data Explorer"
+        ],
+        "summary": "Perform maintenance on a table",
+        "operationId": "perform_maintenance",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Maintenance accepted",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
           },
           "500": {
             "description": "Internal server error"
@@ -2220,6 +2298,61 @@
         ]
       }
     },
+    "/api/v1/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Unified search across all resources",
+        "description": "Searches Assets, Catalogs, Namespaces, and Branches.",
+        "operationId": "unified_search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max results (default 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnifiedSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/search/assets": {
       "get": {
         "tags": [
@@ -2551,6 +2684,46 @@
         ]
       }
     },
+    "/api/v1/storage/presigned-url": {
+      "get": {
+        "tags": [
+          "Data Explorer"
+        ],
+        "summary": "Get a presigned URL for a specific file location",
+        "description": "Get a presigned URL for a specific file location",
+        "operationId": "get_presigned_url",
+        "parameters": [
+          {
+            "name": "location",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned URL generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tags": {
       "get": {
         "tags": [
@@ -2870,6 +3043,35 @@
         }
       }
     },
+    "/api/v1/tokens/rotate": {
+      "post": {
+        "tags": [
+          "Tokens"
+        ],
+        "summary": "Rotate current token",
+        "operationId": "rotate_token",
+        "responses": {
+          "200": {
+            "description": "Token rotated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateTokenResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tokens/{token_id}": {
       "delete": {
         "tags": [
@@ -3019,6 +3221,88 @@
         }
       }
     },
+    "/api/v1/users/logout": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Logout (invalidate token)",
+        "description": "Logout current user (client-side primarily)",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Logged out successfully"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get current user",
+        "description": "Get current logged-in user details",
+        "operationId": "get_current_user",
+        "responses": {
+          "200": {
+            "description": "Current user details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/tokens": {
+      "get": {
+        "tags": [
+          "Tokens"
+        ],
+        "summary": "List tokens for current user",
+        "operationId": "list_my_tokens",
+        "responses": {
+          "200": {
+            "description": "List of active tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TokenInfo"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/{user_id}": {
       "get": {
         "tags": [
@@ -3144,6 +3428,145 @@
           },
           "400": {
             "description": "Cannot delete yourself"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/roles": {
+      "get": {
+        "tags": [
+          "Roles & Permissions"
+        ],
+        "summary": "Get user roles",
+        "description": "Get roles assigned to a user",
+        "operationId": "get_user_roles",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of user roles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Role"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Roles & Permissions"
+        ],
+        "summary": "Assign role to user",
+        "description": "Assign a role to a user",
+        "operationId": "assign_role",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignRoleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Role assigned"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/roles/{role_id}": {
+      "delete": {
+        "tags": [
+          "Roles & Permissions"
+        ],
+        "summary": "Revoke role from user",
+        "description": "Revoke a role from a user",
+        "operationId": "revoke_role",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "role_id",
+            "in": "path",
+            "description": "Role ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Role revoked"
           },
           "403": {
             "description": "Forbidden"
@@ -3443,6 +3866,883 @@
           }
         ]
       }
+    },
+    "/v1/config": {
+      "get": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "operationId": "get_iceberg_catalog_config_handler",
+        "responses": {
+          "200": {
+            "description": "Catalog configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/{prefix}/namespaces": {
+      "get": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "List namespaces in a catalog",
+        "operationId": "list_namespaces",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of namespaces",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListNamespacesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Catalog not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Create a namespace",
+        "operationId": "create_namespace",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNamespaceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Namespace created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateNamespaceResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Catalog not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}": {
+      "delete": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Delete a namespace",
+        "operationId": "delete_namespace",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Namespace deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Namespace not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}/properties": {
+      "post": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Update namespace properties",
+        "operationId": "update_namespace_properties",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNamespacePropertiesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Properties updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateNamespacePropertiesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Namespace not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}/tables": {
+      "get": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "List tables in a namespace",
+        "operationId": "list_tables",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tables",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListTablesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Catalog or namespace not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Create a table",
+        "operationId": "create_table",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Table created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Catalog or namespace not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}/tables/{table}": {
+      "get": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Load a table",
+        "operationId": "load_table",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table name (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Table metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Table not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Update a table (Commit)",
+        "operationId": "update_table",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table name (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitTableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Table updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Table not found"
+          },
+          "409": {
+            "description": "Conflict (OCC failed)"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Delete a table",
+        "operationId": "delete_table",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table name (optionally with @branch)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Table deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Table not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "head": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Check if a table exists",
+        "operationId": "table_exists",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Table exists"
+          },
+          "404": {
+            "description": "Table not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials": {
+      "get": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Get credentials for accessing a table",
+        "description": "This endpoint vends credentials based on the catalog's warehouse configuration\nGet credentials for accessing a table\nThis endpoint vends credentials based on the catalog's warehouse configuration",
+        "operationId": "get_table_credentials",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credentials vended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadCredentialsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Catalog or Warehouse not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}/tables/{table}/metrics": {
+      "post": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Report metrics for a table",
+        "operationId": "report_metrics",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "table",
+            "in": "path",
+            "description": "Table",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Metrics reported"
+          }
+        }
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}/views": {
+      "post": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Create a database view",
+        "operationId": "create_view",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateViewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "View created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/namespaces/{namespace}/views/{view}": {
+      "get": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Get a database view",
+        "operationId": "get_view",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "view",
+            "in": "path",
+            "description": "View name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "View details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ViewResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "View not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/v1/{prefix}/tables/rename": {
+      "post": {
+        "tags": [
+          "Iceberg REST"
+        ],
+        "summary": "Rename a table",
+        "operationId": "rename_table",
+        "parameters": [
+          {
+            "name": "prefix",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameTableRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Table renamed"
+          },
+          "404": {
+            "description": "Source table not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3568,6 +4868,18 @@
           }
         }
       },
+      "AppConfig": {
+        "type": "object",
+        "description": "App configuration (public)",
+        "required": [
+          "auth_enabled"
+        ],
+        "properties": {
+          "auth_enabled": {
+            "type": "boolean"
+          }
+        }
+      },
       "AssetSearchResult": {
         "type": "object",
         "required": [
@@ -3610,6 +4922,72 @@
             "format": "uuid"
           }
         }
+      },
+      "AuditAction": {
+        "type": "string",
+        "description": "Types of actions that can be audited",
+        "enum": [
+          "create_catalog",
+          "update_catalog",
+          "delete_catalog",
+          "create_namespace",
+          "update_namespace",
+          "delete_namespace",
+          "create_table",
+          "update_table",
+          "drop_table",
+          "rename_table",
+          "commit_table",
+          "load_table",
+          "create_view",
+          "update_view",
+          "drop_view",
+          "rename_view",
+          "load_view",
+          "create_branch",
+          "delete_branch",
+          "merge_branch",
+          "create_user",
+          "update_user",
+          "delete_user",
+          "login",
+          "logout",
+          "create_service_user",
+          "update_service_user",
+          "delete_service_user",
+          "rotate_api_key",
+          "grant_permission",
+          "revoke_permission",
+          "create_federated_catalog",
+          "update_federated_catalog",
+          "delete_federated_catalog",
+          "test_federated_connection",
+          "create_warehouse",
+          "update_warehouse",
+          "delete_warehouse",
+          "create_tenant",
+          "update_tenant",
+          "delete_tenant",
+          "create_tag",
+          "delete_tag",
+          "initiate_merge",
+          "complete_merge",
+          "abort_merge",
+          "resolve_conflict",
+          "list_conflicts",
+          "add_metadata",
+          "update_metadata",
+          "delete_metadata",
+          "search_assets",
+          "request_access",
+          "approve_access",
+          "deny_access",
+          "update_access_request",
+          "generate_token",
+          "revoke_token",
+          "create_commit",
+          "list_commits"
+        ]
       },
       "AuditCountResponse": {
         "type": "object",
@@ -3689,6 +5067,93 @@
             "nullable": true
           }
         }
+      },
+      "AuditLogEntry": {
+        "type": "object",
+        "description": "Comprehensive audit log entry for tracking all catalog operations",
+        "required": [
+          "id",
+          "tenant_id",
+          "username",
+          "action",
+          "resource_type",
+          "resource_name",
+          "timestamp",
+          "result"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/AuditAction"
+          },
+          "error_message": {
+            "type": "string",
+            "description": "Error message if the operation failed",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique identifier for this audit log entry"
+          },
+          "ip_address": {
+            "type": "string",
+            "description": "Client IP address (if available)",
+            "nullable": true
+          },
+          "metadata": {
+            "description": "Additional structured metadata about the operation",
+            "nullable": true
+          },
+          "resource_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID of the specific resource (if applicable)",
+            "nullable": true
+          },
+          "resource_name": {
+            "type": "string",
+            "description": "Human-readable resource name/path"
+          },
+          "resource_type": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "result": {
+            "$ref": "#/components/schemas/AuditResult"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Tenant that owns the resource being operated on"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the action occurred (UTC)"
+          },
+          "user_agent": {
+            "type": "string",
+            "description": "Client user agent (if available)",
+            "nullable": true
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "User who performed the action (None for system operations)",
+            "nullable": true
+          },
+          "username": {
+            "type": "string",
+            "description": "Username for readability (actor field for backward compatibility)"
+          }
+        }
+      },
+      "AuditResult": {
+        "type": "string",
+        "description": "Result of an audited operation",
+        "enum": [
+          "success",
+          "failure"
+        ]
       },
       "AuthorizeParams": {
         "type": "object",
@@ -3968,6 +5433,240 @@
           }
         }
       },
+      "CommitRequirement": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "assert-create"
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "uuid",
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "assert-table-uuid"
+                ]
+              },
+              "uuid": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "ref",
+              "type"
+            ],
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "snapshot-id": {
+                "type": "integer",
+                "format": "int64",
+                "nullable": true
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "assert-ref-snapshot-id"
+                ]
+              }
+            }
+          }
+        ],
+        "discriminator": {
+          "propertyName": "type"
+        }
+      },
+      "CommitTableRequest": {
+        "type": "object",
+        "required": [
+          "requirements",
+          "updates"
+        ],
+        "properties": {
+          "identifier": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TableIdentifier"
+              }
+            ],
+            "nullable": true
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitRequirement"
+            }
+          },
+          "updates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommitUpdate"
+            }
+          }
+        }
+      },
+      "CommitUpdate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "uuid",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "assign-uuid"
+                ]
+              },
+              "uuid": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "format-version",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "upgrade-format-version"
+                ]
+              },
+              "format-version": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "schema",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add-schema"
+                ]
+              },
+              "schema": {}
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "schema-id",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "set-current-schema"
+                ]
+              },
+              "schema-id": {
+                "type": "integer",
+                "format": "int32"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "snapshot",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add-snapshot"
+                ]
+              },
+              "snapshot": {}
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "ref-name",
+              "snapshot-id",
+              "type",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "set-snapshot-ref"
+                ]
+              },
+              "ref-name": {
+                "type": "string"
+              },
+              "snapshot-id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "updates",
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "set-properties"
+                ]
+              },
+              "updates": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "discriminator": {
+          "propertyName": "action"
+        }
+      },
       "ConflictResolution": {
         "type": "object",
         "required": [
@@ -4199,6 +5898,48 @@
           }
         }
       },
+      "CreateNamespaceRequest": {
+        "type": "object",
+        "required": [
+          "namespace"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "CreateNamespaceResponse": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "properties"
+        ],
+        "properties": {
+          "namespace": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "CreateRoleRequest": {
         "type": "object",
         "description": "Request to create a new role",
@@ -4241,6 +5982,31 @@
           },
           "role": {
             "$ref": "#/components/schemas/UserRole"
+          }
+        }
+      },
+      "CreateTableRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "location": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "schema": {
+            "nullable": true
           }
         }
       },
@@ -4295,6 +6061,32 @@
             "nullable": true
           },
           "username": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateViewRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "sql"
+        ],
+        "properties": {
+          "dialect": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "sql": {
             "type": "string"
           }
         }
@@ -4493,6 +6285,65 @@
           }
         }
       },
+      "ListNamespacesResponse": {
+        "type": "object",
+        "required": [
+          "namespaces"
+        ],
+        "properties": {
+          "namespaces": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ListNamespacesTreeResponse": {
+        "type": "object",
+        "required": [
+          "root"
+        ],
+        "properties": {
+          "root": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamespaceNode"
+            }
+          }
+        }
+      },
+      "ListTablesResponse": {
+        "type": "object",
+        "required": [
+          "identifiers"
+        ],
+        "properties": {
+          "identifiers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TableIdentifier"
+            }
+          }
+        }
+      },
+      "LoadCredentialsResponse": {
+        "type": "object",
+        "required": [
+          "storage-credentials"
+        ],
+        "properties": {
+          "storage-credentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorageCredential"
+            }
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "description": "User login request",
@@ -4526,6 +6377,27 @@
           },
           "user": {
             "$ref": "#/components/schemas/UserInfo"
+          }
+        }
+      },
+      "MaintenanceRequest": {
+        "type": "object",
+        "required": [
+          "job_type"
+        ],
+        "properties": {
+          "job_type": {
+            "type": "string"
+          },
+          "older_than_ms": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "retention_ms": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           }
         }
       },
@@ -4705,6 +6577,22 @@
           "Aborted"
         ]
       },
+      "MetadataLogEntry": {
+        "type": "object",
+        "required": [
+          "timestamp-ms",
+          "metadata-file"
+        ],
+        "properties": {
+          "metadata-file": {
+            "type": "string"
+          },
+          "timestamp-ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "MetadataResponse": {
         "type": "object",
         "required": [
@@ -4735,6 +6623,59 @@
           }
         }
       },
+      "NamespaceNode": {
+        "type": "object",
+        "required": [
+          "name",
+          "full_path",
+          "children"
+        ],
+        "properties": {
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NamespaceNode"
+            }
+          },
+          "full_path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "NestedField": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "required",
+          "type"
+        ],
+        "properties": {
+          "doc": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/Type"
+          }
+        }
+      },
       "OAuthCallback": {
         "type": "object",
         "description": "OAuth callback query parameters",
@@ -4760,6 +6701,50 @@
           "github",
           "okta"
         ]
+      },
+      "PartitionField": {
+        "type": "object",
+        "required": [
+          "source-id",
+          "field-id",
+          "name",
+          "transform"
+        ],
+        "properties": {
+          "field-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transform": {
+            "type": "string"
+          }
+        }
+      },
+      "PartitionSpec": {
+        "type": "object",
+        "required": [
+          "spec-id",
+          "fields"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartitionField"
+            }
+          },
+          "spec-id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       },
       "Permission": {
         "type": "object",
@@ -4798,6 +6783,26 @@
           "user-id": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "PermissionGrant": {
+        "type": "object",
+        "description": "Permission grant within a role",
+        "required": [
+          "scope",
+          "actions"
+        ],
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            },
+            "uniqueItems": true
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PermissionScope"
           }
         }
       },
@@ -4915,6 +6920,43 @@
           "propertyName": "type"
         }
       },
+      "PresignParams": {
+        "type": "object",
+        "required": [
+          "location"
+        ],
+        "properties": {
+          "location": {
+            "type": "string"
+          }
+        }
+      },
+      "PresignResponse": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "RenameTableRequest": {
+        "type": "object",
+        "required": [
+          "source",
+          "destination"
+        ],
+        "properties": {
+          "destination": {
+            "$ref": "#/components/schemas/TableIdentifier"
+          },
+          "source": {
+            "$ref": "#/components/schemas/TableIdentifier"
+          }
+        }
+      },
       "RequestStatus": {
         "type": "string",
         "description": "Status of an access request",
@@ -4947,6 +6989,31 @@
             "$ref": "#/components/schemas/ResolutionStrategy"
           }
         }
+      },
+      "ResourceType": {
+        "type": "string",
+        "description": "Types of resources that can be operated on",
+        "enum": [
+          "catalog",
+          "namespace",
+          "table",
+          "view",
+          "branch",
+          "tag",
+          "user",
+          "service_user",
+          "permission",
+          "role",
+          "federated_catalog",
+          "warehouse",
+          "tenant",
+          "merge_operation",
+          "conflict",
+          "access_request",
+          "metadata",
+          "token",
+          "commit"
+        ]
       },
       "RevokeTokenRequest": {
         "type": "object",
@@ -5013,6 +7080,33 @@
           "updated-at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "Schema": {
+        "type": "object",
+        "required": [
+          "schema-id",
+          "fields"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NestedField"
+            }
+          },
+          "identifier-field-ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "nullable": true
+          },
+          "schema-id": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -5090,6 +7184,15 @@
           }
         }
       },
+      "SearchResultType": {
+        "type": "string",
+        "enum": [
+          "Asset",
+          "Catalog",
+          "Namespace",
+          "Branch"
+        ]
+      },
       "ServiceUser": {
         "type": "object",
         "description": "Service user for API key authentication",
@@ -5145,6 +7248,272 @@
           "tenant-id": {
             "type": "string",
             "format": "uuid"
+          }
+        }
+      },
+      "Snapshot": {
+        "type": "object",
+        "required": [
+          "snapshot-id",
+          "sequence-number",
+          "timestamp-ms",
+          "manifest-list",
+          "summary"
+        ],
+        "properties": {
+          "manifest-list": {
+            "type": "string"
+          },
+          "parent-snapshot-id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "schema-id": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "sequence-number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "snapshot-id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "summary": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "timestamp-ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SnapshotLogEntry": {
+        "type": "object",
+        "required": [
+          "timestamp-ms",
+          "snapshot-id"
+        ],
+        "properties": {
+          "snapshot-id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timestamp-ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SortField": {
+        "type": "object",
+        "required": [
+          "source-id",
+          "transform",
+          "direction",
+          "null-order"
+        ],
+        "properties": {
+          "direction": {
+            "type": "string"
+          },
+          "null-order": {
+            "type": "string"
+          },
+          "source-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "transform": {
+            "type": "string"
+          }
+        }
+      },
+      "SortOrder": {
+        "type": "object",
+        "required": [
+          "order-id",
+          "fields"
+        ],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SortField"
+            }
+          },
+          "order-id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "StorageCredential": {
+        "type": "object",
+        "required": [
+          "prefix",
+          "config"
+        ],
+        "properties": {
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "prefix": {
+            "type": "string"
+          }
+        }
+      },
+      "TableIdentifier": {
+        "type": "object",
+        "required": [
+          "namespace",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TableMetadata": {
+        "type": "object",
+        "required": [
+          "format-version",
+          "table-uuid",
+          "location",
+          "last-sequence-number",
+          "last-updated-ms",
+          "last-column-id",
+          "current-schema-id",
+          "schemas",
+          "current-partition-spec-id",
+          "partition-specs",
+          "default-sort-order-id",
+          "sort-orders"
+        ],
+        "properties": {
+          "current-partition-spec-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "current-schema-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "current-snapshot-id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "default-sort-order-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "format-version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last-column-id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last-sequence-number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last-updated-ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "location": {
+            "type": "string"
+          },
+          "metadata-log": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MetadataLogEntry"
+            },
+            "nullable": true
+          },
+          "partition-specs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartitionSpec"
+            }
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "schemas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Schema"
+            }
+          },
+          "snapshot-log": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SnapshotLogEntry"
+            },
+            "nullable": true
+          },
+          "snapshots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Snapshot"
+            },
+            "nullable": true
+          },
+          "sort-orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SortOrder"
+            }
+          },
+          "table-uuid": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "TableResponse": {
+        "type": "object",
+        "required": [
+          "metadata"
+        ],
+        "properties": {
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/TableMetadata"
+          },
+          "metadata-location": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -5210,6 +7579,144 @@
           }
         }
       },
+      "Type": {
+        "oneOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "fields"
+            ],
+            "properties": {
+              "fields": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NestedField"
+                }
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "element_id",
+              "element_required",
+              "element"
+            ],
+            "properties": {
+              "element": {
+                "$ref": "#/components/schemas/Type"
+              },
+              "element_id": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "element_required": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type",
+              "key_id",
+              "key",
+              "value_id",
+              "value_required",
+              "value"
+            ],
+            "properties": {
+              "key": {
+                "$ref": "#/components/schemas/Type"
+              },
+              "key_id": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "type": {
+                "type": "string"
+              },
+              "value": {
+                "$ref": "#/components/schemas/Type"
+              },
+              "value_id": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "value_required": {
+                "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "UnifiedSearchQuery": {
+        "type": "object",
+        "required": [
+          "q"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "q": {
+            "type": "string"
+          }
+        }
+      },
+      "UnifiedSearchResponse": {
+        "type": "object",
+        "required": [
+          "results"
+        ],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UnifiedSearchResult"
+            }
+          }
+        }
+      },
+      "UnifiedSearchResult": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "context": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SearchResultType"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateCatalogRequest": {
         "type": "object",
         "properties": {
@@ -5235,6 +7742,53 @@
           "warehouse_name": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "UpdateNamespacePropertiesRequest": {
+        "type": "object",
+        "properties": {
+          "removals": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "updates": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        }
+      },
+      "UpdateNamespacePropertiesResponse": {
+        "type": "object",
+        "required": [
+          "updated",
+          "removed",
+          "missing"
+        ],
+        "properties": {
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "updated": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -5618,6 +8172,32 @@
           }
         ]
       },
+      "ViewResponse": {
+        "type": "object",
+        "required": [
+          "name",
+          "sql",
+          "dialect",
+          "properties"
+        ],
+        "properties": {
+          "dialect": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "sql": {
+            "type": "string"
+          }
+        }
+      },
       "Warehouse": {
         "type": "object",
         "required": [
@@ -5796,6 +8376,10 @@
     {
       "name": "System Config",
       "description": "System configuration management endpoints"
+    },
+    {
+      "name": "Iceberg REST",
+      "description": "Iceberg REST Catalog endpoints"
     },
     {
       "name": "Data Explorer",
