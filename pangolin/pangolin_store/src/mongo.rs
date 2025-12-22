@@ -30,7 +30,23 @@ pub struct MongoStore {
 
 impl MongoStore {
     pub async fn new(connection_string: &str, database_name: &str) -> Result<Self> {
-        let client_options = ClientOptions::parse(connection_string).await?;
+        let mut client_options = ClientOptions::parse(connection_string).await?;
+        
+        // Configure connection pool from environment variables
+        if let Ok(max_pool_size) = std::env::var("MONGO_MAX_POOL_SIZE") {
+            if let Ok(size) = max_pool_size.parse::<u32>() {
+                client_options.max_pool_size = Some(size);
+                tracing::info!("MongoDB max pool size set to: {}", size);
+            }
+        }
+        
+        if let Ok(min_pool_size) = std::env::var("MONGO_MIN_POOL_SIZE") {
+            if let Ok(size) = min_pool_size.parse::<u32>() {
+                client_options.min_pool_size = Some(size);
+                tracing::info!("MongoDB min pool size set to: {}", size);
+            }
+        }
+        
         let client = Client::with_options(client_options)?;
         let db = client.database(database_name);
         Ok(Self { client, db })
@@ -395,9 +411,11 @@ impl CatalogStore for MongoStore {
 
     // Asset Operations
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
+            "branch": &branch_name,
             "namespace": &namespace,
             "name": &asset.name
         };
@@ -405,8 +423,8 @@ impl CatalogStore for MongoStore {
         let doc = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
+            "branch": &branch_name,
             "namespace": namespace,
-            "branch": branch,
             "id": to_bson_uuid(asset.id),
             "name": &asset.name,
             "kind": format!("{:?}", asset.kind),
@@ -420,9 +438,11 @@ impl CatalogStore for MongoStore {
     }
 
     async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
+            "branch": branch_name,
             "namespace": namespace,
             "name": name
         };
@@ -460,9 +480,11 @@ impl CatalogStore for MongoStore {
     }
 
     async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
+            "branch": branch_name,
             "namespace": namespace
         };
         let cursor = self.db.collection::<Document>("assets").find(filter).await?;
@@ -529,9 +551,11 @@ impl CatalogStore for MongoStore {
     }
 
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
+            "branch": branch_name,
             "namespace": namespace,
             "name": name
         };
@@ -540,9 +564,11 @@ impl CatalogStore for MongoStore {
     }
 
     async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
+            "branch": &branch_name,
             "namespace": source_namespace,
             "name": source_name
         };
@@ -1361,9 +1387,11 @@ impl CatalogStore for MongoStore {
     }
 
     async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
+            "branch": branch_name,
             "namespace": namespace,
             "name": table
         };

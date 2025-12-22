@@ -40,6 +40,9 @@ pub mod system_config_handlers; // System configuration
 pub mod service_user_handlers; // Service user management
 pub mod cleanup_job; // Token cleanup background job
 pub mod openapi; // OpenAPI documentation
+pub mod error; // Custom error types
+pub mod dashboard_handlers; // Dashboard statistics
+pub mod optimization_handlers; // Search, bulk ops, validation
 
 
 
@@ -180,6 +183,15 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
         // .route("/api/v1/access-requests", post(business_metadata_handlers::create_access_request))
         // .route("/api/v1/access-requests/:id", get(business_metadata_handlers::get_access_request).put(business_metadata_handlers::update_access_request))
+        // Dashboard & Statistics
+        .route("/api/v1/dashboard/stats", get(dashboard_handlers::get_dashboard_stats))
+        .route("/api/v1/catalogs/:name/summary", get(dashboard_handlers::get_catalog_summary))
+        // Search & Filter
+        .route("/api/v1/search/assets", get(optimization_handlers::search_assets_by_name))
+        // Bulk Operations
+        .route("/api/v1/bulk/assets/delete", post(optimization_handlers::bulk_delete_assets))
+        // Validation
+        .route("/api/v1/validate/names", post(optimization_handlers::validate_names))
         .layer(axum::middleware::from_fn(auth_middleware::auth_middleware_wrapper))
         .layer(cors)
         .with_state(store)

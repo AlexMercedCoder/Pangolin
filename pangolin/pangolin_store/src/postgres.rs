@@ -25,8 +25,28 @@ pub struct PostgresStore {
 
 impl PostgresStore {
     pub async fn new(connection_string: &str) -> Result<Self> {
+        let max_connections = std::env::var("DATABASE_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(5);
+        
+        let min_connections = std::env::var("DATABASE_MIN_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(2);
+        
+        let connect_timeout = std::env::var("DATABASE_CONNECT_TIMEOUT")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(30);
+        
+        tracing::info!("Initializing PostgreSQL pool: max={}, min={}, timeout={}s", 
+            max_connections, min_connections, connect_timeout);
+        
         let pool = PgPoolOptions::new()
-            .max_connections(5)
+            .max_connections(max_connections)
+            .min_connections(min_connections)
+            .acquire_timeout(std::time::Duration::from_secs(connect_timeout))
             .connect(connection_string)
             .await?;
         
@@ -519,11 +539,13 @@ impl CatalogStore for PostgresStore {
     }
 
     // Asset Operations
-    async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
-        sqlx::query("INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, asset_type, metadata_location, properties) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+    async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        sqlx::query("INSERT INTO assets (id, tenant_id, catalog_name, branch_name, namespace_path, name, asset_type, metadata_location, properties) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(asset.id)
             .bind(tenant_id)
             .bind(catalog_name)
+            .bind(&branch_name)
             .bind(&namespace)
             .bind(&asset.name)
             .bind(format!("{:?}", asset.kind))
@@ -534,10 +556,12 @@ impl CatalogStore for PostgresStore {
         Ok(())
     }
 
-    async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
-        let row = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3 AND name = $4")
+    async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let row = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4 AND name = $5")
             .bind(tenant_id)
             .bind(catalog_name)
+            .bind(&branch_name)
             .bind(&namespace)
             .bind(&name)
             .fetch_optional(&self.pool)
@@ -594,10 +618,12 @@ impl CatalogStore for PostgresStore {
         }
     }
 
-    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
-        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3")
+    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4")
             .bind(tenant_id)
             .bind(catalog_name)
+            .bind(&branch_name)
             .bind(&namespace)
             .fetch_all(&self.pool)
             .await?;
@@ -622,10 +648,12 @@ impl CatalogStore for PostgresStore {
         Ok(assets)
     }
 
-    async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
-        sqlx::query("DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3 AND name = $4")
+    async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        sqlx::query("DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4 AND name = $5")
             .bind(tenant_id)
             .bind(catalog_name)
+            .bind(&branch_name)
             .bind(&namespace)
             .bind(&name)
             .execute(&self.pool)
@@ -633,12 +661,14 @@ impl CatalogStore for PostgresStore {
         Ok(())
     }
 
-    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
-        sqlx::query("UPDATE assets SET namespace_path = $1, name = $2 WHERE tenant_id = $3 AND catalog_name = $4 AND namespace_path = $5 AND name = $6")
+    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        sqlx::query("UPDATE assets SET namespace_path = $1, name = $2 WHERE tenant_id = $3 AND catalog_name = $4 AND branch_name = $5 AND namespace_path = $6 AND name = $7")
             .bind(&dest_namespace)
             .bind(&dest_name)
             .bind(tenant_id)
             .bind(catalog_name)
+            .bind(&branch_name)
             .bind(&source_namespace)
             .bind(&source_name)
             .execute(&self.pool)
@@ -1393,16 +1423,15 @@ impl CatalogStore for PostgresStore {
         tracing::info!("update_metadata_location: tenant_id={}, catalog={}, namespace={:?}, table={}, expected={:?}, new={}", 
             tenant_id, catalog_name, namespace, table, expected_location, new_location);
 
-        // CAS Logic
-        // We need to check if current metadata_location matches expected_location
-        // In Postgres, we can do this in the UPDATE query WHERE clause
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         
         let result = if let Some(expected) = expected_location {
             // Update only if current location matches expected
-            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_path = $4 AND name = $5 AND metadata_location = $6")
+            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND branch_name = $4 AND namespace_path = $5 AND name = $6 AND metadata_location = $7")
                 .bind(new_location)
                 .bind(tenant_id)
                 .bind(catalog_name)
+                .bind(&branch_name)
                 .bind(&namespace)
                 .bind(table)
                 .bind(expected)
@@ -1410,10 +1439,11 @@ impl CatalogStore for PostgresStore {
                 .await?
         } else {
             // Update if no metadata_location exists (create or first commit)
-            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_path = $4 AND name = $5 AND metadata_location IS NULL")
+            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND branch_name = $4 AND namespace_path = $5 AND name = $6 AND metadata_location IS NULL")
                 .bind(new_location)
                 .bind(tenant_id)
                 .bind(catalog_name)
+                .bind(&branch_name)
                 .bind(&namespace)
                 .bind(table)
                 .execute(&self.pool)

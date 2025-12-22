@@ -131,9 +131,15 @@ db.catalogs.createIndex({ "tenant_id": 1, "name": 1 }, { unique: true })
 // Namespaces
 db.namespaces.createIndex({ "tenant_id": 1, "catalog_name": 1, "namespace_path": 1 }, { unique: true })
 
-// Assets
-db.assets.createIndex({ "tenant_id": 1, "catalog_name": 1 })
-db.assets.createIndex({ "namespace_path": 1 })
+// Assets (Isolated by Branch)
+db.assets.createIndex({ 
+  "tenant_id": 1, 
+  "catalog_name": 1, 
+  "branch": 1, 
+  "namespace": 1, 
+  "name": 1 
+}, { unique: true })
+db.assets.createIndex({ "namespace": 1 })
 ```
 
 ## Performance Tuning

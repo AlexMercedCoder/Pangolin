@@ -68,10 +68,12 @@ CREATE TABLE IF NOT EXISTS assets (
     catalog_name TEXT NOT NULL,
     namespace_path TEXT NOT NULL, -- JSON array
     name TEXT NOT NULL,
+    branch_name TEXT NOT NULL DEFAULT 'main',
     asset_type TEXT NOT NULL,
     metadata_location TEXT,
     properties TEXT, -- JSON
-    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    UNIQUE (tenant_id, catalog_name, branch_name, namespace_path, name)
 );
 CREATE INDEX IF NOT EXISTS idx_assets_tenant_catalog_ns ON assets(tenant_id, catalog_name, namespace_path);
 

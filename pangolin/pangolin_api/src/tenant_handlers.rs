@@ -4,6 +4,7 @@ use axum::{
     response::IntoResponse,
     http::StatusCode,
 };
+use crate::error::ApiError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -65,7 +66,7 @@ pub async fn list_tenants(
         .unwrap_or(false);
 
     if !no_auth_enabled && session.role != UserRole::Root {
-         return (StatusCode::FORBIDDEN, "Only Root can list tenants").into_response();
+         return ApiError::forbidden("Only Root can list tenants").into_response();
     }
 
     match store.list_tenants().await {
@@ -73,7 +74,7 @@ pub async fn list_tenants(
             let response: Vec<TenantResponse> = tenants.into_iter().map(|t: Tenant| TenantResponse::from(t)).collect();
             (StatusCode::OK, Json(response)).into_response()
         },
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(e) => ApiError::from(e).into_response(),
     }
 }
 
@@ -181,14 +182,14 @@ pub async fn get_tenant(
         // Tenants can view themselves? Usually yes.
         // If session tenant_id matches requested id
         if session.tenant_id != Some(id) {
-             return (StatusCode::FORBIDDEN, "Forbidden").into_response();
+             return ApiError::forbidden("Forbidden").into_response();
         }
     }
 
     match store.get_tenant(id).await {
         Ok(Some(tenant)) => (StatusCode::OK, Json(TenantResponse::from(tenant))).into_response(),
-        Ok(None) => (StatusCode::NOT_FOUND, "Tenant not found").into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Ok(None) => ApiError::not_found("Tenant not found").into_response(),
+        Err(e) => ApiError::from(e).into_response(),
     }
 }
 

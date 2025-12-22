@@ -16,6 +16,8 @@ use crate::business_metadata_handlers::*;
 use crate::audit_handlers::*;
 use crate::system_config_handlers::*;
 use crate::iceberg_handlers::*;
+use crate::dashboard_handlers::*;
+use crate::optimization_handlers::*;
 
 // Import all schema types
 use pangolin_core::model::{
@@ -141,6 +143,15 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         list_audit_events,
         get_audit_event,
         count_audit_events,
+        
+        // Dashboard endpoints
+        get_dashboard_stats,
+        get_catalog_summary,
+        
+        // Optimization endpoints
+        search_assets_by_name,
+        bulk_delete_assets,
+        validate_names,
     ),
     components(
         schemas(
@@ -180,6 +191,14 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             
             // Audit logging types
             AuditListQuery, AuditCountResponse,
+            
+            // Dashboard types
+            DashboardStats, CatalogSummary,
+            
+            // Optimization types
+            SearchQuery, AssetSearchResult, SearchResponse,
+            BulkDeleteAssetsRequest, BulkOperationResponse,
+            ValidateNamesRequest, NameValidationResult, ValidateNamesResponse,
         )
     ),
     tags(
@@ -199,6 +218,10 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         (name = "Audit Logging", description = "Audit log viewing and filtering endpoints"),
         (name = "System Config", description = "System configuration management endpoints"),
         (name = "Data Explorer", description = "Data exploration and discovery endpoints"),
+        (name = "Dashboard", description = "Dashboard statistics and summaries"),
+        (name = "Search", description = "Asset search and discovery"),
+        (name = "Bulk Operations", description = "Bulk operations for efficiency"),
+        (name = "Validation", description = "Resource name validation"),
     ),
     modifiers(&SecurityAddon),
     info(

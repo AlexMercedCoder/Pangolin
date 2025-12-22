@@ -12,7 +12,9 @@ pub use postgres::PostgresStore;
 pub use mongo::MongoStore;
 pub use sqlite::SqliteStore;
 pub mod object_store_factory;
+pub mod object_store_cache;
 pub use signer::SignerImpl;
+pub use object_store_cache::ObjectStoreCache;
 
 use async_trait::async_trait;
 use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalog, Warehouse};

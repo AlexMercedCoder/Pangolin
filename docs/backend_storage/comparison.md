@@ -19,6 +19,7 @@ Detailed comparison of PostgreSQL, MongoDB, and SQLite for Pangolin metadata sto
 | **Indexes** | ✅ Advanced | ✅ Advanced | ✅ Basic |
 | **Full-Text Search** | ✅ Built-in | ✅ Built-in | ✅ FTS5 |
 | **JSON Support** | ✅ JSONB | ✅ Native | ✅ JSON1 |
+| **Branch Isolation** | ✅ Yes | ✅ Yes (Native) | ✅ Yes |
 | **Replication** | ✅ Built-in | ✅ Built-in | ❌ Manual |
 | **Sharding** | ⚠️ Extensions | ✅ Built-in | ❌ No |
 | **Backup** | ✅ pg_dump | ✅ mongodump | ✅ File copy |

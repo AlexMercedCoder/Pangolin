@@ -723,14 +723,16 @@ impl CatalogStore for SqliteStore {
     }
 
     // Asset Operations
-    async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
+    async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
         let namespace_path = serde_json::to_string(&namespace)?;
-        sqlx::query("INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, asset_type, metadata_location, properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        sqlx::query("INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, branch_name, asset_type, metadata_location, properties) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
             .bind(asset.id.to_string())
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
             .bind(&asset.name)
+            .bind(&branch_name)
             .bind(format!("{:?}", asset.kind))
             .bind(asset.properties.get("metadata_location").unwrap_or(&asset.location))
             .bind(serde_json::to_string(&asset.properties)?)
@@ -739,13 +741,15 @@ impl CatalogStore for SqliteStore {
         Ok(())
     }
 
-    async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
+    async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
         let namespace_path = serde_json::to_string(&namespace)?;
-        let row = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let row = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
             .bind(&name)
+            .bind(&branch_name)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -802,12 +806,14 @@ impl CatalogStore for SqliteStore {
         }
     }
 
-    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
         let namespace_path = serde_json::to_string(&namespace)?;
-        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ?")
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND branch_name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
+            .bind(&branch_name)
             .fetch_all(&self.pool)
             .await?;
 
@@ -831,29 +837,33 @@ impl CatalogStore for SqliteStore {
         Ok(assets)
     }
 
-    async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
+    async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
         let namespace_path = serde_json::to_string(&namespace)?;
-        sqlx::query("DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
+        sqlx::query("DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
             .bind(&name)
+            .bind(&branch_name)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
-    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
+    async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()> {
         let source_ns_path = serde_json::to_string(&source_namespace)?;
         let dest_ns_path = serde_json::to_string(&dest_namespace)?;
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         
-        sqlx::query("UPDATE assets SET namespace_path = ?, name = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+        sqlx::query("UPDATE assets SET namespace_path = ?, name = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
             .bind(&dest_ns_path)
             .bind(&dest_name)
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&source_ns_path)
             .bind(&source_name)
+            .bind(&branch_name)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -1033,17 +1043,19 @@ impl CatalogStore for SqliteStore {
         }
     }
 
-    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, _branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
+    async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
         let namespace_path = serde_json::to_string(&namespace)?;
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         
         // Transaction for CAS
         let mut tx = self.pool.begin().await?;
         
-        let row = sqlx::query("SELECT metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+        let row = sqlx::query("SELECT metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
             .bind(&table)
+            .bind(&branch_name)
             .fetch_optional(&mut *tx)
             .await?;
             

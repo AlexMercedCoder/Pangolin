@@ -108,6 +108,7 @@ The comprehensive schema includes:
 **Indexes**:
 - Pragma-enforced Foreign Keys
 - Primary keys on all tables
+- Composite indexes for branch isolation (e.g., `UNIQUE(tenant_id, catalog_name, branch_name, namespace_path, name)`)
 - Composite indexes for common listing operations
 
 ### Manual Schema Application

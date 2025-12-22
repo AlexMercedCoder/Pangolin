@@ -6,8 +6,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use std::collections::HashMap;
 use pangolin_store::CatalogStore;
-use pangolin_core::model::{Branch, BranchType};
+use pangolin_core::model::{Branch, BranchType, Namespace};
 use uuid::Uuid;
 use crate::auth::TenantId;
 use pangolin_core::permission::{PermissionScope, Action};
@@ -712,7 +713,17 @@ pub async fn create_catalog(
     };
 
     match store.create_catalog(tenant_id, catalog.clone()).await {
-        Ok(_) => (StatusCode::CREATED, Json(CatalogResponse::from(catalog))).into_response(),
+        Ok(_) => {
+            // Create default namespace
+            let ns = Namespace {
+                name: vec!["default".to_string()],
+                properties: HashMap::new(),
+            };
+            if let Err(e) = store.create_namespace(tenant_id, &catalog.name, ns).await {
+                tracing::warn!("Failed to create default namespace for catalog {}: {}", catalog.name, e);
+            }
+            (StatusCode::CREATED, Json(CatalogResponse::from(catalog))).into_response()
+        },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }

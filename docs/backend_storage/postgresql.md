@@ -124,7 +124,7 @@ The comprehensive schema includes:
 - `warehouses` - Storage configurations (S3, Azure, GCP)
 - `catalogs` - Iceberg catalog definitions
 - `namespaces` - Namespace hierarchies and properties
-- `assets` - Table and view metadata pointers
+- `assets` - Table and view metadata pointers (Isolated by `branch_name`)
 - `branches` - Git-like branch definitions
 - `tags` - Immutable commit pointers (snapshots)
 - `commits` - Detailed operation history
