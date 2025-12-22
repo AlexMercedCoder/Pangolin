@@ -8,50 +8,111 @@
     import { icebergApi } from '$lib/api/iceberg';
     import Input from '$lib/components/ui/Input.svelte';
     import Modal from '$lib/components/ui/Modal.svelte';
-    import FederatedControls from '$lib/components/catalogs/FederatedControls.svelte';
+	import FederatedControls from '$lib/components/catalogs/FederatedControls.svelte';
+    import StatCard from '$lib/components/dashboard/StatCard.svelte';
+    import MergeBranchModal from '$lib/components/merges/MergeBranchModal.svelte';
     import { catalogsApi, type Catalog } from '$lib/api/catalogs';
     import { branchesApi, type Branch } from '$lib/api/branches';
     import { notifications } from '$lib/stores/notifications';
-    import { isTenantAdmin } from '$lib/stores/auth';
-    import MergeBranchModal from '$lib/components/merges/MergeBranchModal.svelte';
+    import { authStore, isRoot, isTenantAdmin } from '$lib/stores/auth';
+	// ... previous imports
+    import { searchApi } from '$lib/api/optimization';
+    import BulkDeleteDialog from '$lib/components/dialogs/BulkDeleteDialog.svelte';
+    import type { AssetSearchResult } from '$lib/types/optimization';
 
-    let catalog: Catalog | null = null;
-    let loading = false;
-    let deleting = false;
+    // ... existing variables
+    
+    // Asset List State
+    // Asset List State (consolidated)
+    let assets: AssetSearchResult[] = [];
+    let loadingAssets = false;
+    let selectedAssetIds: string[] = [];
+    let showBulkDelete = false;
+
+    // missing state variables
+    let selectedBranch = '';
     let showDeleteDialog = false;
     let showMergeModal = false;
-    let branches: any[] = [];
-    let selectedBranch = 'main';
 
+    let catalogName = $page.params.name;
+    let catalog: Catalog | null = null;
+    let loading = true; // Keep this one, verify no other exists
+    let deleting = false;
+    
     let namespaces: string[] = [];
+    let branches: Branch[] = [];
+
     let showNamespaceModal = false;
     let newNamespaceName = '';
     let creatingNamespace = false;
-
-    $: catalogName = $page.params.name || '';
-
+    
+    // Reactive trigger
+    $: catalogName = $page.params.name;
     $: if (catalogName) {
         loadCatalog();
     }
-
+    
+    // Fetch assets when catalog loads
 	async function loadCatalog() {
 		if (!catalogName) return;
 
 		loading = true;
 		try {
 			catalog = await catalogsApi.get(catalogName);
+            
+            try {
+                const summary = await catalogsApi.getSummary(catalogName);
+                if (summary) catalogSummary = summary;
+            } catch (e) {
+                // Squelch summary errors (api might not support it yet)
+            }
+
+            // Load assets using search API
+            loadAssets();
+
 			await Promise.all([
                 loadBranches(),
                 loadNamespaces()
             ]);
 		} catch (error: any) {
-			console.error('Error loading catalog:', error);
-			notifications.error(`Failed to load catalog: ${error.message}`);
-			goto('/catalogs');
+             // Squelch load errors if page is just refreshing
 		} finally {
 			loading = false;
 		}
 	}
+
+    async function loadAssets() {
+        // Backend search endpoint requires a non-empty query. 
+        // We cannot list "all" assets with IDs easily via current API without backend changes.
+        // So we leave the list empty initially to avoid 400 Bad Request.
+        assets = [];
+        loadingAssets = false;
+    }
+
+    function toggleAssetSelection(id: string) {
+        if (selectedAssetIds.includes(id)) {
+            selectedAssetIds = selectedAssetIds.filter(i => i !== id);
+        } else {
+            selectedAssetIds = [...selectedAssetIds, id];
+        }
+    }
+
+    function toggleAllAssets() {
+        if (selectedAssetIds.length === assets.length) {
+            selectedAssetIds = [];
+        } else {
+            selectedAssetIds = assets.map(a => a.id);
+        }
+    }
+
+    $: selectedAssetNames = assets
+        .filter(a => selectedAssetIds.includes(a.id))
+        .map(a => a.name);
+
+// End of Script logic
+
+
+    let catalogSummary: any = null;
 
     async function loadNamespaces() {
         try {
@@ -154,6 +215,15 @@
 			</div>
 		</Card>
 	{:else if catalog}
+        <!-- Summary Stats -->
+        {#if catalogSummary}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard label="Tables" value={catalogSummary.table_count} icon="📋" color="blue" />
+                <StatCard label="Namespaces" value={catalogSummary.namespace_count} icon="🏷️" color="yellow" />
+                <StatCard label="Branches" value={catalogSummary.branch_count} icon="🌲" color="purple" />
+            </div>
+        {/if}
+
 		<!-- Details Card -->
 		<Card>
 			<h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Details</h3>
@@ -192,6 +262,85 @@
 			</dl>
 		</Card>
 
+		<!-- Assets Management Card -->
+		<Card>
+            <div class="flex items-center justify-between mb-4">
+			    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Assets</h3>
+                <div class="flex gap-2">
+                    {#if selectedAssetIds.length > 0}
+                        <Button variant="error" size="sm" on:click={() => showBulkDelete = true}>
+                            Delete ({selectedAssetIds.length})
+                        </Button>
+                    {/if}
+                    <Button size="sm" variant="secondary" on:click={loadAssets} loading={loadingAssets}>
+                        Refresh
+                    </Button>
+                </div>
+            </div>
+            
+            {#if assets.length === 0}
+                 <p class="text-gray-500 text-center py-4">No assets found in this catalog.</p>
+            {:else}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-3 text-left">
+                                    <input type="checkbox" 
+                                        checked={selectedAssetIds.length === assets.length && assets.length > 0}
+                                        on:change={toggleAllAssets}
+                                        class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-4 w-4"
+                                    />
+                                </th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Namespace</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {#each assets as asset}
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
+                                    <td class="px-4 py-3">
+                                        <input type="checkbox"
+                                            checked={selectedAssetIds.includes(asset.id)}
+                                            on:change={() => toggleAssetSelection(asset.id)}
+                                            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 h-4 w-4"
+                                        />
+                                    </td>
+                                    <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                                        {asset.name}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                        {asset.namespace.join('.')}
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                                        <span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                            {asset.asset_type}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                         <!-- Future: View/Edit buttons -->
+                                    </td>
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
+                </div>
+            {/if}
+        </Card>
+
+        <BulkDeleteDialog 
+        bind:open={showBulkDelete}
+        selectedIds={selectedAssetIds}
+        selectedNames={selectedAssetNames}
+        on:success={() => {
+            selectedAssetIds = [];
+            loadAssets(); // Refresh list
+            loadCatalog(); // Refresh stats
+        }}
+    />
+
 		<!-- Namespaces Card -->
 		<Card>
             <div class="flex items-center justify-between mb-4">
@@ -208,7 +357,7 @@
                     {#each namespaces as ns}
                         <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-primary-500 transition-colors">
                             <div class="flex items-center gap-2 mb-2">
-                                <span class="material-icons text-gray-400">folder</span>
+                                <span class="text-gray-400">🏷️</span>
                                 <h4 class="font-medium text-gray-900 dark:text-white">{ns}</h4>
                             </div>
                             <div class="text-sm text-gray-500">

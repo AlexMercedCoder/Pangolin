@@ -60,7 +60,7 @@
                     label: label,
                     type: 'namespace',
                     icon: '📁',
-                    href: `/catalogs/${catalogName}/namespaces/${label}`, // Context for click
+                    href: `/explorer/${catalogName}/${label}`, // Context for click
                     hasChildren: true,
                     expanded: false,
                     // Pass loader for tables
@@ -81,7 +81,7 @@
                 label: t.name,
                 type: 'table',
                 icon: '📄',
-                href: `/catalogs/${catalogName}/tables/${namespaceParts.join('.')}/${t.name}`,
+                href: `/explorer/${catalogName}/${namespaceParts.join('.')}/${t.name}`,
                 hasChildren: false,
                 expanded: false
             }));

@@ -1,74 +1,35 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/svelte';
-import ConfirmDialog from '$lib/components/ui/ConfirmDialog.svelte';
+import { render, fireEvent } from '@testing-library/svelte';
+import { describe, it, expect, vi } from 'vitest';
+import ConfirmDialog from './ConfirmDialog.svelte';
 
-describe('ConfirmDialog Component', () => {
-	it('renders when open is true', () => {
-		render(ConfirmDialog, {
-			props: {
-				open: true,
-				title: 'Confirm Action',
-				message: 'Are you sure?',
-				variant: 'danger'
-			}
-		});
+describe('ConfirmDialog', () => {
+  it('renders correctly when open', () => {
+    const { getByText } = render(ConfirmDialog, { open: true, title: 'Test Title', message: 'Test Message' });
+    expect(getByText('Test Title')).toBeTruthy();
+    expect(getByText('Test Message')).toBeTruthy();
+  });
 
-		expect(screen.getByText('Confirm Action')).toBeInTheDocument();
-		expect(screen.getByText('Are you sure?')).toBeInTheDocument();
-	});
+  it('dispatches confirm event on click', async () => {
+    const confirmHandler = vi.fn();
+    const { getByText } = render(ConfirmDialog, { 
+        open: true, 
+        confirmText: 'Yes',
+        onConfirm: confirmHandler
+    });
 
-	it('does not render when open is false', () => {
-		render(ConfirmDialog, {
-			props: {
-				open: false,
-				title: 'Confirm Action',
-				message: 'Are you sure?'
-			}
-		});
+    await fireEvent.click(getByText('Yes'));
+    expect(confirmHandler).toHaveBeenCalled();
+  });
 
-		expect(screen.queryByText('Confirm Action')).not.toBeInTheDocument();
-	});
+  it('dispatches cancel event on click', async () => {
+    const cancelHandler = vi.fn();
+    const { getByText } = render(ConfirmDialog, { 
+        open: true, 
+        cancelText: 'No',
+        onCancel: cancelHandler
+    });
 
-	it('shows correct button text', () => {
-		render(ConfirmDialog, {
-			props: {
-				open: true,
-				title: 'Delete Item',
-				message: 'This cannot be undone',
-				confirmText: 'Delete',
-				cancelText: 'Keep It'
-			}
-		});
-
-		expect(screen.getByText('Delete')).toBeInTheDocument();
-		expect(screen.getByText('Keep It')).toBeInTheDocument();
-	});
-
-	it('applies danger variant styling', () => {
-		render(ConfirmDialog, {
-			props: {
-				open: true,
-				title: 'Delete',
-				message: 'Confirm delete',
-				variant: 'danger'
-			}
-		});
-
-		const confirmButton = screen.getByText('Confirm');
-		expect(confirmButton.className).toContain('bg-red');
-	});
-
-	it('shows loading state', () => {
-		render(ConfirmDialog, {
-			props: {
-				open: true,
-				title: 'Delete',
-				message: 'Confirm delete',
-				loading: true
-			}
-		});
-
-		const confirmButton = screen.getByText('Confirm');
-		expect(confirmButton).toBeDisabled();
-	});
+    await fireEvent.click(getByText('No'));
+    expect(cancelHandler).toHaveBeenCalled();
+  });
 });

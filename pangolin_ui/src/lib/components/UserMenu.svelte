@@ -46,7 +46,7 @@
                 <span class="role-badge">{$user?.role || 'User'}</span>
                 {#if $user?.tenant_id}
                     <div class="tenant-info">
-                        Tenant: <span class="mono">{$user.tenant_id.slice(0, 8)}...</span>
+                        Tenant: <span class="mono">{$user.tenant_id}</span>
                     </div>
                 {/if}
             </div>

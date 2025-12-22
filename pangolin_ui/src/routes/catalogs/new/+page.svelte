@@ -7,6 +7,8 @@
 	import Input from '$lib/components/ui/Input.svelte';
 	import Select from '$lib/components/ui/Select.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
+    import { optimizationApi } from '$lib/api/optimization';
+    import type { NameValidationResult } from '$lib/types/optimization';
 	import { notifications } from '$lib/stores/notifications';
 
 	let loading = false;
@@ -24,8 +26,41 @@
 	let storageLocation = '';
 
 	// Federated Catalog State
-	// Federated Catalog State
 	let properties: { key: string; value: string }[] = [{ key: 'uri', value: '' }];
+
+     // Validation
+    let validationResult: NameValidationResult | null = null;
+    let validating = false;
+    let debounceTimer: any;
+
+    function debounce(func: Function, wait: number) {
+        return (...args: any[]) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func(...args), wait);
+        };
+    }
+
+    const validateName = debounce(async (val: string) => {
+        if (!val || val.length < 2) {
+            validationResult = null;
+            return;
+        }
+
+        validating = true;
+        try {
+            const res = await optimizationApi.validateNames({
+                resource_type: 'catalog',
+                names: [val]
+            });
+            validationResult = res.results[0];
+        } catch (e) {
+            console.error('Validation failed', e);
+        } finally {
+            validating = false;
+        }
+    }, 500);
+
+    $: validateName(name);
 
 	function addProperty() {
 		properties = [...properties, { key: '', value: '' }];
@@ -70,6 +105,11 @@
 	}
 
 	async function handleSubmit() {
+        if (validationResult && !validationResult.available) {
+             notifications.error(validationResult.reason || 'Catalog name is unavailable');
+             return;
+        }
+
 		loading = true;
 		error = '';
 
@@ -133,13 +173,34 @@
 			{/if}
 
 			<div class="space-y-6">
-				<Input
-					label="Catalog Name"
-					bind:value={name}
-					placeholder="my-catalog"
-					required
-					disabled={loading}
-				/>
+			<div class="space-y-6">
+                <div class="relative">
+    				<Input
+	    				label="Catalog Name"
+		    			bind:value={name}
+			    		placeholder="my-catalog"
+				    	required
+					    disabled={loading}
+    				/>
+                    <!-- Validation Indicator -->
+                    <div class="absolute right-2 top-9">
+                        {#if validating}
+                            <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        {:else if validationResult && name.length >= 2}
+                            {#if validationResult.available}
+                                <span class="material-icons text-green-500 text-lg">check_circle</span>
+                            {:else}
+                                <span class="material-icons text-red-500 text-lg" title={validationResult.reason || 'Taken'}>cancel</span>
+                            {/if}
+                        {/if}
+                    </div>
+                     {#if validationResult && !validationResult.available}
+                        <p class="text-xs text-red-500 mt-1 ml-1">{validationResult.reason || 'Name is unavailable'}</p>
+                    {/if}
+                </div>
 
 				<!-- Catalog Type Toggle -->
 				<div>
@@ -271,7 +332,7 @@
 					variant="primary"
 					type="submit"
 					{loading}
-					disabled={loading || !name || (!isFederated && !storageLocation) || (isFederated && properties.every(p => !p.key || !p.value))}
+					disabled={loading || !name || (!isFederated && !storageLocation) || (isFederated && properties.every(p => !p.key || !p.value)) || (validationResult !== null && !validationResult.available)}
 				>
 					{loading ? 'Creating...' : 'Create Catalog'}
 				</Button>

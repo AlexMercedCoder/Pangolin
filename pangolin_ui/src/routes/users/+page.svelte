@@ -113,7 +113,7 @@
 	<div class="flex justify-between items-center mb-6">
 		<div>
 			<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Users</h1>
-			<p class="text-gray-600 dark:text-gray-400 mt-1">Manage user accounts and permissions</p>
+			<p class="text-gray-600 dark:text-gray-400 mt-1">Manage user accounts and permissions. <span class="text-primary-600 dark:text-primary-400 font-medium">Click on a user to assign roles.</span></p>
 		</div>
 
 		{#if $isRoot || $isTenantAdmin}
@@ -168,7 +168,7 @@
 	</div>
 
 	<!-- Users Table -->
-	<DataTable {columns} data={tableData} {loading}>
+	<DataTable {columns} data={tableData} {loading} on:rowClick={(e) => handleView(e.detail)}>
 		<svelte:fragment slot="cell" let:row let:column>
 			{#if column.key === 'role'}
 				<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {roleColors[row.role_badge] || 'bg-gray-100 text-gray-800'}">

@@ -1,20 +1,24 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { authStore, isRoot, isTenantAdmin } from '$lib/stores/auth';
-	import { themeStore } from '$lib/stores/theme';
-	import { tenantStore } from '$lib/stores/tenant';
+    import { page } from '$app/stores';
+    import { goto } from '$app/navigation';
+    import { authStore, isRoot, isTenantAdmin } from '$lib/stores/auth';
+    import { themeStore } from '$lib/stores/theme';
 	import { helpStore } from '$lib/stores/help';
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
+    import { onMount } from 'svelte';
+    
+    // Ensure material icons are loaded even if app.html HMR misses it
+
 	import Notification from '$lib/components/ui/Notification.svelte';
 	import HelpPanel from '$lib/components/ui/HelpPanel.svelte';
 	import UserMenu from '$lib/components/UserMenu.svelte';
+    import GlobalSearch from '$lib/components/search/GlobalSearch.svelte';
 	import '../app.css';
 
 	let sidebarOpen = true;
 	let tenants: Tenant[] = [];
 	let loadingTenants = false;
+    let tenantsLoaded = false;
 
 	onMount(() => {
 		// Initialize auth - checks server config and auto-authenticates if NO_AUTH mode
@@ -26,30 +30,40 @@
 		// Load theme
 		themeStore.loadTheme();
 
-		// Redirect to login if not authenticated (and auth is enabled)
-		const unsubscribeAuth = authStore.subscribe(async state => {
-			if (!state.isLoading && !state.isAuthenticated && state.authEnabled && $page.url.pathname !== '/login') {
-				goto('/login');
-			} else if (!state.isLoading && state.isAuthenticated && $page.url.pathname === '/login') {
-				// If authenticated and on login page, redirect to dashboard
-				goto('/');
-			}
-
-			// Load tenants if root and not loaded
-			if (state.isAuthenticated && state.user?.role?.toLowerCase() === 'root' && tenants.length === 0 && !loadingTenants) {
-				loadingTenants = true;
-				try {
-					tenants = await tenantsApi.list();
-				} catch (e) {
-					console.error('Failed to load tenants for switcher', e);
-				} finally {
-					loadingTenants = false;
-				}
-			}
-		});
-
-		return unsubscribeAuth;
 	});
+    
+    // Auth redirect logic & State Reset
+    $: if (!$authStore.isLoading) {
+        if ($authStore.authEnabled) {
+            const path = $page.url.pathname;
+            if (!$authStore.isAuthenticated && path !== '/login') {
+                goto('/login');
+            } else if ($authStore.isAuthenticated && path === '/login') {
+                goto('/');
+            }
+        }
+        
+        // Reset tenants state on logout
+        if (!$authStore.isAuthenticated) {
+            tenants = [];
+            tenantsLoaded = false;
+        }
+    }
+    
+    // Load tenants logic - Protected against infinite loops
+    // Load tenants logic - Protected against infinite loops
+    /*
+    $: if ($authStore.isAuthenticated && $isRoot && !tenantsLoaded && !loadingTenants) {
+        loadingTenants = true;
+        tenantsApi.list()
+            .then(t => tenants = t)
+            .catch(e => console.error('Failed to load tenants for switcher', e))
+            .finally(() => {
+                loadingTenants = false;
+                tenantsLoaded = true;
+            });
+    }
+    */
 
 	// Route guards
 	$: if ($authStore.isAuthenticated && !$authStore.isLoading) {
@@ -89,6 +103,10 @@
 		window.location.reload(); 
 	}
 </script>
+
+<svelte:head>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</svelte:head>
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
 	{#if $authStore.isLoading}
@@ -305,6 +323,10 @@
 								{$page.url.pathname === '/' ? 'Dashboard' : $page.url.pathname.split('/')[1] || 'Pangolin'}
 							</h2>
 						</div>
+
+						<div class="flex-1 max-w-xl mx-8">
+                             <GlobalSearch />
+                        </div>
 
 						<div class="flex items-center gap-4">
 							<!-- Context Switcher Removed for Root -->

@@ -3,10 +3,12 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { rolesApi, type Role } from '$lib/api/roles';
+  import { catalogsApi, type Catalog } from '$lib/api/catalogs';
   import Button from '$lib/components/ui/Button.svelte';
   import Card from '$lib/components/ui/Card.svelte';
   import { notifications } from '$lib/stores/notifications';
   import PermissionBuilder from '$lib/components/rbac/PermissionBuilder.svelte';
+  import PermissionHelpTable from '$lib/components/rbac/PermissionHelpTable.svelte';
   import type { ScopeType, ActionType } from '$lib/components/rbac/PermissionBuilder.svelte';
 
   let role: Role | null = null;
@@ -22,9 +24,21 @@
   let currentScope: { type: ScopeType, id?: string } = { type: 'Tenant' };
   let currentActions: ActionType[] = [];
 
+  let catalogs: Catalog[] = [];
+
   onMount(async () => {
+    // Load catalogs FIRST so we can resolve IDs to names when loading the role
+    await loadCatalogs();
     await loadRole();
   });
+
+  async function loadCatalogs() {
+      try {
+          catalogs = await catalogsApi.list();
+      } catch (e) {
+          console.error('Failed to load catalogs', e);
+      }
+  }
 
   async function loadRole() {
     loading = true;
@@ -34,9 +48,7 @@
       role = await rolesApi.get(id);
       name = role.name;
       description = role.description || '';
-      // Parse permissions if they come as object from API (Role interface has any[])
-      // In create we sent JSON string. The API get likely returns objects or the string.
-      // Assuming API returns parsed JSON array of objects matching our structure.
+      // Parse permissions if they come as object from API
       let rawPermissions: any[] = [];
       if (Array.isArray(role.permissions)) {
         rawPermissions = role.permissions;
@@ -48,13 +60,12 @@
           }
       }
       
-      // Normalize permissions for UI (backend kebab-case -> frontend view model)
+      // Normalize permissions for UI
       permissions = rawPermissions.map((p: any) => {
           let scopeType: ScopeType = 'Catalog'; // Default
           let scopeId = '';
           
           if (p.scope) {
-              // Handle backend type casing (catalog -> Catalog)
               const rawType = p.scope.type?.toLowerCase();
               if (rawType === 'catalog') scopeType = 'Catalog';
               else if (rawType === 'namespace') scopeType = 'Namespace';
@@ -63,16 +74,42 @@
               else if (rawType === 'tenant') scopeType = 'Tenant';
               else if (rawType === 'system') scopeType = 'System';
               
-              // Map ID fields
-              scopeId = p.scope['catalog-id'] || p.scope.catalog_id || 
-                        p.scope['namespace'] || 
-                        p.scope['table'] || 
-                        p.scope['view'] || '';
+              // Helper to resolve catalog name from ID
+              const resolveCatalogName = (id: string) => {
+                  const cat = catalogs.find(c => c.id === id);
+                  return cat ? cat.name : id;
+              };
+
+              // Reconstruct "catalogName.namespaceName" format for UI
+              if (scopeType === 'Catalog') {
+                  const id = p.scope['catalog-id'] || p.scope.catalog_id;
+                  scopeId = resolveCatalogName(id);
+              } 
+              else if (scopeType === 'Namespace') {
+                  const catId = p.scope['catalog-id'] || p.scope.catalog_id;
+                  const nsIs = p.scope['namespace'];
+                  const catName = resolveCatalogName(catId);
+                  scopeId = `${catName}.${nsIs}`;
+              }
+              else if (scopeType === 'Table' || scopeType === 'View') {
+                  const catId = p.scope['catalog-id'] || p.scope.catalog_id;
+                  const nsIs = p.scope['namespace'];
+                  const tblIs = p.scope['table'] || p.scope['view'];
+                  const catName = resolveCatalogName(catId);
+                  scopeId = `${catName}.${nsIs}.${tblIs}`;
+              }
+              else if (scopeType === 'Tenant' || scopeType === 'System') {
+                  scopeId = ''; // No ID needed
+              }
+              else {
+                  // Fallback
+                  scopeId = p.scope['catalog-id'] || p.scope.catalog_id || '';
+              }
           }
           
           return {
               scope: { type: scopeType, id: scopeId },
-              actions: p.actions || [] // Actions likely "read", display as is or capitalize?
+              actions: p.actions || []
           };
       });
     } catch (error: any) {
@@ -108,12 +145,63 @@
     if (!role) return;
     submitting = true;
     try {
-      await rolesApi.update(role.id, {
-        name,
-        description,
-        permissions: permissions
-      });
+      // Logic mirrored from roles/create/+page.svelte to fix 422 error
+      const backendPermissions = [];
+      
+      for (const p of permissions) {
+          let backendScope: any;
+          const resourceName = p.scope.id || '';
+          
+          if (p.scope.type === 'Catalog') {
+              const catalog = catalogs.find(c => c.name === resourceName);
+              if (!catalog) {
+                   notifications.error(`Catalog '${resourceName}' not found. Please verify the name.`);
+                   submitting = false;
+                   return; // STOP SAVE
+              } else {
+                   backendScope = { type: 'catalog', 'catalog_id': catalog.id };
+              }
+          } else if (p.scope.type === 'Namespace') {
+              const parts = resourceName.split('.');
+              if (parts.length >= 2) {
+                  const catName = parts[0];
+                  const nsName = parts.slice(1).join('.'); 
+                  const catalog = catalogs.find(c => c.name === catName);
+                  if (catalog) {
+                      backendScope = { type: 'namespace', 'catalog_id': catalog.id, 'namespace': nsName };
+                  } else {
+                      notifications.error(`Catalog '${catName}' not found in namespace '${resourceName}'.`);
+                      submitting = false;
+                      return; // STOP SAVE
+                  }
+              } else {
+                 notifications.error(`Invalid Namespace format '${resourceName}'. Use 'catalog.namespace'.`);
+                 submitting = false;
+                 return; // STOP SAVE
+              }
+          } else if (p.scope.type === 'Tenant') {
+              backendScope = { type: 'tenant' };
+          } else {
+               backendScope = { type: 'catalog', 'catalog_id': p.scope.id };
+          }
+
+          backendPermissions.push({
+              scope: backendScope,
+              actions: p.actions.map(a => a.toLowerCase())
+          });
+      }
+
+      // Update local role object first
+      role.name = name;
+      role.description = description;
+      role.permissions = backendPermissions;
+
+      // Send FULL role object
+      await rolesApi.update(role.id, role);
+      
       notifications.success('Role updated successfully');
+      // Reload to ensure state sync?
+      await loadRole();
     } catch (error: any) {
       notifications.error(`Failed to update role: ${error.message}`);
     }
@@ -158,7 +246,7 @@
           <input 
               id="role-name"
               type="text" 
-              class="input w-full" 
+              class="input w-full text-gray-900 dark:text-white bg-white dark:bg-gray-800"
               bind:value={name} 
           />
         </div>
@@ -166,7 +254,7 @@
           <label for="role-description" class="label mb-1">Description</label>
           <textarea 
               id="role-description"
-              class="textarea w-full" 
+              class="textarea w-full text-gray-900 dark:text-white bg-white dark:bg-gray-800"
               bind:value={description} 
           ></textarea>
         </div>
@@ -180,6 +268,11 @@
           actions={currentActions} 
           on:change={handlePermissionChange} 
         />
+        
+        <div class="mt-4">
+            <PermissionHelpTable />
+        </div>
+
         <div class="flex justify-end">
           <Button variant="secondary" on:click={addPermission}>
             Add Permission

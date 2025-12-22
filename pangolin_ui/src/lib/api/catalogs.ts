@@ -1,4 +1,5 @@
 import { apiClient, type ApiResponse } from './client';
+import type { CatalogSummary } from '$lib/types/optimization';
 
 export type CatalogType = 'Local' | 'Federated';
 
@@ -46,6 +47,12 @@ export const catalogsApi = {
 		if (response.error) throw new Error(response.error.message);
 		return response.data!;
 	},
+
+    async getSummary(name: string): Promise<CatalogSummary> {
+        const response = await apiClient.get<CatalogSummary>(`/api/v1/catalogs/${encodeURIComponent(name)}/summary`);
+        if (response.error) throw new Error(response.error.message);
+        return response.data!;
+    },
 
 	async create(data: CreateCatalogRequest): Promise<Catalog> {
 		const response = await apiClient.post<Catalog>('/api/v1/catalogs', data);

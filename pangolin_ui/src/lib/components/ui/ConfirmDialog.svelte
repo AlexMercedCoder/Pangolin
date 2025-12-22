@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
+	import { createEventDispatcher } from 'svelte';
 
 	export let open = false;
 	export let title = 'Confirm Action';
@@ -11,6 +12,8 @@
 
 	export let onCancel: () => void = () => {};
 	export let loading = false;
+
+	const dispatch = createEventDispatcher();
 
 	const variantStyles = {
 		danger: 'bg-error-600 hover:bg-error-700',
@@ -25,12 +28,14 @@
 	};
 
 	function handleConfirm() {
-		onConfirm();
+		dispatch('confirm');
+		if (onConfirm) onConfirm();
 		open = false;
 	}
 
 	function handleCancel() {
-		onCancel();
+		dispatch('cancel');
+		if (onCancel) onCancel();
 		open = false;
 	}
 </script>

@@ -189,8 +189,8 @@
 	</div>
 </div>
 
-{#if showConfirmDialog}
 	<ConfirmDialog
+        bind:open={showConfirmDialog}
 		title="Revoke Token"
 		message="Are you sure you want to revoke this token? This action cannot be undone and will immediately invalidate the token."
 		confirmText="Revoke"
@@ -198,7 +198,6 @@
 		on:confirm={confirmRevoke}
 		on:cancel={cancelRevoke}
 	/>
-{/if}
 
 {#if showRotateConfirmDialog}
 	<ConfirmDialog

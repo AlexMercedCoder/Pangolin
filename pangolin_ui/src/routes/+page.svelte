@@ -1,18 +1,38 @@
 <script lang="ts">
 	import Card from '$lib/components/ui/Card.svelte';
 	import GettingStarted from '$lib/components/dashboard/GettingStarted.svelte';
+    import StatCard from '$lib/components/dashboard/StatCard.svelte';
     import Button from '$lib/components/ui/Button.svelte';
     import Modal from '$lib/components/ui/Modal.svelte';
     import Input from '$lib/components/ui/Input.svelte';
     import { user, token } from '$lib/stores/auth';
     import { authApi } from '$lib/api/auth';
+    import { dashboardApi } from '$lib/api/optimization';
+    import type { DashboardStats } from '$lib/types/optimization';
     import { goto } from '$app/navigation';
+    import { onMount } from 'svelte';
 
     let showTokenModal = false;
     let newToken = '';
     let tokenExpiry = '';
     let generatingToken = false;
     let copySuccess = false;
+
+    // Stats
+    let stats: DashboardStats | null = null;
+    let loadingStats = true;
+
+    onMount(async () => {
+        if ($user) {
+            try {
+                stats = await dashboardApi.getStats();
+            } catch (e) {
+                console.error('Failed to load dashboard stats', e);
+            } finally {
+                loadingStats = false;
+            }
+        }
+    });
 
     async function handleGenerateToken() {
         if (!$user) {
@@ -98,6 +118,21 @@
         </div>
 	</div>
 
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {#if stats}
+            <StatCard label="Catalogs" value={stats.catalogs_count} icon="📂" color="blue" />
+            <StatCard label="Warehouses" value={stats.warehouses_count} icon="🏭" color="purple" />
+            <StatCard label="Namespaces" value={stats.namespaces_count} icon="🏷️" color="yellow" />
+            <StatCard label="Tables" value={stats.tables_count} icon="📋" color="red" />
+        {:else if loadingStats}
+            <StatCard label="Catalogs" value={undefined} icon="📂" color="blue" />
+            <StatCard label="Warehouses" value={undefined} icon="🏭" color="purple" />
+            <StatCard label="Namespaces" value={undefined} icon="🏷️" color="yellow" />
+            <StatCard label="Tables" value={undefined} icon="📋" color="red" />
+        {/if}
+    </div>
+
 	<div class="grid grid-cols-1 gap-6">
 		<GettingStarted />
 	</div>
@@ -125,9 +160,9 @@
                     title="Copy to clipboard"
                 >
                     {#if copySuccess}
-                        <span class="material-icons text-green-500 text-sm">check</span>
+                        <span class="text-green-500 text-sm">✅</span>
                     {:else}
-                        <span class="material-icons text-sm">content_copy</span>
+                        <span class="text-sm">📋</span>
                     {/if}
                 </button>
             </div>

@@ -1,0 +1,126 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e8]:
+        - generic [ref=e9]: P
+        - generic [ref=e10]: Pangolin
+      - navigation [ref=e11]:
+        - link "📊 Dashboard" [ref=e12] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e13]: 📊
+          - generic [ref=e14]: Dashboard
+        - link "🔍 Data Explorer" [ref=e15] [cursor=pointer]:
+          - /url: /explorer
+          - generic [ref=e16]: 🔍
+          - generic [ref=e17]: Data Explorer
+        - link "🔎 Discovery" [ref=e18] [cursor=pointer]:
+          - /url: /discovery
+          - generic [ref=e19]: 🔎
+          - generic [ref=e20]: Discovery
+        - link "📚 Catalogs" [ref=e21] [cursor=pointer]:
+          - /url: /catalogs
+          - generic [ref=e22]: 📚
+          - generic [ref=e23]: Catalogs
+        - link "🏢 Warehouses" [ref=e24] [cursor=pointer]:
+          - /url: /warehouses
+          - generic [ref=e25]: 🏢
+          - generic [ref=e26]: Warehouses
+        - link "👥 Users" [ref=e27] [cursor=pointer]:
+          - /url: /users
+          - generic [ref=e28]: 👥
+          - generic [ref=e29]: Users
+        - link "🛡️ Roles" [ref=e30] [cursor=pointer]:
+          - /url: /roles
+          - generic [ref=e31]: 🛡️
+          - generic [ref=e32]: Roles
+        - link "📫 Access Requests" [ref=e33] [cursor=pointer]:
+          - /url: /admin/requests
+          - generic [ref=e34]: 📫
+          - generic [ref=e35]: Access Requests
+        - link "🤖 Service Users" [ref=e36] [cursor=pointer]:
+          - /url: /admin/service-users
+          - generic [ref=e37]: 🤖
+          - generic [ref=e38]: Service Users
+        - link "🔑 Tokens" [ref=e39] [cursor=pointer]:
+          - /url: /admin/tokens
+          - generic [ref=e40]: 🔑
+          - generic [ref=e41]: Tokens
+        - link "⚙️ System Config" [ref=e42] [cursor=pointer]:
+          - /url: /admin/settings
+          - generic [ref=e43]: ⚙️
+          - generic [ref=e44]: System Config
+        - link "📋 Audit Logs" [ref=e45] [cursor=pointer]:
+          - /url: /admin/audit
+          - generic [ref=e46]: 📋
+          - generic [ref=e47]: Audit Logs
+      - button "◀" [ref=e49] [cursor=pointer]:
+        - generic [ref=e50]: ◀
+  - generic [ref=e51]:
+    - banner [ref=e52]:
+      - generic [ref=e53]:
+        - heading "Dashboard" [level=2] [ref=e55]
+        - generic [ref=e58]:
+          - generic:
+            - generic: search
+          - textbox "Search assets..." [ref=e59]
+        - generic [ref=e60]:
+          - button "💻" [ref=e61] [cursor=pointer]
+          - button "N no-auth ▼" [ref=e63] [cursor=pointer]:
+            - generic [ref=e64]: "N"
+            - generic [ref=e65]: no-auth
+            - generic [ref=e66]: ▼
+    - main [ref=e67]:
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - generic [ref=e70]:
+            - heading "Dashboard" [level=1] [ref=e71]
+            - paragraph [ref=e72]: Welcome to Pangolin Lakehouse Catalog
+          - button "Generate New Token" [ref=e74] [cursor=pointer]
+        - generic [ref=e75]:
+          - generic [ref=e77]:
+            - generic [ref=e78]: folder_open
+            - generic [ref=e79]:
+              - paragraph [ref=e80]: Catalogs
+              - paragraph [ref=e81]: "1"
+          - generic [ref=e83]:
+            - generic [ref=e84]: warehouse
+            - generic [ref=e85]:
+              - paragraph [ref=e86]: Warehouses
+              - paragraph [ref=e87]: "1"
+          - generic [ref=e89]:
+            - generic [ref=e90]: dns
+            - generic [ref=e91]:
+              - paragraph [ref=e92]: Namespaces
+              - paragraph [ref=e93]: "0"
+          - generic [ref=e95]:
+            - generic [ref=e96]: table_chart
+            - generic [ref=e97]:
+              - paragraph [ref=e98]: Tables
+              - paragraph [ref=e99]: "0"
+        - generic [ref=e101]:
+          - generic [ref=e102]:
+            - heading "code Getting Started with PyIceberg" [level=3] [ref=e103]:
+              - generic [ref=e104]: code
+              - text: Getting Started with PyIceberg
+            - link "View Docs" [ref=e105] [cursor=pointer]:
+              - /url: https://py.iceberg.apache.org/
+          - navigation "Tabs" [ref=e107]:
+            - button "Credential Vending" [ref=e108] [cursor=pointer]
+            - button "AWS S3" [ref=e109] [cursor=pointer]
+            - button "S3-Compatible (MinIO)" [ref=e110] [cursor=pointer]
+            - button "Azure" [ref=e111] [cursor=pointer]
+            - button "GCP" [ref=e112] [cursor=pointer]
+          - generic [ref=e113]:
+            - generic [ref=e114]: "from pyiceberg.catalog import load_catalog catalog = load_catalog(\"pangolin\", **{ \"uri\": \"http://localhost:5175/api/v1/catalogs/my_catalog\", \"header.X-Pangolin-Tenant\": \"00000000-0000-0000-0000-000000000000\", \"token\": \"<YOUR_ACCESS_TOKEN>\", \"header.X-Iceberg-Access-Delegation\": \"vended-credentials\" })"
+            - button "content_copy" [ref=e115] [cursor=pointer]
+          - paragraph [ref=e117]:
+            - text: Replace
+            - code [ref=e118]: <YOUR_ACCESS_TOKEN>
+            - text: with a token generated from your
+            - link "Profile" [ref=e119] [cursor=pointer]:
+              - /url: /profile/tokens
+            - text: .
+```

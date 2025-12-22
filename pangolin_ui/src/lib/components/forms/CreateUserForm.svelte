@@ -46,8 +46,9 @@
 	$: if (!$authStore.authEnabled) {
 		// In NO_AUTH mode, use the default tenant
 		formData.tenant_id = '00000000-0000-0000-0000-000000000000';
-	} else if (!$isRoot && $tenantStore.selectedTenantId) {
-		formData.tenant_id = $tenantStore.selectedTenantId;
+	} else if (!$isRoot) {
+        // Fallback to authStore if tenantStore is empty, but protect against undefined
+		formData.tenant_id = $tenantStore.selectedTenantId || $authStore.user?.tenant_id;
 	}
 
 	async function loadTenants() {

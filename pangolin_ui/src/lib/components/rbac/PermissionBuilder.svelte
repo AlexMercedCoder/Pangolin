@@ -51,7 +51,7 @@
     <!-- Scope Selection -->
     <div>
       <label class="label text-sm font-medium mb-1" for="scope-type">Scope</label>
-      <select id="scope-type" class="select w-full" value={scope.type} on:change={updateScopeType}>
+      <select id="scope-type" class="select w-full text-gray-900 dark:text-white bg-white dark:bg-gray-800" value={scope.type} on:change={updateScopeType}>
         {#each scopeOptions as opt}
           <option value={opt}>{opt}</option>
         {/each}
@@ -65,14 +65,28 @@
         <input 
           type="text" 
           id="resource-id"
-          class="input w-full" 
+          class="input w-full text-gray-900 dark:text-white bg-white dark:bg-gray-800" 
           placeholder={`e.g. "finance_db" for Namespace`}
           value={scope.id || ''} 
           on:input={updateScopeId}
         />
         <p class="text-xs text-surface-400 mt-1">Leave empty for all resources of this type</p>
       </div>
-    {/if}
+      
+      <!-- Contextual Guidance -->
+      <div class="col-span-1 md:col-span-2 bg-surface-700/50 p-3 rounded text-sm text-surface-200">
+          <span class="font-bold text-primary-400">💡 Guidance:</span>
+          {#if scope.type === 'Catalog'}
+              Enter the exact <strong>Catalog Name</strong>. It will be resolved to its ID automatically.
+          {:else if scope.type === 'Namespace'}
+              Use format <code>catalogName.namespaceName</code> (e.g., <code>lakehouse_cat.sales</code>). Nested namespaces use dots (e.g., <code>lakehouse_cat.sales.regional</code>).
+          {:else if scope.type === 'Table' || scope.type === 'View'}
+               Use format <code>catalogName.namespaceName.tableName</code>.
+          {:else}
+               Enter the Resource ID or Name.
+          {/if}
+      </div>
+     {/if}
   </div>
 
   <!-- Actions Selection -->

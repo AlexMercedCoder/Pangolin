@@ -61,9 +61,18 @@ export const authApi = {
 	},
 
 	async login(credentials: LoginRequest): Promise<LoginResponse> {
-		const response = await apiClient.post<LoginResponse>('/api/v1/users/login', credentials);
+		const response = await apiClient.post<any>('/api/v1/users/login', credentials);
 		if (response.error) throw new Error(response.error.message);
-		return response.data!;
+		
+        const data = response.data!;
+        const userRaw = data.user;
+        const user: User = {
+            ...userRaw,
+            tenant_id: userRaw.tenant_id || userRaw['tenant-id'],
+            tenant_name: userRaw.tenant_name || userRaw['tenant-name']
+        };
+        
+		return { token: data.token, user };
 	},
 
 	async logout(): Promise<void> {
@@ -73,9 +82,17 @@ export const authApi = {
 	},
 
 	async getCurrentUser(): Promise<User> {
-		const response = await apiClient.get<User>('/api/v1/users/me');
+		const response = await apiClient.get<any>('/api/v1/users/me');
 		if (response.error) throw new Error(response.error.message);
-		return response.data!;
+        
+        const userRaw = response.data!;
+        const user: User = {
+            ...userRaw,
+            tenant_id: userRaw.tenant_id || userRaw['tenant-id'],
+            tenant_name: userRaw.tenant_name || userRaw['tenant-name']
+        };
+
+		return user;
 	},
 
 	async getOAuthProviders(): Promise<OAuthProvider[]> {

@@ -4,6 +4,8 @@
 	import Select from '$lib/components/ui/Select.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import { warehousesApi, type CreateWarehouseRequest } from '$lib/api/warehouses';
+    import { optimizationApi } from '$lib/api/optimization';
+    import type { NameValidationResult } from '$lib/types/optimization';
 	import { notifications } from '$lib/stores/notifications';
 
 	export let open = false;
@@ -43,6 +45,40 @@
 
 	let formErrors: Record<string, string> = {};
 
+    // Validation
+    let validationResult: NameValidationResult | null = null;
+    let validating = false;
+    let debounceTimer: any;
+
+    function debounce(func: Function, wait: number) {
+        return (...args: any[]) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func(...args), wait);
+        };
+    }
+
+    const validateName = debounce(async (val: string) => {
+        if (!val || val.length < 2) {
+            validationResult = null;
+            return;
+        }
+
+        validating = true;
+        try {
+            const res = await optimizationApi.validateNames({
+                resource_type: 'warehouse',
+                names: [val]
+            });
+            validationResult = res.results[0];
+        } catch (e) {
+            console.error('Validation failed', e);
+        } finally {
+            validating = false;
+        }
+    }, 500);
+
+    $: validateName(formData.name);
+
 	const storageTypeOptions = [
 		{ value: 's3', label: 'AWS S3 / S3-Compatible' },
 		{ value: 'azure', label: 'Azure Blob Storage' },
@@ -62,6 +98,13 @@
 
 	function validateStep(): boolean {
 		formErrors = {};
+
+        if (step === 1) {
+            if (validationResult && !validationResult.available) {
+                formErrors.name = validationResult.reason || 'Name is unavailable';
+                return false;
+            }
+        }
 
 		if (step === 1) {
 			if (!formData.name.trim()) {
@@ -232,7 +275,9 @@
 			gcsServiceAccountKey: '',
 			gcsServiceAccountEmail: '',
 		};
+		};
 		formErrors = {};
+        validationResult = null;
 	}
 
 	$: if (!open) {
@@ -277,13 +322,30 @@
 		<!-- Step 1: Basic Info -->
 		{#if step === 1}
 			<div class="space-y-4">
-				<Input
-					label="Warehouse Name"
-					bind:value={formData.name}
-					placeholder="my-warehouse"
-					required
-					error={formErrors.name}
-				/>
+				<div class="relative">
+                    <Input
+                        label="Warehouse Name"
+                        bind:value={formData.name}
+                        placeholder="my-warehouse"
+                        required
+                        error={formErrors.name}
+                    />
+                    <!-- Validation Indicator -->
+                    <div class="absolute right-2 top-9">
+                        {#if validating}
+                            <svg class="animate-spin h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        {:else if validationResult && formData.name.length >= 2}
+                            {#if validationResult.available}
+                                <span class="material-icons text-green-500 text-lg">check_circle</span>
+                            {:else}
+                                <span class="material-icons text-red-500 text-lg" title={validationResult.reason || 'Taken'}>cancel</span>
+                            {/if}
+                        {/if}
+                    </div>
+                </div>
 				<div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
 					<p class="text-sm text-blue-800 dark:text-blue-200">
 						<strong>💡 Tip:</strong> Choose a descriptive name like "production-s3" or "dev-minio". This will be referenced when creating catalogs.

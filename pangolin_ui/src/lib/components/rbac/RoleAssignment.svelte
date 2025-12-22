@@ -27,12 +27,13 @@
       Available Roles
     </header>
     <div class="flex-1 overflow-y-auto space-y-2">
+        <p class="text-xs text-surface-400 px-2">Click to assign:</p>
         {#if unassignedRoles.length === 0}
             <p class="text-surface-400 italic text-sm p-2">No more roles available.</p>
         {/if}
       {#each unassignedRoles as role}
         <button 
-          class="w-full text-left p-2 rounded hover:bg-surface-700 flex justify-between items-center group"
+          class="w-full text-left p-2 rounded hover:bg-surface-700 flex justify-between items-center border border-surface-600"
           on:click={() => toggleRole(role.id)}
         >
           <div>
@@ -41,8 +42,8 @@
                 <div class="text-xs text-surface-400">{role.description}</div>
             {/if}
           </div>
-          <span class="text-primary-500 opacity-0 group-hover:opacity-100 transition-opacity">
-            →
+          <span class="badge variant-soft-primary">
+            + Assign
           </span>
         </button>
       {/each}
@@ -55,12 +56,13 @@
       Assigned Roles
     </header>
     <div class="flex-1 overflow-y-auto space-y-2">
+        <p class="text-xs text-surface-400 px-2">Click to remove:</p>
         {#if assignedRolesList.length === 0}
             <p class="text-surface-400 italic text-sm p-2">No roles assigned yet.</p>
         {/if}
       {#each assignedRolesList as role}
         <button 
-          class="w-full text-left p-2 rounded hover:bg-surface-700 flex justify-between items-center group"
+          class="w-full text-left p-2 rounded hover:bg-surface-700 flex justify-between items-center border border-surface-600"
           on:click={() => toggleRole(role.id)}
         >
           <div>
@@ -69,8 +71,8 @@
                 <div class="text-xs text-surface-400">{role.description}</div>
             {/if}
           </div>
-          <span class="text-error-500 opacity-0 group-hover:opacity-100 transition-opacity">
-            ✕
+          <span class="badge variant-soft-error">
+            REMOVE
           </span>
         </button>
       {/each}

@@ -1,22 +1,19 @@
 <script lang="ts">
-	import { tenantsApi, type Tenant } from '$lib/api/tenants';
-	import { usersApi, type User } from '$lib/api/users';
 	import { onMount } from 'svelte';
+    import { dashboardApi } from '$lib/api/optimization';
+    import type { DashboardStats } from '$lib/types/optimization';
+    import StatCard from '$lib/components/dashboard/StatCard.svelte';
 	
-	let tenantCount = 0;
-	let userCount = 0;
+	let stats: DashboardStats | null = null;
 	let loading = true;
+    let error: string | null = null;
 
 	onMount(async () => {
 		try {
-			const [tenants, users] = await Promise.all([
-				tenantsApi.list(),
-				usersApi.list()
-			]);
-			tenantCount = tenants.length;
-			userCount = users.length;
-		} catch (e) {
+            stats = await dashboardApi.getStats();
+		} catch (e: any) {
 			console.error('Failed to load root dashboard data', e);
+            error = e.message || 'Failed to load dashboard statistics';
 		} finally {
 			loading = false;
 		}
@@ -29,39 +26,39 @@
 		<p class="text-gray-500 dark:text-gray-400">Global metrics for the Pangolin instance.</p>
 	</div>
 
-	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-		<!-- Tenant Count -->
-		<div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-			<div class="flex items-center gap-4">
-				<div class="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
-					<span class="text-2xl">🏛️</span>
-				</div>
-				<div>
-					<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Tenants</p>
-					{#if loading}
-						<div class="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mt-1"></div>
-					{:else}
-						<p class="text-2xl font-semibold text-gray-900 dark:text-white">{tenantCount}</p>
-					{/if}
-				</div>
-			</div>
-		</div>
+    {#if error}
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 rounded-lg text-red-700 dark:text-red-300">
+            Error loading stats: {error}
+        </div>
+    {/if}
 
-		<!-- User Count -->
-		<div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-			<div class="flex items-center gap-4">
-				<div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400">
-					<span class="text-2xl">👥</span>
-				</div>
-				<div>
-					<p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
-					{#if loading}
-						<div class="h-8 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mt-1"></div>
-					{:else}
-						<p class="text-2xl font-semibold text-gray-900 dark:text-white">{userCount}</p>
-					{/if}
-				</div>
-			</div>
-		</div>
+	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard 
+            label="Total Tenants" 
+            value={stats?.scope === 'root' ? stats.catalogs_count : 0} 
+            icon="apartment" 
+            color="blue" 
+        />
+        <!-- Note: The stats endpoint for root currently maps catalogs_count. 
+             Ideally backend should provide tenant_count explicitely if scope is root.
+             Assuming catalogs_count might be tenants for root? 
+             Let's check the backend logic or just show what we have.
+             Actually, let's show all the stats available.
+        -->
+        
+        {#if stats}
+            <StatCard label="Catalogs" value={stats.catalogs_count} icon="📂" color="blue" />
+            <StatCard label="Warehouses" value={stats.warehouses_count} icon="🏭" color="purple" />
+            <StatCard label="Users" value={stats.users_count} icon="👥" color="green" />
+            <StatCard label="Namespaces" value={stats.namespaces_count} icon="🏷️" color="yellow" />
+            <StatCard label="Tables" value={stats.tables_count} icon="📋" color="red" />
+            <StatCard label="Branches" value={stats.branches_count} icon="🌲" color="gray" />
+        {:else}
+            <!-- Loading Skeletons -->
+            <StatCard label="Catalogs" value={undefined} icon="📂" color="blue" />
+            <StatCard label="Warehouses" value={undefined} icon="🏭" color="purple" />
+            <StatCard label="Users" value={undefined} icon="👥" color="green" />
+            <StatCard label="Namespaces" value={undefined} icon="🏷️" color="yellow" />
+        {/if}
 	</div>
 </div>

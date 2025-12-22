@@ -5,6 +5,7 @@
 	import Card from '$lib/components/ui/Card.svelte';
 	import { notifications } from '$lib/stores/notifications';
 	import PermissionBuilder from '$lib/components/rbac/PermissionBuilder.svelte';
+    import PermissionHelpTable from '$lib/components/rbac/PermissionHelpTable.svelte';
 	import type { ScopeType, ActionType } from '$lib/components/rbac/PermissionBuilder.svelte';
     import { tenantStore } from '$lib/stores/tenant';
     import { authStore } from '$lib/stores/auth';
@@ -44,6 +45,19 @@
     permissions = permissions.filter((_, i) => i !== index);
   }
 
+  import { catalogsApi, type Catalog } from '$lib/api/catalogs';
+  import { onMount } from 'svelte';
+
+  let catalogs: Catalog[] = [];
+
+  onMount(async () => {
+      try {
+          catalogs = await catalogsApi.list();
+      } catch (e) {
+          console.error('Failed to load catalogs', e);
+      }
+  });
+
   async function handleSubmit() {
     if (!name.trim()) return notifications.error('Role Name is required');
     if (permissions.length === 0) return notifications.error('Please add at least one permission');
@@ -51,45 +65,71 @@
     submitting = true;
     try {
       // 1. Get Tenant ID
-      // Try tenantStore first, then authStore user context, then fail.
       const tenantId = $tenantStore.selectedTenantId || $authStore.user?.tenant_id;
       if (!tenantId) {
           throw new Error('Tenant Context missing. Cannot create role.');
       }
 
-      // 2. Create Role (permissions ignored by backend)
+      // 2. Create Role
       const role = await rolesApi.create({
         name,
         description,
         'tenant-id': tenantId
       });
 
-      // 3. Update Role with Permissions
-      // Map frontend permissions to backend structure
-      // Backend expects PermissionGrant: { scope: { type: 'Catalog', catalog_id: uuid }, actions: [] }
-      const backendPermissions = permissions.map(p => {
+      const backendPermissions = [];
+      
+      for (const p of permissions) {
           let backendScope: any;
+          const resourceName = p.scope.id || '';
           
           if (p.scope.type === 'Catalog') {
-              // Backend: kebab-case scope fields and lowercase type/variant?
-              // PermissionScope uses tag="type", rename_all="kebab-case".
-              // So type="catalog".
-              // BUT rename_all on enum only renames variants. Fields likely remain snake_case.
-              // So catalog_id.
-              backendScope = { type: 'catalog', 'catalog_id': p.scope.id };
+              // Find catalog by name
+              const catalog = catalogs.find(c => c.name === resourceName);
+              if (!catalog) {
+                   notifications.error(`Catalog '${resourceName}' not found. Please verify the name.`);
+                   submitting = false;
+                   return;
+              } else {
+                   backendScope = { type: 'catalog', 'catalog_id': catalog.id };
+              }
           } else if (p.scope.type === 'Namespace') {
-              // Not fully supported in UI yet, but for safety:
-             backendScope = { type: 'catalog', 'catalog_id': p.scope.id }; 
+              // Expecting format "catalogName.namespaceName"
+              const parts = resourceName.split('.');
+              if (parts.length >= 2) {
+                  const catName = parts[0];
+                  // join the rest in case namespace has dots? assume 1st dot is sep
+                  const nsName = parts.slice(1).join('.'); 
+                  
+                  const catalog = catalogs.find(c => c.name === catName);
+                  if (catalog) {
+                      backendScope = { 
+                          type: 'namespace', 
+                          'catalog_id': catalog.id,
+                          'namespace': nsName
+                      };
+                  } else {
+                      notifications.error(`Catalog '${catName}' not found in namespace '${resourceName}'.`);
+                      submitting = false;
+                      return;
+                  }
+              } else {
+                  notifications.error(`Invalid Namespace format '${resourceName}'. Use 'catalog.namespace'.`);
+                  submitting = false;
+                  return;
+              }
+          } else if (p.scope.type === 'Tenant') {
+              backendScope = { type: 'tenant' };
           } else {
-              // Default
+              // Default / Asset (Asset needs ID too, which is hard. Not fixing Asset right now as per user flow)
                backendScope = { type: 'catalog', 'catalog_id': p.scope.id };
           }
 
-          return {
+          backendPermissions.push({
               scope: backendScope,
-              actions: p.actions.map(a => a.toLowerCase()) // Action enum is kebab-case (Read -> read)
-          };
-      });
+              actions: p.actions.map(a => a.toLowerCase())
+          });
+      }
       
       role.permissions = backendPermissions;
       console.log('Sending Role Update with Permissions:', JSON.stringify(role, null, 2));
@@ -113,17 +153,17 @@
 
 <div class="max-w-4xl mx-auto space-y-6">
   <div class="flex items-center justify-between">
-    <h1 class="text-3xl font-bold">Create Role</h1>
+    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Create Role</h1>
   </div>
 
   <Card title="Role Details">
     <div class="space-y-4">
       <div>
-        <label class="label mb-1" for="role-name">Role Name</label>
+        <label class="label mb-1 text-gray-700 dark:text-gray-300" for="role-name">Role Name</label>
         <input 
             type="text" 
             id="role-name"
-            class="input w-full" 
+            class="input w-full text-gray-900 dark:text-white bg-white dark:bg-gray-800" 
             bind:value={name} 
             placeholder="e.g. Data Analyst"
         />
@@ -132,7 +172,7 @@
         <label class="label mb-1" for="role-description">Description (Optional)</label>
         <textarea 
             id="role-description"
-            class="textarea w-full" 
+            class="textarea w-full text-gray-900 dark:text-white bg-white dark:bg-gray-800" 
             bind:value={description} 
             placeholder="Role description..."
         ></textarea>
@@ -147,6 +187,11 @@
         actions={currentActions} 
         on:change={handlePermissionChange} 
       />
+      
+      <div class="mt-4">
+        <PermissionHelpTable />
+      </div>
+
       <div class="flex justify-end">
         <Button variant="secondary" on:click={addPermission}>
           Add Permission
