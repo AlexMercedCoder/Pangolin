@@ -72,8 +72,8 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
             .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()))
         // System Config
         .route("/api/v1/config/settings", get(system_config_handlers::get_system_settings).put(system_config_handlers::update_system_settings))
-        .route("/v1/config", get(iceberg_handlers::config))
-        .route("/v1/:prefix/config", get(iceberg_handlers::config))
+        .route("/v1/config", get(iceberg_handlers::get_iceberg_catalog_config_handler))
+        .route("/v1/:prefix/config", get(iceberg_handlers::get_iceberg_catalog_config_handler))
         .route("/v1/:prefix/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
         .route("/v1/:prefix/namespaces/:namespace", delete(iceberg_handlers::delete_namespace))
         .route("/v1/:prefix/namespaces/:namespace/properties", post(iceberg_handlers::update_namespace_properties))
@@ -83,7 +83,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/namespaces/:namespace/tables/:table/metrics", post(iceberg_handlers::report_metrics))
         .route("/v1/:prefix/tables/rename", post(iceberg_handlers::rename_table))
         // PyIceberg compatibility: it might append v1/config to a path that already includes v1/prefix
-        .route("/v1/:prefix/v1/config", get(iceberg_handlers::config))
+        .route("/v1/:prefix/v1/config", get(iceberg_handlers::get_iceberg_catalog_config_handler))
         .route("/v1/:prefix/v1/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
         .route("/v1/:prefix/v1/namespaces/:namespace", delete(iceberg_handlers::delete_namespace))
         .route("/v1/:prefix/v1/namespaces/:namespace/properties", post(iceberg_handlers::update_namespace_properties))
@@ -187,6 +187,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/dashboard/stats", get(dashboard_handlers::get_dashboard_stats))
         .route("/api/v1/catalogs/:name/summary", get(dashboard_handlers::get_catalog_summary))
         // Search & Filter
+        .route("/api/v1/search", get(optimization_handlers::unified_search))
         .route("/api/v1/search/assets", get(optimization_handlers::search_assets_by_name))
         // Bulk Operations
         .route("/api/v1/bulk/assets/delete", post(optimization_handlers::bulk_delete_assets))

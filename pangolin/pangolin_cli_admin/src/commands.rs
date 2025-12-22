@@ -342,6 +342,42 @@ pub enum AdminCommand {
         #[arg(long)]
         id: String,
     },
+    // --- Optimization Commands ---
+    /// Get dashboard statistics
+    Stats,
+    /// Get catalog summary
+    CatalogSummary {
+        /// Catalog name
+        name: String,
+    },
+    /// Search for assets
+    Search {
+        /// Search query
+        query: String,
+        /// Filter by catalog
+        #[arg(long)]
+        catalog: Option<String>,
+        /// Maximum results
+        #[arg(long, default_value = "50")]
+        limit: usize,
+    },
+    /// Bulk delete assets
+    BulkDelete {
+        /// Comma-separated list of asset UUIDs
+        #[arg(long)]
+        ids: String,
+        /// Skip confirmation prompt
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Validate resource names
+    Validate {
+        /// Resource type (catalog, warehouse)
+        #[arg(value_parser = ["catalog", "warehouse"])]
+        resource_type: String,
+        /// Names to validate
+        names: Vec<String>,
+    },
     /// Exit the REPL
     Exit,
     /// Clear the screen

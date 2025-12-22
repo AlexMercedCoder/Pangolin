@@ -3069,10 +3069,13 @@ version = "0.12.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8261cd88c312e0004c1d51baad2980c66528dfdb2bee62003e643a4d8f86b077"
 dependencies = [
+ "async-lock",
  "crossbeam-channel",
  "crossbeam-epoch",
  "crossbeam-utils",
  "equivalent",
+ "event-listener 5.4.1",
+ "futures-util",
  "parking_lot",
  "portable-atomic",
  "rustc_version",
@@ -3497,6 +3500,7 @@ dependencies = [
  "shell-words",
  "tokio",
  "tokio-test",
+ "urlencoding",
  "wiremock",
 ]
 
@@ -3570,9 +3574,11 @@ dependencies = [
  "futures",
  "google-cloud-auth",
  "google-cloud-storage",
+ "moka",
  "mongodb",
  "object_store",
  "pangolin_core",
+ "regex",
  "reqwest 0.12.26",
  "serde",
  "serde_json",

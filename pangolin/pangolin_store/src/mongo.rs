@@ -12,7 +12,7 @@ use pangolin_core::model::{
 };
 use pangolin_core::user::{User, UserRole as CoreUserRole, OAuthProvider};
 use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
-use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use pangolin_core::business_metadata::{AccessRequest, RequestStatus, BusinessMetadata};
 use pangolin_core::token::TokenInfo;
 use crate::signer::{Signer, Credentials};
 use object_store::ObjectStore;
@@ -21,11 +21,15 @@ use pangolin_core::audit::AuditLogEntry;
 use uuid::Uuid;
 use std::collections::HashMap;
 use chrono::Utc;
+use std::sync::Arc;
+use object_store::path::Path as ObjPath;
 
 #[derive(Clone)]
 pub struct MongoStore {
     client: Client,
     db: Database,
+    object_store_cache: crate::ObjectStoreCache,
+    metadata_cache: crate::MetadataCache,
 }
 
 impl MongoStore {
@@ -46,10 +50,18 @@ impl MongoStore {
                 tracing::info!("MongoDB min pool size set to: {}", size);
             }
         }
+
+        // Set app name
+        client_options.app_name = Some("Pangolin".to_string());
         
         let client = Client::with_options(client_options)?;
         let db = client.database(database_name);
-        Ok(Self { client, db })
+        Ok(Self { 
+            client, 
+            db,
+            object_store_cache: crate::ObjectStoreCache::default(),
+            metadata_cache: crate::MetadataCache::default(),
+        })
     }
 
     fn tenants(&self) -> Collection<Tenant> {
@@ -106,6 +118,10 @@ impl MongoStore {
 
     fn access_requests(&self) -> Collection<AccessRequest> {
         self.db.collection("access_requests")
+    }
+
+    fn business_metadata(&self) -> Collection<BusinessMetadata> {
+        self.db.collection("business_metadata")
     }
 
     fn active_tokens(&self) -> Collection<Document> {
@@ -584,6 +600,18 @@ impl CatalogStore for MongoStore {
         Ok(())
     }
 
+    async fn count_namespaces(&self, tenant_id: Uuid) -> Result<usize> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let count = self.namespaces().count_documents(filter).await?;
+        Ok(count as usize)
+    }
+
+    async fn count_assets(&self, tenant_id: Uuid) -> Result<usize> {
+        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let count = self.assets().count_documents(filter).await?;
+        Ok(count as usize)
+    }
+
     // Branch Operations
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> {
         let doc = doc! {
@@ -826,62 +854,33 @@ impl CatalogStore for MongoStore {
     // File Operations
 
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
-        // Try to look up warehouse credentials first
-        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
-            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
-                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
-                // Extract key relative to bucket
-                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
-                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
-                } else {
-                     path
-                };
-                
-                match store.get(&object_store::path::Path::from(key)).await {
-                    Ok(result) => return Ok(result.bytes().await?.to_vec()),
-                    Err(e) => {
-                         tracing::warn!("Failed to read from warehouse-configured store for {}, falling back to global env: {}", path, e);
-                    }
-                }
-            }
+        // Use metadata cache for metadata.json files
+        if path.ends_with("metadata.json") || path.ends_with(".metadata.json") {
+            return self.metadata_cache.get_or_fetch(path, || async {
+                self.read_file_uncached(path).await
+            }).await;
         }
-
-        if let Some(rest) = path.strip_prefix("s3://") {
-            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
-            
-            let mut builder = AmazonS3Builder::from_env()
-                .with_bucket_name(bucket)
-                .with_allow_http(true);
-                
-             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
-                 builder = builder.with_endpoint(endpoint);
-             }
-             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
-                 builder = builder.with_access_key_id(key_id);
-             }
-             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
-                 builder = builder.with_secret_access_key(secret);
-             }
-             if let Ok(region) = std::env::var("AWS_REGION") {
-                 builder = builder.with_region(region);
-             }
-             
-             let store = builder.build()?;
-             let location = object_store::path::Path::from(key);
-             let result = store.get(&location).await?;
-             let bytes = result.bytes().await?;
-             Ok(bytes.to_vec())
-        } else {
-             Err(anyhow::anyhow!("Only s3:// paths are supported in Mongo store"))
-        }
+        
+        // Non-metadata files bypass cache
+        self.read_file_uncached(path).await
     }
 
 
     async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        // Invalidate metadata cache on write
+        if path.ends_with("metadata.json") || path.ends_with(".metadata.json") {
+            self.metadata_cache.invalidate(path).await;
+        }
+
         // Try to look up warehouse credentials first
         if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
             if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
-                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Use cached object store
+                let cache_key = self.get_object_store_cache_key(&warehouse.storage_config, path);
+                let store = self.object_store_cache.get_or_insert(cache_key, || {
+                    Arc::new(crate::object_store_factory::create_object_store(&warehouse.storage_config, path).unwrap())
+                });
+
                 // Extract key relative to bucket
                 let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
                      rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
@@ -889,15 +888,16 @@ impl CatalogStore for MongoStore {
                      path
                 };
                 
-                store.put(&object_store::path::Path::from(key), data.into()).await?;
+                store.put(&ObjPath::from(key), data.into()).await?;
                 return Ok(());
             }
         }
 
+        // Fallback to existing logic (Global Env Vars)
         if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
-            let mut builder = AmazonS3Builder::from_env()
+            let mut builder = AmazonS3Builder::new()
                 .with_bucket_name(bucket)
                 .with_allow_http(true);
                 
@@ -915,7 +915,7 @@ impl CatalogStore for MongoStore {
              }
              
              let store = builder.build()?;
-             let location = object_store::path::Path::from(key);
+             let location = ObjPath::from(key);
              store.put(&location, data.into()).await?;
              Ok(())
         } else {
@@ -1312,6 +1312,165 @@ impl CatalogStore for MongoStore {
         Ok(())
     }
 
+    // Business Metadata Operations
+    async fn upsert_business_metadata(&self, metadata: BusinessMetadata) -> Result<()> {
+        let filter = doc! { "asset_id": to_bson_uuid(metadata.asset_id) };
+        self.business_metadata().replace_one(filter, metadata).upsert(true).await?;
+        Ok(())
+    }
+
+    async fn get_business_metadata(&self, asset_id: Uuid) -> Result<Option<BusinessMetadata>> {
+        let filter = doc! { "asset_id": to_bson_uuid(asset_id) };
+        let meta = self.business_metadata().find_one(filter).await?;
+        Ok(meta)
+    }
+
+    async fn delete_business_metadata(&self, asset_id: Uuid) -> Result<()> {
+        let filter = doc! { "asset_id": to_bson_uuid(asset_id) };
+        self.business_metadata().delete_one(filter).await?;
+        Ok(())
+    }
+
+    async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>, String, Vec<String>)>> {
+        let query_regex = mongodb::bson::Regex {
+             pattern: format!(".*{}.*", regex::escape(query)),
+             options: "i".to_string(),
+        };
+
+        let mut pipeline = vec![
+            doc! { "$match": { "tenant_id": to_bson_uuid(tenant_id) } },
+            doc! { 
+                "$lookup": {
+                    "from": "business_metadata",
+                    "localField": "id",
+                    "foreignField": "asset_id",
+                    "as": "metadata"
+                }
+            },
+            doc! {
+                "$unwind": {
+                    "path": "$metadata",
+                    "preserveNullAndEmptyArrays": true
+                }
+            },
+            doc! {
+                "$match": {
+                    "$or": [
+                        { "name": query_regex.clone() },
+                        { "metadata.description": query_regex }
+                    ]
+                }
+            }
+        ];
+
+        if let Some(tag_list) = tags {
+            if !tag_list.is_empty() {
+                pipeline.push(doc! {
+                    "$match": {
+                        "metadata.tags": { "$all": tag_list }
+                    }
+                });
+            }
+        }
+
+        let cursor = self.assets().aggregate(pipeline).await?;
+        let docs: Vec<Document> = cursor.try_collect().await?;
+        
+        let mut results = Vec::new();
+
+        for d in docs {
+            let metadata_doc = d.get_document("metadata").ok();
+            
+            // Manual deserialization for Asset to ensure we get what we expect, 
+            // though from_document works if struct matches.
+            // But we need catalog and namespace which are in the doc but not in the struct.
+            let asset: Asset = mongodb::bson::from_document(d.clone())?;
+            
+            let metadata = if let Some(md_doc) = metadata_doc {
+                 if md_doc.is_empty() { None } else { Some(mongodb::bson::from_document(md_doc.clone())?) }
+            } else { None };
+            
+            let catalog_name = d.get_str("catalog_name")?.to_string();
+            let namespace_bson = d.get_array("namespace")?;
+            let namespace: Vec<String> = namespace_bson.iter()
+                .map(|b| b.as_str().unwrap_or_default().to_string())
+                .collect();
+
+            results.push((asset, metadata, catalog_name, namespace));
+        }
+
+        Ok(results)
+    }
+
+    async fn search_catalogs(&self, tenant_id: Uuid, query: &str) -> Result<Vec<Catalog>> {
+        let query_regex = mongodb::bson::Regex {
+             pattern: format!(".*{}.*", regex::escape(query)),
+             options: "i".to_string(),
+        };
+        let filter = doc! {
+            "tenant_id": to_bson_uuid(tenant_id),
+            "name": query_regex
+        };
+        let cursor = self.catalogs().find(filter).await?;
+        let catalogs: Vec<Catalog> = cursor.try_collect().await?;
+        Ok(catalogs)
+    }
+
+    async fn search_namespaces(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Namespace, String)>> {
+        // Namespaces search with aggregation to output Docs
+        let query_regex = mongodb::bson::Regex {
+             pattern: format!(".*{}.*", regex::escape(query)),
+             options: "i".to_string(),
+        };
+
+        let pipeline = vec![
+            doc! { "$match": { "tenant_id": to_bson_uuid(tenant_id) } }
+        ];
+        
+        // self.namespaces() returns Collection<Namespace>. aggregate returns Cursor<Document>.
+        // BUT we need to call aggregate on collection. self.namespaces() is typed. 
+        // We can call aggregate on typed collection but it returns Cursor<Document>.
+        let cursor = self.namespaces().aggregate(pipeline).await?;
+        let docs: Vec<Document> = cursor.try_collect().await?;
+        
+        let mut results = Vec::new();
+        let query_lower = query.to_lowercase();
+        
+        for d in docs {
+            let ns: Namespace = mongodb::bson::from_document(d.clone())?;
+            let catalog_name = d.get_str("catalog_name")?.to_string();
+            
+            if ns.to_string().to_lowercase().contains(&query_lower) {
+                results.push((ns, catalog_name));
+            }
+        }
+        Ok(results)
+    }
+
+    async fn search_branches(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Branch, String)>> {
+        // Use aggregate instead of find to get Document cursor easily and access catalog_name
+        let query_regex = mongodb::bson::Regex {
+             pattern: format!(".*{}.*", regex::escape(query)),
+             options: "i".to_string(),
+        };
+        
+        // Explicitly filter by query in pipeline
+        let pipeline = vec![
+            doc! { "$match": { "tenant_id": to_bson_uuid(tenant_id), "name": query_regex } }
+        ];
+
+        let cursor = self.branches().aggregate(pipeline).await?;
+        let docs: Vec<Document> = cursor.try_collect().await?;
+        
+        let mut results = Vec::new();
+        for d in docs {
+            let branch: Branch = mongodb::bson::from_document(d.clone())?;
+            let catalog_name = d.get_str("catalog_name")?.to_string();
+            results.push((branch, catalog_name));
+        }
+        Ok(results)
+    }
+
     // Access Request Operations
     async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
         self.access_requests().insert_one(request).await?;
@@ -1379,9 +1538,12 @@ impl CatalogStore for MongoStore {
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>> {
         let asset = self.get_asset(tenant_id, catalog_name, branch, namespace, table).await?;
         if let Some(asset) = asset {
+            // First check if metadata_location is explicitly set in properties
             if let Some(loc) = asset.properties.get("metadata_location") {
                 return Ok(Some(loc.clone()));
             }
+            // Fall back to the asset's location field
+            return Ok(Some(asset.location));
         }
         Ok(None)
     }
@@ -1396,13 +1558,17 @@ impl CatalogStore for MongoStore {
             "name": table
         };
         
-        // CAS Logic
+        // CAS Logic - need to check both location field and properties.metadata_location
+        // because get_metadata_location falls back to location if metadata_location doesn't exist
         let mut query = filter.clone();
         if let Some(expected) = expected_location {
-            query.insert("properties.metadata_location", expected);
+            // Match if either properties.metadata_location equals expected OR location equals expected (and metadata_location doesn't exist)
+            query.insert("$or", vec![
+                doc! { "properties.metadata_location": &expected },
+                doc! { "location": &expected, "properties.metadata_location": doc! { "$exists": false } }
+            ]);
         } else {
             // expected is None, meaning it shouldn't exist or should be null.
-            // In Mongo, we can check { $exists: false } or { $eq: null }
             query.insert("properties.metadata_location", doc! { "$exists": false });
         }
         
@@ -1629,35 +1795,13 @@ impl MongoStore {
     }
 
     async fn get_warehouse_for_location(&self, location: &str) -> Result<Option<Warehouse>> {
-         let bucket = if let Some(rest) = location.strip_prefix("s3://") {
-             rest.split('/').next().unwrap_or("")
-         } else if let Some(rest) = location.strip_prefix("az://") {
-             rest.split('/').next().unwrap_or("")
-         } else if let Some(rest) = location.strip_prefix("gs://") {
-             rest.split('/').next().unwrap_or("")
-         } else {
-             return Ok(None);
-         };
-
-         if bucket.is_empty() { return Ok(None); }
-
          let cursor = self.warehouses().find(doc! {}).await.map_err(|e| anyhow::anyhow!(e))?;
          let warehouses: Vec<Warehouse> = cursor.try_collect().await.map_err(|e| anyhow::anyhow!(e))?;
 
          for warehouse in warehouses {
-             let s3_match = warehouse.storage_config.get("s3.bucket").map(|b| b == bucket).unwrap_or(false);
-             // Also check nested if passing full config
-             let s3_nested = if !s3_match {
-                  // Try to see if we can parse it as nested? No, storage_config is HashMap<String, String>.
-                  // So it's ALWAYS flat in the struct.
-                  // If it was stored as nested BSON, deserialization to HashMap might fail or flatten it?
-                  // pangolin_core::model::Warehouse defines storage_config as HashMap<String, String>.
-                  // So it IS flat.
-                  false
-             } else { false };
-             
-             let azure_match = warehouse.storage_config.get("azure.container").map(|c| c == bucket).unwrap_or(false);
-             let gcp_match = warehouse.storage_config.get("gcp.bucket").map(|b| b == bucket).unwrap_or(false);
+             let s3_match = warehouse.storage_config.get("s3.bucket").map(|b| location.contains(b)).unwrap_or(false);
+             let azure_match = warehouse.storage_config.get("azure.container").map(|c| location.contains(c)).unwrap_or(false);
+             let gcp_match = warehouse.storage_config.get("gcp.bucket").map(|b| location.contains(b)).unwrap_or(false);
              
              if s3_match || azure_match || gcp_match {
                  return Ok(Some(warehouse));
@@ -1665,5 +1809,71 @@ impl MongoStore {
          }
          
          Ok(None)
+    }
+
+    fn get_object_store_cache_key(&self, config: &HashMap<String, String>, location: &str) -> String {
+        let endpoint = config.get("s3.endpoint").or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
+        let bucket = config.get("s3.bucket").or_else(|| config.get("azure.container")).or_else(|| config.get("gcp.bucket")).map(|s| s.as_str()).unwrap_or_else(|| {
+            location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")).and_then(|s| s.split('/').next()).unwrap_or("")
+        });
+        let access_key = config.get("s3.access-key-id").or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account-key")).map(|s| s.as_str()).unwrap_or("");
+        let region = config.get("s3.region").or_else(|| config.get("azure.region")).or_else(|| config.get("gcp.region")).map(|s| s.as_str()).unwrap_or("");
+        crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
+    }
+
+    async fn read_file_uncached(&self, path: &str) -> Result<Vec<u8>> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                // Use cached object store
+                let cache_key = self.get_object_store_cache_key(&warehouse.storage_config, path);
+                let store = self.object_store_cache.get_or_insert(cache_key, || {
+                    Arc::new(crate::object_store_factory::create_object_store(&warehouse.storage_config, path).unwrap())
+                });
+
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                match store.get(&ObjPath::from(key)).await {
+                    Ok(result) => return Ok(result.bytes().await?.to_vec()),
+                    Err(e) => {
+                         tracing::warn!("Failed to read from warehouse-configured store for {}, falling back to global env: {}", path, e);
+                    }
+                }
+            }
+        }
+
+        if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            let mut builder = AmazonS3Builder::new()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             let location = ObjPath::from(key);
+             let result = store.get(&location).await?;
+             let bytes = result.bytes().await?;
+             Ok(bytes.to_vec())
+        } else {
+             Err(anyhow::anyhow!("Only s3:// paths are supported in Mongo store"))
+        }
     }
 }

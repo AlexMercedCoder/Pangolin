@@ -55,7 +55,7 @@ async fn test_sqlite_warehouse_crud() {
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
         tenant_id: tenant.id,
-        name: "test_wh".to_string(),
+        name: "test_warehouse".to_string(),
         use_sts: false,
         storage_config: From::from([
             ("type".to_string(), "s3".to_string()),

@@ -55,6 +55,9 @@ pub struct MemoryStore {
     system_settings: Arc<DashMap<Uuid, SystemSettings>>,
     // Federated Stats: (TenantId, CatalogName) -> SyncStats
     federated_stats: Arc<DashMap<(Uuid, String), SyncStats>>,
+    // Performance optimizations
+    object_store_cache: crate::ObjectStoreCache,
+    metadata_cache: crate::MetadataCache,
 }
 
 impl MemoryStore {
@@ -85,6 +88,8 @@ impl MemoryStore {
             active_tokens: Arc::new(DashMap::new()),
             system_settings: Arc::new(DashMap::new()),
             federated_stats: Arc::new(DashMap::new()),
+            object_store_cache: crate::ObjectStoreCache::new(),
+            metadata_cache: crate::MetadataCache::default(),
         }
     }
 }
@@ -402,11 +407,6 @@ impl CatalogStore for MemoryStore {
 
         if let Some((_, mut asset)) = self.assets.remove(&src_key) {
             asset.name = dest_name;
-            // Assuming Asset struct has namespace field to update?
-            // Actually Asset struct usually only has name. Namespace is implied by location.
-            // But let's check Asset struct definition in core/model.rs if possible.
-            // Assuming we just update the name in the Asset object if it stores it.
-            
             // Update index
             self.assets_by_id.insert(asset.id, (catalog_name.to_string(), dest_namespace, Some(branch_val), asset.name.clone()));
             
@@ -415,6 +415,23 @@ impl CatalogStore for MemoryStore {
         } else {
             Err(anyhow::anyhow!("Asset not found"))
         }
+    }
+
+    async fn count_namespaces(&self, tenant_id: Uuid) -> Result<usize> {
+        // Efficient counting for MemoryStore
+        // We iterate over the DashMap, but it's much faster than constructing full Namespace objects
+        let count = self.namespaces.iter()
+            .filter(|entry| entry.key().0 == tenant_id)
+            .count();
+        Ok(count)
+    }
+
+    async fn count_assets(&self, tenant_id: Uuid) -> Result<usize> {
+        // Efficient counting for MemoryStore
+        let count = self.assets.iter()
+            .filter(|entry| entry.key().0 == tenant_id)
+            .count();
+        Ok(count)
     }
 
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> {
@@ -604,57 +621,36 @@ impl CatalogStore for MemoryStore {
 
 
     async fn read_file(&self, location: &str) -> Result<Vec<u8>> {
-        // Try to read from object store first if configured
-        if let Some(warehouse) = self.get_warehouse_for_location(location) {
-             // Basic heuristic to skip memory-only locations if any
-             if location.starts_with("s3://") || location.starts_with("az://") || location.starts_with("gs://") {
-                 match crate::object_store_factory::create_object_store(&warehouse.storage_config, location) {
-                     Ok(store) => {
-                         let path = if let Some(rest) = location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")) {
-                              if let Some((_, key)) = rest.split_once('/') {
-                                  object_store::path::Path::from(key)
-                              } else {
-                                  object_store::path::Path::from(rest)
-                              }
-                         } else {
-                             object_store::path::Path::from(location)
-                         };
-                         
-                         match store.get(&path).await {
-                             Ok(result) => return Ok(result.bytes().await?.to_vec()),
-                             Err(e) => {
-                                 tracing::warn!("Failed to read from object store for {}, falling back to memory: {}", location, e);
-                             }
-                         }
-                     },
-                     Err(e) => tracing::warn!("Failed to create object store for {}, falling back to memory: {}", location, e),
-                 }
-             }
+        // Use metadata cache for metadata.json files
+        if location.ends_with("metadata.json") || location.ends_with(".metadata.json") {
+            return self.metadata_cache.get_or_fetch(location, || async {
+                self.read_file_uncached(location).await
+            }).await;
         }
-
-        if let Some(data) = self.files.get(location) {
-            Ok(data.value().clone())
-        } else {
-            Err(anyhow::anyhow!("File not found: {}", location))
-        }
+        
+        // Non-metadata files bypass cache
+        self.read_file_uncached(location).await
     }
 
     async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()> {
+        // Invalidate metadata cache on write
+        if location.ends_with("metadata.json") || location.ends_with(".metadata.json") {
+            self.metadata_cache.invalidate(location).await;
+        }
+        
         // Dual write: Memory + Object Store
         self.files.insert(location.to_string(), content.clone());
         
         if let Some(warehouse) = self.get_warehouse_for_location(location) {
              if location.starts_with("s3://") || location.starts_with("az://") || location.starts_with("gs://") {
-                 let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, location)?;
-                 let path = if let Some(rest) = location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")) {
-                      if let Some((_, key)) = rest.split_once('/') {
-                          object_store::path::Path::from(key)
-                      } else {
-                          object_store::path::Path::from(rest)
-                      }
-                 } else {
-                     object_store::path::Path::from(location)
-                 };
+                 // Use object store cache
+                 let cache_key = self.get_object_store_cache_key(&warehouse.storage_config, location);
+                 let store = self.object_store_cache.get_or_insert(cache_key, || {
+                     Arc::new(crate::object_store_factory::create_object_store(&warehouse.storage_config, location)
+                         .expect("Failed to create object store"))
+                 });
+                 
+                 let path = self.extract_object_store_path(location);
                  store.put(&path, content.into()).await?;
              }
         }
@@ -945,13 +941,13 @@ impl CatalogStore for MemoryStore {
         Ok(())
     }
 
-    async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>)>> {
+    async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>, String, Vec<String>)>> {
         let mut results = Vec::new();
         let query_lower = query.to_lowercase();
 
         // Iterate through all assets for this tenant
         for entry in self.assets.iter() {
-            let key = entry.key();
+            let key = entry.key(); // (tenant_id, catalog, branch, namespace_str, name)
             if key.0 != tenant_id {
                 continue;
             }
@@ -959,8 +955,18 @@ impl CatalogStore for MemoryStore {
             let asset = entry.value().clone();
             let metadata = self.business_metadata.get(&asset.id).map(|m| m.value().clone());
 
-            // Check if asset matches search criteria
+            // Check if asset matches search criteria (Name OR Description)
             let name_matches = asset.name.to_lowercase().contains(&query_lower);
+            
+            let description_matches = if let Some(ref meta) = metadata {
+                if let Some(ref desc) = meta.description {
+                    desc.to_lowercase().contains(&query_lower)
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
             
             let tags_match = if let Some(ref search_tags) = tags {
                 if let Some(ref meta) = metadata {
@@ -972,11 +978,56 @@ impl CatalogStore for MemoryStore {
                 true // No tag filter
             };
 
-            if name_matches && tags_match {
-                results.push((asset, metadata));
+            if (name_matches || description_matches) && tags_match {
+                // key.1 is catalog_name, key.3 is namespace_str
+                let catalog_name = key.1.clone();
+                let namespace = key.3.split('\x1F').map(String::from).collect();
+                results.push((asset, metadata, catalog_name, namespace));
             }
         }
 
+        Ok(results)
+    }
+
+    async fn search_catalogs(&self, tenant_id: Uuid, query: &str) -> Result<Vec<Catalog>> {
+        let mut results = Vec::new();
+        let query_lower = query.to_lowercase();
+        for entry in self.catalogs.iter() {
+            let (tid, _name) = entry.key();
+            if *tid == tenant_id && entry.value().name.to_lowercase().contains(&query_lower) {
+                results.push(entry.value().clone());
+            }
+        }
+        Ok(results)
+    }
+
+    async fn search_namespaces(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Namespace, String)>> {
+        let mut results = Vec::new();
+        let query_lower = query.to_lowercase();
+        for entry in self.namespaces.iter() {
+            let (tid, catalog_name, _ns_str) = entry.key();
+            if *tid == tenant_id {
+                let ns = entry.value();
+                if ns.to_string().to_lowercase().contains(&query_lower) {
+                    results.push((ns.clone(), catalog_name.clone()));
+                }
+            }
+        }
+        Ok(results)
+    }
+
+    async fn search_branches(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Branch, String)>> {
+        let mut results = Vec::new();
+        let query_lower = query.to_lowercase();
+        for entry in self.branches.iter() {
+            let (tid, catalog_name, _branch_name) = entry.key();
+            if *tid == tenant_id {
+                let branch = entry.value();
+                if branch.name.to_lowercase().contains(&query_lower) {
+                    results.push((branch.clone(), catalog_name.clone()));
+                }
+            }
+        }
         Ok(results)
     }
 
@@ -1275,6 +1326,66 @@ impl MemoryStore {
             }
         }
         None
+    }
+
+    // Helper methods for performance optimizations
+    fn get_object_store_cache_key(&self, config: &std::collections::HashMap<String, String>, location: &str) -> String {
+        let endpoint = config.get("s3.endpoint").or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
+        let bucket = self.extract_bucket_from_location(location);
+        let access_key = config.get("s3.access-key-id").or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account")).map(|s| s.as_str()).unwrap_or("");
+        let region = config.get("s3.region").map(|s| s.as_str()).unwrap_or("us-east-1");
+        
+        crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
+    }
+
+    fn extract_bucket_from_location(&self, location: &str) -> String {
+        if let Some(rest) = location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")) {
+            if let Some((bucket, _)) = rest.split_once('/') {
+                return bucket.to_string();
+            }
+            return rest.to_string();
+        }
+        "default".to_string()
+    }
+
+    fn extract_object_store_path(&self, location: &str) -> object_store::path::Path {
+        if let Some(rest) = location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")) {
+            if let Some((_, key)) = rest.split_once('/') {
+                return object_store::path::Path::from(key);
+            }
+            return object_store::path::Path::from(rest);
+        }
+        object_store::path::Path::from(location)
+    }
+
+    async fn read_file_uncached(&self, location: &str) -> Result<Vec<u8>> {
+        // Try to read from object store first if configured
+        if let Some(warehouse) = self.get_warehouse_for_location(location) {
+             // Basic heuristic to skip memory-only locations if any
+             if location.starts_with("s3://") || location.starts_with("az://") || location.starts_with("gs://") {
+                 // Use object store cache
+                 let cache_key = self.get_object_store_cache_key(&warehouse.storage_config, location);
+                 let store = self.object_store_cache.get_or_insert(cache_key, || {
+                     Arc::new(crate::object_store_factory::create_object_store(&warehouse.storage_config, location)
+                         .expect("Failed to create object store"))
+                 });
+                 
+                 let path = self.extract_object_store_path(location);
+                 
+                 match store.get(&path).await {
+                     Ok(result) => return Ok(result.bytes().await?.to_vec()),
+                     Err(e) => {
+                         tracing::warn!("Failed to read from object store for {}, falling back to memory: {}", location, e);
+                     }
+                 }
+             }
+        }
+
+        if let Some(data) = self.files.get(location) {
+            Ok(data.value().clone())
+        } else {
+            Err(anyhow::anyhow!("File not found: {}", location))
+        }
     }
 }
 

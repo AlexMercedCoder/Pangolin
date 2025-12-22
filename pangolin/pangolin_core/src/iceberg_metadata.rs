@@ -1,8 +1,9 @@
+use utoipa::ToSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct TableMetadata {
     pub format_version: i32,
@@ -24,7 +25,7 @@ pub struct TableMetadata {
     pub metadata_log: Option<Vec<MetadataLogEntry>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct Schema {
     pub schema_id: i32,
@@ -32,7 +33,7 @@ pub struct Schema {
     pub fields: Vec<NestedField>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct NestedField {
     pub id: i32,
@@ -43,7 +44,7 @@ pub struct NestedField {
     pub doc: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(untagged)]
 pub enum Type {
     Primitive(String),
@@ -70,14 +71,14 @@ pub enum Type {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct PartitionSpec {
     pub spec_id: i32,
     pub fields: Vec<PartitionField>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct PartitionField {
     pub source_id: i32,
@@ -86,14 +87,14 @@ pub struct PartitionField {
     pub transform: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct SortOrder {
     pub order_id: i32,
     pub fields: Vec<SortField>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct SortField {
     pub source_id: i32,
@@ -102,7 +103,7 @@ pub struct SortField {
     pub null_order: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct Snapshot {
     pub snapshot_id: i64,
@@ -114,14 +115,14 @@ pub struct Snapshot {
     pub schema_id: Option<i32>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct SnapshotLogEntry {
     pub timestamp_ms: i64,
     pub snapshot_id: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct MetadataLogEntry {
     pub timestamp_ms: i64,

@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use utoipa::ToSchema;
 

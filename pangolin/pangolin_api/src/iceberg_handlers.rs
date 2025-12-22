@@ -20,9 +20,17 @@ use crate::authz::check_permission;
 use pangolin_core::permission::{PermissionScope, Action};
 use pangolin_core::user::UserSession;
 use crate::auth::TenantId;
+use utoipa::{ToSchema, IntoParams};
 
 // Placeholder for AppState
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
+
+#[derive(Serialize, ToSchema)]
+pub struct CatalogConfig {
+    pub defaults: HashMap<String, String>,
+    pub overrides: HashMap<String, String>,
+}
+
 
 /// Helper function to check if a catalog is federated and forward the request if so
 async fn check_and_forward_if_federated(
@@ -63,49 +71,49 @@ async fn check_and_forward_if_federated(
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ListNamespacesResponse {
     pub namespaces: Vec<Vec<String>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 pub struct ListNamespaceParams {
-    parent: Option<String>,
+    pub parent: Option<String>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, ToSchema)]
 pub struct NamespaceNode {
     pub name: String,
     pub full_path: Vec<String>,
     pub children: Vec<NamespaceNode>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ListNamespacesTreeResponse {
     pub root: Vec<NamespaceNode>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateNamespaceRequest {
     pub namespace: Vec<String>,
     pub properties: Option<HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CreateNamespaceResponse {
-    namespace: Vec<String>,
-    properties: HashMap<String, String>,
+    pub namespace: Vec<String>,
+    pub properties: HashMap<String, String>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct CreateTableRequest {
-    name: String,
-    location: Option<String>,
-    schema: Option<serde_json::Value>,  // Accept schema as JSON
-    properties: Option<HashMap<String, String>>,
+    pub name: String,
+    pub location: Option<String>,
+    pub schema: Option<serde_json::Value>,  // Accept schema as JSON
+    pub properties: Option<HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TableResponse {
     #[serde(rename = "metadata-location")]
     pub metadata_location: Option<String>,
@@ -166,18 +174,18 @@ impl TableResponse {
         }
     }
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct ListTablesResponse {
-    identifiers: Vec<TableIdentifier>,
+    pub identifiers: Vec<TableIdentifier>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct TableIdentifier {
-    namespace: Vec<String>,
-    name: String,
+    pub namespace: Vec<String>,
+    pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, ToSchema)]
 pub struct PartitionField {
     pub source_id: i32,
     pub field_id: i32,
@@ -185,14 +193,14 @@ pub struct PartitionField {
     pub transform: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct CommitTableRequest {
-    identifier: Option<TableIdentifier>,
-    requirements: Vec<CommitRequirement>,
-    updates: Vec<CommitUpdate>,
+    pub identifier: Option<TableIdentifier>,
+    pub requirements: Vec<CommitRequirement>,
+    pub updates: Vec<CommitUpdate>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 #[serde(tag = "type")]
 pub enum CommitRequirement {
     #[serde(rename = "assert-create")]
@@ -209,7 +217,7 @@ pub enum CommitRequirement {
     // Add others as needed
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 #[serde(tag = "action")]
 pub enum CommitUpdate {
     #[serde(rename = "assign-uuid")]
@@ -253,6 +261,23 @@ pub fn parse_table_identifier(identifier: &str) -> (String, Option<String>) {
     }
 }
 
+/// List namespaces in a catalog
+#[utoipa::path(
+    get,
+    path = "/v1/{prefix}/namespaces",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ListNamespaceParams
+    ),
+    responses(
+        (status = 200, description = "List of namespaces", body = ListNamespacesResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_namespaces(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -382,9 +407,16 @@ pub async fn list_namespaces_tree(
     }
 }
 
-pub async fn config(
-    prefix: Option<Path<String>>,
-) -> Json<serde_json::Value> {
+
+#[utoipa::path(
+    get,
+    path = "/v1/config",
+    tag = "Iceberg REST",
+    responses(
+        (status = 200, description = "Catalog configuration", body = CatalogConfig),
+    )
+)]
+pub async fn get_iceberg_catalog_config_handler() -> Json<CatalogConfig> {
     // Return Iceberg REST catalog config
     // Use X-Iceberg-Access-Delegation header to enable credential vending
     let mut defaults = HashMap::new();
@@ -405,12 +437,29 @@ pub async fn config(
         defaults.insert("s3.region".to_string(), region);
     }
     
-    Json(serde_json::json!({
-        "defaults": defaults,
-        "overrides": {}
-    }))
+    Json(CatalogConfig {
+        defaults,
+        overrides: HashMap::new(),
+    })
 }
 
+/// Create a namespace
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/namespaces",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name")
+    ),
+    request_body = CreateNamespaceRequest,
+    responses(
+        (status = 200, description = "Namespace created", body = CreateNamespaceResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_namespace(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -452,6 +501,23 @@ pub async fn create_namespace(
     }
 }
 
+/// List tables in a namespace
+#[utoipa::path(
+    get,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace (optionally with @branch)")
+    ),
+    responses(
+        (status = 200, description = "List of tables", body = ListTablesResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog or namespace not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn list_tables(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -506,6 +572,24 @@ pub async fn list_tables(
     }
 }
 
+/// Create a table
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace (optionally with @branch)")
+    ),
+    request_body = CreateTableRequest,
+    responses(
+        (status = 200, description = "Table created", body = TableResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog or namespace not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -758,6 +842,24 @@ pub async fn create_table(
     }
 }
 
+/// Load a table
+#[utoipa::path(
+    get,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace (optionally with @branch)"),
+        ("table" = String, Path, description = "Table name (optionally with @branch)")
+    ),
+    responses(
+        (status = 200, description = "Table metadata", body = TableResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Table not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn load_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -900,6 +1002,26 @@ pub async fn load_table(
     }
 }
 
+/// Update a table (Commit)
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace (optionally with @branch)"),
+        ("table" = String, Path, description = "Table name (optionally with @branch)")
+    ),
+    request_body = CommitTableRequest,
+    responses(
+        (status = 200, description = "Table updated", body = TableResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Table not found"),
+        (status = 409, description = "Conflict (OCC failed)"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -1085,12 +1207,28 @@ pub async fn update_table(
     (StatusCode::CONFLICT, "Failed to commit after retries").into_response()
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct RenameTableRequest {
-    source: TableIdentifier,
-    destination: TableIdentifier,
+    pub source: TableIdentifier,
+    pub destination: TableIdentifier,
 }
 
+/// Rename a table
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/tables/rename",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name")
+    ),
+    request_body = RenameTableRequest,
+    responses(
+        (status = 204, description = "Table renamed"),
+        (status = 404, description = "Source table not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn rename_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -1135,6 +1273,24 @@ pub async fn rename_table(
     }
 }
 
+/// Delete a table
+#[utoipa::path(
+    delete,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace (optionally with @branch)"),
+        ("table" = String, Path, description = "Table name (optionally with @branch)")
+    ),
+    responses(
+        (status = 204, description = "Table deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Table not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_table(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -1206,6 +1362,23 @@ pub async fn delete_table(
     }
 }
 
+/// Delete a namespace
+#[utoipa::path(
+    delete,
+    path = "/v1/{prefix}/namespaces/{namespace}",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace name")
+    ),
+    responses(
+        (status = 204, description = "Namespace deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Namespace not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn delete_namespace(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -1242,19 +1415,37 @@ pub async fn delete_namespace(
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, ToSchema)]
 pub struct UpdateNamespacePropertiesRequest {
-    removals: Option<Vec<String>>,
-    updates: Option<std::collections::HashMap<String, String>>,
+    pub removals: Option<Vec<String>>,
+    pub updates: Option<std::collections::HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct UpdateNamespacePropertiesResponse {
-    updated: Vec<String>,
-    removed: Vec<String>,
-    missing: Vec<String>,
+    pub updated: Vec<String>,
+    pub removed: Vec<String>,
+    pub missing: Vec<String>,
 }
 
+/// Update namespace properties
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/namespaces/{namespace}/properties",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace name")
+    ),
+    request_body = UpdateNamespacePropertiesRequest,
+    responses(
+        (status = 200, description = "Properties updated", body = UpdateNamespacePropertiesResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Namespace not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn update_namespace_properties(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -1300,6 +1491,20 @@ pub async fn update_namespace_properties(
     }
 }
 
+/// Report metrics for a table
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}/metrics",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace"),
+        ("table" = String, Path, description = "Table")
+    ),
+    responses(
+        (status = 204, description = "Metrics reported"),
+    )
+)]
 pub async fn report_metrics(
     Path((_prefix, _namespace, _table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
@@ -1313,13 +1518,31 @@ pub async fn report_metrics(
 
 
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct MaintenanceRequest {
     pub job_type: String, // "expire_snapshots" or "remove_orphan_files"
     pub retention_ms: Option<i64>,
     pub older_than_ms: Option<i64>,
 }
 
+/// Perform maintenance on a table
+#[utoipa::path(
+    post,
+    path = "/api/v1/catalogs/{prefix}/namespaces/{namespace}/tables/{table}/maintenance",
+    tag = "Data Explorer",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace"),
+        ("table" = String, Path, description = "Table")
+    ),
+    request_body = MaintenanceRequest,
+    responses(
+        (status = 200, description = "Maintenance accepted", body = serde_json::Value),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn perform_maintenance(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(tenant_id): Extension<TenantId>,
@@ -1357,6 +1580,22 @@ pub async fn perform_maintenance(
     Ok(Json(serde_json::json!({ "status": "accepted" })))
 }
 
+/// Check if a table exists
+#[utoipa::path(
+    head,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace"),
+        ("table" = String, Path, description = "Table")
+    ),
+    responses(
+        (status = 200, description = "Table exists"),
+        (status = 404, description = "Table not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn table_exists(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(tenant_id): Extension<TenantId>,

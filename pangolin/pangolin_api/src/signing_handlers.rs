@@ -10,6 +10,7 @@ use pangolin_store::CatalogStore;
 use crate::iceberg_handlers::AppState;
 use crate::auth::TenantId;
 use axum::Extension;
+use utoipa::{ToSchema, IntoParams};
 use std::collections::HashMap;
 
 // Cloud provider SDK imports (conditional on features)
@@ -26,24 +27,24 @@ use azure_core::auth::TokenCredential;
 #[cfg(feature = "gcp-oauth")]
 use gcp_auth::{CustomServiceAccount, TokenProvider};
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct StorageCredential {
     pub prefix: String,
     pub config: HashMap<String, String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct LoadCredentialsResponse {
     pub storage_credentials: Vec<StorageCredential>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams, ToSchema)]
 pub struct PresignParams {
     pub location: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PresignResponse {
     pub url: String,
 }
@@ -180,6 +181,25 @@ pub async fn get_gcp_token(
 
 /// Get credentials for accessing a table
 /// This endpoint vends credentials based on the catalog's warehouse configuration
+/// Get credentials for accessing a table
+/// This endpoint vends credentials based on the catalog's warehouse configuration
+#[utoipa::path(
+    get,
+    path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace"),
+        ("table" = String, Path, description = "Table")
+    ),
+    responses(
+        (status = 200, description = "Credentials vended", body = LoadCredentialsResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog or Warehouse not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_table_credentials(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -410,6 +430,20 @@ pub async fn get_table_credentials(
 }
 
 /// Get a presigned URL for a specific file location
+/// Get a presigned URL for a specific file location
+#[utoipa::path(
+    get,
+    path = "/api/v1/storage/presigned-url",
+    tag = "Data Explorer",
+    params(
+        PresignParams
+    ),
+    responses(
+        (status = 200, description = "Presigned URL generated", body = PresignResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_presigned_url(
     State(_store): State<AppState>,
     Query(params): Query<PresignParams>,

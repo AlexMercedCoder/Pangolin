@@ -123,7 +123,7 @@ pub struct Role {
 }
 
 /// Permission grant within a role
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct PermissionGrant {
     pub scope: PermissionScope,
@@ -151,7 +151,7 @@ impl Role {
 }
 
 /// User-Role assignment
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
 #[serde(rename_all = "kebab-case")]
 pub struct UserRole {
     pub user_id: Uuid,

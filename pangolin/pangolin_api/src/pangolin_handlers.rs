@@ -553,16 +553,7 @@ pub async fn rebase_branch(
     }
 }
 
-pub async fn list_audit_events(
-    State(store): State<AppState>,
-    Extension(tenant): Extension<TenantId>,
-) -> impl IntoResponse {
-    let tenant_id = tenant.0;
-    match store.list_audit_events(tenant_id, None).await {
-        Ok(events) => (StatusCode::OK, Json(events)).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
-    }
-}
+
 
 // Catalog Management
 #[derive(Deserialize, ToSchema)]

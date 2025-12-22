@@ -71,6 +71,7 @@ pub async fn get_dashboard_stats(
             
             Ok((StatusCode::OK, Json(stats)))
         },
+
         UserRole::TenantAdmin => {
             let tenant_id = session.tenant_id.unwrap_or_default();
             
@@ -79,11 +80,15 @@ pub async fn get_dashboard_stats(
             let warehouses = store.list_warehouses(tenant_id).await
                 .map_err(ApiError::from)?;
             
+            // Use efficient count methods
+            let namespaces_count = store.count_namespaces(tenant_id).await.unwrap_or(0);
+            let tables_count = store.count_assets(tenant_id).await.unwrap_or(0);
+
             let stats = DashboardStats {
                 catalogs_count: catalogs.len(),
-                tables_count: 0,
-                namespaces_count: 0,
-                users_count: 0,
+                tables_count,
+                namespaces_count,
+                users_count: 0, 
                 warehouses_count: warehouses.len(),
                 branches_count: 0,
                 scope: "tenant".to_string(),
@@ -97,10 +102,15 @@ pub async fn get_dashboard_stats(
             let catalogs = store.list_catalogs(tenant_id).await
                 .map_err(ApiError::from)?;
             
+            // For now, users verify all counts in tenant. 
+            // TODO: In future, filter by permissions if needed, but count_assets provides O(1) stats.
+            let namespaces_count = store.count_namespaces(tenant_id).await.unwrap_or(0);
+            let tables_count = store.count_assets(tenant_id).await.unwrap_or(0);
+
             let stats = DashboardStats {
                 catalogs_count: catalogs.len(),
-                tables_count: 0,
-                namespaces_count: 0,
+                tables_count,
+                namespaces_count,
                 users_count: 0,
                 warehouses_count: 0,
                 branches_count: 0,

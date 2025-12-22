@@ -537,7 +537,7 @@ pub async fn handle_set_metadata(client: &PangolinClient, _entity_type: String, 
     // 1. Fetch existing metadata to preserve other fields
     let get_res = client.get(&format!("/api/v1/assets/{}/metadata", entity_id)).await?;
     
-    let mut current_metadata = if get_res.status().is_success() {
+    let current_metadata = if get_res.status().is_success() {
         let body: Value = get_res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
         body.get("metadata").cloned().unwrap_or(serde_json::json!({}))
     } else {
@@ -866,7 +866,7 @@ pub async fn handle_update_service_user(
         payload["active"] = serde_json::Value::Bool(a);
     }
     
-    let mut res = client.put(&format!("/api/v1/service-users/{}", id), &payload).await?;
+    let res = client.put(&format!("/api/v1/service-users/{}", id), &payload).await?;
     
     if !res.status().is_success() {
         let status = res.status();
@@ -1545,5 +1545,160 @@ pub async fn handle_get_audit_event(client: &PangolinClient, id: String) -> Resu
     println!("Timestamp: {}", event["timestamp"].as_str().unwrap_or("-"));
     if let Some(error) = event["error_message"].as_str() { println!("Error: {}", error); }
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    Ok(())
+}
+// ==================== Optimization Commands ====================
+
+use pangolin_cli_common::optimization_types::*;
+
+pub async fn handle_stats(client: &PangolinClient) -> Result<(), CliError> {
+    let res = client.get("/api/v1/dashboard/stats").await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to get stats: {}", res.status())));
+    }
+    
+    let stats: DashboardStats = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("Dashboard Statistics ({})", stats.scope);
+    println!("  Catalogs:    {}", stats.catalogs_count);
+    println!("  Warehouses:  {}", stats.warehouses_count);
+    println!("  Namespaces:  {}", stats.namespaces_count);
+    println!("  Tables:      {}", stats.tables_count);
+    println!("  Users:       {}", stats.users_count);
+    println!("  Branches:    {}", stats.branches_count);
+    
+    Ok(())
+}
+
+pub async fn handle_catalog_summary(client: &PangolinClient, name: String) -> Result<(), CliError> {
+    let url = format!("/api/v1/catalogs/{}/summary", name);
+    let res = client.get(&url).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to get catalog summary: {}", res.status())));
+    }
+    
+    let summary: CatalogSummary = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("Catalog: {}", summary.name);
+    println!("  Namespaces: {}", summary.namespace_count);
+    println!("  Tables:     {}", summary.table_count);
+    println!("  Branches:   {}", summary.branch_count);
+    if let Some(location) = summary.storage_location {
+        println!("  Storage:    {}", location);
+    }
+    
+    Ok(())
+}
+
+pub async fn handle_search(
+    client: &PangolinClient,
+    query: String,
+    catalog: Option<String>,
+    limit: usize
+) -> Result<(), CliError> {
+    let mut url = format!("/api/v1/search/assets?q={}&limit={}", 
+        urlencoding::encode(&query), limit);
+    
+    if let Some(cat) = catalog {
+        url.push_str(&format!("&catalog={}", urlencoding::encode(&cat)));
+    }
+    
+    let res = client.get(&url).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Search failed: {}", res.status())));
+    }
+    
+    let results: SearchResponse = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("Found {} results:", results.total);
+    for result in results.results {
+        println!("  {}.{}.{}", 
+            result.catalog,
+            result.namespace.join("."),
+            result.name
+        );
+    }
+    
+    Ok(())
+}
+
+pub async fn handle_bulk_delete(
+    client: &PangolinClient,
+    ids: String,
+    confirm: bool
+) -> Result<(), CliError> {
+    let asset_ids: Vec<String> = ids.split(',').map(|s| s.trim().to_string()).collect();
+    
+    if !confirm {
+        use dialoguer::Confirm;
+        
+        println!("About to delete {} assets:", asset_ids.len());
+        for id in &asset_ids {
+            println!("  - {}", id);
+        }
+        
+        if !Confirm::new()
+            .with_prompt("Continue?")
+            .interact()
+            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+        {
+            println!("Cancelled.");
+            return Ok(());
+        }
+    }
+    
+    let payload = serde_json::json!({ "asset_ids": asset_ids });
+    let res = client.post("/api/v1/bulk/assets/delete", &payload).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Bulk delete failed: {}", res.status())));
+    }
+    
+    let result: BulkOperationResponse = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("Bulk delete completed:");
+    println!("  Succeeded: {}", result.succeeded);
+    println!("  Failed:    {}", result.failed);
+    
+    if !result.errors.is_empty() {
+        println!("Errors:");
+        for error in result.errors {
+            println!("  - {}", error);
+        }
+    }
+    
+    Ok(())
+}
+
+pub async fn handle_validate_names(
+    client: &PangolinClient,
+    resource_type: String,
+    names: Vec<String>
+) -> Result<(), CliError> {
+    let payload = serde_json::json!({
+        "resource_type": resource_type,
+        "names": names
+    });
+    
+    let res = client.post("/api/v1/validate/names", &payload).await?;
+    
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Validation failed: {}", res.status())));
+    }
+    
+    let result: ValidateNamesResponse = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
+    
+    println!("Name validation results:");
+    for validation in result.results {
+        let status = if validation.available { "✓ Available" } else { "✗ Taken" };
+        println!("  {}: {}", validation.name, status);
+        if let Some(reason) = validation.reason {
+            println!("    Reason: {}", reason);
+        }
+    }
+    
     Ok(())
 }

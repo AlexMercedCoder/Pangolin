@@ -202,16 +202,9 @@ pub async fn search_assets(
             // Store results tuple: (Asset, Metadata, HasAccess, CatalogName, Namespace)
             let mut final_results: Vec<(pangolin_core::model::Asset, Option<BusinessMetadata>, bool, String, String)> = Vec::new();
             
-            for (asset, metadata) in results {
+            for (asset, metadata, catalog_name, namespace_vec) in results {
                 let is_discoverable = metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
-                
-                // Get additional context (Catalog/Namespace) for FQN and Permissions
-                // We resolve this for every item to ensure we can display FQN
-                let (catalog_name, namespace) = match store.get_asset_by_id(tenant_id, asset.id).await {
-                    Ok(Some((_, c, n))) => (c, n.join(".")),
-                    Ok(None) => ("Unknown".to_string(), "Unknown".to_string()),
-                    Err(_) => ("Error".to_string(), "Error".to_string()), 
-                };
+                let namespace = namespace_vec.join(".");
                 
                 // Calculate Read Permission
                 let has_read = if crate::authz::is_admin(&session.role) {

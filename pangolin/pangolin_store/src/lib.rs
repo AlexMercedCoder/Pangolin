@@ -13,8 +13,10 @@ pub use mongo::MongoStore;
 pub use sqlite::SqliteStore;
 pub mod object_store_factory;
 pub mod object_store_cache;
+pub mod metadata_cache;
 pub use signer::SignerImpl;
 pub use object_store_cache::ObjectStoreCache;
+pub use metadata_cache::MetadataCache;
 
 use async_trait::async_trait;
 use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalog, Warehouse};
@@ -60,13 +62,73 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>>;
     async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>>;
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()>;
+
     async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()>;
+    async fn count_namespaces(&self, tenant_id: Uuid) -> Result<usize>;
+    async fn count_assets(&self, tenant_id: Uuid) -> Result<usize>;
 
     // Branch Operations
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()>;
     async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>>;
     async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>>;
     async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()>;
+    
+    /// Find assets that exist in both branches (potential conflicts)
+    /// Returns pairs of (source_asset, target_asset) for assets with same namespace+name
+    async fn find_conflicting_assets(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        source_branch: &str,
+        target_branch: &str,
+    ) -> Result<Vec<(Asset, Asset)>> {
+        // Default implementation: iterate and compare
+        // Backends can override with optimized queries
+        let source_assets_with_ns = self.list_all_assets_in_branch(tenant_id, catalog_name, source_branch).await?;
+        let mut conflicts = Vec::new();
+        
+        for (source_asset, namespace) in source_assets_with_ns {
+            // Try to find matching asset in target branch
+            if let Some(target_asset) = self.get_asset(
+                tenant_id,
+                catalog_name,
+                Some(target_branch.to_string()),
+                namespace,
+                source_asset.name.clone()
+            ).await? {
+                conflicts.push((source_asset, target_asset));
+            }
+        }
+        
+        Ok(conflicts)
+    }
+    
+    /// Helper method to list all assets in a branch across all namespaces
+    /// Returns (Asset, namespace) pairs
+    async fn list_all_assets_in_branch(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: &str,
+    ) -> Result<Vec<(Asset, Vec<String>)>> {
+        // Default implementation: iterate through namespaces
+        let namespaces = self.list_namespaces(tenant_id, catalog_name, None).await?;
+        let mut all_assets = Vec::new();
+        
+        for ns in namespaces {
+            let assets = self.list_assets(
+                tenant_id,
+                catalog_name,
+                Some(branch.to_string()),
+                ns.name.clone()
+            ).await?;
+            for asset in assets {
+                all_assets.push((asset, ns.name.clone()));
+            }
+        }
+        
+        Ok(all_assets)
+    }
 
     // Tag Operations
     async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()>;
@@ -169,7 +231,19 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn delete_business_metadata(&self, _asset_id: Uuid) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
-    async fn search_assets(&self, _tenant_id: Uuid, _query: &str, _tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>)>> {
+    async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>, String, Vec<String>)>> {
+        Ok(vec![])
+    }
+
+    async fn search_catalogs(&self, _tenant_id: Uuid, _query: &str) -> Result<Vec<Catalog>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn search_namespaces(&self, _tenant_id: Uuid, _query: &str) -> Result<Vec<(Namespace, String)>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    async fn search_branches(&self, _tenant_id: Uuid, _query: &str) -> Result<Vec<(Branch, String)>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
 

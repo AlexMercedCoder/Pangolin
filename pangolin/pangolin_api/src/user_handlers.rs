@@ -78,7 +78,7 @@ impl From<User> for UserInfo {
 }
 
 /// App configuration (public)
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct AppConfig {
     pub auth_enabled: bool,
 }
@@ -416,6 +416,17 @@ pub async fn login(
 }
 
 /// Get current user
+/// Get current logged-in user details
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me",
+    tag = "Users",
+    responses(
+        (status = 200, description = "Current user details", body = UserInfo),
+        (status = 401, description = "Unauthorized")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_current_user(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -441,6 +452,16 @@ pub async fn get_current_user(
 }
 
 /// Logout (invalidate token)
+/// Logout current user (client-side primarily)
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/logout",
+    tag = "Users",
+    responses(
+        (status = 204, description = "Logged out successfully"),
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn logout(
     State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
 ) -> Response {
@@ -449,6 +470,15 @@ pub async fn logout(
     (StatusCode::NO_CONTENT).into_response()
 }
 
+/// Get public application configuration
+#[utoipa::path(
+    get,
+    path = "/api/v1/app/config",
+    tag = "System Config",
+    responses(
+        (status = 200, description = "App config", body = AppConfig),
+    )
+)]
 pub async fn get_app_config() -> Response {
     // Check if NO_AUTH mode is enabled (must be exactly "true" for security)
     let no_auth = std::env::var("PANGOLIN_NO_AUTH")

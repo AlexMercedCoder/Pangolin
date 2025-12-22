@@ -22,7 +22,7 @@ Your primary navigation hub. It dynamically updates based on your **User Role**:
 
 ### 2. Global Header (Top)
 Provides constant access to:
-- **Search**: Quick jump to assets or documentation.
+- **Global Search**: Instantly find assets (Tables, Views, Namespaces) across all catalogs with type-ahead suggestions.
 - **Notifications**: Toast alerts for operation statuses (e.g., "Table Created Successfully").
 - **User Profile**: Access to your tokens, settings, and logout.
 - **Theme Toggle**: Switch between light and dark modes.
@@ -34,11 +34,11 @@ The main area where you interact with data, forms, and logs.
 
 ### Root Dashboard
 *Accessible only to system owners.*
-Provides high-level metrics on system health, total tenants, and active users across the entire platform.
+Provides high-level metrics on system health, total tenants, and active users across the entire platform. Features **Summary Cards** for quick insight into total warehouses, catalogs, and users.
 
 ### Tenant Dashboard
 *The home screen for most users.*
-Displays recent activity, quick-access catalogs, and pending access requests (for admins).
+Displays recent activity, quick-access catalogs, and pending access requests. Includes **Real-time Statistics** for your tenant's resource usage (Tables, Storage, Compute).
 
 ## 🔔 Interaction Patterns
 

@@ -195,6 +195,22 @@ pub async fn delete_role(
 }
 
 /// Assign role to user
+/// Assign a role to a user
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/{user_id}/roles",
+    tag = "Roles & Permissions",
+    params(
+        ("user_id" = Uuid, Path, description = "User ID")
+    ),
+    request_body = AssignRoleRequest,
+    responses(
+        (status = 201, description = "Role assigned"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn assign_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
@@ -218,6 +234,20 @@ pub async fn assign_role(
 }
 
 /// Get user roles
+/// Get roles assigned to a user
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/{user_id}/roles",
+    tag = "Roles & Permissions",
+    params(
+        ("user_id" = Uuid, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "List of user roles", body = Vec<Role>),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_user_roles(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Path(target_user_id): Path<Uuid>,
@@ -240,6 +270,22 @@ pub async fn get_user_roles(
 }
 
 /// Revoke role from user
+/// Revoke a role from a user
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users/{user_id}/roles/{role_id}",
+    tag = "Roles & Permissions",
+    params(
+        ("user_id" = Uuid, Path, description = "User ID"),
+        ("role_id" = Uuid, Path, description = "Role ID")
+    ),
+    responses(
+        (status = 204, description = "Role revoked"),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn revoke_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,

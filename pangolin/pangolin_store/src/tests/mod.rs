@@ -9,6 +9,14 @@ pub async fn test_asset_update_consistency<S: CatalogStore>(store: &S) {
     let namespace = vec!["ns1".to_string()];
     let table = "tbl1".to_string();
     
+    // 0. Create Tenant (Required for Postgres FKs)
+    let tenant = Tenant {
+        id: tenant_id,
+        name: format!("tenant_consistency_{}", tenant_id),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant).await.expect("Failed to create tenant");
+    
     // 1. Setup Hierarchy (Tenant -> Warehouse -> Catalog -> Namespace)
     // Some stores enforce referential integrity
     let warehouse = Warehouse {
@@ -82,6 +90,80 @@ pub async fn test_asset_update_consistency<S: CatalogStore>(store: &S) {
     // Verify it didn't change
     let current_loc = store.get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone()).await.unwrap();
     assert_eq!(current_loc, Some(new_loc), "Location should not change on CAS failure");
+}
+
+pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
+    let tenant_id = Uuid::new_v4();
+    
+    // 0. Create Tenant (Required for Postgres FKs)
+    let tenant = Tenant {
+        id: tenant_id,
+        name: format!("tenant_{}", tenant_id),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant).await.expect("Failed to create tenant");
+
+    // 1. Initial State
+    let ns_count = store.count_namespaces(tenant_id).await.expect("Failed to count namespaces");
+    let asset_count = store.count_assets(tenant_id).await.expect("Failed to count assets");
+    assert_eq!(ns_count, 0, "Initial namespace count should be 0");
+    assert_eq!(asset_count, 0, "Initial asset count should be 0");
+
+    // 2. Create Hierarchy
+    let catalog = "cat_stats".to_string();
+    let warehouse = Warehouse {
+        id: Uuid::new_v4(),
+        name: "wh_stats".to_string(),
+        tenant_id,
+        storage_config: HashMap::new(),
+        use_sts: false,
+        vending_strategy: None,
+    };
+    let _ = store.create_warehouse(tenant_id, warehouse).await;
+
+    let catalog_obj = Catalog {
+        id: Uuid::new_v4(),
+        name: catalog.clone(),
+        catalog_type: CatalogType::Local,
+        warehouse_name: Some("wh_stats".to_string()),
+        storage_location: None,
+        federated_config: None,
+        properties: HashMap::new(),
+    };
+    let _ = store.create_catalog(tenant_id, catalog_obj).await;
+
+    // 3. Create Namespaces
+    let ns1 = vec!["ns1".to_string()];
+    let ns2 = vec!["ns2".to_string()];
+    
+    let ns_obj = Namespace { name: ns1.clone(), properties: HashMap::new() };
+    store.create_namespace(tenant_id, &catalog, ns_obj).await.expect("Failed ns1");
+    
+    let ns_obj2 = Namespace { name: ns2.clone(), properties: HashMap::new() };
+    store.create_namespace(tenant_id, &catalog, ns_obj2).await.expect("Failed ns2");
+
+    // Verify Namespace Count
+    let ns_count_after = store.count_namespaces(tenant_id).await.expect("Failed count ns");
+    assert_eq!(ns_count_after, 2, "Namespace count should be 2");
+
+    // 4. Create Assets
+    let asset1 = Asset {
+        id: Uuid::new_v4(),
+        name: "tbl1".to_string(),
+        kind: AssetType::IcebergTable,
+        location: "s3://bucket/tbl1".to_string(),
+        properties: HashMap::new(),
+    };
+    store.create_asset(tenant_id, &catalog, None, ns1.clone(), asset1).await.expect("Failed asset1");
+
+    // Verify Asset Count
+    let asset_count_after = store.count_assets(tenant_id).await.expect("Failed count asset");
+    assert_eq!(asset_count_after, 1, "Asset count should be 1");
+
+    // 5. Delete Asset
+    store.delete_asset(tenant_id, &catalog, None, ns1.clone(), "tbl1".to_string()).await.expect("Failed delete asset");
+    let asset_count_final = store.count_assets(tenant_id).await.expect("Failed count asset final");
+    assert_eq!(asset_count_final, 0, "Asset count should return to 0");
 }
 
 pub mod multi_cloud;

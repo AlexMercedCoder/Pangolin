@@ -13,20 +13,20 @@ use crate::auth::TenantId;
 use crate::iceberg_handlers::{AppState, parse_table_identifier};
 use utoipa::ToSchema;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateViewRequest {
-    name: String,
-    sql: String,
-    dialect: Option<String>,
-    properties: Option<std::collections::HashMap<String, String>>,
+    pub name: String,
+    pub sql: String,
+    pub dialect: Option<String>,
+    pub properties: Option<std::collections::HashMap<String, String>>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ViewResponse {
-    name: String,
-    sql: String,
-    dialect: String,
-    properties: std::collections::HashMap<String, String>,
+    pub name: String,
+    pub sql: String,
+    pub dialect: String,
+    pub properties: std::collections::HashMap<String, String>,
 }
 
 impl From<Asset> for ViewResponse {
@@ -40,6 +40,22 @@ impl From<Asset> for ViewResponse {
     }
 }
 
+/// Create a database view
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/namespaces/{namespace}/views",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace")
+    ),
+    request_body = CreateViewRequest,
+    responses(
+        (status = 201, description = "View created", body = ViewResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn create_view(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
@@ -73,6 +89,23 @@ pub async fn create_view(
     }
 }
 
+/// Get a database view
+#[utoipa::path(
+    get,
+    path = "/v1/{prefix}/namespaces/{namespace}/views/{view}",
+    tag = "Iceberg REST",
+    params(
+        ("prefix" = String, Path, description = "Catalog name"),
+        ("namespace" = String, Path, description = "Namespace"),
+        ("view" = String, Path, description = "View name")
+    ),
+    responses(
+        (status = 200, description = "View details", body = ViewResponse),
+        (status = 404, description = "View not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn get_view(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,

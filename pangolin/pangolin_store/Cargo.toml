@@ -29,8 +29,11 @@ azure_storage_blobs = { version = "0.20", optional = true }
 azure_core = { version = "0.20", optional = true }
 google-cloud-storage = { version = "0.20", optional = true }
 google-cloud-auth = { version = "0.16", optional = true }
+moka = { version = "0.12", features = ["future"] }
+# Using reqwest for manual HTTP calls/mocks if needed
 # Using reqwest for manual HTTP calls/mocks if needed
 reqwest = { version = "0.12", features = ["json"], optional = true }
+regex = "1.10"
 
 [features]
 default = ["aws", "azure", "gcp"]

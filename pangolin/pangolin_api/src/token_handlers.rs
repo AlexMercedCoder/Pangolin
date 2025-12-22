@@ -253,6 +253,18 @@ pub async fn revoke_token_by_id(
 }
 
 /// Admin endpoint to clean up expired tokens
+/// Admin endpoint to clean up expired tokens
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/tokens/cleanup",
+    tag = "Tokens",
+    responses(
+        (status = 200, description = "Cleaned up expired tokens", body = serde_json::Value),
+        (status = 403, description = "Forbidden"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
 pub async fn cleanup_expired_tokens(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,

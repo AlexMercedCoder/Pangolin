@@ -80,40 +80,27 @@ pub async fn search_assets_by_name(
         return Err(ApiError::bad_request("Search query cannot be empty"));
     }
     
-    let catalogs = if let Some(catalog_name) = query.catalog {
-        vec![catalog_name]
-    } else {
-        let all_catalogs = store.list_catalogs(tenant_id).await
-            .map_err(ApiError::from)?;
-        all_catalogs.into_iter().map(|c| c.name).collect()
-    };
+    // Use the optimized search_assets method from the store
+    // This pushes filtering down to the database level (SQL/Mongo)
+    let assets = store.search_assets(tenant_id, &query.q, None).await
+        .map_err(ApiError::from)?;
     
+    // Filter by catalog if specified
     let mut all_results = Vec::new();
-    
-    for catalog_name in catalogs {
-        let namespaces = store.list_namespaces(tenant_id, &catalog_name, None).await
-            .map_err(ApiError::from)?;
-        
-        for namespace in namespaces {
-            let assets = store.list_assets(
-                tenant_id,
-                &catalog_name,
-                None,
-                namespace.name.clone()
-            ).await.map_err(ApiError::from)?;
-            
-            for asset in assets {
-                if asset.name.to_lowercase().contains(&query.q.to_lowercase()) {
-                    all_results.push(AssetSearchResult {
-                        id: asset.id.to_string(),
-                        name: asset.name,
-                        namespace: namespace.name.clone(),
-                        catalog: catalog_name.clone(),
-                        asset_type: "table".to_string(),
-                    });
-                }
+    for (asset, _metadata, catalog_name, namespace) in assets {
+        if let Some(ref cat_filter) = query.catalog {
+            if &catalog_name != cat_filter {
+                continue;
             }
         }
+        
+        all_results.push(AssetSearchResult {
+            id: asset.id.to_string(),
+            name: asset.name,
+            namespace, // already a Vec<String>
+            catalog: catalog_name,
+            asset_type: format!("{:?}", asset.kind), // Use debug formatter for AssetType enum
+        });
     }
     
     let total = all_results.len();
@@ -291,4 +278,115 @@ pub async fn validate_names(
     }
     
     Ok((StatusCode::OK, Json(ValidateNamesResponse { results })))
+}
+#[derive(Serialize, ToSchema)]
+pub enum SearchResultType {
+    Asset,
+    Catalog,
+    Namespace,
+    Branch,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct UnifiedSearchResult {
+    pub id: Option<String>, // Catalogs/Assets have IDs, Namespaces/Branches might not
+    pub name: String,
+    pub kind: SearchResultType,
+    pub description: Option<String>,
+    pub context: Option<String>, // e.g., "catalog.namespace" or "catalog table"
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct UnifiedSearchResponse {
+    pub results: Vec<UnifiedSearchResult>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct UnifiedSearchQuery {
+    pub q: String,
+    #[serde(default)]
+    pub limit: usize,
+}
+
+/// Unified search across all resources
+/// 
+/// Searches Assets, Catalogs, Namespaces, and Branches.
+#[utoipa::path(
+    get,
+    path = "/api/v1/search",
+    tag = "Search",
+    params(
+        ("q" = String, Query, description = "Search query"),
+        ("limit" = Option<usize>, Query, description = "Max results (default 20)")
+    ),
+    responses(
+        (status = 200, description = "Search results", body = UnifiedSearchResponse),
+        (status = 400, description = "Bad request"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn unified_search(
+    State(store): State<AppState>,
+    Extension(session): Extension<UserSession>,
+    Query(query): Query<UnifiedSearchQuery>,
+) -> Result<impl IntoResponse, ApiError> {
+    let tenant_id = session.tenant_id.unwrap_or_default();
+    let limit = if query.limit == 0 { 20 } else { query.limit };
+    
+    let mut results = Vec::new();
+
+    // 1. Search Catalogs
+    let catalogs = store.search_catalogs(tenant_id, &query.q).await.map_err(ApiError::from)?;
+    for c in catalogs {
+        results.push(UnifiedSearchResult {
+            id: Some(c.id.to_string()),
+            name: c.name,
+            kind: SearchResultType::Catalog,
+            description: None, // Catalog doesn't have description yet
+            context: None,
+        });
+    }
+
+    // 2. Search Namespaces
+    let namespaces = store.search_namespaces(tenant_id, &query.q).await.map_err(ApiError::from)?;
+    for (ns, cat_name) in namespaces {
+        results.push(UnifiedSearchResult {
+            id: None,
+            name: ns.name.join("."),
+            kind: SearchResultType::Namespace,
+            description: None,
+            context: Some(format!("Catalog: {}", cat_name)),
+        });
+    }
+
+    // 3. Search Assets
+    let assets = store.search_assets(tenant_id, &query.q, None).await.map_err(ApiError::from)?;
+    for (asset, metadata, cat_name, ns) in assets {
+        results.push(UnifiedSearchResult {
+            id: Some(asset.id.to_string()),
+            name: asset.name,
+            kind: SearchResultType::Asset,
+            description: metadata.and_then(|m| m.description),
+            context: Some(format!("{}.{}", cat_name, ns.join("."))),
+        });
+    }
+
+    // 4. Search Branches
+    let branches = store.search_branches(tenant_id, &query.q).await.map_err(ApiError::from)?;
+    for (branch, cat_name) in branches {
+        results.push(UnifiedSearchResult {
+            id: None,
+            name: branch.name,
+            kind: SearchResultType::Branch,
+            description: None,
+            context: Some(format!("Catalog: {}", cat_name)),
+        });
+    }
+
+    // Sort by name length (simple relevance) and truncate
+    results.sort_by_key(|r| r.name.len());
+    results.truncate(limit);
+
+    Ok((StatusCode::OK, Json(UnifiedSearchResponse { results })))
 }

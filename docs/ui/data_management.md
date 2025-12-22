@@ -18,6 +18,13 @@ Clicking an asset opens a comprehensive detail pane:
 - **Properties**: Key-value pairs defining table behavior.
 - **Maintenance**: One-click actions for table health (e.g., Compaction, Snapshot Expiration).
 
+### 🗑️ Bulk Operations
+- **Asset List**: View all tables and namespaces within a catalog in a searchable list.
+- **Bulk Delete**: Select multiple assets to delete them in a single batch operation with progress tracking.
+
+### ✅ Smart Validation
+- **Name Validation**: Creation forms (Catalogs, Warehouses) automatically check for duplicate names in real-time, preventing errors before submission.
+
 ---
 
 ## 🌿 Versioning (Git-for-Data)

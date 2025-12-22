@@ -7,6 +7,7 @@ use pangolin_core::audit::AuditLogEntry;
 use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 use anyhow::Result;
 use chrono::{DateTime, Utc, TimeZone};
@@ -23,6 +24,8 @@ use object_store::aws::AmazonS3Builder;
 #[derive(Clone)]
 pub struct SqliteStore {
     pub(crate) pool: SqlitePool,
+    object_store_cache: crate::ObjectStoreCache,
+    metadata_cache: crate::MetadataCache,
 }
 
 impl SqliteStore {
@@ -54,7 +57,11 @@ impl SqliteStore {
             .execute(&pool)
             .await?;
         
-        Ok(Self { pool })
+        Ok(Self { 
+            pool,
+            object_store_cache: crate::ObjectStoreCache::new(),
+            metadata_cache: crate::MetadataCache::default(),
+        })
     }
     
     pub async fn apply_schema(&self, schema_sql: &str) -> Result<()> {
@@ -773,6 +780,23 @@ impl CatalogStore for SqliteStore {
         }
     }
 
+    async fn count_namespaces(&self, tenant_id: Uuid) -> Result<usize> {
+        // SQLite COUNT return type can be i64 (via sqlx)
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM namespaces WHERE tenant_id = ?")
+            .bind(tenant_id.to_string())
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count as usize)
+    }
+
+    async fn count_assets(&self, tenant_id: Uuid) -> Result<usize> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM assets WHERE tenant_id = ?")
+            .bind(tenant_id.to_string())
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count as usize)
+    }
+
     async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>> {
         let row = sqlx::query("SELECT id, name, catalog_name, namespace_path, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND id = ?")
             .bind(tenant_id.to_string())
@@ -968,6 +992,166 @@ impl CatalogStore for SqliteStore {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetadata>, String, Vec<String>)>> {
+        let mut sql = String::from(
+            "SELECT 
+                a.id, a.tenant_id, a.catalog_name, a.namespace_path, a.name, a.metadata_location, a.properties as asset_properties, a.branch_name, a.asset_type,
+                m.id as meta_id, m.description, m.tags, m.properties as meta_properties, m.discoverable, m.created_by as meta_created_by, 
+                m.created_at as meta_created_at, m.updated_by as meta_updated_by, m.updated_at as meta_updated_at
+            FROM assets a
+            LEFT JOIN business_metadata m ON a.id = m.asset_id
+            WHERE a.tenant_id = ? AND (a.name LIKE ? OR m.description LIKE ?)"
+        );
+
+        let query_pattern = format!("%{}%", query);
+        
+        // If tags are provided, we need to filter them. 
+        // In SQLite, we can use json_each if available, but a simpler way is to filter in Rust 
+        // if we want to stay compatible with older SQLite, or use json_each for performance.
+        // Let's use json_each for efficiency if possible.
+        if let Some(ref tag_list) = tags {
+            if !tag_list.is_empty() {
+                sql.push_str(" AND EXISTS (SELECT 1 FROM json_each(m.tags) WHERE value IN (");
+                for (i, _) in tag_list.iter().enumerate() {
+                    if i > 0 { sql.push_str(", "); }
+                    sql.push_str("?");
+                }
+                sql.push_str("))");
+            }
+        }
+
+        let mut query_builder = sqlx::query(&sql)
+            .bind(tenant_id.to_string())
+            .bind(&query_pattern)
+            .bind(&query_pattern); // Bind for m.description LIKE ?
+
+        if let Some(ref tag_list) = tags {
+            if !tag_list.is_empty() {
+                for tag in tag_list {
+                    query_builder = query_builder.bind(tag);
+                }
+            }
+        }
+
+        let rows = query_builder.fetch_all(&self.pool).await?;
+        let mut results = Vec::new();
+
+        for row in rows {
+            let asset_type_str: String = row.get("asset_type");
+            let kind = match asset_type_str.as_str() {
+                "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
+                "View" => pangolin_core::model::AssetType::View,
+                _ => pangolin_core::model::AssetType::IcebergTable,
+            };
+
+            let asset = Asset {
+                id: Uuid::parse_str(row.get("id"))?,
+                name: row.get("name"),
+                kind,
+                location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
+                properties: serde_json::from_str(row.get("asset_properties")).unwrap_or_default(),
+            };
+
+            let meta_id_str: Option<String> = row.get("meta_id");
+            let metadata = if let Some(id_str) = meta_id_str {
+                Some(pangolin_core::business_metadata::BusinessMetadata {
+                    id: Uuid::parse_str(&id_str)?,
+                    asset_id: asset.id,
+                    description: row.get("description"),
+                    tags: serde_json::from_str(row.get("tags")).unwrap_or_default(),
+                    properties: serde_json::from_str(row.get("meta_properties")).unwrap_or_default(),
+                    discoverable: row.get("discoverable"),
+                    created_by: Uuid::parse_str(row.get("meta_created_by"))?,
+                    created_at: Utc.timestamp_nanos(row.get("meta_created_at")),
+                    updated_by: Uuid::parse_str(row.get("meta_updated_by"))?,
+                    updated_at: Utc.timestamp_nanos(row.get("meta_updated_at")),
+                })
+            } else {
+                None
+            };
+            
+            let catalog_name: String = row.get("catalog_name");
+            let namespace_path: String = row.get("namespace_path");
+            let namespace: Vec<String> = namespace_path.split('\x1F').map(String::from).collect();
+
+            results.push((asset, metadata, catalog_name, namespace));
+        }
+
+        Ok(results)
+    }
+
+    async fn search_catalogs(&self, tenant_id: Uuid, query: &str) -> Result<Vec<Catalog>> {
+        let query_pattern = format!("%{}%", query);
+        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = ? AND name LIKE ?")
+            .bind(tenant_id.to_string())
+            .bind(&query_pattern)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut catalogs = Vec::new();
+        for row in rows {
+            catalogs.push(Catalog {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                name: row.get("name"),
+                catalog_type: serde_json::from_str(&format!("\"{}\"", row.get::<String, _>("catalog_type"))).unwrap_or(CatalogType::Local),
+                warehouse_name: row.get("warehouse_name"),
+                storage_location: row.get("storage_location"),
+                federated_config: row.get::<Option<String>, _>("federated_config").and_then(|s| serde_json::from_str(&s).ok()),
+                properties: serde_json::from_str(&row.get::<String, _>("properties")).unwrap_or_default(),
+            });
+        }
+        Ok(catalogs)
+    }
+
+    async fn search_namespaces(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Namespace, String)>> {
+        let query_pattern = format!("%{}%", query);
+        let rows = sqlx::query("SELECT catalog_name, namespace_path, properties FROM namespaces WHERE tenant_id = ? AND namespace_path LIKE ?")
+            .bind(tenant_id.to_string())
+            .bind(&query_pattern)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut namespaces = Vec::new();
+        for row in rows {
+            let catalog_name: String = row.get("catalog_name");
+            let namespace_json: String = row.get("namespace_path");
+            let namespace_path: Vec<String> = serde_json::from_str(&namespace_json).unwrap_or_default();
+            
+            namespaces.push((Namespace {
+                name: namespace_path,
+                properties: serde_json::from_str(&row.get::<String, _>("properties")).unwrap_or_default(),
+            }, catalog_name));
+        }
+        Ok(namespaces)
+    }
+
+    async fn search_branches(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Branch, String)>> {
+        let query_pattern = format!("%{}%", query);
+        let rows = sqlx::query("SELECT catalog_name, name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND name LIKE ?")
+            .bind(tenant_id.to_string())
+            .bind(&query_pattern)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut branches = Vec::new();
+        for row in rows {
+            let catalog_name: String = row.get("catalog_name");
+            let branch_type_str: String = row.get("branch_type");
+            let branch_type = match branch_type_str.as_str() {
+                "Ingest" => BranchType::Ingest,
+                _ => BranchType::Experimental,
+            };
+
+            branches.push((Branch {
+                name: row.get("name"),
+                head_commit_id: row.get::<Option<String>, _>("head_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                branch_type,
+                assets: serde_json::from_str(&row.get::<String, _>("assets")).unwrap_or_default(),
+            }, catalog_name));
+        }
+        Ok(branches)
     }
 
     async fn get_business_metadata(&self, asset_id: Uuid) -> Result<Option<pangolin_core::business_metadata::BusinessMetadata>> {
@@ -1589,61 +1773,32 @@ impl CatalogStore for SqliteStore {
 
 
     async fn read_file(&self, path: &str) -> Result<Vec<u8>> {
-        // Try to look up warehouse credentials first
-        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
-            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
-                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
-                // Extract key relative to bucket
-                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
-                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
-                } else {
-                     path
-                };
-                
-                match store.get(&object_store::path::Path::from(key)).await {
-                    Ok(result) => return Ok(result.bytes().await?.to_vec()),
-                    Err(e) => {
-                         tracing::warn!("Failed to read from warehouse-configured store for {}, falling back to global env: {}", path, e);
-                    }
-                }
-            }
+        // Use metadata cache for metadata.json files
+        if path.ends_with("metadata.json") || path.ends_with(".metadata.json") {
+            return self.metadata_cache.get_or_fetch(path, || async {
+                self.read_file_uncached(path).await
+            }).await;
         }
-
-        if let Some(rest) = path.strip_prefix("s3://") {
-            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
-            
-            let mut builder = AmazonS3Builder::from_env()
-                .with_bucket_name(bucket)
-                .with_allow_http(true);
-                
-             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
-                 builder = builder.with_endpoint(endpoint);
-             }
-             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
-                 builder = builder.with_access_key_id(key_id);
-             }
-             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
-                 builder = builder.with_secret_access_key(secret);
-             }
-             if let Ok(region) = std::env::var("AWS_REGION") {
-                 builder = builder.with_region(region);
-             }
-             
-             let store = builder.build()?;
-             let result = store.get(&ObjPath::from(key)).await?;
-             let bytes = result.bytes().await?;
-             Ok(bytes.to_vec())
-        } else {
-             Err(anyhow::anyhow!("Only s3:// paths are supported in SQLite store"))
-        }
+        
+        // Non-metadata files bypass cache
+        self.read_file_uncached(path).await
     }
 
 
     async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
+        // Invalidate metadata cache on write
+        if path.ends_with("metadata.json") || path.ends_with(".metadata.json") {
+            self.metadata_cache.invalidate(path).await;
+        }
+        
         // Try to look up warehouse credentials first
         if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
             if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
-                let store = crate::object_store_factory::create_object_store(&warehouse.storage_config, path)?;
+                // Use cached object store
+                let cache_key = self.get_object_store_cache_key(&warehouse.storage_config, path);
+                let store = self.object_store_cache.get_or_insert(cache_key, || {
+                    Arc::new(crate::object_store_factory::create_object_store(&warehouse.storage_config, path).unwrap())
+                });
                 // Extract key relative to bucket
                 let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
                      rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
@@ -1656,12 +1811,21 @@ impl CatalogStore for SqliteStore {
             }
         }
 
-        if let Some(rest) = path.strip_prefix("s3://") {
+        if let Some(rest) = path.strip_prefix("file://") {
+             let path = std::path::Path::new(rest);
+             if let Some(parent) = path.parent() {
+                 tokio::fs::create_dir_all(parent).await?;
+             }
+             match tokio::fs::write(path, data).await {
+                 Ok(_) => Ok(()),
+                 Err(e) => Err(anyhow::anyhow!("Failed to write local file {}: {}", rest, e)),
+             }
+        } else if let Some(rest) = path.strip_prefix("s3://") {
             let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
             
             tracing::info!("write_file: s3 path='{}' bucket='{}' key='{}'", path, bucket, key);
             
-            let mut builder = AmazonS3Builder::from_env()
+            let mut builder = AmazonS3Builder::new()
                 .with_bucket_name(bucket)
                 .with_allow_http(true);
                 
@@ -1690,7 +1854,7 @@ impl CatalogStore for SqliteStore {
                  }
              }
         } else {
-             Err(anyhow::anyhow!("Only s3:// paths are supported in SQLite store"))
+             Err(anyhow::anyhow!("Only s3:// and file:// paths are supported in SQLite store"))
         }
     }
 
@@ -2007,18 +2171,6 @@ impl SqliteStore {
     }
 
     async fn get_warehouse_for_location(&self, location: &str) -> Result<Option<Warehouse>> {
-         let bucket = if let Some(rest) = location.strip_prefix("s3://") {
-             rest.split('/').next().unwrap_or("")
-         } else if let Some(rest) = location.strip_prefix("az://") {
-             rest.split('/').next().unwrap_or("")
-         } else if let Some(rest) = location.strip_prefix("gs://") {
-             rest.split('/').next().unwrap_or("")
-         } else {
-             return Ok(None);
-         };
-
-         if bucket.is_empty() { return Ok(None); }
-
         let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config, vending_strategy FROM warehouses")
             .fetch_all(&self.pool)
             .await?;
@@ -2026,9 +2178,10 @@ impl SqliteStore {
         for row in rows {
             let config_str: String = row.get("storage_config");
             if let Ok(config) = serde_json::from_str::<std::collections::HashMap<String, String>>(&config_str) {
-                 let s3_match = config.get("s3.bucket").map(|b| b == bucket).unwrap_or(false);
-                 let azure_match = config.get("azure.container").map(|c| c == bucket).unwrap_or(false);
-                 let gcp_match = config.get("gcp.bucket").map(|b| b == bucket).unwrap_or(false);
+                 // Check if location contains the bucket/container name (like MemoryStore does)
+                 let s3_match = config.get("s3.bucket").map(|b| location.contains(b)).unwrap_or(false);
+                 let azure_match = config.get("azure.container").map(|c| location.contains(c)).unwrap_or(false);
+                 let gcp_match = config.get("gcp.bucket").map(|b| location.contains(b)).unwrap_or(false);
                  
                  if s3_match || azure_match || gcp_match {
                       let vending_strategy_str: Option<String> = row.get("vending_strategy");
@@ -2046,5 +2199,76 @@ impl SqliteStore {
             }
         }
         Ok(None)
+    }
+
+    fn get_object_store_cache_key(&self, config: &std::collections::HashMap<String, String>, location: &str) -> String {
+        let endpoint = config.get("s3.endpoint").or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
+        let bucket = config.get("s3.bucket").or_else(|| config.get("azure.container")).or_else(|| config.get("gcp.bucket")).map(|s| s.as_str()).unwrap_or_else(|| {
+            location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")).and_then(|s| s.split('/').next()).unwrap_or("")
+        });
+        let access_key = config.get("s3.access-key-id").or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account-key")).map(|s| s.as_str()).unwrap_or("");
+        let region = config.get("s3.region").or_else(|| config.get("azure.region")).or_else(|| config.get("gcp.region")).map(|s| s.as_str()).unwrap_or("");
+        crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
+    }
+
+    // Helper method for reading files without cache (used by read_file with metadata cache)
+    async fn read_file_uncached(&self, path: &str) -> Result<Vec<u8>> {
+        // Try to look up warehouse credentials first
+        if let Some(warehouse) = self.get_warehouse_for_location(path).await? {
+            if path.starts_with("s3://") || path.starts_with("az://") || path.starts_with("gs://") {
+                // Use cached object store
+                let cache_key = self.get_object_store_cache_key(&warehouse.storage_config, path);
+                let store = self.object_store_cache.get_or_insert(cache_key, || {
+                    Arc::new(crate::object_store_factory::create_object_store(&warehouse.storage_config, path).unwrap())
+                });
+                // Extract key relative to bucket
+                let key = if let Some(rest) = path.strip_prefix("s3://").or_else(|| path.strip_prefix("az://")).or_else(|| path.strip_prefix("gs://")) {
+                     rest.split_once('/').map(|(_, k)| k).unwrap_or(rest)
+                } else {
+                     path
+                };
+                
+                match store.get(&object_store::path::Path::from(key)).await {
+                    Ok(result) => return Ok(result.bytes().await?.to_vec()),
+                    Err(e) => {
+                         tracing::warn!("Failed to read from warehouse-configured store for {}, falling back to global env: {}", path, e);
+                    }
+                }
+            }
+        }
+
+        if let Some(rest) = path.strip_prefix("file://") {
+             let path = std::path::Path::new(rest);
+             match tokio::fs::read(path).await {
+                 Ok(bytes) => Ok(bytes),
+                 Err(e) => Err(anyhow::anyhow!("Failed to read local file {}: {}", rest, e)),
+             }
+        } else if let Some(rest) = path.strip_prefix("s3://") {
+            let (bucket, key) = rest.split_once('/').ok_or_else(|| anyhow::anyhow!("Invalid S3 path"))?;
+            
+            let mut builder = AmazonS3Builder::new()
+                .with_bucket_name(bucket)
+                .with_allow_http(true);
+                
+             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                 builder = builder.with_endpoint(endpoint);
+             }
+             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                 builder = builder.with_access_key_id(key_id);
+             }
+             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                 builder = builder.with_secret_access_key(secret);
+             }
+             if let Ok(region) = std::env::var("AWS_REGION") {
+                 builder = builder.with_region(region);
+             }
+             
+             let store = builder.build()?;
+             let result = store.get(&ObjPath::from(key)).await?;
+             let bytes = result.bytes().await?;
+             Ok(bytes.to_vec())
+        } else {
+             Err(anyhow::anyhow!("Only s3:// and file:// paths are supported in SQLite store"))
+        }
     }
 }

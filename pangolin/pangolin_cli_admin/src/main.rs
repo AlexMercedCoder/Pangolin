@@ -122,6 +122,11 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::UpdateSystemSettings { allow_public_signup, default_warehouse_bucket, default_retention_days } => handlers::handle_update_system_settings(&client, allow_public_signup, default_warehouse_bucket, default_retention_days).await?,
             AdminCommand::SyncFederatedCatalog { name } => handlers::handle_sync_federated_catalog(&client, name).await?,
             AdminCommand::GetFederatedStats { name } => handlers::handle_get_federated_stats(&client, name).await?,
+            AdminCommand::Stats => handlers::handle_stats(&client).await?,
+            AdminCommand::CatalogSummary { name } => handlers::handle_catalog_summary(&client, name).await?,
+            AdminCommand::Search { query, catalog, limit } => handlers::handle_search(&client, query, catalog, limit).await?,
+            AdminCommand::BulkDelete { ids, confirm } => handlers::handle_bulk_delete(&client, ids, confirm).await?,
+            AdminCommand::Validate { resource_type, names } => handlers::handle_validate_names(&client, resource_type, names).await?,
             AdminCommand::ListNamespaceTree { catalog } => handlers::handle_list_namespace_tree(&client, catalog).await?,
             _ => println!("Command not available in non-interactive mode."),
         }
@@ -335,6 +340,21 @@ async fn main() -> anyhow::Result<()> {
                                     },
                                     AdminCommand::GetAuditEvent { id } => {
                                         if let Err(e) = handlers::handle_get_audit_event(&client, id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::Stats => {
+                                        if let Err(e) = handlers::handle_stats(&client).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::CatalogSummary { name } => {
+                                        if let Err(e) = handlers::handle_catalog_summary(&client, name).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::Search { query, catalog, limit } => {
+                                        if let Err(e) = handlers::handle_search(&client, query, catalog, limit).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::BulkDelete { ids, confirm } => {
+                                        if let Err(e) = handlers::handle_bulk_delete(&client, ids, confirm).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::Validate { resource_type, names } => {
+                                        if let Err(e) = handlers::handle_validate_names(&client, resource_type, names).await { eprintln!("Error: {}", e); }
                                     },
                                     AdminCommand::ListUserTokens { user_id } => {
                                         if let Err(e) = handlers::handle_list_user_tokens(&client, user_id).await { eprintln!("Error: {}", e); }

@@ -570,6 +570,34 @@ paths:
           description: Internal server error
       security:
       - bearer_auth: []
+  /api/v1/bulk/assets/delete:
+    post:
+      tags:
+      - Bulk Operations
+      summary: Bulk delete multiple assets
+      description: |-
+        Deletes up to 100 assets in a single request.
+        Returns detailed results including any errors.
+      operationId: bulk_delete_assets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteAssetsRequest'
+        required: true
+      responses:
+        '200':
+          description: Bulk delete results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkOperationResponse'
+        '400':
+          description: Bad request (e.g., too many assets)
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
   /api/v1/catalogs:
     get:
       tags:
@@ -712,6 +740,32 @@ paths:
           description: Internal server error
       security:
       - bearer_auth: []
+  /api/v1/catalogs/{name}/summary:
+    get:
+      tags:
+      - Catalogs
+      summary: Get summary statistics for a specific catalog
+      operationId: get_catalog_summary
+      parameters:
+      - name: name
+        in: path
+        description: Catalog name
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Catalog summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogSummary'
+        '404':
+          description: Catalog not found
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
   /api/v1/catalogs/{prefix}/namespaces/tree:
     get:
       tags:
@@ -798,6 +852,28 @@ paths:
       responses:
         '200':
           description: Conflict resolved
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/dashboard/stats:
+    get:
+      tags:
+      - Dashboard
+      summary: Get dashboard statistics based on user role
+      description: |-
+        Returns different scopes based on user role:
+        - Root: system-wide statistics
+        - Tenant Admin: tenant-wide statistics
+        - Tenant User: statistics for accessible resources
+      operationId: get_dashboard_stats
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
         '500':
           description: Internal server error
       security:
@@ -1295,6 +1371,58 @@ paths:
           description: Role deleted
         '403':
           description: Forbidden
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
+  /api/v1/search/assets:
+    get:
+      tags:
+      - Search
+      summary: Search for assets across catalogs
+      description: |-
+        Performs a case-insensitive search across asset names.
+        Supports filtering by catalog and pagination.
+      operationId: search_assets_by_name
+      parameters:
+      - name: q
+        in: query
+        description: Search query
+        required: true
+        schema:
+          type: string
+      - name: catalog
+        in: query
+        description: Filter by catalog name
+        required: false
+        schema:
+          type: string
+          nullable: true
+      - name: limit
+        in: query
+        description: 'Maximum results (default: 50)'
+        required: false
+        schema:
+          type: integer
+          nullable: true
+          minimum: 0
+      - name: offset
+        in: query
+        description: 'Pagination offset (default: 0)'
+        required: false
+        schema:
+          type: integer
+          nullable: true
+          minimum: 0
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Bad request
         '500':
           description: Internal server error
       security:
@@ -1857,6 +1985,34 @@ paths:
           description: Internal server error
       security:
       - bearer_auth: []
+  /api/v1/validate/names:
+    post:
+      tags:
+      - Validation
+      summary: Validate resource name availability
+      description: |-
+        Checks if catalog or warehouse names are available.
+        Supports batch validation of multiple names.
+      operationId: validate_names
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateNamesRequest'
+        required: true
+      responses:
+        '200':
+          description: Validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidateNamesResponse'
+        '400':
+          description: Bad request
+        '500':
+          description: Internal server error
+      security:
+      - bearer_auth: []
   /api/v1/warehouses:
     get:
       tags:
@@ -2067,6 +2223,27 @@ components:
         service_user_id:
           type: string
           format: uuid
+    AssetSearchResult:
+      type: object
+      required:
+      - id
+      - name
+      - namespace
+      - catalog
+      - asset_type
+      properties:
+        asset_type:
+          type: string
+        catalog:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        namespace:
+          type: array
+          items:
+            type: string
     AssignRoleRequest:
       type: object
       description: Request to assign a role to a user
@@ -2165,6 +2342,33 @@ components:
           nullable: true
         name:
           type: string
+    BulkDeleteAssetsRequest:
+      type: object
+      required:
+      - asset_ids
+      properties:
+        asset_ids:
+          type: array
+          items:
+            type: string
+          description: List of asset UUIDs to delete (maximum 100)
+    BulkOperationResponse:
+      type: object
+      required:
+      - succeeded
+      - failed
+      - errors
+      properties:
+        errors:
+          type: array
+          items:
+            type: string
+        failed:
+          type: integer
+          minimum: 0
+        succeeded:
+          type: integer
+          minimum: 0
     BusinessMetadata:
       type: object
       description: Business metadata attached to assets
@@ -2269,6 +2473,28 @@ components:
         warehouse_name:
           type: string
           nullable: true
+    CatalogSummary:
+      type: object
+      required:
+      - name
+      - table_count
+      - namespace_count
+      - branch_count
+      properties:
+        branch_count:
+          type: integer
+          minimum: 0
+        name:
+          type: string
+        namespace_count:
+          type: integer
+          minimum: 0
+        storage_location:
+          type: string
+          nullable: true
+        table_count:
+          type: integer
+          minimum: 0
     CatalogType:
       type: string
       enum:
@@ -2528,69 +2754,63 @@ components:
           allOf:
           - $ref: '#/components/schemas/VendingStrategy'
           nullable: true
-    FederatedAuthType:
-      type: string
-      enum:
-      - None
-      - BasicAuth
-      - BearerToken
-      - ApiKey
+    DashboardStats:
+      type: object
+      required:
+      - catalogs_count
+      - tables_count
+      - namespaces_count
+      - users_count
+      - warehouses_count
+      - branches_count
+      - scope
+      properties:
+        branches_count:
+          type: integer
+          minimum: 0
+        catalogs_count:
+          type: integer
+          minimum: 0
+        namespaces_count:
+          type: integer
+          minimum: 0
+        scope:
+          type: string
+          description: 'Scope of statistics: "system", "tenant", or "user"'
+        tables_count:
+          type: integer
+          minimum: 0
+        users_count:
+          type: integer
+          minimum: 0
+        warehouses_count:
+          type: integer
+          minimum: 0
     FederatedCatalogConfig:
       type: object
       required:
-      - base_url
-      - auth_type
-      - timeout_seconds
+      - properties
       properties:
-        auth_type:
-          $ref: '#/components/schemas/FederatedAuthType'
-        base_url:
-          type: string
-        credentials:
-          allOf:
-          - $ref: '#/components/schemas/FederatedCredentials'
-          nullable: true
-        timeout_seconds:
-          type: integer
-          format: int64
-          minimum: 0
+        properties:
+          type: object
+          additionalProperties:
+            type: string
     FederatedCatalogResponse:
       type: object
       required:
       - id
       - name
-      - base_url
-      - auth_type
-      - timeout_seconds
+      - properties
       properties:
-        auth_type:
-          type: string
-        base_url:
-          type: string
         id:
           type: string
           format: uuid
         name:
           type: string
-        timeout_seconds:
-          type: integer
-          format: int64
-          minimum: 0
-    FederatedCredentials:
-      type: object
-      properties:
-        api_key:
-          type: string
-          nullable: true
-        password:
-          type: string
-          nullable: true
-        token:
-          type: string
-          nullable: true
-        username:
-          type: string
-          nullable: true
+        properties:
+          type: object
+          additionalProperties:
+            type: string
     GenerateTokenRequest:
       type: object
       required:
@@ -2812,6 +3032,19 @@ components:
       properties:
         metadata:
           $ref: '#/components/schemas/BusinessMetadata'
+    NameValidationResult:
+      type: object
+      required:
+      - name
+      - available
+      properties:
+        available:
+          type: boolean
+        name:
+          type: string
+        reason:
+          type: string
+          nullable: true
     OAuthCallback:
       type: object
       description: OAuth callback query parameters
@@ -3008,6 +3241,26 @@ components:
         updated-at:
           type: string
           format: date-time
+    SearchQuery:
+      type: object
+      required:
+      - q
+      properties:
+        catalog:
+          type: string
+          description: Optional catalog name to filter results
+          nullable: true
+        limit:
+          type: integer
+          description: Maximum number of results to return
+          minimum: 0
+        offset:
+          type: integer
+          description: Offset for pagination
+          minimum: 0
+        q:
+          type: string
+          description: Search query string
     SearchRequest:
       type: object
       required:
@@ -3020,6 +3273,27 @@ components:
           items:
             type: string
           nullable: true
+    SearchResponse:
+      type: object
+      required:
+      - results
+      - total
+      - limit
+      - offset
+      properties:
+        limit:
+          type: integer
+          minimum: 0
+        offset:
+          type: integer
+          minimum: 0
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AssetSearchResult'
+        total:
+          type: integer
+          minimum: 0
     ServiceUser:
       type: object
       description: Service user for API key authentication
@@ -3296,6 +3570,29 @@ components:
           format: uuid
         username:
           type: string
+    ValidateNamesRequest:
+      type: object
+      required:
+      - resource_type
+      - names
+      properties:
+        names:
+          type: array
+          items:
+            type: string
+          description: List of names to validate
+        resource_type:
+          type: string
+          description: 'Resource type: "catalog" or "warehouse"'
+    ValidateNamesResponse:
+      type: object
+      required:
+      - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/NameValidationResult'
     VendingStrategy:
       oneOf:
       - type: object
@@ -3473,4 +3770,12 @@ tags:
   description: System configuration management endpoints
 - name: Data Explorer
   description: Data exploration and discovery endpoints
+- name: Dashboard
+  description: Dashboard statistics and summaries
+- name: Search
+  description: Asset search and discovery
+- name: Bulk Operations
+  description: Bulk operations for efficiency
+- name: Validation
+  description: Resource name validation
 

@@ -1,17 +1,17 @@
 use wiremock::{MockServer, Mock, ResponseTemplate};
-use wiremock::matchers::{method, path, query_param};
+use wiremock::matchers::{method, path};
 use pangolin_cli_common::client::PangolinClient;
-use pangolin_cli_common::config::Config;
+use pangolin_cli_common::config::CliConfig;
 use serde_json::json;
 
 // Helper to create test client
 fn create_test_client(base_url: String) -> PangolinClient {
-    let config = Config {
+    let config = CliConfig {
         base_url,
+        auth_token: Some("test-token".to_string()),
+        username: Some("test-user".to_string()),
         tenant_id: Some("test-tenant-id".to_string()),
         tenant_name: Some("test-tenant".to_string()),
-        username: Some("test-user".to_string()),
-        token: Some("test-token".to_string()),
     };
     PangolinClient::new(config)
 }
