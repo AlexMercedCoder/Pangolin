@@ -37,6 +37,35 @@ This document consolidates all prior planning, audit, and design documents into 
 - **Name Validation**: `/api/v1/validate/names` - Batch validation for catalog/warehouse names
 - **Dashboard Stats**: `/api/v1/stats` - Aggregated metrics endpoint
 
+### 2.5 PyIceberg Integration ✅
+**Status:** 3 of 4 backends verified (MemoryStore, SqliteStore, MongoStore)
+
+#### Completed Fixes
+1. **AddSchema Handler**: Implemented proper schema deserialization and addition to metadata
+2. **SetCurrentSchema Handler**: Implemented `-1` schema ID resolution (PyIceberg convention for "use last schema")
+3. **S3 Persistence**: Verified working across all tested backends with MinIO
+4. **Credential Vending**: Confirmed functional for warehouse-based catalogs
+5. **Client Credentials**: Confirmed functional for direct S3 access
+
+#### Verification Results
+- ✅ **MemoryStore**: All tests passed (create, write, read, schema update, partitioning, snapshots)
+- ✅ **SqliteStore**: All tests passed
+- ✅ **MongoStore**: All tests passed  
+- ⚠️ **PostgresStore**: Blocked on authentication issue (admin provisioned but not recognized)
+
+**Documentation:**
+- [pyiceberg_integration_status.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/planning/pyiceberg_integration_status.md)
+- [schema_fix_walkthrough.md](file:///home/alexmerced/.gemini/antigravity/brain/b0c38965-4af1-4c1c-a961-e1f0d43e437e/schema_fix_walkthrough.md)
+- [postgres_auth_fix_walkthrough.md](file:///home/alexmerced/.gemini/antigravity/brain/b0c38965-4af1-4c1c-a961-e1f0d43e437e/postgres_auth_fix_walkthrough.md)
+- [authentication.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/docs/architecture/authentication.md) - Comprehensive auth architecture docs
+
+### 2.6 Architecture Documentation ✅
+**Status:** Comprehensive authentication documentation created
+
+- **Authentication & Authorization**: Complete guide covering all auth methods (Basic Auth for Root, Bearer tokens, API keys), middleware flow, user roles, session management, and troubleshooting
+- **Common Pitfalls**: Documented authentication issues and solutions to prevent future confusion
+- **Environment Variables**: Complete reference for all auth-related configuration
+
 ---
 
 ## 3. Outstanding & Planned Work (🚧 To Do)

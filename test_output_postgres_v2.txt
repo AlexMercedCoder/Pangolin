@@ -1,0 +1,74 @@
+2025-12-22 19:09:14,560 - INFO - Starting Integration Test for Backend: PostgresStore
+2025-12-22 19:09:14,561 - INFO - Creating Tenant: 7025737d-8a55-4977-8d21-e821bfac369f
+2025-12-22 19:09:14,564 - ERROR - Setup Failed: HTTPConnectionPool(host='localhost', port=8080): Max retries exceeded with url: /api/v1/tenants (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x72cd18064110>: Failed to establish a new connection: [Errno 111] Connection refused'))
+Traceback (most recent call last):
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/connection.py", line 494, in request
+    self.endheaders()
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/http/client.py", line 1277, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/http/client.py", line 1037, in _send_output
+    self.send(msg)
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/http/client.py", line 975, in send
+    self.connect()
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/connection.py", line 325, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x72cd18064110>: Failed to establish a new connection: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/adapters.py", line 644, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='localhost', port=8080): Max retries exceeded with url: /api/v1/tenants (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x72cd18064110>: Failed to establish a new connection: [Errno 111] Connection refused'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/tests/integration/test_pyiceberg_matrix.py", line 354, in main
+    tenant_id = setup_tenant()
+                ^^^^^^^^^^^^^^
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/tests/integration/test_pyiceberg_matrix.py", line 36, in setup_tenant
+    resp = requests.post(f"{PANGOLIN_URL}/api/v1/tenants", auth=(ADMIN_USER, ADMIN_PASS), json={
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/alexmerced/.pyenv/versions/3.11.2/lib/python3.11/site-packages/requests/adapters.py", line 677, in send
+    raise ConnectionError(e, request=request)
+requests.exceptions.ConnectionError: HTTPConnectionPool(host='localhost', port=8080): Max retries exceeded with url: /api/v1/tenants (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x72cd18064110>: Failed to establish a new connection: [Errno 111] Connection refused'))

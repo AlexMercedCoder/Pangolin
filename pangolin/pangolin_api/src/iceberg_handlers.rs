@@ -214,6 +214,11 @@ pub enum CommitRequirement {
         #[serde(rename = "snapshot-id")]
         snapshot_id: Option<i64>,
     },
+    #[serde(rename = "assert-current-schema-id")]
+    AssertCurrentSchemaId {
+        #[serde(rename = "current-schema-id")]
+        current_schema_id: Option<i32>,
+    },
     // Add others as needed
 }
 
@@ -973,8 +978,8 @@ pub async fn load_table(
                 if let Some(warehouse_name) = catalog.warehouse_name {
                     match store.get_warehouse(tenant_id, warehouse_name).await {
                         Ok(Some(warehouse)) => {
-                            let access_key = warehouse.storage_config.get("access_key_id").cloned();
-                            let secret_key = warehouse.storage_config.get("secret_access_key").cloned();
+                            let access_key = warehouse.storage_config.get("s3.access-key-id").cloned();
+                            let secret_key = warehouse.storage_config.get("s3.secret-access-key").cloned();
                             
                             if let (Some(ak), Some(sk)) = (access_key, secret_key) {
                                 Some((ak, sk))
@@ -1129,6 +1134,28 @@ pub async fn update_table(
             }
         };
 
+        // 2. Validate Requirements
+        for requirement in &payload.requirements {
+            match requirement {
+                CommitRequirement::AssertCurrentSchemaId { current_schema_id } => {
+                    if let Some(req_id) = current_schema_id {
+                        if metadata.current_schema_id != *req_id {
+                            tracing::warn!("Commit failed: Current schema ID mismatch: expected {}, found {}", req_id, metadata.current_schema_id);
+                            return (StatusCode::CONFLICT, format!("Current schema ID mismatch: expected {}, found {}", req_id, metadata.current_schema_id)).into_response();
+                        }
+                    }
+                },
+                CommitRequirement::AssertTableUuid { uuid } => {
+                    if metadata.table_uuid.to_string() != *uuid {
+                        tracing::warn!("Commit failed: Table UUID mismatch: expected {}, found {}", uuid, metadata.table_uuid);
+                        return (StatusCode::CONFLICT, format!("Table UUID mismatch: expected {}, found {}", uuid, metadata.table_uuid)).into_response();
+                     }
+                },
+                 _ => {}
+            }
+        }
+
+
         // 3. Apply updates
         for update in &payload.updates {
             match update {
@@ -1164,13 +1191,31 @@ pub async fn update_table(
                     }
                 },
                 CommitUpdate::AddSchema { schema } => {
-                    // Store the schema JSON in metadata
-                    tracing::info!("Adding schema: {:?}", schema);
-                    // For now, just ensure we have at least one schema
-                    // In a full implementation, we'd parse and append to schemas array
+                    // Deserialize schema Value to Schema struct
+                    match serde_json::from_value::<pangolin_core::iceberg_metadata::Schema>(schema.clone()) {
+                        Ok(new_schema) => {
+                             tracing::info!("Adding new schema with ID: {}", new_schema.schema_id);
+                             metadata.schemas.push(new_schema);
+                        },
+                        Err(e) => {
+                             tracing::error!("Failed to parse new schema: {}", e);
+                             return (StatusCode::BAD_REQUEST, format!("Invalid schema format: {}", e)).into_response();
+                        }
+                    }
                 },
                 CommitUpdate::SetCurrentSchema { schema_id } => {
-                    metadata.current_schema_id = *schema_id;
+                    tracing::info!("Setting current schema ID to: {}", schema_id);
+                    if *schema_id == -1 {
+                        if let Some(last) = metadata.schemas.last() {
+                            tracing::info!("Resolving -1 to last schema ID: {}", last.schema_id);
+                            metadata.current_schema_id = last.schema_id;
+                        } else {
+                             tracing::warn!("SetCurrentSchema -1 requested but no schemas available");
+                             metadata.current_schema_id = *schema_id; // Fallback
+                        }
+                    } else {
+                        metadata.current_schema_id = *schema_id;
+                    }
                 },
                 _ => {} // Ignore others for MVP
             }

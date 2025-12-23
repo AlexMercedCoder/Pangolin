@@ -22,11 +22,18 @@ fn create_s3_store(
     config: &HashMap<String, String>,
     location: &str,
 ) -> Result<Box<dyn ObjectStore>> {
-    let (bucket, _) = location
-        .strip_prefix("s3://")
-        .unwrap()
-        .split_once('/')
-        .ok_or_else(|| anyhow::anyhow!("Invalid S3 path structure"))?;
+    // Use bucket from config if available, otherwise parse from location
+    let bucket = config
+        .get("s3.bucket")
+        .map(|s| s.as_str())
+        .or_else(|| {
+            // Fallback: parse from location
+            location
+                .strip_prefix("s3://")
+                .and_then(|rest| rest.split_once('/'))
+                .map(|(b, _)| b)
+        })
+        .ok_or_else(|| anyhow::anyhow!("Cannot determine S3 bucket from config or location"))?;
 
     let region = config
         .get("s3.region")

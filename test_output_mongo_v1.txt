@@ -1,0 +1,31 @@
+2025-12-22 19:07:36,769 - INFO - Starting Integration Test for Backend: MongoStore
+2025-12-22 19:07:36,769 - INFO - Creating Tenant: e472623b-9ff0-4cc4-b476-e0deb055adbc
+2025-12-22 19:07:36,781 - INFO - Created Tenant ID: e2c1559b-2dd6-4dcb-bccd-a9862ac34291
+2025-12-22 19:07:36,782 - INFO - Creating Tenant Admin User
+2025-12-22 19:07:37,911 - INFO - Logging in as Tenant Admin
+2025-12-22 19:07:38,851 - INFO - Creating Warehouse with Vending Strategy
+2025-12-22 19:07:39,046 - INFO - Creating Catalogs
+2025-12-22 19:07:39,499 - INFO - >>> Testing Vended Credentials Catalog (cat_vended)
+2025-12-22 19:07:39,562 - INFO - Creating Namespace 'ns1'
+2025-12-22 19:07:39,571 - INFO - Creating Table 'ns1.table1'
+2025-12-22 19:07:40,396 - INFO - Writing Data to 'ns1.table1'
+2025-12-22 19:07:42,169 - INFO - Reading Data from 'ns1.table1'
+2025-12-22 19:07:42,200 - INFO - Updating Schema (add column 'ts')
+2025-12-22 19:07:42,326 - INFO - ✅ Vended Credentials Test PASSED
+2025-12-22 19:07:42,326 - INFO - >>> Testing Client Credentials Catalog (cat_client)
+2025-12-22 19:07:42,339 - INFO - Creating Namespace 'ns1'
+2025-12-22 19:07:42,370 - INFO - Creating Table 'ns1.table1'
+2025-12-22 19:07:42,458 - INFO - Writing Data to 'ns1.table1'
+2025-12-22 19:07:43,232 - INFO - Reading Data from 'ns1.table1'
+2025-12-22 19:07:43,275 - INFO - Updating Schema (add column 'ts')
+2025-12-22 19:07:43,586 - INFO - ✅ Client Credentials Test PASSED
+2025-12-22 19:07:43,586 - INFO - >>> Testing Advanced Features (Partitioning, Snapshots, Sort Order)
+2025-12-22 19:07:43,602 - INFO - --- Partitioning Test ---
+2025-12-22 19:07:45,351 - INFO - ✅ Partitioning Verified
+2025-12-22 19:07:45,351 - INFO - --- Snapshot Test ---
+2025-12-22 19:07:45,351 - INFO - Found 1 snapshots
+2025-12-22 19:07:45,351 - INFO - ✅ Snapshots Verified
+2025-12-22 19:07:45,352 - INFO - --- Sort Order Test ---
+2025-12-22 19:07:45,352 - INFO - Checking initial sort order
+2025-12-22 19:07:45,352 - WARNING - Sort Order Update skipped/failed (might be unsupported by client/server yet): 'Table' object has no attribute 'replace_sort_order'
+2025-12-22 19:07:45,352 - INFO - 🎉 All Tests PASSED

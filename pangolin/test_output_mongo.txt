@@ -1,0 +1,11 @@
+2025-12-22 18:44:55,017 - INFO - Starting Integration Test for Backend: MongoStore
+2025-12-22 18:44:55,017 - INFO - Creating Tenant: eec9b790-7dc8-41a9-9a1a-93d4aad83c93
+2025-12-22 18:44:55,028 - ERROR - Failed to create tenant: Internal Server Error
+2025-12-22 18:44:55,028 - ERROR - Setup Failed: Tenant creation failed
+Traceback (most recent call last):
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/../tests/integration/test_pyiceberg_matrix.py", line 245, in main
+    tenant_id = setup_tenant()
+                ^^^^^^^^^^^^^^
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/../tests/integration/test_pyiceberg_matrix.py", line 42, in setup_tenant
+    raise Exception("Tenant creation failed")
+Exception: Tenant creation failed

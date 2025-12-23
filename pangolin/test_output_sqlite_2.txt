@@ -1,0 +1,13 @@
+2025-12-22 18:39:41,934 - INFO - Starting Integration Test for Backend: SQLiteStore
+2025-12-22 18:39:41,934 - INFO - Creating Tenant: a7f944f3-7212-4cbb-b938-e20f582b2616
+2025-12-22 18:39:41,967 - INFO - Creating Tenant Admin User
+2025-12-22 18:39:42,906 - INFO - Logging in as Tenant Admin
+2025-12-22 18:39:43,826 - INFO - Creating Warehouse with Vending Strategy
+2025-12-22 18:39:43,830 - ERROR - Failed to create warehouse: Internal Server Error: error returned from database: (code: 787) FOREIGN KEY constraint failed
+2025-12-22 18:39:43,830 - ERROR - Setup Failed: Warehouse creation failed
+Traceback (most recent call last):
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/../tests/integration/test_pyiceberg_matrix.py", line 242, in main
+    setup_warehouse(tenant_id, token)
+  File "/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/../tests/integration/test_pyiceberg_matrix.py", line 102, in setup_warehouse
+    raise Exception("Warehouse creation failed")
+Exception: Warehouse creation failed
