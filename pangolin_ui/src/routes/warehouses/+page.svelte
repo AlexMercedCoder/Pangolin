@@ -69,17 +69,23 @@
 		}
 	}
 
-	function getStorageType(warehouse: Warehouse): string {
-		const type = warehouse.storage_config?.type || 'unknown';
-		return type.toUpperCase();
+	function getStorageType(warehouse: any): string {
+		// Infer type from property names since 'type' field doesn't exist
+		if (warehouse.storage_config?.['s3.bucket']) return 's3';
+		if (warehouse.storage_config?.['adls.account-name']) return 'azure';
+		if (warehouse.storage_config?.['gcs.bucket']) return 'gcs';
+		return 'unknown';
 	}
 
-	function getBucketOrContainer(warehouse: Warehouse): string {
-		return warehouse.storage_config?.bucket || warehouse.storage_config?.container || '-';
+	function getBucketOrContainer(warehouse: any): string {
+		return warehouse.storage_config?.['s3.bucket'] 
+			|| warehouse.storage_config?.['azure.container']
+			|| warehouse.storage_config?.['gcs.bucket'] 
+			|| '-';
 	}
 
-	function getRegion(warehouse: Warehouse): string {
-		return warehouse.storage_config?.region || '-';
+	function getRegion(warehouse: any): string {
+		return warehouse.storage_config?.['s3.region'] || '-';
 	}
 </script>
 
@@ -114,13 +120,13 @@
 				{#if column.key === 'storage_config.type'}
 					<span
 						class="px-2 py-1 text-xs font-medium rounded-full
-						{row.storage_config?.type === 's3'
+						{getStorageType(row) === 's3'
 							? 'bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-200'
-							: row.storage_config?.type === 'azure'
+							: getStorageType(row) === 'azure'
 							? 'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200'
 							: 'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200'}"
 					>
-						{getStorageType(row)}
+						{getStorageType(row).toUpperCase()}
 					</span>
 				{:else if column.key === 'storage_config.bucket'}
 					{getBucketOrContainer(row)}

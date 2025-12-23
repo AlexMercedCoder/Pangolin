@@ -195,42 +195,33 @@
 		creating = true;
 
 		// Build storage config based on type and auth method
-		const storage_config: any = {
-			type: formData.storageType,
-		};
+		const storage_config: any = {};
 
 		if (formData.storageType === 's3') {
-			storage_config.bucket = formData.s3Bucket;
-			storage_config.region = formData.s3Region;
+			storage_config['s3.bucket'] = formData.s3Bucket;
+			storage_config['s3.region'] = formData.s3Region;
 			if (formData.s3Endpoint) {
-				storage_config.endpoint = formData.s3Endpoint;
+				storage_config['s3.endpoint'] = formData.s3Endpoint;
 			}
 			if (formData.authMethod === 'static') {
-				storage_config.access_key_id = formData.s3AccessKey;
-				storage_config.secret_access_key = formData.s3SecretKey;
-			} else {
-				storage_config.role_arn = formData.s3RoleArn;
+				storage_config['s3.access-key-id'] = formData.s3AccessKey;
+				storage_config['s3.secret-access-key'] = formData.s3SecretKey;
 			}
+			// Note: IAM role (role_arn) not supported in current API
 		} else if (formData.storageType === 'azure') {
-			storage_config.container = formData.azureContainer;
-			storage_config.account_name = formData.azureAccountName;
+			storage_config['azure.container'] = formData.azureContainer;
+			storage_config['adls.account-name'] = formData.azureAccountName;
 			if (formData.authMethod === 'static') {
-				storage_config.account_key = formData.azureAccountKey;
-			} else {
-				storage_config.tenant_id = formData.azureTenantId;
-				storage_config.client_id = formData.azureClientId;
-				if (formData.azureClientSecret) {
-					storage_config.client_secret = formData.azureClientSecret;
-				}
+				storage_config['adls.account-key'] = formData.azureAccountKey;
 			}
+			// Note: OAuth fields (tenant_id, client_id, client_secret) not supported in current API
 		} else if (formData.storageType === 'gcs') {
-			storage_config.bucket = formData.gcsBucket;
-			storage_config.project_id = formData.gcsProjectId;
+			storage_config['gcs.bucket'] = formData.gcsBucket;
+			storage_config['gcs.project-id'] = formData.gcsProjectId;
 			if (formData.authMethod === 'static') {
-				storage_config.service_account_key = formData.gcsServiceAccountKey;
-			} else {
-				storage_config.service_account_email = formData.gcsServiceAccountEmail;
+				storage_config['gcs.service-account-file'] = formData.gcsServiceAccountKey;
 			}
+			// Note: service_account_email not supported in current API
 		}
 
 		const request: CreateWarehouseRequest = {

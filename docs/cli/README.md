@@ -1,145 +1,245 @@
 # Pangolin CLI Documentation
 
-Command-line tools for managing and interacting with Pangolin catalogs.
-
 ## Overview
 
-Pangolin provides two CLI tools:
-- **pangolin-admin** - Administrative operations (requires elevated permissions)
-- **pangolin-user** - User operations (standard user access)
+The Pangolin CLI provides command-line tools for managing your Pangolin data catalog infrastructure.
 
-## Getting Started
+## CLI Tools
 
-- [CLI Overview](overview.md) - Introduction to Pangolin CLI tools
-- [Configuration](configuration.md) - Setting up CLI configuration
-- [Docker Usage](docker-usage.md) - Using CLI via Docker container
+- **`pangolin-admin`** - Administrative tool for managing tenants, warehouses, catalogs, users, and permissions
+- **`pangolin-user`** - User-focused tool for data discovery and catalog operations
 
-## Admin CLI (`pangolin-admin`)
+## Quick Start
 
-### Core Operations
-- [Admin Overview](admin.md) - Complete admin CLI reference
-- [Tenants](admin-tenants.md) - Manage tenants
-- [Warehouses](admin-warehouses.md) - Manage warehouses
-- [Catalogs](admin-catalogs.md) - Manage catalogs
-- [Users](admin-users.md) - Manage users
+### Installation
+
+```bash
+# Build from source
+cd pangolin
+cargo build --release --bin pangolin-admin
+
+# The binary will be at: target/release/pangolin-admin
+```
+
+### First Steps
+
+```bash
+# 1. Login as root
+pangolin-admin login --username admin --password password
+
+# 2. Create a tenant
+pangolin-admin create-tenant --name my-company \
+  --admin-username tenant-admin \
+  --admin-password secure-password
+
+# 3. Login as tenant admin
+pangolin-admin login --username tenant-admin --password secure-password
+
+# 4. Create a warehouse
+pangolin-admin create-warehouse my-warehouse --type s3
+
+# 5. Create a catalog
+pangolin-admin create-catalog my-catalog --warehouse my-warehouse
+```
+
+## Documentation Index
+
+### Getting Started
+- [Installation & Setup](./installation.md) - Installing and configuring the CLI
+- [Authentication](./authentication.md) - Login methods and credential management
+
+### Core Features
+- **[Warehouse Management](./warehouse-management.md)** - Creating and managing S3, Azure, and GCS warehouses
+- [Catalog Management](./catalog-management.md) - Managing catalogs and namespaces
+- [User Management](./user-management.md) - Creating and managing users
+- [Permission Management](./permissions.md) - RBAC and access control
 
 ### Advanced Features
-- [Permissions](admin-permissions.md) - Grant and revoke permissions
-- [Token Management](admin-token-management.md) - Generate and manage JWT tokens
-- [Service Users](admin-service-users.md) - Manage service accounts
-- [Federated Catalogs](admin-federated-catalogs.md) - Configure catalog federation
-- [Merge Operations](admin-merge-operations.md) - Merge branches and resolve conflicts
-- [Update Operations](admin-update-operations.md) - Update existing resources
-- [Business Metadata](admin-metadata.md) - Manage business metadata
-- [Audit Logging](admin-audit-logging.md) - Query audit logs
-- [Optimization Commands](admin-optimization-commands.md) - Stats, Search, and Validation
+- [Federated Catalogs](./federated-catalogs.md) - Connecting to external Iceberg catalogs
+- [Token Management](./tokens.md) - API tokens and service users
+- [Audit Logging](./audit-logging.md) - Viewing and analyzing audit events
+- [Merge Operations](./merge-operations.md) - Managing branch merges
 
-## User CLI (`pangolin-user`)
+### Reference
+- [Command Reference](./command-reference.md) - Complete command listing
+- [Configuration](./configuration.md) - CLI configuration files
+- [Docker Usage](./docker-usage.md) - Running CLI in Docker
 
-- [User Overview](user.md) - Complete user CLI reference
-- [Discovery](user-discovery.md) - Search and discover datasets
-- [Access Requests](user-access.md) - Request access to datasets
-- [Tokens](user-tokens.md) - Manage personal access tokens
-- [Branches](user-branches.md) - Work with catalog branches
-- [Tags](user-tags.md) - Manage dataset tags
+## Common Tasks
 
-## Installation
-
-### Pre-compiled Binaries
-
-Download binaries for your platform from [GitHub Releases](https://github.com/AlexMercedCoder/Pangolin/releases/latest):
-
-- **Linux (x86_64)**: `pangolin-admin`, `pangolin-user`
-- **macOS (Intel & ARM)**: `pangolin-admin`, `pangolin-user`
-- **Windows (x86_64)**: `pangolin-admin.exe`, `pangolin-user.exe`
-
-### Docker
+### Warehouse Operations
 
 ```bash
-docker pull alexmerced/pangolin-cli:0.1.0
+# Create S3 warehouse
+pangolin-admin create-warehouse prod-s3 --type s3 \
+  --bucket my-bucket \
+  --access-key AKIA... \
+  --secret-key ... \
+  --region us-east-1
 
-# Run admin commands
-docker run --rm alexmerced/pangolin-cli:0.1.0 pangolin-admin --help
+# Create Azure warehouse
+pangolin-admin create-warehouse prod-azure --type azure
 
-# Run user commands
-docker run --rm alexmerced/pangolin-cli:0.1.0 pangolin-user --help
+# Create GCS warehouse
+pangolin-admin create-warehouse prod-gcs --type gcs
+
+# List warehouses
+pangolin-admin list-warehouses
+
+# Update warehouse credentials
+pangolin-admin update-warehouse --id <uuid>
+
+# Delete warehouse
+pangolin-admin delete-warehouse my-warehouse
 ```
 
-See [Docker Usage Guide](docker-usage.md) for detailed instructions.
-
-### Build from Source
+### Catalog Operations
 
 ```bash
-cd pangolin/
-cargo build --release --bin pangolin-admin --bin pangolin-user
+# Create catalog
+pangolin-admin create-catalog my-catalog --warehouse my-warehouse
 
-# Binaries will be in target/release/
-./target/release/pangolin-admin --help
-./target/release/pangolin-user --help
+# List catalogs
+pangolin-admin list-catalogs
+
+# Delete catalog
+pangolin-admin delete-catalog my-catalog
 ```
 
-## Quick Examples
-
-### Admin Examples
+### User Management
 
 ```bash
-# Create a tenant
-pangolin-admin create-tenant --name "acme"
+# Create user
+pangolin-admin create-user john.doe \
+  --email john@example.com \
+  --role tenant-user
 
-# Create a warehouse
-pangolin-admin create-warehouse --name "prod_warehouse" --storage-type s3
+# List users
+pangolin-admin list-users
 
-# Create a catalog
-pangolin-admin create-catalog --name "analytics" --warehouse-id <warehouse-id>
-
-# Grant permissions
-pangolin-admin grant-permission --user-id <user-id> --action read --scope "catalog:analytics"
+# Update user
+pangolin-admin update-user --id <uuid> --active false
 ```
 
-### User Examples
+## Interactive Mode
+
+The CLI supports an interactive REPL mode:
 
 ```bash
-# Search for datasets
-pangolin-user search "customers"
+# Start interactive mode
+pangolin-admin
 
-# Request access
-pangolin-user request-access --table "analytics.sales.customers"
+# You'll see a prompt:
+(admin:username@tenant)> 
 
-# Create a branch
-pangolin-user create-branch --catalog analytics --branch dev --from main
-
-# Generate a token
-pangolin-user generate-token --expiry 30d
+# Type commands without the 'pangolin-admin' prefix:
+(admin:username@tenant)> list-warehouses
+(admin:username@tenant)> create-catalog my-catalog --warehouse my-warehouse
+(admin:username@tenant)> exit
 ```
 
-## Configuration
+## Environment Variables
 
-CLI tools can be configured via:
+```bash
+# Set Pangolin API URL
+export PANGOLIN_URL="http://localhost:8080"
 
-1. **Environment Variables**:
-   ```bash
-   export PANGOLIN_API_URL=http://localhost:8080
-   export PANGOLIN_TOKEN=your_jwt_token
-   ```
+# Set tenant context
+export PANGOLIN_TENANT="my-tenant"
 
-2. **Configuration File** (`~/.pangolin/config.json`):
-   ```json
-   {
-     "api_url": "http://localhost:8080",
-     "token": "your_jwt_token"
-   }
-   ```
+# Use in commands
+pangolin-admin list-warehouses
+```
 
-3. **Command-line Flags**:
-   ```bash
-   pangolin-admin --api-url http://localhost:8080 --token <token> list-tenants
-   ```
+## Configuration Profiles
 
-See [Configuration Guide](configuration.md) for details.
+The CLI saves authentication state in `~/.pangolin/config.json`:
 
-## Related Documentation
+```json
+{
+  "base_url": "http://localhost:8080",
+  "username": "admin",
+  "token": "...",
+  "tenant_id": "...",
+  "tenant_name": "my-tenant"
+}
+```
 
-- [Getting Started](../getting-started/getting_started.md)
-- [API Reference](../api/README.md)
-- [Deployment Guide](../../deployment_assets/README.md)
-- [Binary Installation](../../deployment_assets/bin/README.md)
+Use multiple profiles:
+
+```bash
+# Use specific profile
+pangolin-admin --profile production list-warehouses
+
+# Switch profiles
+pangolin-admin --profile staging login --username admin
+```
+
+## Getting Help
+
+```bash
+# General help
+pangolin-admin help
+
+# Command-specific help
+pangolin-admin create-warehouse --help
+
+# List all commands
+pangolin-admin help | grep "  "
+```
+
+## Troubleshooting
+
+### Connection Issues
+
+```bash
+# Check API is running
+curl http://localhost:8080/health
+
+# Verify URL
+echo $PANGOLIN_URL
+
+# Test with explicit URL
+pangolin-admin --url http://localhost:8080 list-tenants
+```
+
+### Authentication Issues
+
+```bash
+# Clear saved credentials
+rm ~/.pangolin/config.json
+
+# Login again
+pangolin-admin login --username admin --password password
+```
+
+### Permission Issues
+
+```bash
+# Check current user context
+pangolin-admin list-users  # Shows current user
+
+# Verify tenant context
+# Root users must use 'use' command to switch tenants
+pangolin-admin use my-tenant
+```
+
+## Examples
+
+See individual documentation pages for detailed examples:
+
+- [Warehouse Management Examples](./warehouse-management.md#examples)
+- [Multi-Cloud Setup](./warehouse-management.md#multi-cloud-strategy)
+- [Federated Catalog Setup](./federated-catalogs.md#examples)
+
+## Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/pangolin/issues)
+- **Documentation**: [Full Documentation](../../README.md)
+- **Architecture**: [Architecture Docs](../architecture/)
+
+## Version
+
+Current CLI version: 0.1.0
+
+For API compatibility, see [API Documentation](../api/).

@@ -23,6 +23,12 @@ This document consolidates all prior planning, audit, and design documents into 
 - **Global Search**: ✅ `pangolin-admin search <query>` (searches assets only).
 - **Bulk Operations**: ✅ `pangolin-admin bulk-delete --ids <id_list>`.
 - **Validation**: ✅ `pangolin-admin validate <type> <names>`.
+- **Multi-Cloud Warehouses**: ✅ Create and manage S3, Azure ADLS, and GCS warehouses
+  - S3/MinIO with correct PyIceberg property names (`s3.bucket`, `s3.access-key-id`, etc.)
+  - Azure ADLS with account key or SAS token authentication
+  - Google GCS with service account authentication
+  - Interactive property editor for warehouse updates
+- **Documentation**: ✅ Comprehensive CLI warehouse management guide created
 
 ### 2.3 UI Implementation
 - **Dashboard**: Integrated real-time stats endpoint.
@@ -88,12 +94,71 @@ This document consolidates all prior planning, audit, and design documents into 
 - **Storage & Connectivity**: Complete guide for S3/Azure/GCS integration, credential vending, common issues, debugging workflow, and lessons learned
 - **Common Pitfalls**: Documented authentication and storage issues to prevent future confusion
 - **Environment Variables**: Complete reference for all auth and storage configuration
+- **CLI Documentation**: Complete warehouse management guide with multi-cloud examples
+
+### 2.8 CLI Multi-Cloud Warehouse Support ✅
+**Status:** Implemented and documented (API and CLI locked)
+
+#### Features Implemented
+- **S3/MinIO Warehouses**: Fixed property names to PyIceberg conventions
+  - Correct property names: `s3.bucket`, `s3.access-key-id`, `s3.secret-access-key`, `s3.region`, `s3.endpoint`
+  - Interactive and non-interactive modes
+  - MinIO endpoint support
+- **Azure ADLS Warehouses**: Full support with interactive prompts
+  - Properties: `adls.account-name`, `adls.account-key`, `azure.container`, `adls.sas-token`
+  - Account key or SAS token authentication
+- **Google GCS Warehouses**: Full support with service account auth
+  - Properties: `gcs.project-id`, `gcs.bucket`, `gcs.service-account-file`
+- **Warehouse Updates**: Interactive property editor
+  - Update warehouse name
+  - Update storage_config properties
+  - Credential rotation workflow
+
+#### Documentation
+- [CLI Warehouse Management Guide](file:///home/alexmerced/development/personal/Personal/2026/pangolin/docs/cli/warehouse-management.md) - Complete guide with examples
+- [CLI README](file:///home/alexmerced/development/personal/Personal/2026/pangolin/docs/cli/README.md) - Updated with warehouse examples
+- [Multi-Cloud CLI Walkthrough](file:///home/alexmerced/.gemini/antigravity/brain/b0c38965-4af1-4c1c-a961-e1f0d43e437e/multicloud_cli_walkthrough.md) - Implementation details
 
 ---
 
 ## 3. Outstanding & Planned Work (🚧 To Do)
 
-### 3.1 Performance Optimizations (High Priority)
+### 3.1 UI Warehouse Alignment (CRITICAL - High Priority)
+**Status:** ❌ Not Implemented  
+**Priority:** HIGHEST (Breaking issue - warehouses created via UI don't work with PyIceberg)
+
+#### Critical Issues Identified
+1. **Wrong Property Names**: UI uses old property names instead of PyIceberg conventions
+   - Current: `bucket`, `access_key_id`, `secret_access_key`
+   - Required: `s3.bucket`, `s3.access-key-id`, `s3.secret-access-key`
+   - **Impact**: Warehouses created via UI are incompatible with PyIceberg
+   
+2. **Unsupported Fields**: UI includes fields not in API schema
+   - S3: `role_arn` (not supported)
+   - Azure: OAuth fields (`tenant_id`, `client_id`, `client_secret`) not in API
+   - GCS: `service_account_email` (not supported)
+   
+3. **Missing Warehouse Update**: No UI for updating warehouse storage_config
+   - CLI has interactive property editor
+   - API supports PUT /api/v1/warehouses/{id}
+   - UI has no update functionality
+
+#### Files Requiring Updates
+- `CreateWarehouseModal.svelte` - Fix all property names (L198-239)
+- `warehouses/+page.svelte` - Fix display logic (L21-23, L73-82, L114-127)
+- `warehouses/new/+page.svelte` - Fix property assignments (L45-79)
+- `catalogs/new/+page.svelte` - Fix storage_config accessors (L94-98)
+- `warehouses/[name]/+page.svelte` - Fix getStorageType function (L114)
+- **NEW**: `UpdateWarehouseModal.svelte` - Create warehouse update modal
+
+#### Property Name Mapping Required
+**S3**: `bucket` → `s3.bucket`, `access_key_id` → `s3.access-key-id`, etc.  
+**Azure**: `container` → `azure.container`, `account_name` → `adls.account-name`, etc.  
+**GCS**: `bucket` → `gcs.bucket`, `project_id` → `gcs.project-id`, etc.
+
+**Reference**: [UI Audit Findings](file:///home/alexmerced/.gemini/antigravity/brain/b0c38965-4af1-4c1c-a961-e1f0d43e437e/ui_audit_findings.md)
+
+### 3.2 Performance Optimizations (High Priority)
 *Ref: detailed in `performance_optimizations_status.md`*
 
 1.  **Object Store Cache Integration**
