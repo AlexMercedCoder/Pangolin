@@ -21,3 +21,13 @@ target/
 .DS_Store
 .env
 .env.local
+
+# Log files
+*.log
+api_*.log
+server*.log
+ui_*.log
+
+# Test output files
+test_output*.txt
+*_output*.txt

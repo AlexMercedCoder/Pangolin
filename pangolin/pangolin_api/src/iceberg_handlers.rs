@@ -1150,9 +1150,21 @@ pub async fn update_table(
     const MAX_RETRIES: i32 = 5;
 
     while retries < MAX_RETRIES {
-        // 1. Load current metadata location
-        let current_metadata_location = asset.properties.get("metadata_location").cloned();
-        tracing::info!("update_table: Current metadata location: {:?}", current_metadata_location);
+        // 1. Re-fetch asset to get current metadata location (critical for OCC)
+        let current_asset = match store.get_asset(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone()).await {
+            Ok(Some(a)) => a,
+            Ok(None) => {
+                tracing::error!("update_table: Table not found during retry");
+                return (StatusCode::NOT_FOUND, "Table not found").into_response()
+            },
+            Err(e) => {
+                tracing::error!("update_table: DB Error during retry: {}", e);
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            },
+        };
+        
+        let current_metadata_location = current_asset.properties.get("metadata_location").cloned();
+        tracing::info!("update_table: Current metadata location (retry {}): {:?}", retries, current_metadata_location);
         
         let metadata_bytes = if let Some(loc) = &current_metadata_location {
              match store.read_file(loc).await {
@@ -1177,6 +1189,7 @@ pub async fn update_table(
                 return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response()
             }
         };
+
 
         // 2. Validate Requirements
         for requirement in &payload.requirements {

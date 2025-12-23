@@ -170,9 +170,7 @@ fn create_test_metadata() -> TableMetadata {
             spec_id: 0,
             fields: vec![],
         }],
-        default_spec_id: 0,
-        last_partition_id: 0,
-        properties: HashMap::new(),
+        properties: Some(HashMap::new()),
         current_snapshot_id: None,
         snapshots: None,
         snapshot_log: None,
@@ -182,6 +180,7 @@ fn create_test_metadata() -> TableMetadata {
             fields: vec![],
         }],
         default_sort_order_id: 0,
-        refs: None,
+        last_sequence_number: 0,
+        current_partition_spec_id: 0,
     }
 }
