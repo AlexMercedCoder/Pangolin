@@ -99,20 +99,77 @@ pub async fn get_dashboard_stats(
         UserRole::TenantUser => {
             let tenant_id = session.tenant_id.unwrap_or_default();
             
-            let catalogs = store.list_catalogs(tenant_id).await
+            // Fetch user permissions for filtering
+            let permissions = store.list_user_permissions(session.user_id).await
                 .map_err(ApiError::from)?;
             
-            // For now, users verify all counts in tenant. 
-            // TODO: In future, filter by permissions if needed, but count_assets provides O(1) stats.
-            let namespaces_count = store.count_namespaces(tenant_id).await.unwrap_or(0);
-            let tables_count = store.count_assets(tenant_id).await.unwrap_or(0);
+            // Get all catalogs and filter by permissions
+            let all_catalogs = store.list_catalogs(tenant_id).await
+                .map_err(ApiError::from)?;
+            let accessible_catalogs = crate::authz_utils::filter_catalogs(
+                all_catalogs,
+                &permissions,
+                session.role.clone()
+            );
+            
+            // Get all warehouses and filter by permissions
+            // Note: Warehouses don't have direct permission scopes, so we show warehouses
+            // associated with accessible catalogs
+            let all_warehouses = store.list_warehouses(tenant_id).await
+                .map_err(ApiError::from)?;
+            let accessible_warehouse_names: std::collections::HashSet<_> = accessible_catalogs
+                .iter()
+                .filter_map(|c| c.warehouse_name.clone())
+                .collect();
+            let accessible_warehouses_count = all_warehouses
+                .iter()
+                .filter(|w| accessible_warehouse_names.contains(&w.name))
+                .count();
+            
+            // Count accessible namespaces
+            // Fetch all namespaces and filter by permissions
+            let catalog_id_map: std::collections::HashMap<_, _> = accessible_catalogs
+                .iter()
+                .map(|c| (c.name.clone(), c.id))
+                .collect();
+            
+            let mut accessible_namespaces_count = 0;
+            for catalog in &accessible_catalogs {
+                if let Ok(namespaces) = store.list_namespaces(tenant_id, &catalog.name, None).await {
+                    let namespace_tuples: Vec<_> = namespaces
+                        .into_iter()
+                        .map(|ns| (ns, catalog.name.clone()))
+                        .collect();
+                    
+                    let filtered = crate::authz_utils::filter_namespaces(
+                        namespace_tuples,
+                        &permissions,
+                        session.role.clone(),
+                        &catalog_id_map
+                    );
+                    accessible_namespaces_count += filtered.len();
+                }
+            }
+            
+            // Count accessible tables/assets
+            // This is more expensive but necessary for accurate counts
+            let mut accessible_tables_count = 0;
+            if let Ok(all_assets) = store.search_assets(tenant_id, "", None).await {
+                let filtered_assets = crate::authz_utils::filter_assets(
+                    all_assets,
+                    &permissions,
+                    session.role.clone(),
+                    &catalog_id_map
+                );
+                accessible_tables_count = filtered_assets.len();
+            }
 
             let stats = DashboardStats {
-                catalogs_count: catalogs.len(),
-                tables_count,
-                namespaces_count,
+                catalogs_count: accessible_catalogs.len(),
+                tables_count: accessible_tables_count,
+                namespaces_count: accessible_namespaces_count,
                 users_count: 0,
-                warehouses_count: 0,
+                warehouses_count: accessible_warehouses_count,
                 branches_count: 0,
                 scope: "user".to_string(),
             };
