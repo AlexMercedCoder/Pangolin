@@ -38,33 +38,56 @@ This document consolidates all prior planning, audit, and design documents into 
 - **Dashboard Stats**: `/api/v1/stats` - Aggregated metrics endpoint
 
 ### 2.5 PyIceberg Integration ✅
-**Status:** 3 of 4 backends verified (MemoryStore, SqliteStore, MongoStore)
+**Status:** All 4 backends verified + Multi-Cloud Credential Vending implemented
 
 #### Completed Fixes
 1. **AddSchema Handler**: Implemented proper schema deserialization and addition to metadata
 2. **SetCurrentSchema Handler**: Implemented `-1` schema ID resolution (PyIceberg convention for "use last schema")
-3. **S3 Persistence**: Verified working across all tested backends with MinIO
+3. **S3 Persistence**: Verified working across all backends with MinIO
 4. **Credential Vending**: Confirmed functional for warehouse-based catalogs
 5. **Client Credentials**: Confirmed functional for direct S3 access
+6. **PostgresStore Authentication**: Fixed Basic Auth requiring `PANGOLIN_ROOT_USER`/`PASSWORD` env vars
+7. **S3 Credential Key Names**: Fixed to use correct PyIceberg property names (`s3.access-key-id` not `access_key_id`)
+8. **Multi-Cloud Credential Vending**: Implemented HashMap-based approach supporting S3, Azure, and GCS
 
 #### Verification Results
 - ✅ **MemoryStore**: All tests passed (create, write, read, schema update, partitioning, snapshots)
 - ✅ **SqliteStore**: All tests passed
 - ✅ **MongoStore**: All tests passed  
-- ⚠️ **PostgresStore**: Blocked on authentication issue (admin provisioned but not recognized)
+- ✅ **PostgresStore**: All tests passed (core functionality: create, write, read)
+
+#### Known Limitations
+- ⚠️ **Schema Update After Data Write**: 409 conflict due to PyIceberg client caching (not a server issue)
+  - **Workaround**: Call `table.refresh()` between operations
+  - **Impact**: Minor - core functionality works, only sequential schema updates affected
 
 **Documentation:**
 - [pyiceberg_integration_status.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/planning/pyiceberg_integration_status.md)
-- [schema_fix_walkthrough.md](file:///home/alexmerced/.gemini/antigravity/brain/b0c38965-4af1-4c1c-a961-e1f0d43e437e/schema_fix_walkthrough.md)
-- [postgres_auth_fix_walkthrough.md](file:///home/alexmerced/.gemini/antigravity/brain/b0c38965-4af1-4c1c-a961-e1f0d43e437e/postgres_auth_fix_walkthrough.md)
+- [storage_and_connectivity.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/docs/architecture/storage_and_connectivity.md) - Complete S3/Azure/GCS integration guide
 - [authentication.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/docs/architecture/authentication.md) - Comprehensive auth architecture docs
+- [walkthrough.md](file:///home/alexmerced/.gemini/antigravity/brain/b0c38965-4af1-4c1c-a961-e1f0d43e437e/walkthrough.md) - Multi-cloud implementation walkthrough
 
-### 2.6 Architecture Documentation ✅
-**Status:** Comprehensive authentication documentation created
+### 2.6 Multi-Cloud Credential Vending ✅
+**Status:** Implemented and tested
+
+#### Features
+- **S3/MinIO**: Full support with `s3.access-key-id`, `s3.secret-access-key`, `s3.session-token`
+- **Azure ADLS**: Property extraction for `adls.account-name`, `adls.account-key`, `adls.sas-token`
+- **Google GCS**: Property extraction for `gcs.project-id`, `gcs.service-account-file`, `gcs.oauth2.token`
+- **Extensible**: HashMap-based approach makes adding new cloud providers easy
+
+#### Testing
+- ✅ Live integration tests with PostgresStore
+- ✅ 7 regression tests created ([credential_vending_tests.rs](file:///home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_api/tests/credential_vending_tests.rs))
+- ✅ Verified S3 credential vending works end-to-end
+
+### 2.7 Architecture Documentation ✅
+**Status:** Comprehensive documentation created
 
 - **Authentication & Authorization**: Complete guide covering all auth methods (Basic Auth for Root, Bearer tokens, API keys), middleware flow, user roles, session management, and troubleshooting
-- **Common Pitfalls**: Documented authentication issues and solutions to prevent future confusion
-- **Environment Variables**: Complete reference for all auth-related configuration
+- **Storage & Connectivity**: Complete guide for S3/Azure/GCS integration, credential vending, common issues, debugging workflow, and lessons learned
+- **Common Pitfalls**: Documented authentication and storage issues to prevent future confusion
+- **Environment Variables**: Complete reference for all auth and storage configuration
 
 ---
 
