@@ -344,6 +344,10 @@ impl AuditLogEntry {
             "create_branch" => AuditAction::CreateBranch,
             "merge_branch" => AuditAction::MergeBranch,
             "create_namespace" => AuditAction::CreateNamespace,
+            "delete_table" | "drop_table" => AuditAction::DropTable,
+            "rename_table" => AuditAction::RenameTable,
+            "delete_namespace" => AuditAction::DeleteNamespace,
+            "update_table" => AuditAction::UpdateTable,
             _ => AuditAction::UpdateMetadata, // Default fallback
         };
         

@@ -1832,6 +1832,7 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+        // 1. Fetch direct permissions
         let rows = sqlx::query("SELECT id, user_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = $1")
             .bind(user_id)
             .fetch_all(&self.pool)
@@ -1848,6 +1849,34 @@ impl CatalogStore for PostgresStore {
                 granted_at: row.get("granted_at"),
             });
         }
+
+        // 2. Fetch role-based permissions
+        let role_rows = sqlx::query(
+            "SELECT r.permissions, r.created_by, r.created_at FROM roles r \
+             JOIN user_roles ur ON r.id = ur.role_id \
+             WHERE ur.user_id = $1"
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        for row in role_rows {
+            let grants: Vec<PermissionGrant> = serde_json::from_value(row.get("permissions"))?;
+            let created_by: Uuid = row.get("created_by");
+            let created_at: DateTime<Utc> = row.get("created_at");
+
+            for grant in grants {
+                perms.push(Permission {
+                    id: Uuid::new_v4(), // Synthesized ID
+                    user_id,
+                    scope: grant.scope,
+                    actions: grant.actions,
+                    granted_by: created_by,
+                    granted_at: created_at,
+                });
+            }
+        }
+
         Ok(perms)
     }
 

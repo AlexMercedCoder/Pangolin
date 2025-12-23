@@ -1,10 +1,13 @@
 use pangolin_store::{PostgresStore, CatalogStore};
 use pangolin_core::model::{Tenant, Warehouse, Catalog, CatalogType, Namespace, Asset, AssetType};
+use pangolin_core::user::{User, UserRole, OAuthProvider};
+use pangolin_core::permission::{Role, Permission, Action, PermissionScope, UserRole as UserRoleAssignment, PermissionGrant};
 use uuid::Uuid;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
+use chrono::{DateTime, Utc};
 
-const TEST_DB_URL: &str = "postgresql://pangolin:pangolin_dev_password@localhost/pangolin_test";
+const TEST_DB_URL: &str = "postgresql://pangolin:pangolin_dev_password@localhost:5433/pangolin_test";
 
 #[tokio::test]
 async fn test_postgres_tenant_crud() {
@@ -341,8 +344,6 @@ async fn test_postgres_rbac_operations() {
     };
     store.create_tenant(tenant.clone()).await.expect("Failed to create tenant");
 
-    use pangolin_core::user::{User, UserRole, OAuthProvider};
-    
     // Create User
     let user_id = Uuid::new_v4();
     let user = User {
@@ -375,7 +376,6 @@ async fn test_postgres_rbac_operations() {
     assert_eq!(fetched_updated.role, UserRole::TenantUser);
 
     // Create Role
-    use pangolin_core::permission::{Role, Permission, Action, PermissionScope};
     
     let role_id = Uuid::new_v4();
     let role = Role {
@@ -407,4 +407,67 @@ async fn test_postgres_rbac_operations() {
     // Delete User
     store.delete_user(user_id).await.expect("Failed to delete user");
     assert!(store.get_user(user_id).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn test_postgres_list_user_permissions_aggregation() {
+    let store = PostgresStore::new(TEST_DB_URL).await.expect("Failed to create PostgresStore");
+    let tenant_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+    let admin_id = Uuid::new_v4();
+
+    // 0. Setup Tenant
+    let tenant = Tenant {
+        id: tenant_id,
+        name: format!("tenant_for_agg_{}", Uuid::new_v4()),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant).await.expect("Failed to create tenant");
+
+    // 0. Setup User
+    let user = User {
+        id: user_id,
+        username: format!("user_for_agg_{}", Uuid::new_v4()),
+        email: format!("agg_{}@example.com", Uuid::new_v4()),
+        password_hash: None,
+        oauth_provider: None,
+        oauth_subject: None,
+        tenant_id: Some(tenant_id),
+        role: UserRole::TenantUser,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        last_login: None,
+        active: true,
+    };
+    store.create_user(user).await.expect("Failed to create user");
+
+    // 1. Create a Role with permissions
+    let mut role = Role::new("test-role-agg".to_string(), None, tenant_id, admin_id);
+    let role_scope = PermissionScope::Catalog { catalog_id: Uuid::new_v4() };
+    let mut role_actions = HashSet::new();
+    role_actions.insert(Action::Read);
+    role.add_permission(role_scope.clone(), role_actions);
+    store.create_role(role.clone()).await.unwrap();
+
+    // 2. Assign role to user
+    let user_role = UserRoleAssignment::new(user_id, role.id, admin_id);
+    store.assign_role(user_role).await.unwrap();
+
+    // 3. Create a direct permission
+    let direct_scope = PermissionScope::Catalog { catalog_id: Uuid::new_v4() };
+    let mut direct_actions = HashSet::new();
+    direct_actions.insert(Action::Write);
+    let direct_perm = Permission::new(user_id, direct_scope.clone(), direct_actions, admin_id);
+    store.create_permission(direct_perm.clone()).await.unwrap();
+
+    // 4. List user permissions and verify aggregation
+    let aggregated_perms = store.list_user_permissions(user_id).await.unwrap();
+    
+    assert_eq!(aggregated_perms.len(), 2, "Should have 2 permissions (1 direct, 1 from role)");
+    
+    let has_direct = aggregated_perms.iter().any(|p| p.scope == direct_scope && p.actions.contains(&Action::Write));
+    let has_role_based = aggregated_perms.iter().any(|p| p.scope == role_scope && p.actions.contains(&Action::Read));
+    
+    assert!(has_direct, "Aggregated permissions should include direct permission");
+    assert!(has_role_based, "Aggregated permissions should include role-based permission");
 }

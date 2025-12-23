@@ -498,3 +498,69 @@ async fn test_sqlite_access_requests() {
     assert_eq!(updated.unwrap().status, RequestStatus::Approved);
 }
 
+#[tokio::test]
+async fn test_sqlite_list_user_permissions_aggregation() {
+    let store = setup_store().await;
+    let tenant_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4();
+    let admin_id = Uuid::new_v4();
+
+    // 0. Setup Tenant
+    let tenant = Tenant {
+        id: tenant_id,
+        name: "test_tenant".to_string(),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant).await.expect("Failed to create tenant");
+
+    // 0. Setup User (Foreign key requirement)
+    let user = User {
+        id: user_id,
+        username: "test_user".to_string(),
+        email: "test@example.com".to_string(),
+        password_hash: None,
+        oauth_provider: None,
+        oauth_subject: None,
+        tenant_id: Some(tenant_id),
+        role: UserRole::TenantUser,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        last_login: None,
+        active: true,
+    };
+    store.create_user(user).await.expect("Failed to create user");
+
+    use pangolin_core::permission::{Action, PermissionScope, Role, UserRole as UserRoleAssignment, Permission};
+    use std::collections::HashSet;
+
+    // 1. Create a Role with permissions
+    let mut role = Role::new("test-role".to_string(), None, tenant_id, admin_id);
+    let role_scope = PermissionScope::Catalog { catalog_id: Uuid::new_v4() };
+    let mut role_actions = HashSet::new();
+    role_actions.insert(Action::Read);
+    role.add_permission(role_scope.clone(), role_actions);
+    store.create_role(role.clone()).await.unwrap();
+
+    // 2. Assign role to user
+    let user_role = UserRoleAssignment::new(user_id, role.id, admin_id);
+    store.assign_role(user_role).await.unwrap();
+
+    // 3. Create a direct permission
+    let direct_scope = PermissionScope::Catalog { catalog_id: Uuid::new_v4() };
+    let mut direct_actions = HashSet::new();
+    direct_actions.insert(Action::Write);
+    let direct_perm = Permission::new(user_id, direct_scope.clone(), direct_actions, admin_id);
+    store.create_permission(direct_perm.clone()).await.unwrap();
+
+    // 4. List user permissions and verify aggregation
+    let aggregated_perms = store.list_user_permissions(user_id).await.unwrap();
+    
+    assert_eq!(aggregated_perms.len(), 2, "Should have 2 permissions (1 direct, 1 from role)");
+    
+    let has_direct = aggregated_perms.iter().any(|p| p.scope == direct_scope && p.actions.contains(&Action::Write));
+    let has_role_based = aggregated_perms.iter().any(|p| p.scope == role_scope && p.actions.contains(&Action::Read));
+    
+    assert!(has_direct, "Aggregated permissions should include direct permission");
+    assert!(has_role_based, "Aggregated permissions should include role-based permission");
+}
+

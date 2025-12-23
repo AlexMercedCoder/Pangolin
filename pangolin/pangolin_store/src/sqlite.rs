@@ -1727,6 +1727,7 @@ impl CatalogStore for SqliteStore {
     }
 
     async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+        // 1. Fetch direct permissions
         let rows = sqlx::query("SELECT id, user_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = ?")
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
@@ -1743,6 +1744,35 @@ impl CatalogStore for SqliteStore {
                 granted_at: Utc.timestamp_millis_opt(row.get("granted_at")).single().unwrap_or_default(),
             });
         }
+
+        // 2. Fetch role-based permissions
+        let role_rows = sqlx::query(
+            "SELECT r.permissions, r.created_by, r.created_at FROM roles r \
+             JOIN user_roles ur ON r.id = ur.role_id \
+             WHERE ur.user_id = ?"
+        )
+        .bind(user_id.to_string())
+        .fetch_all(&self.pool)
+        .await?;
+
+        for row in role_rows {
+            let grants_json: String = row.get("permissions");
+            let grants: Vec<PermissionGrant> = serde_json::from_str(&grants_json)?;
+            let created_by = Uuid::parse_str(&row.get::<String, _>("created_by"))?;
+            let created_at = Utc.timestamp_millis_opt(row.get("created_at")).single().unwrap_or_default();
+
+            for grant in grants {
+                perms.push(Permission {
+                    id: Uuid::new_v4(), // Synthesized ID
+                    user_id,
+                    scope: grant.scope,
+                    actions: grant.actions,
+                    granted_by: created_by,
+                    granted_at: created_at,
+                });
+            }
+        }
+
         Ok(perms)
     }
 

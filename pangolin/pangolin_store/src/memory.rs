@@ -907,10 +907,32 @@ impl CatalogStore for MemoryStore {
     }
 
     async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
-        Ok(self.permissions.iter()
+        let mut permissions: Vec<Permission> = self.permissions.iter()
             .filter(|p| p.value().user_id == user_id)
             .map(|p| p.value().clone())
-            .collect())
+            .collect();
+
+        // Add permissions from roles
+        let user_roles = self.get_user_roles(user_id).await?;
+        for user_role in user_roles {
+            if let Some(role_entry) = self.roles.get(&user_role.role_id) {
+                let role = role_entry.value();
+                for grant in &role.permissions {
+                    // Synthesize a Permission object from the Role's PermissionGrant
+                    let synthesized_perm = Permission {
+                        id: Uuid::new_v4(), // Temporary ID for the aggregated result
+                        user_id,
+                        scope: grant.scope.clone(),
+                        actions: grant.actions.clone(),
+                        granted_by: role.created_by,
+                        granted_at: role.created_at,
+                    };
+                    permissions.push(synthesized_perm);
+                }
+            }
+        }
+
+        Ok(permissions)
     }
 
     async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
@@ -1729,6 +1751,47 @@ mod tests {
         let perms_u1 = store.list_user_permissions(user1).await.unwrap();
         assert_eq!(perms_u1.len(), 1);
         assert_eq!(perms_u1[0].id, p1.id);
+    }
+
+    #[tokio::test]
+    async fn test_list_user_permissions_aggregation() {
+        use pangolin_core::permission::{Action, PermissionScope, Role, UserRole};
+        use std::collections::HashSet;
+
+        let store = MemoryStore::new();
+        let tenant_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let admin_id = Uuid::new_v4();
+
+        // 1. Create a Role with permissions
+        let mut role = Role::new("test-role".to_string(), None, tenant_id, admin_id);
+        let role_scope = PermissionScope::Catalog { catalog_id: Uuid::new_v4() };
+        let mut role_actions = HashSet::new();
+        role_actions.insert(Action::Read);
+        role.add_permission(role_scope.clone(), role_actions);
+        store.create_role(role.clone()).await.unwrap();
+
+        // 2. Assign role to user
+        let user_role = UserRole::new(user_id, role.id, admin_id);
+        store.assign_role(user_role).await.unwrap();
+
+        // 3. Create a direct permission
+        let direct_scope = PermissionScope::Catalog { catalog_id: Uuid::new_v4() };
+        let mut direct_actions = HashSet::new();
+        direct_actions.insert(Action::Write);
+        let direct_perm = Permission::new(user_id, direct_scope.clone(), direct_actions, admin_id);
+        store.create_permission(direct_perm.clone()).await.unwrap();
+
+        // 4. List user permissions and verify aggregation
+        let aggregated_perms = store.list_user_permissions(user_id).await.unwrap();
+        
+        assert_eq!(aggregated_perms.len(), 2, "Should have 2 permissions (1 direct, 1 from role)");
+        
+        let has_direct = aggregated_perms.iter().any(|p| p.scope == direct_scope && p.actions.contains(&Action::Write));
+        let has_role_based = aggregated_perms.iter().any(|p| p.scope == role_scope && p.actions.contains(&Action::Read));
+        
+        assert!(has_direct, "Aggregated permissions should include direct permission");
+        assert!(has_role_based, "Aggregated permissions should include role-based permission");
     }
 }
 

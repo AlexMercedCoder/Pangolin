@@ -30,6 +30,8 @@ pub mod tests_common;
 pub mod audit_handlers;
 #[cfg(test)]
 pub mod verification_tests;
+#[cfg(test)]
+pub mod audit_tests;
 
 
 

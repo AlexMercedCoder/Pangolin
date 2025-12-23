@@ -1206,8 +1206,14 @@ impl CatalogStore for MongoStore {
 
     async fn update_user(&self, user: User) -> Result<()> {
         let filter = doc! { "id": to_bson_uuid(user.id) };
-        let update = doc! { "$set": mongodb::bson::to_document(&user)? };
-        self.users().update_one(filter, update).await?;
+        let mut doc = mongodb::bson::to_document(&user)?;
+        // Ensure UUIDs are stored as Binary Subtype 0 for consistency with filters
+        doc.insert("id", to_bson_uuid(user.id));
+        if let Some(tid) = user.tenant_id {
+            doc.insert("tenant-id", to_bson_uuid(tid));
+        }
+        let update = doc! { "$set": doc };
+        self.db.collection::<Document>("users").update_one(filter, update).await?;
         Ok(())
     }
 
@@ -1230,7 +1236,7 @@ impl CatalogStore for MongoStore {
     }
 
     async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<Role>> {
-        let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let filter = doc! { "tenant-id": to_bson_uuid(tenant_id) };
         let cursor = self.roles().find(filter).await?;
         let roles: Vec<Role> = cursor.try_collect().await?;
         Ok(roles)
@@ -1244,8 +1250,13 @@ impl CatalogStore for MongoStore {
 
     async fn update_role(&self, role: Role) -> Result<()> {
         let filter = doc! { "id": to_bson_uuid(role.id) };
-        let update = doc! { "$set": mongodb::bson::to_document(&role)? };
-        self.roles().update_one(filter, update).await?;
+        let mut doc = mongodb::bson::to_document(&role)?;
+        doc.insert("id", to_bson_uuid(role.id));
+        doc.insert("tenant-id", to_bson_uuid(role.tenant_id));
+        doc.insert("created-by", to_bson_uuid(role.created_by));
+        
+        let update = doc! { "$set": doc };
+        self.db.collection::<Document>("roles").update_one(filter, update).await?;
         Ok(())
     }
 
@@ -1256,15 +1267,15 @@ impl CatalogStore for MongoStore {
 
     async fn revoke_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()> {
         let filter = doc! { 
-            "user_id": to_bson_uuid(user_id),
-            "role_id": to_bson_uuid(role_id)
+            "user-id": to_bson_uuid(user_id),
+            "role-id": to_bson_uuid(role_id)
         };
         self.user_roles().delete_one(filter).await?;
         Ok(())
     }
 
     async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<UserRoleAssignment>> {
-        let filter = doc! { "user_id": to_bson_uuid(user_id) };
+        let filter = doc! { "user-id": to_bson_uuid(user_id) };
         let cursor = self.user_roles().find(filter).await?;
         let roles: Vec<UserRoleAssignment> = cursor.try_collect().await?;
         Ok(roles)
@@ -1283,15 +1294,34 @@ impl CatalogStore for MongoStore {
     }
 
     async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
-        let filter = doc! { "user_id": to_bson_uuid(user_id) };
+        // 1. Fetch direct permissions
+        let filter = doc! { "user-id": to_bson_uuid(user_id) };
         let cursor = self.permissions().find(filter).await?;
-        let perms: Vec<Permission> = cursor.try_collect().await?;
+        let mut perms: Vec<Permission> = cursor.try_collect().await?;
+
+        // 2. Fetch role-based permissions
+        let user_roles = self.get_user_roles(user_id).await?;
+        for ur in user_roles {
+            if let Some(role) = self.get_role(ur.role_id).await? {
+                for grant in role.permissions {
+                    perms.push(Permission {
+                        id: Uuid::new_v4(), // Synthesized ID
+                        user_id,
+                        scope: grant.scope,
+                        actions: grant.actions,
+                        granted_by: role.created_by,
+                        granted_at: role.created_at,
+                    });
+                }
+            }
+        }
+
         Ok(perms)
     }
 
     async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
         // 1. Get all user IDs for the tenant
-        let user_filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
+        let user_filter = doc! { "tenant-id": to_bson_uuid(tenant_id) };
         let user_cursor = self.users().find(user_filter).await?;
         let users: Vec<User> = user_cursor.try_collect().await?;
         let user_ids: Vec<mongodb::bson::Bson> = users.iter().map(|u| to_bson_uuid(u.id)).collect();
@@ -1301,7 +1331,7 @@ impl CatalogStore for MongoStore {
         }
 
         // 2. Get permissions for those users
-        let perm_filter = doc! { "user_id": { "$in": user_ids } };
+        let perm_filter = doc! { "user-id": { "$in": user_ids } };
         let perm_cursor = self.permissions().find(perm_filter).await?;
         let perms: Vec<Permission> = perm_cursor.try_collect().await?;
         Ok(perms)
@@ -1314,19 +1344,24 @@ impl CatalogStore for MongoStore {
 
     // Business Metadata Operations
     async fn upsert_business_metadata(&self, metadata: BusinessMetadata) -> Result<()> {
-        let filter = doc! { "asset_id": to_bson_uuid(metadata.asset_id) };
-        self.business_metadata().replace_one(filter, metadata).upsert(true).await?;
+        let filter = doc! { "asset-id": to_bson_uuid(metadata.asset_id) };
+        let mut doc = mongodb::bson::to_document(&metadata)?;
+        doc.insert("asset-id", to_bson_uuid(metadata.asset_id));
+        self.db.collection::<Document>("business_metadata")
+            .replace_one(filter, doc)
+            .upsert(true)
+            .await?;
         Ok(())
     }
 
     async fn get_business_metadata(&self, asset_id: Uuid) -> Result<Option<BusinessMetadata>> {
-        let filter = doc! { "asset_id": to_bson_uuid(asset_id) };
+        let filter = doc! { "asset-id": to_bson_uuid(asset_id) };
         let meta = self.business_metadata().find_one(filter).await?;
         Ok(meta)
     }
 
     async fn delete_business_metadata(&self, asset_id: Uuid) -> Result<()> {
-        let filter = doc! { "asset_id": to_bson_uuid(asset_id) };
+        let filter = doc! { "asset-id": to_bson_uuid(asset_id) };
         self.business_metadata().delete_one(filter).await?;
         Ok(())
     }
@@ -1496,13 +1531,13 @@ impl CatalogStore for MongoStore {
             doc! {
                 "$lookup": {
                     "from": "users",
-                    "localField": "user_id",
+                    "localField": "user-id",
                     "foreignField": "id",
                     "as": "user"
                 }
             },
             doc! { "$unwind": "$user" },
-            doc! { "$match": { "user.tenant_id": to_bson_uuid(tenant_id) } },
+            doc! { "$match": { "user.tenant-id": to_bson_uuid(tenant_id) } },
             // Project back to AccessRequest root fields only?
             // "replaceRoot"? Or simple map.
             doc! {
@@ -1785,7 +1820,7 @@ impl MongoStore {
 
     pub async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
         let filter = if let Some(tid) = tenant_id {
-            doc! { "tenant_id": to_bson_uuid(tid) }
+            doc! { "tenant-id": to_bson_uuid(tid) }
         } else {
             doc! {}
         };

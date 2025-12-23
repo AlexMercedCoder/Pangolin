@@ -478,10 +478,21 @@ pub async fn create_namespace(
     };
 
     match store.create_namespace(tenant_id, &catalog_name, ns.clone()).await {
-        Ok(_) => (StatusCode::OK, Json(CreateNamespaceResponse {
-            namespace: ns.name,
-            properties: ns.properties,
-        })).into_response(),
+        Ok(_) => {
+            // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+                tenant_id,
+                session.username.clone(),
+                "create_namespace".to_string(),
+                format!("{}/{}", catalog_name, ns.name.join(".")),
+                None
+            )).await;
+
+            (StatusCode::OK, Json(CreateNamespaceResponse {
+                namespace: ns.name,
+                properties: ns.properties,
+            })).into_response()
+        },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
@@ -787,7 +798,7 @@ pub async fn create_table(
             // Audit Log
             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
                 tenant_id,
-                "system".to_string(),
+                session.username.clone(),
                 "create_table".to_string(),
                 format!("{}/{}/{}", catalog_name, namespace, tbl_name),
                 Some(location.clone())
@@ -1291,6 +1302,15 @@ pub async fn update_table(
         match store.update_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone(), current_metadata_location.clone(), new_metadata_location.clone()).await {
             Ok(_) => {
                 // Success!
+                // Audit Log
+                let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+                    tenant_id,
+                    session.username.clone(),
+                    "update_table".to_string(),
+                    format!("{}/{}/{}", catalog_name, namespace, table_name),
+                    Some(new_metadata_location.clone())
+                )).await;
+
                 return (StatusCode::OK, Json(TableResponse::new(
                     Some(new_metadata_location.clone()),
                     metadata,
@@ -1369,8 +1389,19 @@ pub async fn rename_table(
     // Iceberg spec doesn't explicitly mention branches in rename, so we assume "main" or default.
     let branch = Some("main".to_string());
 
-    match store.rename_asset(tenant_id, &catalog_name, branch, source_ns, source_name, dest_ns, dest_name).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+    match store.rename_asset(tenant_id, &catalog_name, branch, source_ns.clone(), source_name.clone(), dest_ns.clone(), dest_name.clone()).await {
+        Ok(_) => {
+            // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+                tenant_id,
+                session.username.clone(),
+                "rename_table".to_string(),
+                format!("{}/{}.{} -> {}.{}", catalog_name, source_ns.join("."), source_name, dest_ns.join("."), dest_name),
+                None
+            )).await;
+            
+            StatusCode::NO_CONTENT.into_response()
+        },
         Err(_) => (StatusCode::NOT_FOUND, "Table not found").into_response(),
     }
 }
@@ -1452,7 +1483,7 @@ pub async fn delete_table(
              // Audit Log
              let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
                 tenant_id,
-                "system".to_string(),
+                session.username.clone(),
                 "delete_table".to_string(),
                 format!("{}/{}/{}", catalog_name, namespace, table),
                 None
@@ -1511,8 +1542,19 @@ pub async fn delete_namespace(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
 
-    match store.delete_namespace(tenant_id, &catalog_name, namespace_parts).await {
-        Ok(_) => StatusCode::NO_CONTENT.into_response(),
+    match store.delete_namespace(tenant_id, &catalog_name, namespace_parts.clone()).await {
+        Ok(_) => {
+            // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+                tenant_id,
+                session.username.clone(),
+                "delete_namespace".to_string(),
+                format!("{}/{}", catalog_name, namespace_parts.join(".")),
+                None
+            )).await;
+
+            StatusCode::NO_CONTENT.into_response()
+        },
         Err(_) => (StatusCode::NOT_FOUND, "Namespace not found").into_response(),
     }
 }
