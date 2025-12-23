@@ -70,10 +70,11 @@
 	}
 
 	function getStorageType(warehouse: any): string {
-		// Infer type from property names since 'type' field doesn't exist
-		if (warehouse.storage_config?.['s3.bucket']) return 's3';
-		if (warehouse.storage_config?.['adls.account-name']) return 'azure';
-		if (warehouse.storage_config?.['gcs.bucket']) return 'gcs';
+		if (!warehouse?.storage_config) return 'unknown';
+        const keys = Object.keys(warehouse.storage_config);
+		if (keys.some(k => k.toLowerCase().includes('s3'))) return 's3';
+		if (keys.some(k => k.toLowerCase().includes('azure') || k.toLowerCase().includes('adls'))) return 'azure';
+		if (keys.some(k => k.toLowerCase().includes('gcs') || k.toLowerCase().includes('gs'))) return 'gcs';
 		return 'unknown';
 	}
 

@@ -239,7 +239,7 @@
 					<div class="space-y-6 transition-all duration-300">
 						<div>
 							<Select
-								label="Warehouse"
+								label="Warehouse (Optional)"
 								bind:value={warehouseName}
 								options={warehouses}
 								placeholder={loadingWarehouses ? "Loading warehouses..." : "Select a warehouse (Optional)"}
@@ -255,15 +255,21 @@
 
 						<div>
 							<Input
-								label="Storage Location"
+								label="Storage Location (Optional)"
 								bind:value={storageLocation}
 								placeholder="s3://bucket/path/to/catalog"
-								required
 								disabled={loading}
 							/>
-							<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-								Base path for this catalog. All tables will constitute subdirectories here.
-							</p>
+							<div class="mt-2 text-xs space-y-2">
+								<p class="text-gray-600 dark:text-gray-400">
+									<span class="font-medium text-gray-700 dark:text-gray-300">Default Path:</span> 
+									If provided, the server will manage table paths automatically under this base directory.
+								</p>
+								<p class="text-gray-600 dark:text-gray-400">
+									<span class="font-medium text-gray-700 dark:text-gray-300">Client-Defined:</span> 
+									If left blank, you <strong>must</strong> specify an explicit <code>location</code> in your client's <code>create_table</code> calls.
+								</p>
+							</div>
 						</div>
 					</div>
 				{:else}
@@ -335,7 +341,7 @@
 					variant="primary"
 					type="submit"
 					{loading}
-					disabled={loading || !name || (!isFederated && !storageLocation) || (isFederated && properties.every(p => !p.key || !p.value)) || (validationResult !== null && !validationResult.available)}
+					disabled={loading || !name || (isFederated && properties.every(p => !p.key || !p.value)) || (validationResult !== null && !validationResult.available)}
 				>
 					{loading ? 'Creating...' : 'Create Catalog'}
 				</Button>

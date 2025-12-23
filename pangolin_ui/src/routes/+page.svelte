@@ -120,12 +120,12 @@
 
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {#if stats}
+        {#if stats && $user?.role !== 'tenant-user'}
             <StatCard label="Catalogs" value={stats.catalogs_count} icon="📂" color="blue" />
             <StatCard label="Warehouses" value={stats.warehouses_count} icon="🏭" color="purple" />
             <StatCard label="Namespaces" value={stats.namespaces_count} icon="🏷️" color="yellow" />
             <StatCard label="Tables" value={stats.tables_count} icon="📋" color="red" />
-        {:else if loadingStats}
+        {:else if loadingStats && $user?.role !== 'tenant-user'}
             <StatCard label="Catalogs" value={undefined} icon="📂" color="blue" />
             <StatCard label="Warehouses" value={undefined} icon="🏭" color="purple" />
             <StatCard label="Namespaces" value={undefined} icon="🏷️" color="yellow" />

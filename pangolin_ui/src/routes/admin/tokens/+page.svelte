@@ -5,7 +5,8 @@
 	import { usersApi, type User } from '$lib/api/users'; // Added
     import { tokensApi, type TokenInfo } from '$lib/api/tokens'; // Added
 	import { notifications } from '$lib/stores/notifications';
-	import { user, isRoot } from '$lib/stores/auth';
+	import { user, isRoot, isTenantAdmin } from '$lib/stores/auth';
+    import { get } from 'svelte/store';
 	import Card from '$lib/components/ui/Card.svelte';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
@@ -72,6 +73,10 @@
 	});
 
 	async function loadTenants() {
+        if (!get(isRoot)) {
+            loadingTenants = false;
+            return;
+        }
 		loadingTenants = true;
 		try {
 			tenants = await tenantsApi.list();
@@ -86,7 +91,9 @@
 	}
     
     async function loadUsers() {
+        if (!get(isRoot) && !get(isTenantAdmin)) return;
         try {
+            // Tenant admins can list their own users
             allUsers = await usersApi.list();
         } catch (error: any) {
              notifications.error(`Failed to load users: ${error.message}`);
