@@ -132,40 +132,20 @@ impl TableResponse {
     pub fn with_credentials(
         metadata_location: Option<String>, 
         metadata: TableMetadata,
-        credentials: Option<(String, String)>, // (access_key, secret_key)
+        credentials: Option<HashMap<String, String>>,
     ) -> Self {
-        // Add credential vending config to tell PyIceberg to request credentials
         let mut config = HashMap::new();
         
-        // Add S3 endpoint and region (defaults for S3)
-        config.insert("s3.endpoint".to_string(), std::env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string()));
-        config.insert("s3.region".to_string(), std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
-        
-        // Add credentials if provided
-        if let Some((key, value)) = credentials {
-            // Determine storage type based on key format
-            if key.contains("account") || key.contains("azure") {
-                // Azure credentials
-                config.insert("adls.account-name".to_string(), key);
-                config.insert("adls.account-key".to_string(), value);
-                // Add Azure endpoint if configured
-                if let Ok(endpoint) = std::env::var("AZURE_ENDPOINT") {
-                    config.insert("adls.endpoint".to_string(), endpoint);
-                }
-            } else if key.contains("project") || key.contains("gcs") {
-                // GCS credentials - key is project_id, value is service account key
-                config.insert("gcs.project-id".to_string(), key);
-                config.insert("gcs.service-account-key".to_string(), value);
-                // Add GCS endpoint if configured (for emulator)
-                if let Ok(endpoint) = std::env::var("GCS_ENDPOINT") {
-                    config.insert("gcs.endpoint".to_string(), endpoint);
-                }
-            } else {
-                // S3 credentials (default)
-                config.insert("s3.access-key-id".to_string(), key);
-                config.insert("s3.secret-access-key".to_string(), value);
-            }
+        // Merge vended credentials into config
+        if let Some(creds) = credentials {
+            config.extend(creds);
         }
+        
+        // Add S3 defaults if not already present
+        config.entry("s3.endpoint".to_string())
+            .or_insert_with(|| std::env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string()));
+        config.entry("s3.region".to_string())
+            .or_insert_with(|| std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
         
         Self {
             metadata_location,
@@ -819,11 +799,43 @@ pub async fn create_table(
                     if let Some(warehouse_name) = catalog.warehouse_name {
                         match store.get_warehouse(tenant_id, warehouse_name).await {
                             Ok(Some(warehouse)) => {
-                                let access_key = warehouse.storage_config.get("access_key_id").cloned();
-                                let secret_key = warehouse.storage_config.get("secret_access_key").cloned();
+                                let mut creds = HashMap::new();
                                 
-                                if let (Some(ak), Some(sk)) = (access_key, secret_key) {
-                                    Some((ak, sk))
+                                // Extract S3 credentials if present
+                                if let Some(ak) = warehouse.storage_config.get("s3.access-key-id") {
+                                    creds.insert("s3.access-key-id".to_string(), ak.clone());
+                                }
+                                if let Some(sk) = warehouse.storage_config.get("s3.secret-access-key") {
+                                    creds.insert("s3.secret-access-key".to_string(), sk.clone());
+                                }
+                                if let Some(token) = warehouse.storage_config.get("s3.session-token") {
+                                    creds.insert("s3.session-token".to_string(), token.clone());
+                                }
+                                
+                                // Extract Azure credentials if present
+                                if let Some(account) = warehouse.storage_config.get("adls.account-name") {
+                                    creds.insert("adls.account-name".to_string(), account.clone());
+                                }
+                                if let Some(key) = warehouse.storage_config.get("adls.account-key") {
+                                    creds.insert("adls.account-key".to_string(), key.clone());
+                                }
+                                if let Some(sas) = warehouse.storage_config.get("adls.sas-token") {
+                                    creds.insert("adls.sas-token".to_string(), sas.clone());
+                                }
+                                
+                                // Extract GCS credentials if present
+                                if let Some(project) = warehouse.storage_config.get("gcs.project-id") {
+                                    creds.insert("gcs.project-id".to_string(), project.clone());
+                                }
+                                if let Some(sa_file) = warehouse.storage_config.get("gcs.service-account-file") {
+                                    creds.insert("gcs.service-account-file".to_string(), sa_file.clone());
+                                }
+                                if let Some(token) = warehouse.storage_config.get("gcs.oauth2.token") {
+                                    creds.insert("gcs.oauth2.token".to_string(), token.clone());
+                                }
+                                
+                                if !creds.is_empty() {
+                                    Some(creds)
                                 } else {
                                     None
                                 }
@@ -978,11 +990,43 @@ pub async fn load_table(
                 if let Some(warehouse_name) = catalog.warehouse_name {
                     match store.get_warehouse(tenant_id, warehouse_name).await {
                         Ok(Some(warehouse)) => {
-                            let access_key = warehouse.storage_config.get("s3.access-key-id").cloned();
-                            let secret_key = warehouse.storage_config.get("s3.secret-access-key").cloned();
+                            let mut creds = HashMap::new();
                             
-                            if let (Some(ak), Some(sk)) = (access_key, secret_key) {
-                                Some((ak, sk))
+                            // Extract S3 credentials if present
+                            if let Some(ak) = warehouse.storage_config.get("s3.access-key-id") {
+                                creds.insert("s3.access-key-id".to_string(), ak.clone());
+                            }
+                            if let Some(sk) = warehouse.storage_config.get("s3.secret-access-key") {
+                                creds.insert("s3.secret-access-key".to_string(), sk.clone());
+                            }
+                            if let Some(token) = warehouse.storage_config.get("s3.session-token") {
+                                creds.insert("s3.session-token".to_string(), token.clone());
+                            }
+                            
+                            // Extract Azure credentials if present
+                            if let Some(account) = warehouse.storage_config.get("adls.account-name") {
+                                creds.insert("adls.account-name".to_string(), account.clone());
+                            }
+                            if let Some(key) = warehouse.storage_config.get("adls.account-key") {
+                                creds.insert("adls.account-key".to_string(), key.clone());
+                            }
+                            if let Some(sas) = warehouse.storage_config.get("adls.sas-token") {
+                                creds.insert("adls.sas-token".to_string(), sas.clone());
+                            }
+                            
+                            // Extract GCS credentials if present
+                            if let Some(project) = warehouse.storage_config.get("gcs.project-id") {
+                                creds.insert("gcs.project-id".to_string(), project.clone());
+                            }
+                            if let Some(sa_file) = warehouse.storage_config.get("gcs.service-account-file") {
+                                creds.insert("gcs.service-account-file".to_string(), sa_file.clone());
+                            }
+                            if let Some(token) = warehouse.storage_config.get("gcs.oauth2.token") {
+                                creds.insert("gcs.oauth2.token".to_string(), token.clone());
+                            }
+                            
+                            if !creds.is_empty() {
+                                Some(creds)
                             } else {
                                 None
                             }
