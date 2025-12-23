@@ -115,6 +115,9 @@ pub struct CreateTableRequest {
 
 #[derive(Serialize, ToSchema)]
 pub struct TableResponse {
+    /// Internal Pangolin asset ID for linking to business metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<uuid::Uuid>,
     #[serde(rename = "metadata-location")]
     pub metadata_location: Option<String>,
     pub metadata: TableMetadata,
@@ -125,14 +128,15 @@ pub struct TableResponse {
 }
 
 impl TableResponse {
-    pub fn new(metadata_location: Option<String>, metadata: TableMetadata) -> Self {
-        Self::with_credentials(metadata_location, metadata, None)
+    pub fn new(metadata_location: Option<String>, metadata: TableMetadata, asset_id: Option<uuid::Uuid>) -> Self {
+        Self::with_credentials(metadata_location, metadata, None, asset_id)
     }
     
     pub fn with_credentials(
         metadata_location: Option<String>, 
         metadata: TableMetadata,
         credentials: Option<HashMap<String, String>>,
+        asset_id: Option<uuid::Uuid>,
     ) -> Self {
         let mut config = HashMap::new();
         
@@ -148,6 +152,7 @@ impl TableResponse {
             .or_insert_with(|| std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
         
         Self {
+            id: asset_id,
             metadata_location,
             metadata,
             config: Some(config),
@@ -864,6 +869,7 @@ pub async fn create_table(
                 Some(location.clone()),
                 metadata,
                 credentials,
+                Some(table_uuid), // Asset ID from create_table
             ))).into_response()
         },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
@@ -1051,11 +1057,18 @@ pub async fn load_table(
             _ => None
         };
 
+        // Get asset ID for response
+        let asset_id = match store.get_asset(tenant_id, &catalog_name, branch.clone(), ns_vec.clone(), tbl_name.clone()).await {
+            Ok(Some(asset)) => Some(asset.id),
+            _ => None,
+        };
+
         // Return the metadata with vended credentials if available
         (StatusCode::OK, Json(TableResponse::with_credentials(
             Some(location),
             metadata,
             credentials,
+            asset_id,
         ))).into_response()
     } else {
         (StatusCode::NOT_FOUND, "Metadata location not found").into_response()
@@ -1314,6 +1327,7 @@ pub async fn update_table(
                 return (StatusCode::OK, Json(TableResponse::new(
                     Some(new_metadata_location.clone()),
                     metadata,
+                    Some(asset.id), // Asset was already fetched at function start
                 ))).into_response();
             },
             Err(_) => {

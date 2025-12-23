@@ -619,31 +619,26 @@ pub async fn list_catalogs(
 
     match store.list_catalogs(tenant_id).await {
         Ok(catalogs) => {
-            // RBAC Check
-            if crate::authz::is_admin(&session.role) {
-                tracing::info!("list_catalogs returning ALL {} catalogs for admin", catalogs.len());
-                let resp: Vec<CatalogResponse> = catalogs.into_iter().map(|c| c.into()).collect();
-                return (StatusCode::OK, Json(resp)).into_response();
-            }
-
-            // Filter for non-admin users
-            let user_permissions = match store.list_user_permissions(session.user_id).await {
-                Ok(p) => p,
-                Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch permissions").into_response(),
+            // Use authz_utils for consistent permission filtering
+            let permissions = if matches!(session.role, UserRole::TenantUser) {
+                match store.list_user_permissions(session.user_id).await {
+                    Ok(p) => p,
+                    Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch permissions").into_response(),
+                }
+            } else {
+                Vec::new() // Root/TenantAdmin bypass filtering
             };
 
-            let filtered_catalogs: Vec<CatalogResponse> = catalogs.into_iter()
-                .filter(|c| {
-                    user_permissions.iter().any(|p| 
-                        matches!(p.scope, PermissionScope::Catalog { catalog_id } if catalog_id == c.id) &&
-                        p.actions.contains(&Action::Read)
-                    )
-                })
-                .map(|c| c.into())
-                .collect();
+            let filtered_catalogs = crate::authz_utils::filter_catalogs(
+                catalogs,
+                &permissions,
+                session.role.clone()
+            );
 
-            tracing::info!("list_catalogs returning {} filtered catalogs for user {}", filtered_catalogs.len(), session.user_id);
-            (StatusCode::OK, Json(filtered_catalogs)).into_response()
+            tracing::info!("list_catalogs returning {} catalogs for user {}", filtered_catalogs.len(), session.user_id);
+            
+            let resp: Vec<CatalogResponse> = filtered_catalogs.into_iter().map(|c| c.into()).collect();
+            (StatusCode::OK, Json(resp)).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }

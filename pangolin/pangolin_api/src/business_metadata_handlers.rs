@@ -194,50 +194,34 @@ pub async fn search_assets(
     match store.search_assets(tenant_id, &query, tags).await {
         Ok(results) => {
             tracing::info!("SEARCH DEBUG: Session user_id: {}", session.user_id);
-            let user_perms = store.list_user_permissions(session.user_id).await.unwrap_or_default();
             
+            // Use authz_utils for consistent permission filtering
+            let permissions = if matches!(session.role, UserRole::TenantUser) {
+                store.list_user_permissions(session.user_id).await.unwrap_or_default()
+            } else {
+                Vec::new() // Root/TenantAdmin bypass filtering
+            };
+            
+            // Build catalog ID map for filtering
             let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
-            let catalog_map: std::collections::HashMap<_, _> = catalogs.iter().map(|c| (c.name.clone(), c.id)).collect();
+            let catalog_map: std::collections::HashMap<_, _> = catalogs.iter()
+                .map(|c| (c.name.clone(), c.id))
+                .collect();
 
-            // Store results tuple: (Asset, Metadata, HasAccess, CatalogName, Namespace)
-            let mut final_results: Vec<(pangolin_core::model::Asset, Option<BusinessMetadata>, bool, String, String)> = Vec::new();
-            
-            for (asset, metadata, catalog_name, namespace_vec) in results {
+            // Apply permission-based filtering
+            let filtered_results = crate::authz_utils::filter_assets(
+                results,
+                &permissions,
+                session.role.clone(),
+                &catalog_map
+            );
+
+            // Map to response format with has_access and discoverable flags
+            let mapped_results: Vec<_> = filtered_results.into_iter().map(|(asset, metadata, catalog, namespace)| {
+                // User has access if they passed the filter
+                let has_access = true;
                 let is_discoverable = metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
-                let namespace = namespace_vec.join(".");
                 
-                // Calculate Read Permission
-                let has_read = if crate::authz::is_admin(&session.role) {
-                    true
-                } else if let Some(catalog_id) = catalog_map.get(&catalog_name) {
-                     user_perms.iter().any(|p| {
-                         // Check if permission allows Read (or implies it)
-                         if !p.allows(&Action::Read) {
-                             return false;
-                         }
-                         
-                         match &p.scope {
-                             PermissionScope::Tenant => true,
-                             PermissionScope::Catalog { catalog_id: cid } => cid == catalog_id,
-                             PermissionScope::Namespace { catalog_id: cid, namespace: ns } => {
-                                 cid == catalog_id && (ns == &namespace || namespace.starts_with(&format!("{}.", ns)))
-                             },
-                             PermissionScope::Asset { catalog_id: cid, asset_id: aid, .. } => {
-                                 cid == catalog_id && aid == &asset.id
-                             },
-                             _ => false,
-                         }
-                     })
-                } else {
-                    false
-                };
-
-                if is_discoverable || has_read || crate::authz::is_admin(&session.role) {
-                    final_results.push((asset, metadata, has_read, catalog_name.clone(), namespace.clone()));
-                }
-            }
-
-            let mapped_results: Vec<_> = final_results.into_iter().map(|(asset, metadata, has_access, catalog, namespace)| {
                 serde_json::json!({
                     "id": asset.id,
                     "name": asset.name,
@@ -246,9 +230,9 @@ pub async fn search_assets(
                     "description": metadata.as_ref().and_then(|m| m.description.clone()),
                     "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
                     "has_access": has_access,
-                    "discoverable": metadata.as_ref().map(|m| m.discoverable).unwrap_or(false),
+                    "discoverable": is_discoverable,
                     "catalog": catalog,
-                    "namespace": namespace
+                    "namespace": namespace.join(".")
                 })
             }).collect();
             

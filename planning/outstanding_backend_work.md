@@ -83,9 +83,16 @@ This document tracks backend improvements and bug fixes identified during testin
 
 ---
 
-## Future Improvements
-
-### 9. Standardize Authz Utilization
+### ✅ 9. Standardize Authz Utilization
 - **Files**: `pangolin_handlers.rs`, `business_metadata_handlers.rs`
-- **Issue**: Handlers for `list_catalogs` and `search_assets` contain manual, incomplete permission checking logic.
-- **Goal**: Refactor these handlers to use `authz::check_permission` or a consistent effective-permission set to determine visibility.
+- **Issue**: Handlers for `list_catalogs` and `search_assets` contained manual, incomplete permission checking logic.
+- **Solution**: 
+  - Refactored both handlers to use `authz_utils::filter_catalogs()` and `authz_utils::filter_assets()`
+  - Removed ~32 lines of duplicate permission checking code
+  - Fixed bug where Tenant-scoped permissions weren't checked in `list_catalogs`
+- **Status**: ✅ **COMPLETED** - All code compiles successfully. No breaking changes.
+- **Date Completed**: 2025-12-23
+
+---
+
+## Future Improvements
