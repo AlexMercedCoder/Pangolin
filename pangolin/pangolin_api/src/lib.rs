@@ -21,6 +21,7 @@ pub mod user_handlers;
 pub mod oauth_handlers;
 pub mod auth_middleware;
 pub mod authz;
+pub mod authz_utils; // Permission filtering utilities
 pub mod business_metadata_handlers;
 pub mod conflict_detector;
 pub mod merge_handlers;

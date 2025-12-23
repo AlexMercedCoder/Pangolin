@@ -2,27 +2,33 @@
 
 This document tracks backend improvements and bug fixes identified during testing that have been deferred to focus on UI and integration verification.
 
-## High Priority Fixes
 
-### 1. Audit Log User Attribution
+## Completed Items
+
+### ✅ 1. Audit Log User Attribution
 - **File**: `iceberg_handlers.rs`
-- **Issue**: Several Iceberg REST endpoints (create/update/delete table) currently hardcode the user as `"system"` when logging audit events.
-- **Goal**: Update all handlers to correctly extract and log `session.username` from the `UserSession` extension.
-- **Affected Handlers**:
-  - `create_table`
-  - `register_table`
-  - `update_table`
-  - `rename_table`
-  - `drop_table`
+- **Issue**: Several Iceberg REST endpoints hardcoded the user as `"system"` when logging audit events.
+- **Solution**: All handlers now correctly extract and log `session.username` from the `UserSession` extension.
+- **Status**: ✅ **COMPLETED** - Verified in create_table, register_table, update_table, rename_table, drop_table handlers.
+- **Date Completed**: Prior to 2025-12-23
 
-### 2. Empty Storage Location Path Resolution
+### ✅ 2. Empty Storage Location Path Resolution
 - **Files**: `pangolin_handlers.rs`, `iceberg_handlers.rs`
-- **Issue**: When a catalog is created with an empty string for `storage_location` (instead of `None`), the backend incorrectly treats it as an absolute path prefix (`/`). This causes PyIceberg to fail when trying to write to local system roots.
-- **Goal**: 
-  - Update `create_catalog` and `update_catalog` to convert empty strings to `None`.
-  - Update `create_table` logic to skip prefixes if the location is an empty string.
+- **Issue**: When a catalog was created with an empty string for `storage_location`, the backend incorrectly treated it as an absolute path prefix.
+- **Solution**: `create_catalog` now converts empty strings to `None` using `.filter(|n| !n.is_empty())` on line 700.
+- **Status**: ✅ **COMPLETED** - Empty strings are properly filtered to None.
+- **Date Completed**: Prior to 2025-12-23
+
+### ✅ 7. Effective Permission Aggregation
+- **Files**: `pangolin_store/src/memory.rs`, `pangolin_store/src/sqlite.rs`, `pangolin_store/src/postgres.rs`, `pangolin_store/src/mongo.rs`
+- **Issue**: `store.list_user_permissions(user_id)` only returned direct permission grants, ignoring permissions inherited from assigned roles.
+- **Solution**: Updated `list_user_permissions` in all four store implementations to return a union of direct permissions and role-based permissions.
+- **Status**: ✅ **COMPLETED** - All stores now aggregate permissions correctly. Comprehensive test coverage added.
+- **Date Completed**: 2025-12-23
 
 ---
+
+## High Priority Fixes
 
 ## Future Improvements
 
@@ -53,15 +59,31 @@ This document tracks backend improvements and bug fixes identified during testin
     - `TenantUser` should see counts only for resources they have `Read` or `Discoverable` access to.
 - **Status**: Deferred to prevent cross-component complexity during UI verification.
 
-### 7. Effective Permission Aggregation
-- **Files**: `pangolin_store/src/memory.rs`, `pangolin_store/src/postgres.rs`, etc.
-- **Issue**: `store.list_user_permissions(user_id)` currently only returns direct permission grants, completely ignoring permissions inherited from assigned roles.
-- **Goal**: Update `list_user_permissions` in all store implementations to return a union of direct permissions and role-based permissions. This ensures that callers (like Catalog listing and Discovery Search) correctly respect RBAC.
+## Completed Items
 
-### 8. Permission-Aware Unified Search
-- **File**: `optimization_handlers.rs`
-- **Issue**: The `unified_search` handler (Global Search) returns results for the entire tenant without performing any permission checks.
-- **Goal**: Implement filtering in the handler to ensure users only see search results for Catalogs, Namespaces, and Assets for which they have at least `Read` or `Discoverable` access.
+### ✅ 7. Effective Permission Aggregation
+- **Files**: `pangolin_store/src/memory.rs`, `pangolin_store/src/sqlite.rs`, `pangolin_store/src/postgres.rs`, `pangolin_store/src/mongo.rs`
+- **Issue**: `store.list_user_permissions(user_id)` only returned direct permission grants, ignoring permissions inherited from assigned roles.
+- **Solution**: Updated `list_user_permissions` in all four store implementations to return a union of direct permissions and role-based permissions.
+- **Status**: ✅ **COMPLETED** - All stores now aggregate permissions correctly. Comprehensive test coverage added.
+- **Date Completed**: 2025-12-23
+
+---
+
+### ✅ 8. Permission-Aware Unified Search
+- **Files**: `optimization_handlers.rs`, `authz_utils.rs` (new)
+- **Issue**: The `unified_search` handler returned all results within a tenant without performing any permission checks.
+- **Solution**: 
+  - Created `authz_utils.rs` module with permission checking and filtering functions
+  - Updated `unified_search` to fetch user permissions and filter results
+  - Root/TenantAdmin users bypass filtering
+  - TenantUser users only see resources they have Read or Discoverable access to
+- **Status**: ✅ **COMPLETED** - All unit tests pass. No breaking changes to API contracts.
+- **Date Completed**: 2025-12-23
+
+---
+
+## Future Improvements
 
 ### 9. Standardize Authz Utilization
 - **Files**: `pangolin_handlers.rs`, `business_metadata_handlers.rs`

@@ -334,23 +334,46 @@ pub async fn unified_search(
     let tenant_id = session.tenant_id.unwrap_or_default();
     let limit = if query.limit == 0 { 20 } else { query.limit };
     
+    // Fetch user permissions for filtering (unless Root/TenantAdmin)
+    let permissions = if matches!(session.role, pangolin_core::user::UserRole::TenantUser) {
+        store.list_user_permissions(session.user_id).await.map_err(ApiError::from)?
+    } else {
+        Vec::new() // Root/TenantAdmin bypass filtering
+    };
+    
     let mut results = Vec::new();
 
-    // 1. Search Catalogs
+    // 1. Search Catalogs (with permission filtering)
     let catalogs = store.search_catalogs(tenant_id, &query.q).await.map_err(ApiError::from)?;
-    for c in catalogs {
+    let filtered_catalogs = crate::authz_utils::filter_catalogs(catalogs, &permissions, session.role.clone());
+    for c in filtered_catalogs {
         results.push(UnifiedSearchResult {
             id: Some(c.id.to_string()),
             name: c.name,
             kind: SearchResultType::Catalog,
-            description: None, // Catalog doesn't have description yet
+            description: None,
             context: None,
         });
     }
 
-    // 2. Search Namespaces
+    // 2. Search Namespaces (with permission filtering)
     let namespaces = store.search_namespaces(tenant_id, &query.q).await.map_err(ApiError::from)?;
-    for (ns, cat_name) in namespaces {
+    
+    // Build catalog ID map for namespace filtering
+    let all_catalogs = store.list_catalogs(tenant_id).await.map_err(ApiError::from)?;
+    let catalog_id_map: std::collections::HashMap<String, uuid::Uuid> = all_catalogs
+        .iter()
+        .map(|c| (c.name.clone(), c.id))
+        .collect();
+    
+    let filtered_namespaces = crate::authz_utils::filter_namespaces(
+        namespaces,
+        &permissions,
+        session.role.clone(),
+        &catalog_id_map
+    );
+    
+    for (ns, cat_name) in filtered_namespaces {
         results.push(UnifiedSearchResult {
             id: None,
             name: ns.name.join("."),
@@ -360,9 +383,16 @@ pub async fn unified_search(
         });
     }
 
-    // 3. Search Assets
+    // 3. Search Assets (with permission filtering)
     let assets = store.search_assets(tenant_id, &query.q, None).await.map_err(ApiError::from)?;
-    for (asset, metadata, cat_name, ns) in assets {
+    let filtered_assets = crate::authz_utils::filter_assets(
+        assets,
+        &permissions,
+        session.role.clone(),
+        &catalog_id_map
+    );
+    
+    for (asset, metadata, cat_name, ns) in filtered_assets {
         results.push(UnifiedSearchResult {
             id: Some(asset.id.to_string()),
             name: asset.name,
@@ -372,16 +402,23 @@ pub async fn unified_search(
         });
     }
 
-    // 4. Search Branches
+    // 4. Search Branches (no permission filtering for now - branches are catalog-scoped)
+    // TODO: Add branch permission filtering when branch-level permissions are implemented
     let branches = store.search_branches(tenant_id, &query.q).await.map_err(ApiError::from)?;
     for (branch, cat_name) in branches {
-        results.push(UnifiedSearchResult {
-            id: None,
-            name: branch.name,
-            kind: SearchResultType::Branch,
-            description: None,
-            context: Some(format!("Catalog: {}", cat_name)),
-        });
+        // Check if user has access to the parent catalog
+        if let Some(&catalog_id) = catalog_id_map.get(&cat_name) {
+            if matches!(session.role, pangolin_core::user::UserRole::Root | pangolin_core::user::UserRole::TenantAdmin) ||
+               crate::authz_utils::has_catalog_access(catalog_id, &permissions, &[pangolin_core::permission::Action::Read]) {
+                results.push(UnifiedSearchResult {
+                    id: None,
+                    name: branch.name,
+                    kind: SearchResultType::Branch,
+                    description: None,
+                    context: Some(format!("Catalog: {}", cat_name)),
+                });
+            }
+        }
     }
 
     // Sort by name length (simple relevance) and truncate
