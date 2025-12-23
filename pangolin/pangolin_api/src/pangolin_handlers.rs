@@ -22,7 +22,8 @@ pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
 pub struct CreateBranchRequest {
     name: String,
     branch_type: Option<String>, // "ingest" or "experimental", defaults to experimental
-    catalog: Option<String>, // Optional catalog name, defaults to "default"
+    /// Catalog name (required)
+    catalog: String,
     from_branch: Option<String>, // Defaults to "main"
     assets: Option<Vec<String>>, // List of asset names to include.
 }
@@ -30,14 +31,16 @@ pub struct CreateBranchRequest {
 #[derive(Deserialize, ToSchema)]
 pub struct ListBranchParams {
     name: Option<String>,
-    catalog: Option<String>,
+    /// Catalog name (required)
+    catalog: String,
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct MergeBranchRequest {
     pub source_branch: String,
     pub target_branch: String,
-    pub catalog: Option<String>,
+    /// Catalog name (required)
+    pub catalog: String,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -79,9 +82,8 @@ pub async fn list_branches(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
-    // Use catalog from query params or default to "default"
-    let catalog_name_string = params.catalog.clone().unwrap_or_else(|| "default".to_string());
-    let catalog_name = catalog_name_string.as_str();
+    // Catalog is now required
+    let catalog_name = &params.catalog;
     
     match store.list_branches(tenant_id, catalog_name).await {
         Ok(branches) => {
@@ -112,10 +114,12 @@ pub async fn create_branch(
     Json(payload): Json<CreateBranchRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = payload.catalog.as_deref().unwrap_or("default");
+
+    // Catalog is now required
+    let catalog_name = &payload.catalog;
     
     // Resolve catalog ID for permission check
-    let catalog = match store.get_catalog(tenant_id, catalog_name.to_string()).await {
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
@@ -232,8 +236,8 @@ pub async fn get_branch(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
-    let catalog_name_string = params.catalog.clone().unwrap_or_else(|| "default".to_string());
-    let catalog_name = catalog_name_string.as_str();
+    // Catalog is now required
+    let catalog_name = &params.catalog;
     
     match store.get_branch(tenant_id, catalog_name, name).await {
         Ok(Some(branch)) => (StatusCode::OK, Json(BranchResponse::from(branch))).into_response(),
@@ -262,7 +266,9 @@ pub async fn merge_branch(
     Json(payload): Json<MergeBranchRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name = payload.catalog.as_deref().unwrap_or("default");
+
+    // Catalog is now required
+    let catalog_name = &payload.catalog;
 
     // Attempt to detect base commit
     let base_commit_id = find_common_ancestor(
@@ -378,8 +384,9 @@ pub async fn list_commits(
     Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name_string = params.catalog.unwrap_or_else(|| "default".to_string());
-    let catalog_name = catalog_name_string.as_str();
+    
+    // Catalog is now required
+    let catalog_name = &params.catalog;
 
     // Get branch to find head commit
     let branch = match store.get_branch(tenant_id, catalog_name, branch_name.clone()).await {
@@ -443,8 +450,9 @@ pub async fn list_tags(
     Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name_string = params.catalog.unwrap_or_else(|| "default".to_string());
-    let catalog_name = catalog_name_string.as_str();
+    
+    // Catalog is now required
+    let catalog_name = &params.catalog;
 
     match store.list_tags(tenant_id, catalog_name).await {
         Ok(tags) => {
@@ -505,8 +513,9 @@ pub async fn delete_tag(
     Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name_string = params.catalog.unwrap_or_else(|| "default".to_string());
-    let catalog_name = catalog_name_string.as_str();
+    
+    // Catalog is now required
+    let catalog_name = &params.catalog;
 
     match store.delete_tag(tenant_id, catalog_name, name).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -545,7 +554,9 @@ pub async fn rebase_branch(
      // Check permissions
      // TODO: Granular permissions? For now assume Write on Catalog
     
-    let catalog_name = payload.catalog.as_deref().unwrap_or("default");
+    
+    // Catalog is now required
+    let catalog_name = &payload.catalog;
     
     match store.merge_branch(tenant_id, catalog_name, "main".to_string(), branch_name).await {
         Ok(_) => StatusCode::OK.into_response(),

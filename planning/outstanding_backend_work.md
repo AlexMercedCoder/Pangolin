@@ -26,16 +26,18 @@ This document tracks backend improvements and bug fixes identified during testin
 - **Status**: ✅ **COMPLETED** - All stores now aggregate permissions correctly. Comprehensive test coverage added.
 - **Date Completed**: 2025-12-23
 
----
-
-## High Priority Fixes
-
-## Future Improvements
-
-### 3. Expanded Credential Vending
-- **File**: `iceberg_handlers.rs`
-- **Issue**: Credential vending is currently robust for S3 but needs implementation/verification for Azure ADLS Gen2 (SAS tokens) and GCP (Downscoped tokens) in the `load_table` and `create_table` flows.
-- **Status**: Research needed on specific PyIceberg requirements for Azure/GCS token headers.
+### ✅ 3. Expanded Credential Vending
+- **Files**: `pangolin_api/src/credential_signers/`, `pangolin_api/tests/credential_vending_integration.rs`
+- **Issue**: Credential vending was robust for S3 but needed implementation for Azure ADLS Gen2 (OAuth2 tokens) and GCP (OAuth2 tokens with permission scoping).
+- **Solution**: 
+  - Created trait-based credential signer infrastructure with `CredentialSigner` trait
+  - Implemented `AzureSasSigner` supporting both OAuth2 and account key authentication
+  - Implemented `GcpTokenSigner` with permission-based scope selection (read-only vs read-write)
+  - Implemented `S3Signer` supporting both STS AssumeRole and static credentials
+  - Created `MockSigner` for comprehensive testing
+  - Added 15 tests (5 unit + 10 integration) covering all cloud providers, error handling, and permission scoping
+- **Status**: ✅ **COMPLETED** - All tests passing, ready for integration into Iceberg handlers.
+- **Date Completed**: 2025-12-23
 
 ### 4. Consistent Catalog Scoping for Branches
 - **File**: `pangolin_handlers.rs`

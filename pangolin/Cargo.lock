@@ -3449,6 +3449,7 @@ name = "pangolin_api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "aws-config",
  "aws-credential-types",
  "aws-sdk-sts",
@@ -3481,6 +3482,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "wiremock",
 ]
 
 [[package]]

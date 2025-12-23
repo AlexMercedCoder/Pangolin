@@ -28,6 +28,7 @@ bytes = "1.5"
 serde_yaml = "0.9"
 utoipa = { version = "4", features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { version = "6", features = ["axum"] }
+async-trait = { workspace = true }
 
 # Cloud provider SDKs (optional features)
 aws-config = { version = "1.0", optional = true }
@@ -49,3 +50,4 @@ cloud-credentials = ["aws-sts", "azure-oauth", "gcp-oauth"]
 hyper = { version = "1.0", features = ["full"] }
 pangolin_store = { path = "../pangolin_store" }
 serial_test = "2.0"
+wiremock = "0.6"
