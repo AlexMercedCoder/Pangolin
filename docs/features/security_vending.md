@@ -1,17 +1,18 @@
-# Security & Credential Vending
+# Security & Credential Vending (Multi-Cloud)
 
-Pangolin provides mechanisms to securely vend AWS credentials and presigned URLs to clients, enabling direct data access while maintaining security.
+Pangolin provides mechanisms to securely vend temporary credentials to clients for S3, Azure ADLS Gen2, and Google Cloud Storage, enabling direct data access while maintaining security.
 
 ## Overview
 
-Instead of sharing long-term AWS credentials with clients (e.g., Spark jobs, Dremio, Trino), Pangolin acts as a trusted intermediary. It authenticates the client and then issues temporary, scoped credentials or presigned URLs for specific S3 resources.
+Instead of sharing long-term cloud credentials with clients (e.g., Spark jobs, Dremio, Trino), Pangolin acts as a trusted intermediary. It authenticates the client and then issues temporary, scoped credentials for specific storage resources.
 
 **Benefits**:
 - ✅ No long-term credentials in client configurations
-- ✅ Automatic credential rotation via STS
+- ✅ Automatic credential rotation (STS for S3, OAuth2 for Azure/GCP)
 - ✅ Scoped access to specific table locations
 - ✅ Centralized audit trail of data access
-- ✅ Support for cross-account access
+- ✅ Support for cross-account/cross-cloud access
+- ✅ **Multi-cloud support:** S3, Azure ADLS Gen2, Google Cloud Storage
 
 ---
 
@@ -66,6 +67,62 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
 **Configuration Options**:
 - `use_sts: true` - Vend temporary STS credentials to clients
 - `use_sts: false` - Pass through static credentials from environment variables
+
+### Azure ADLS Gen2 Configuration
+
+**OAuth2 Mode (Recommended):**
+```bash
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -H "X-Pangolin-Tenant: <tenant-id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "azure_warehouse",
+    "use_sts": true,
+    "storage_config": {
+      "type": "azure",
+      "account_name": "mystorageaccount",
+      "container": "data",
+      "tenant_id": "azure-tenant-id",
+      "client_id": "azure-client-id",
+      "client_secret": "azure-client-secret"
+    }
+  }'
+```
+
+**Account Key Mode:**
+```bash
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -H "X-Pangolin-Tenant: <tenant-id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "azure_warehouse",
+    "use_sts": false,
+    "storage_config": {
+      "type": "azure",
+      "account_name": "mystorageaccount",
+      "container": "data",
+      "account_key": "your-account-key"
+    }
+  }'
+```
+
+### Google Cloud Storage Configuration
+
+```bash
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -H "X-Pangolin-Tenant: <tenant-id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "gcp_warehouse",
+    "use_sts": false,
+    "storage_config": {
+      "type": "gcs",
+      "project_id": "my-gcp-project",
+      "bucket": "my-data-bucket",
+      "service_account_key": "{...json key...}"
+    }
+  }'
+```
 
 ---
 
@@ -124,9 +181,9 @@ curl "http://localhost:8080/v1/analytics/namespaces/sales/tables/transactions/pr
 
 ## PyIceberg Integration
 
-PyIceberg automatically uses Pangolin's credential vending when configured correctly.
+PyIceberg automatically uses Pangolin's credential vending when configured correctly for all supported cloud providers.
 
-### Automatic Credential Vending
+### Automatic Credential Vending (S3)
 
 ```python
 from pyiceberg.catalog import load_catalog
@@ -143,19 +200,56 @@ catalog = load_catalog(
 
 # PyIceberg will request credentials from Pangolin for each table access
 table = catalog.load_table("sales.transactions")
-df = table.scan().to_pandas()  # Pangolin vends credentials for S3 access
+df = table.scan().to_pandas()  # Pangolin vends S3 credentials automatically
+```
+
+### Automatic Credential Vending (Azure)
+
+```python
+catalog = load_catalog(
+    "pangolin_azure",
+    **{
+        "uri": "http://localhost:8080",
+        "prefix": "azure_catalog",
+        "token": "your-jwt-token",
+        # No Azure credentials needed - Pangolin vends them automatically!
+        # Pangolin provides: adls.token, adls.account-name, adls.container
+    }
+)
+
+table = catalog.load_table("sales.transactions")
+df = table.scan().to_pandas()  # Pangolin vends Azure credentials automatically
+```
+
+### Automatic Credential Vending (GCP)
+
+```python
+catalog = load_catalog(
+    "pangolin_gcp",
+    **{
+        "uri": "http://localhost:8080",
+        "prefix": "gcp_catalog",
+        "token": "your-jwt-token",
+        # No GCP credentials needed - Pangolin vends them automatically!
+        # Pangolin provides: gcp-oauth-token, gcp-project-id
+    }
+)
+
+table = catalog.load_table("sales.transactions")
+df = table.scan().to_pandas()  # Pangolin vends GCP credentials automatically
 ```
 
 **How it works**:
 1. PyIceberg requests table metadata from Pangolin
-2. Pangolin includes temporary S3 credentials in the response (if `use_sts: true`)
-3. PyIceberg uses these credentials to read data files from S3
+2. Pangolin includes temporary cloud credentials in the response (based on warehouse type)
+3. PyIceberg uses these credentials to read data files from cloud storage
 4. Credentials expire after the configured duration (default: 1 hour)
 
 ### Client-Provided Credentials
 
 If you prefer to manage credentials yourself:
 
+**S3:**
 ```python
 catalog = load_catalog(
     "pangolin",
@@ -165,6 +259,34 @@ catalog = load_catalog(
         "token": "your-jwt-token",
         "s3.access-key-id": "AKIA...",
         "s3.secret-access-key": "...",
+    }
+)
+```
+
+**Azure:**
+```python
+catalog = load_catalog(
+    "pangolin_azure",
+    **{
+        "uri": "http://localhost:8080",
+        "prefix": "azure_catalog",
+        "token": "your-jwt-token",
+        "adls.account-name": "mystorageaccount",
+        "adls.account-key": "...",
+    }
+)
+```
+
+**GCP:**
+```python
+catalog = load_catalog(
+    "pangolin_gcp",
+    **{
+        "uri": "http://localhost:8080",
+        "prefix": "gcp_catalog",
+        "token": "your-jwt-token",
+        "gcp-project-id": "my-project",
+        "gcs.service-account-key": "/path/to/key.json",
     }
 )
 ```

@@ -33,12 +33,15 @@ catalog = load_catalog(
 )
 ```
 
-### Supported Properties
-| PyIceberg Property | Description |
-| :--- | :--- |
-| `adls.account-name` | Azure storage account name. |
-| `adls.account-key` | Azure storage account key (if not using vending). |
-| `adls.connection-string` | Full Azure connection string. |
+### Supported Properties (PyIceberg Compatible)
+| PyIceberg Property | Description | Vended by Pangolin |
+| :--- | :--- | :--- |
+| `adls.token` | OAuth2 access token for Azure AD authentication. | ✅ Yes (OAuth2 mode) |
+| `adls.account-name` | Azure storage account name. | ✅ Yes (all modes) |
+| `adls.account-key` | Azure storage account key. | ✅ Yes (account key mode) |
+| `adls.container` | Container name within the storage account. | ✅ Yes (all modes) |
+
+**Note:** When using Pangolin's credential vending, you don't need to provide these properties manually. Pangolin vends them automatically based on your warehouse configuration.
 
 ---
 
@@ -72,12 +75,14 @@ catalog = load_catalog(
 )
 ```
 
-### Supported Properties
-| PyIceberg Property | Description |
-| :--- | :--- |
-| `gcs.project-id` | GCP project ID. |
-| `gcs.service-account-key` | Path to service account JSON key (if not using vending). |
-| `gcs.oauth2.token` | A raw OAuth2 token (Pangolin can vend this via `vended-credentials`). |
+### Supported Properties (PyIceberg Compatible)
+| PyIceberg Property | Description | Vended by Pangolin |
+| :--- | :--- | :--- |
+| `gcp-oauth-token` | OAuth2 access token for GCP authentication. | ✅ Yes (OAuth2 mode) |
+| `gcp-project-id` | GCP project ID. | ✅ Yes (all modes) |
+| `gcs.service-account-key` | Path to service account JSON key (client-provided). | ❌ No (client manages) |
+
+**Note:** When using Pangolin's credential vending, you only need to provide `token` for authentication. Pangolin vends `gcp-oauth-token` and `gcp-project-id` automatically.
 
 ---
 

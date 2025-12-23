@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # MinIO - S3-compatible storage with STS support
+  minio:
+    image: minio/minio:latest
+    container_name: pangolin-minio
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - minio-data:/data
+
+  # Azurite - Azure Storage Emulator
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: pangolin-azurite
+    ports:
+      - "10000:10000"  # Blob service
+      - "10001:10001"  # Queue service
+      - "10002:10002"  # Table service
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --loose
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "10000"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    volumes:
+      - azurite-data:/data
+
+  # fake-gcs-server - GCS Emulator
+  fake-gcs:
+    image: fsouza/fake-gcs-server:latest
+    container_name: pangolin-fake-gcs
+    ports:
+      - "4443:4443"
+    command: -scheme http -port 4443 -external-url http://localhost:4443
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:4443/storage/v1/b"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # oidc-server-mock - OAuth2/OIDC Mock for Azure AD testing
+  oidc-mock:
+    image: ghcr.io/soluto/oidc-server-mock:latest
+    container_name: pangolin-oidc-mock
+    ports:
+      - "8081:80"  # Changed from 8080 to avoid conflict
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      SERVER_OPTIONS_INLINE: |
+        {
+          "AccessTokenJwtType": "JWT",
+          "Discovery": {
+            "ShowKeySet": true
+          }
+        }
+      USERS_CONFIGURATION_INLINE: |
+        [
+          {
+            "SubjectId": "test-user",
+            "Username": "testuser",
+            "Password": "testpassword"
+          }
+        ]
+      CLIENTS_CONFIGURATION_INLINE: |
+        [
+          {
+            "ClientId": "pangolin-client",
+            "ClientSecrets": ["secret"],
+            "AllowedGrantTypes": ["client_credentials"],
+            "AllowedScopes": ["https://storage.azure.com/.default", "openid", "profile"]
+          }
+        ]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80/.well-known/openid-configuration"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  minio-data:
+  azurite-data:

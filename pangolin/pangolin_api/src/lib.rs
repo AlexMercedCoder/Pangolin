@@ -15,6 +15,7 @@ pub mod asset_handlers;
 pub mod auth;
 pub mod signing_handlers;
 pub mod credential_signers;
+pub mod credential_vending;
 
 
 pub mod token_handlers;

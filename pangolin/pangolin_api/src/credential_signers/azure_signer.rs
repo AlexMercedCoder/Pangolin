@@ -9,7 +9,7 @@ use azure_core::auth::TokenCredential;
 #[cfg(feature = "azure-oauth")]
 use azure_identity::ClientSecretCredential;
 
-/// Azure ADLS Gen2 credential signer that generates SAS tokens
+/// Azure ADLS Gen2 credential signer that generates OAuth2 tokens
 pub struct AzureSasSigner {
     pub account_name: String,
     pub account_key: Option<String>,
@@ -17,6 +17,7 @@ pub struct AzureSasSigner {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     pub container: String,
+    pub authority_host: Option<String>, // Custom authority host for testing
 }
 
 impl AzureSasSigner {
@@ -35,7 +36,14 @@ impl AzureSasSigner {
             client_id,
             client_secret,
             container,
+            authority_host: None, // Default to None (uses production Azure AD)
         }
+    }
+    
+    /// Create a new Azure signer with custom authority host (for testing)
+    pub fn with_authority_host(mut self, authority_host: String) -> Self {
+        self.authority_host = Some(authority_host);
+        self
     }
 }
 
@@ -47,18 +55,46 @@ impl CredentialSigner for AzureSasSigner {
         _permissions: &[String],
         duration: Duration,
     ) -> Result<VendedCredentials> {
+        let expires_at = Utc::now() + duration;
+        
+        // Check for account key first (works regardless of feature flags)
+        if let Some(account_key) = &self.account_key {
+            let mut config = HashMap::new();
+            // PyIceberg-compatible property names
+            config.insert("adls.account-name".to_string(), self.account_name.clone());
+            config.insert("adls.account-key".to_string(), account_key.clone());
+            config.insert("adls.container".to_string(), self.container.clone());
+            
+            tracing::info!("✅ Using Azure account key credentials");
+            
+            return Ok(VendedCredentials {
+                prefix: format!("abfss://{}@{}.dfs.core.windows.net/", 
+                    self.container, self.account_name),
+                config,
+                expires_at: None, // Account keys don't expire
+            });
+        }
+        
+        // Try OAuth2 if azure-oauth feature is enabled
         #[cfg(feature = "azure-oauth")]
         {
-            tracing::info!("🔑 Generating Azure credentials");
-            
-            let expires_at = Utc::now() + duration;
+            tracing::info!("🔑 Generating Azure OAuth2 credentials");
             
             // Try OAuth2 if credentials are available
             if let (Some(tenant_id), Some(client_id), Some(client_secret)) = 
                 (&self.tenant_id, &self.client_id, &self.client_secret) {
                 
-                let authority_host = azure_core::Url::parse("https://login.microsoftonline.com")
+                // Use custom authority host if provided (for testing), otherwise use production Azure AD
+                let authority_url = if let Some(custom_host) = &self.authority_host {
+                    format!("{}", custom_host)
+                } else {
+                    format!("https://login.microsoftonline.com/{}", tenant_id)
+                };
+                
+                let authority_host = azure_core::Url::parse(&authority_url)
                     .map_err(|e| anyhow!("Failed to parse authority host: {}", e))?;
+                
+                tracing::info!("Using authority host: {}", authority_url);
                 
                 let credential = ClientSecretCredential::new(
                     azure_core::new_http_client(),
@@ -74,10 +110,10 @@ impl CredentialSigner for AzureSasSigner {
                     .map_err(|e| anyhow!("Azure token acquisition failed: {}", e))?;
                 
                 let mut config = HashMap::new();
-                config.insert("credential-type".to_string(), "azure-oauth".to_string());
-                config.insert("azure-oauth-token".to_string(), token.token.secret().to_string());
-                config.insert("azure-account-name".to_string(), self.account_name.clone());
-                config.insert("azure-container".to_string(), self.container.clone());
+                // PyIceberg-compatible property names
+                config.insert("adls.token".to_string(), token.token.secret().to_string());
+                config.insert("adls.account-name".to_string(), self.account_name.clone());
+                config.insert("adls.container".to_string(), self.container.clone());
                 
                 tracing::info!("✅ Successfully generated Azure OAuth2 token");
                 
@@ -88,44 +124,15 @@ impl CredentialSigner for AzureSasSigner {
                     expires_at: Some(expires_at),
                 });
             }
-            
-            // Fallback to account key if available
-            if let Some(account_key) = &self.account_key {
-                let mut config = HashMap::new();
-                config.insert("credential-type".to_string(), "azure-key".to_string());
-                config.insert("azure-account-name".to_string(), self.account_name.clone());
-                config.insert("azure-account-key".to_string(), account_key.clone());
-                config.insert("azure-container".to_string(), self.container.clone());
-                
-                tracing::info!("✅ Using Azure account key credentials");
-                
-                return Ok(VendedCredentials {
-                    prefix: format!("abfss://{}@{}.dfs.core.windows.net/", 
-                        self.container, self.account_name),
-                    config,
-                    expires_at: None, // Account keys don't expire
-                });
-            }
-            
-            Err(anyhow!("Azure credentials not configured properly"))
         }
         
+        // If we get here, no credentials are configured
         #[cfg(not(feature = "azure-oauth"))]
         {
-            tracing::warn!("Azure OAuth feature not enabled, returning placeholder credentials");
-            let mut config = HashMap::new();
-            config.insert("credential-type".to_string(), "azure-sas".to_string());
-            config.insert("azure-sas-token".to_string(), "PLACEHOLDER_SAS_TOKEN".to_string());
-            config.insert("azure-account-name".to_string(), self.account_name.clone());
-            config.insert("azure-container".to_string(), self.container.clone());
-            
-            Ok(VendedCredentials {
-                prefix: format!("abfss://{}@{}.dfs.core.windows.net/", 
-                    self.container, self.account_name),
-                config,
-                expires_at: Some(Utc::now() + duration),
-            })
+            tracing::warn!("Azure OAuth feature not enabled and no account key provided");
         }
+        
+        Err(anyhow!("Azure credentials not configured properly. Provide either account_key or OAuth2 credentials (tenant_id, client_id, client_secret)"))
     }
     
     fn storage_type(&self) -> &str {

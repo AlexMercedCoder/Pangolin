@@ -181,8 +181,6 @@ pub async fn get_gcp_token(
 
 /// Get credentials for accessing a table
 /// This endpoint vends credentials based on the catalog's warehouse configuration
-/// Get credentials for accessing a table
-/// This endpoint vends credentials based on the catalog's warehouse configuration
 #[utoipa::path(
     get,
     path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials",
@@ -203,11 +201,12 @@ pub async fn get_gcp_token(
 pub async fn get_table_credentials(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
-    Path((catalog_name, _namespace, _table)): Path<(String, String, String)>,
+    Path((catalog_name, namespace, table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
-    tracing::info!("🔑 Credential vending requested for catalog: {}", catalog_name);
+    tracing::info!("🔑 Credential vending requested for catalog: {}, namespace: {}, table: {}", 
+        catalog_name, namespace, table);
     
     // 1. Get catalog to find associated warehouse
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
@@ -232,201 +231,58 @@ pub async fn get_table_credentials(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
     
-    // 4. Vend credentials based on warehouse configuration
-    // Get the storage location prefix from the warehouse
-    let storage_type = warehouse.storage_config.get("type")
-        .map(|s| s.as_str())
-        .unwrap_or("s3");
+    // 4. Vend credentials using the credential signer infrastructure
+    let resource_path = format!("{}/{}", namespace, table);
+    let permissions = vec!["read".to_string(), "write".to_string()];
     
-    let storage_location = match storage_type {
-        "azure" => {
-            let container = warehouse.storage_config.get("container")
-                .cloned()
-                .unwrap_or_else(|| "warehouse".to_string());
-            let account = warehouse.storage_config.get("account_name")
-                .cloned()
-                .unwrap_or_else(|| "account".to_string());
-            format!("abfss://{}@{}.dfs.core.windows.net/", container, account)
-        },
-        "gcs" => {
-            let bucket = warehouse.storage_config.get("bucket")
-                .cloned()
-                .unwrap_or_else(|| "warehouse".to_string());
-            format!("gs://{}/", bucket)
-        },
-        _ => {
-            // Default to S3
-            warehouse.storage_config.get("bucket")
-                .map(|bucket| format!("s3://{}/", bucket))
-                .unwrap_or_else(|| "s3://warehouse/".to_string())
-        }
-    };
-    
-    let mut config = HashMap::new();
-    
-    match storage_type {
-        "azure" => {
-            // Azure ADLS Gen2 credentials
-            if warehouse.use_sts {
-                // Azure OAuth2 mode - get token using client credentials
-                let tenant_id = match warehouse.storage_config.get("tenant_id") {
-                    Some(id) => id,
-                    None => return (StatusCode::BAD_REQUEST, "Azure tenant_id required for OAuth2").into_response(),
-                };
-                
-                let client_id = match warehouse.storage_config.get("client_id") {
-                    Some(id) => id,
-                    None => return (StatusCode::BAD_REQUEST, "Azure client_id required for OAuth2").into_response(),
-                };
-                
-                let client_secret = match warehouse.storage_config.get("client_secret") {
-                    Some(secret) => secret,
-                    None => return (StatusCode::BAD_REQUEST, "Azure client_secret required for OAuth2").into_response(),
-                };
-                
-                match get_azure_token(tenant_id, client_id, client_secret).await {
-                    Ok(token) => {
-                        config.insert("adls.auth.type".to_string(), "OAuth2".to_string());
-                        config.insert("adls.oauth2.token".to_string(), token);
-                        tracing::info!("✅ Successfully vended Azure OAuth2 token");
-                    },
-                    Err(e) => {
-                        tracing::error!("Failed to get Azure token: {}", e);
-                        return (StatusCode::INTERNAL_SERVER_ERROR,
-                                format!("Failed to vend Azure credentials: {}", e)).into_response();
-                    }
-                }
-            } else {
-                // Azure account key mode
-                let account_name = warehouse.storage_config.get("account_name")
-                    .cloned()
-                    .unwrap_or_default();
-                let account_key = warehouse.storage_config.get("account_key")
-                    .cloned()
-                    .unwrap_or_default();
-                
-                if account_name.is_empty() || account_key.is_empty() {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, "Azure warehouse has no credentials configured").into_response();
-                }
-                
-                config.insert("adls.account-name".to_string(), account_name);
-                config.insert("adls.account-key".to_string(), account_key);
-                
-                // Add endpoint if configured
-                if let Some(endpoint) = warehouse.storage_config.get("endpoint") {
-                    config.insert("adls.endpoint".to_string(), endpoint.clone());
-                }
-            }
-        },
-        "gcs" => {
-            // Google Cloud Storage credentials
-            if warehouse.use_sts {
-                // GCP OAuth2 mode - get token using service account
-                let service_account_key = match warehouse.storage_config.get("service_account_key") {
-                    Some(key) => key,
-                    None => return (StatusCode::BAD_REQUEST, "GCS service_account_key required for OAuth2").into_response(),
-                };
-                
-                match get_gcp_token(service_account_key).await {
-                    Ok(token) => {
-                        config.insert("gcs.auth.type".to_string(), "OAuth2".to_string());
-                        config.insert("gcs.oauth2.token".to_string(), token);
-                        tracing::info!("✅ Successfully vended GCP OAuth2 token");
-                    },
-                    Err(e) => {
-                        tracing::error!("Failed to get GCP token: {}", e);
-                        return (StatusCode::INTERNAL_SERVER_ERROR,
-                                format!("Failed to vend GCP credentials: {}", e)).into_response();
-                    }
-                }
-            } else {
-                // GCS service account key mode
-                let project_id = warehouse.storage_config.get("project_id")
-                    .cloned()
-                    .unwrap_or_default();
-                let service_account_key = warehouse.storage_config.get("service_account_key")
-                    .cloned()
-                    .unwrap_or_default();
-                
-                if project_id.is_empty() || service_account_key.is_empty() {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, "GCS warehouse has no credentials configured").into_response();
-                }
-                
-                config.insert("gcs.project-id".to_string(), project_id);
-                config.insert("gcs.service-account-key".to_string(), service_account_key);
-                
-                // Add endpoint if configured (for GCS emulator)
-                if let Some(endpoint) = warehouse.storage_config.get("endpoint") {
-                    config.insert("gcs.endpoint".to_string(), endpoint.clone());
-                }
-            }
-        },
-        _ => {
-            // S3 credentials (existing logic)
-            if warehouse.use_sts {
-                // AWS STS mode: Generate temporary credentials via AssumeRole
-                let role_arn = warehouse.storage_config.get("role_arn")
-                    .cloned()
-                    .unwrap_or_else(|| "arn:aws:iam::123456789012:role/PangolinRole".to_string());
-                
-                let external_id = warehouse.storage_config.get("external_id")
-                    .map(|s| s.as_str());
-                
-                let session_name = format!("pangolin-{}-{}", tenant_id, catalog_name);
-                
-                match assume_role_aws(&role_arn, external_id, &session_name).await {
-                    Ok((access_key, secret_key, session_token, expiration)) => {
-                        config.insert("access-key".to_string(), access_key);
-                        config.insert("secret-key".to_string(), secret_key);
-                        config.insert("session-token".to_string(), session_token);
-                        config.insert("expiration".to_string(), expiration);
-                        tracing::info!("✅ Successfully assumed AWS role: {}", role_arn);
-                    },
-                    Err(e) => {
-                        tracing::error!("Failed to assume AWS role: {}", e);
-                        return (StatusCode::INTERNAL_SERVER_ERROR,
-                                format!("Failed to vend AWS credentials: {}", e)).into_response();
-                    }
-                }
-            } else {
-                // Static mode: Pass through credentials from warehouse
-                let access_key = warehouse.storage_config.get("access_key_id")
-                    .cloned()
-                    .unwrap_or_default();
-                let secret_key = warehouse.storage_config.get("secret_access_key")
-                    .cloned()
-                    .unwrap_or_default();
-                
-                if access_key.is_empty() || secret_key.is_empty() {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, "Warehouse has no credentials configured").into_response();
-                }
-                
-                config.insert("access-key".to_string(), access_key);
-                config.insert("secret-key".to_string(), secret_key);
-            }
+    match crate::credential_vending::vend_credentials_for_warehouse(&warehouse, &resource_path, &permissions).await {
+        Ok(config) => {
+            // Determine storage location prefix
+            let storage_type = warehouse.storage_config.get("type")
+                .map(|s| s.as_str())
+                .unwrap_or("s3");
             
-            // Add S3 endpoint if configured
-            if let Some(endpoint) = warehouse.storage_config.get("endpoint") {
-                config.insert("s3.endpoint".to_string(), endpoint.clone());
-            }
+            let storage_location = match storage_type {
+                "azure" => {
+                    let container = warehouse.storage_config.get("container")
+                        .cloned()
+                        .unwrap_or_else(|| "warehouse".to_string());
+                    let account = warehouse.storage_config.get("account_name")
+                        .cloned()
+                        .unwrap_or_else(|| "account".to_string());
+                    format!("abfss://{}@{}.dfs.core.windows.net/", container, account)
+                },
+                "gcs" | "gcp" => {
+                    let bucket = warehouse.storage_config.get("bucket")
+                        .cloned()
+                        .unwrap_or_else(|| "warehouse".to_string());
+                    format!("gs://{}/", bucket)
+                },
+                _ => {
+                    // Default to S3
+                    warehouse.storage_config.get("bucket")
+                        .map(|bucket| format!("s3://{}/", bucket))
+                        .unwrap_or_else(|| "s3://warehouse/".to_string())
+                }
+            };
             
-            // Add region if configured
-            if let Some(region) = warehouse.storage_config.get("region") {
-                config.insert("s3.region".to_string(), region.clone());
-            }
+            let storage_credential = StorageCredential {
+                prefix: storage_location,
+                config,
+            };
+            
+            let resp = LoadCredentialsResponse {
+                storage_credentials: vec![storage_credential],
+            };
+            
+            tracing::info!("✅ Successfully vended credentials for {}", storage_type);
+            (StatusCode::OK, Json(resp)).into_response()
+        },
+        Err(e) => {
+            tracing::error!("Failed to vend credentials: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to vend credentials: {}", e)).into_response()
         }
     }
-    
-    let storage_credential = StorageCredential {
-        prefix: storage_location,
-        config,
-    };
-    
-    let resp = LoadCredentialsResponse {
-        storage_credentials: vec![storage_credential],
-    };
-    
-    (StatusCode::OK, Json(resp)).into_response()
 }
 
 /// Get a presigned URL for a specific file location
