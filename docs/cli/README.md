@@ -44,26 +44,35 @@ pangolin-admin create-catalog my-catalog --warehouse my-warehouse
 
 ## Documentation Index
 
-### Getting Started
-- [Installation & Setup](./installation.md) - Installing and configuring the CLI
-- [Authentication](./authentication.md) - Login methods and credential management
+### Admin Tool (`pangolin-admin`)
+- **[Admin Overview](./admin.md)** - Complete admin tool reference
+- **[Tenant Management](./admin-tenants.md)** - Creating and managing tenants
+- **[User Management](./admin-users.md)** - User creation and administration
+- **[Warehouse Management](./admin-warehouses.md)** - Storage backend configuration
+- **[Catalog Management](./admin-catalogs.md)** - Local catalog operations
+- **[Federated Catalogs](./admin-federated-catalogs.md)** - External catalog integration
+- **[Permission Management](./admin-permissions.md)** - RBAC and access control
+- **[Service Users](./admin-service-users.md)** - API keys and service accounts
+- **[Token Management](./admin-token-management.md)** - User token operations
+- **[Audit Logging](./admin-audit-logging.md)** - Viewing and analyzing audit events
+- **[Merge Operations](./admin-merge-operations.md)** - Managing branch merges
+- **[Update Operations](./admin-update-operations.md)** - Updating resources
+- **[Metadata Management](./admin-metadata.md)** - Business metadata operations
+- **[Optimization Commands](./admin-optimization-commands.md)** - Performance and maintenance
 
-### Core Features
-- **[Warehouse Management](./warehouse-management.md)** - Creating and managing S3, Azure, and GCS warehouses
-- [Catalog Management](./catalog-management.md) - Managing catalogs and namespaces
-- [User Management](./user-management.md) - Creating and managing users
-- [Permission Management](./permissions.md) - RBAC and access control
+### User Tool (`pangolin-user`)
+- **[User Overview](./user.md)** - Complete user tool reference
+- **[Branch Management](./user-branches.md)** - Creating and managing branches
+- **[Tag Management](./user-tags.md)** - Versioning with tags
+- **[Discovery](./user-discovery.md)** - Data discovery and search
+- **[Access Requests](./user-access.md)** - Requesting permissions
+- **[Token Management](./user-tokens.md)** - Personal token management
 
-### Advanced Features
-- [Federated Catalogs](./federated-catalogs.md) - Connecting to external Iceberg catalogs
-- [Token Management](./tokens.md) - API tokens and service users
-- [Audit Logging](./audit-logging.md) - Viewing and analyzing audit events
-- [Merge Operations](./merge-operations.md) - Managing branch merges
-
-### Reference
-- [Command Reference](./command-reference.md) - Complete command listing
-- [Configuration](./configuration.md) - CLI configuration files
-- [Docker Usage](./docker-usage.md) - Running CLI in Docker
+### Configuration & Setup
+- **[Overview](./overview.md)** - CLI tools overview
+- **[Configuration](./configuration.md)** - CLI configuration files
+- **[Docker Usage](./docker-usage.md)** - Running CLI in Docker
+- **[Warehouse Management](./warehouse-management.md)** - Multi-cloud warehouse setup
 
 ## Common Tasks
 

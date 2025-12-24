@@ -30,9 +30,19 @@ Finding data and tracking changes.
 - **[Business Catalog](./business_catalog.md)**: Data discovery portal and business metadata.
 - **[Audit Logging](./audit_logs.md)**: Comprehensive action tracking and compliance.
 
+## 🌐 Integration & Federation
+Connecting to external systems.
+- **[Federated Catalogs](./federated_catalogs.md)**: Connecting to remote Iceberg catalogs.
+- **[Catalog Management](./catalog_management.md)**: Managing local and federated catalogs.
+- **[Service Users](./service_users.md)**: API keys for programmatic access.
+
 ## 🧪 Integration & Testing
 Using Pangolin with other tools.
 - **[PyIceberg Integration](./pyiceberg_testing.md)**: Guide for Python users.
+
+## 🛠️ Maintenance
+Optimizing and maintaining your data lake.
+- **[Maintenance Operations](./maintenance.md)**: Snapshot management and orphan file cleanup.
 
 ---
 

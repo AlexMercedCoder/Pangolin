@@ -19,9 +19,15 @@ Fine-tune Pangolin for your environment.
 Connect your favorite tools to the Pangolin REST Catalog.
 - **[Client Configuration](./client_configuration.md)**: Setup guides for PyIceberg, PySpark, and Trino.
 
+## 🔐 Authentication Modes
+Choose your security model.
+- **[Auth Mode](./auth-mode.md)**: Standard operational mode with user authentication.
+- **[No Auth Mode](./no-auth-mode.md)**: For local development and testing.
+
 ## 🚢 Deployment
 Move from local testing to production.
-- **[Deployment Guide](./deployment.md)**: instructions for local, Docker, and production environments.
+- **[Deployment Guide](./deployment.md)**: Instructions for local, Docker, and production environments.
+- **[Docker Deployment](./docker_deployment.md)**: Detailed Docker setup and configuration.
 
 ---
 
