@@ -33,32 +33,24 @@
     {/if}
 
 	<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-            label="Total Tenants" 
-            value={stats?.scope === 'root' ? stats.catalogs_count : 0} 
-            icon="apartment" 
-            color="blue" 
-        />
-        <!-- Note: The stats endpoint for root currently maps catalogs_count. 
-             Ideally backend should provide tenant_count explicitely if scope is root.
-             Assuming catalogs_count might be tenants for root? 
-             Let's check the backend logic or just show what we have.
-             Actually, let's show all the stats available.
-        -->
-        
         {#if stats}
-            <StatCard label="Catalogs" value={stats.catalogs_count} icon="📂" color="blue" />
+            {#if stats.scope === 'system' && stats.tenants_count !== undefined}
+                <StatCard label="Total Tenants" value={stats.tenants_count} icon="🏢" color="blue" />
+            {/if}
+            <StatCard label="Catalogs" value={stats.catalogs_count} icon="📂" color="indigo" />
             <StatCard label="Warehouses" value={stats.warehouses_count} icon="🏭" color="purple" />
             <StatCard label="Users" value={stats.users_count} icon="👥" color="green" />
             <StatCard label="Namespaces" value={stats.namespaces_count} icon="🏷️" color="yellow" />
             <StatCard label="Tables" value={stats.tables_count} icon="📋" color="red" />
             <StatCard label="Branches" value={stats.branches_count} icon="🌲" color="gray" />
-        {:else}
+        {:else if loading}
             <!-- Loading Skeletons -->
-            <StatCard label="Catalogs" value={undefined} icon="📂" color="blue" />
+            <StatCard label="Tenants" value={undefined} icon="🏢" color="blue" />
+            <StatCard label="Catalogs" value={undefined} icon="📂" color="indigo" />
             <StatCard label="Warehouses" value={undefined} icon="🏭" color="purple" />
             <StatCard label="Users" value={undefined} icon="👥" color="green" />
             <StatCard label="Namespaces" value={undefined} icon="🏷️" color="yellow" />
+            <StatCard label="Tables" value={undefined} icon="📋" color="red" />
         {/if}
 	</div>
 </div>

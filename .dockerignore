@@ -1,0 +1,10 @@
+target/
+node_modules/
+.git/
+.env
+.venv
+__pycache__/
+pangolin_ui/node_modules
+pangolin_ui/.svelte-kit
+*.log
+.DS_Store

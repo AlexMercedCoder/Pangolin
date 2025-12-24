@@ -5,6 +5,7 @@
     import ExplorerNode from '$lib/components/explorer/ExplorerNode.svelte';
     import CreateNamespaceDialog from '$lib/components/explorer/CreateNamespaceDialog.svelte';
     import CreateTableDialog from '$lib/components/explorer/CreateTableDialog.svelte';
+    import RegisterAssetModal from '$lib/components/assets/RegisterAssetModal.svelte';
     import { triggerExplorerRefresh, refreshExplorer } from '$lib/stores/explorer';
     import { notifications } from '$lib/stores/notifications';
 
@@ -25,6 +26,13 @@
     let showCreateNamespace = false;
     let showCreateTable = false;
     let creating = false;
+
+    // Register Asset State
+    let showRegisterAsset = false;
+    let registerAssetContext = {
+        catalog: '',
+        namespace: ''
+    };
 
     async function loadCatalogs() {
         loading = true;
@@ -64,7 +72,7 @@
                     hasChildren: true,
                     expanded: false,
                     // Pass loader for tables
-                    loadChildren: () => loadTables(catalogName, nsParts)
+                    loadChildren: () => loadAssets(catalogName, nsParts)
                 };
             });
         } catch (e) {
@@ -73,20 +81,42 @@
         }
     }
 
-    async function loadTables(catalogName: string, namespaceParts: string[]) {
+    function getAssetIcon(kind: string) {
+        switch (kind) {
+            case 'ICEBERG_TABLE': 
+            case 'IcebergTable': return '🧊';
+            case 'VIEW': 
+            case 'View': return '👁️';
+            case 'DELTA_TABLE': 
+            case 'DeltaTable': return '🔺';
+            case 'HUDI_TABLE': 
+            case 'HudiTable': return '🔥';
+            case 'PARQUET_TABLE': 
+            case 'ParquetTable': return '📦';
+            case 'CSV_TABLE': 
+            case 'CsvTable': return '📄';
+            case 'JSON_TABLE': 
+            case 'JsonTable': return '📋';
+            case 'ML_MODEL': 
+            case 'MlModel': return '🧠';
+            default: return '📄';
+        }
+    }
+
+    async function loadAssets(catalogName: string, namespaceParts: string[]) {
         try {
-            const tables = await icebergApi.listTables(catalogName, namespaceParts);
-            return tables.map(t => ({
-                id: `${catalogName}.${namespaceParts.join('.')}.${t.name}`,
-                label: t.name,
-                type: 'table',
-                icon: '📄',
-                href: `/explorer/${catalogName}/${namespaceParts.join('.')}/${t.name}`,
+            const assets = await icebergApi.listAssets(catalogName, namespaceParts);
+            return assets.map(a => ({
+                id: `${catalogName}.${namespaceParts.join('.')}.${a.name}`,
+                label: a.name,
+                type: 'asset', // Using 'asset' instead of 'table'
+                icon: getAssetIcon(a.kind),
+                href: `/explorer/${catalogName}/${namespaceParts.join('.')}/${a.name}`,
                 hasChildren: false,
                 expanded: false
             }));
         } catch (e) {
-             console.error(`Failed to load tables for ${namespaceParts.join('.')}:`, e);
+             console.error(`Failed to load assets for ${namespaceParts.join('.')}:`, e);
              return [];
         }
     }
@@ -119,6 +149,23 @@
         closeContextMenu();
     }
 
+    function openRegisterAsset() {
+        const node = contextMenu.node;
+        // Href format: /explorer/catalog/namespace.parts...
+        const pathParts = node.href.split('/').slice(2); // Remove empty and 'explorer'
+        
+        // pathParts[0] is catalog
+        // pathParts[1] is namespace (joined by dots)
+        
+        registerAssetContext = {
+            catalog: pathParts[0],
+            namespace: pathParts[1] // The href for namespace node already has joined namespace
+        };
+        
+        showRegisterAsset = true;
+        closeContextMenu();
+    }
+
     async function handleCreateNamespace(e: CustomEvent) {
         const { name } = e.detail;
         const catalogName = contextMenu.node.label; // For catalog node, label is name
@@ -141,13 +188,7 @@
         const request = e.detail;
         const node = contextMenu.node;
         
-        // Context depends on node type:
-        // If node is namespace, we have the path.
-        // We need to parse catalog and namespace from href or node structure?
-        // Node structure in ExplorerNode is generic.
-        // Href usually: /explorer/{catalog}/{namespace...}
-        // Let's rely on href to parse context.
-        const pathParts = node.href.split('/').slice(2); // Remove empty and 'explorer'
+        const pathParts = node.href.split('/').slice(2); 
         const catalogName = pathParts[0];
         const namespace = pathParts.slice(1);
 
@@ -251,6 +292,12 @@
                 </button>
                  <button 
                      class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                     on:click={openRegisterAsset}
+                >
+                    <span class="material-icons text-xs">add_link</span> Register Asset
+                </button>
+                 <button 
+                     class="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 flex items-center gap-2"
                      on:click={() => triggerExplorerRefresh('content')}
                 >
                     <span class="material-icons text-xs">refresh</span> Refresh
@@ -258,6 +305,13 @@
             {/if}
         </div>
     {/if}
+
+    <RegisterAssetModal
+        bind:open={showRegisterAsset}
+        catalogName={registerAssetContext.catalog}
+        namespace={registerAssetContext.namespace}
+        onSuccess={() => triggerExplorerRefresh('content')}
+    />
 
     <CreateNamespaceDialog 
         bind:open={showCreateNamespace} 

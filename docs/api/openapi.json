@@ -1075,6 +1075,124 @@
         ]
       }
     },
+    "/api/v1/catalogs/{catalog_name}/namespaces/{namespace}/assets": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "List all assets in a namespace (Iceberg tables + Generic assets)",
+        "operationId": "list_assets",
+        "parameters": [
+          {
+            "name": "catalog_name",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of assets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssetSummary"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Catalog not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Register a generic (non-Iceberg) asset for discovery and metadata management",
+        "operationId": "register_asset",
+        "parameters": [
+          {
+            "name": "catalog_name",
+            "in": "path",
+            "description": "Catalog name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "namespace",
+            "in": "path",
+            "description": "Namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterAssetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Asset registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterAssetResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Catalog not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/catalogs/{name}": {
       "get": {
         "tags": [
@@ -4476,7 +4594,7 @@
           "Iceberg REST"
         ],
         "summary": "Get credentials for accessing a table",
-        "description": "This endpoint vends credentials based on the catalog's warehouse configuration\nGet credentials for accessing a table\nThis endpoint vends credentials based on the catalog's warehouse configuration",
+        "description": "This endpoint vends credentials based on the catalog's warehouse configuration",
         "operationId": "get_table_credentials",
         "parameters": [
           {
@@ -4898,6 +5016,37 @@
           },
           "id": {
             "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AssetSummary": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "namespace",
+          "kind",
+          "identifier"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "identifier": {
+            "$ref": "#/components/schemas/crate.iceberg_handlers.TableIdentifier"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AssetType"
           },
           "name": {
             "type": "string"
@@ -5489,6 +5638,25 @@
                 ]
               }
             }
+          },
+          {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "current-schema-id": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "assert-current-schema-id"
+                ]
+              }
+            }
           }
         ],
         "discriminator": {
@@ -5814,7 +5982,8 @@
       "CreateBranchRequest": {
         "type": "object",
         "required": [
-          "name"
+          "name",
+          "catalog"
         ],
         "properties": {
           "assets": {
@@ -5830,7 +5999,7 @@
           },
           "catalog": {
             "type": "string",
-            "nullable": true
+            "description": "Catalog name (required)"
           },
           "from_branch": {
             "type": "string",
@@ -6016,14 +6185,6 @@
           "name"
         ],
         "properties": {
-          "admin_password": {
-            "type": "string",
-            "nullable": true
-          },
-          "admin_username": {
-            "type": "string",
-            "nullable": true
-          },
           "name": {
             "type": "string"
           },
@@ -6130,6 +6291,7 @@
           "users_count",
           "warehouses_count",
           "branches_count",
+          "tenants_count",
           "scope"
         ],
         "properties": {
@@ -6150,6 +6312,10 @@
             "description": "Scope of statistics: \"system\", \"tenant\", or \"user\""
           },
           "tables_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tenants_count": {
             "type": "integer",
             "minimum": 0
           },
@@ -6274,10 +6440,13 @@
       },
       "ListBranchParams": {
         "type": "object",
+        "required": [
+          "catalog"
+        ],
         "properties": {
           "catalog": {
             "type": "string",
-            "nullable": true
+            "description": "Catalog name (required)"
           },
           "name": {
             "type": "string",
@@ -6355,6 +6524,12 @@
           "password": {
             "type": "string"
           },
+          "tenant-id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional tenant ID for tenant-scoped login. If null/omitted, authenticates as Root user.",
+            "nullable": true
+          },
           "username": {
             "type": "string"
           }
@@ -6405,12 +6580,13 @@
         "type": "object",
         "required": [
           "source_branch",
-          "target_branch"
+          "target_branch",
+          "catalog"
         ],
         "properties": {
           "catalog": {
             "type": "string",
-            "nullable": true
+            "description": "Catalog name (required)"
           },
           "source_branch": {
             "type": "string"
@@ -6938,6 +7114,54 @@
         ],
         "properties": {
           "url": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterAssetRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "kind",
+          "location"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/AssetType"
+          },
+          "location": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RegisterAssetResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "location"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AssetType"
+          },
+          "location": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           }
         }
@@ -7506,6 +7730,12 @@
             "additionalProperties": {
               "type": "string"
             },
+            "nullable": true
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Internal Pangolin asset ID for linking to business metadata",
             "nullable": true
           },
           "metadata": {
@@ -8380,6 +8610,10 @@
     {
       "name": "Iceberg REST",
       "description": "Iceberg REST Catalog endpoints"
+    },
+    {
+      "name": "Assets",
+      "description": "Generic asset registration and management"
     },
     {
       "name": "Data Explorer",

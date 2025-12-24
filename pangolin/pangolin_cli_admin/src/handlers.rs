@@ -4,7 +4,7 @@ use pangolin_cli_common::error::CliError;
 use dialoguer::{Input, Password};
 use serde_json::Value;
 
-pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<String>, password_opt: Option<String>) -> Result<(), CliError> {
+pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<String>, password_opt: Option<String>, tenant_id_opt: Option<String>) -> Result<(), CliError> {
     let username = match username_opt {
         Some(u) => u,
         None => Input::new().with_prompt("Username").interact_text()
@@ -21,7 +21,7 @@ pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<Stri
     client.config.tenant_id = None;
     client.config.tenant_name = None;
 
-    client.login(&username, &password).await?;
+    client.login_with_tenant(&username, &password, tenant_id_opt.as_deref()).await?;
     
     // If tenant_id was set by login (Tenant Admin), try to fetch name
     if let Some(_) = client.config.tenant_id {
@@ -1538,6 +1538,7 @@ pub async fn handle_list_audit_events(
     action: Option<String>,
     resource_type: Option<String>,
     result: Option<String>,
+    tenant_id: Option<String>,
     limit: usize,
 ) -> Result<(), CliError> {
     let mut query_params = vec![format!("limit={}", limit)];
@@ -1545,6 +1546,7 @@ pub async fn handle_list_audit_events(
     if let Some(act) = action { query_params.push(format!("action={}", act)); }
     if let Some(rt) = resource_type { query_params.push(format!("resource_type={}", rt)); }
     if let Some(res) = result { query_params.push(format!("result={}", res)); }
+    if let Some(tid) = tenant_id { query_params.push(format!("tenant_id={}", tid)); }
     
     let query_string = if query_params.is_empty() { String::new() } else { format!("?{}", query_params.join("&")) };
     let res = client.get(&format!("/api/v1/audit{}", query_string)).await?;
@@ -1621,7 +1623,16 @@ pub async fn handle_stats(client: &PangolinClient) -> Result<(), CliError> {
     
     let stats: DashboardStats = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
     
-    println!("Dashboard Statistics ({})", stats.scope);
+    println!("Dashboard Statistics (Scope: {})", stats.scope);
+    println!("=====================================");
+    
+    // Show tenants count for Root users (system scope)
+    if stats.scope == "system" {
+        if let Some(count) = stats.tenants_count {
+            println!("  Tenants:     {}", count);
+        }
+    }
+    
     println!("  Catalogs:    {}", stats.catalogs_count);
     println!("  Warehouses:  {}", stats.warehouses_count);
     println!("  Namespaces:  {}", stats.namespaces_count);

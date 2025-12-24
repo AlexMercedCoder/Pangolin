@@ -52,8 +52,8 @@ async fn main() -> anyhow::Result<()> {
     // If a subcommand was passed directly (non-interactive mode), execute it and exit
     if let Some(cmd) = args.command {
         match cmd {
-            AdminCommand::Login { username, password } => {
-                if let Err(e) = handlers::handle_login(&mut client, username, password).await { eprintln!("Error: {}", e); }
+            AdminCommand::Login { username, password, tenant_id } => {
+                if let Err(e) = handlers::handle_login(&mut client, username, password, tenant_id).await { eprintln!("Error: {}", e); }
                 else {
                     if let Err(e) = config_manager.save(&client.config) {
                         eprintln!("Error saving config: {}", e);
@@ -113,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::ListAccessRequests => handlers::handle_list_access_requests(&client).await?,
             AdminCommand::UpdateAccessRequest { id, status } => handlers::handle_update_access_request(&client, id, status).await?,
             AdminCommand::GetAssetDetails { id } => handlers::handle_get_asset_details(&client, id).await?,
-            AdminCommand::ListAuditEvents { user_id, action, resource_type, result, limit } => handlers::handle_list_audit_events(&client, user_id, action, resource_type, result, limit).await?,
+            AdminCommand::ListAuditEvents { user_id, action, resource_type, result, tenant_id, limit } => handlers::handle_list_audit_events(&client, user_id, action, resource_type, result, tenant_id, limit).await?,
             AdminCommand::CountAuditEvents { user_id, action, resource_type, result } => handlers::handle_count_audit_events(&client, user_id, action, resource_type, result).await?,
             AdminCommand::GetAuditEvent { id } => handlers::handle_get_audit_event(&client, id).await?,
             AdminCommand::ListUserTokens { user_id } => handlers::handle_list_user_tokens(&client, user_id).await?,
@@ -181,8 +181,8 @@ async fn main() -> anyhow::Result<()> {
                                     AdminCommand::Clear => {
                                         print!("\x1B[2J\x1B[1;1H");
                                     },
-                                    AdminCommand::Login { username, password } => {
-                                        if let Err(e) = handlers::handle_login(&mut client, username, password).await {
+                                    AdminCommand::Login { username, password, tenant_id } => {
+                                        if let Err(e) = handlers::handle_login(&mut client, username, password, tenant_id).await {
                                             eprintln!("Error: {}", e);
                                         } else {
                                             // Save new config on success
@@ -332,8 +332,8 @@ async fn main() -> anyhow::Result<()> {
                                     AdminCommand::GetAssetDetails { id } => {
                                         if let Err(e) = handlers::handle_get_asset_details(&client, id).await { eprintln!("Error: {}", e); }
                                     },
-                                    AdminCommand::ListAuditEvents { user_id, action, resource_type, result, limit } => {
-                                        if let Err(e) = handlers::handle_list_audit_events(&client, user_id, action, resource_type, result, limit).await { eprintln!("Error: {}", e); }
+                                    AdminCommand::ListAuditEvents { user_id, action, resource_type, result, tenant_id, limit } => {
+                                        if let Err(e) = handlers::handle_list_audit_events(&client, user_id, action, resource_type, result, tenant_id, limit).await { eprintln!("Error: {}", e); }
                                     },
                                     AdminCommand::CountAuditEvents { user_id, action, resource_type, result } => {
                                         if let Err(e) = handlers::handle_count_audit_events(&client, user_id, action, resource_type, result).await { eprintln!("Error: {}", e); }

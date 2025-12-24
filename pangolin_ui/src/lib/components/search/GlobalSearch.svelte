@@ -61,16 +61,16 @@
       
       // Navigate to catalog
       // Navigate based on asset type
-      if (result.catalog) {
-          if (result.asset_type === 'table' || result.asset_type === 'view') {
-              // Navigate to explorer
-              const namespacePath = result.namespace.join('/');
-              goto(`/explorer/${encodeURIComponent(result.catalog)}/${namespacePath}/${encodeURIComponent(result.name)}`);
-          } else {
-              // Fallback to catalog
-              goto(`/catalogs/${encodeURIComponent(result.catalog)}`);
-          }
-      } else {
+        if (result.catalog) {
+            if (result.asset_type === 'table' || result.asset_type === 'view') {
+                // Navigate to explorer with asset ID for context (e.g. for request access)
+                const namespacePath = result.namespace.join('/');
+                goto(`/explorer/${encodeURIComponent(result.catalog)}/${namespacePath}/${encodeURIComponent(result.name)}?id=${result.id}`);
+            } else {
+                // Fallback to catalog
+                goto(`/catalogs/${encodeURIComponent(result.catalog)}`);
+            }
+        } else {
           console.error('Result missing catalog field', result);
       }
   }
@@ -115,19 +115,31 @@
         class="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 shadow-lg max-h-96 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm"
     >
       {#each results as result}
-        <button
-          on:click={() => handleSelect(result)}
-          class="w-full text-left cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-gray-100 dark:hover:bg-gray-700"
-        >
-          <div class="flex flex-col">
-            <span class="font-medium text-gray-900 dark:text-white truncate">
-                {result.name}
-            </span>
-            <span class="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {result.catalog} • {result.namespace.join('.')}
-            </span>
-          </div>
-        </button>
+
+                <div 
+                    class="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer flex items-center justify-between"
+                    on:click={() => handleSelect(result)}
+                >
+                    <div>
+                        <div class="font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                            {result.name}
+                            {#if !result.has_access}
+                                <span class="text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300 flex items-center gap-1">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                                    </svg>
+                                    Request Access
+                                </span>
+                            {/if}
+                        </div>
+                        <div class="text-sm text-gray-500">
+                           {result.catalog}.{result.namespace.join('.')}
+                        </div>
+                    </div>
+                    <div class="text-xs px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                        {result.asset_type}
+                    </div>
+                </div>
       {/each}
       
       <div class="border-t border-gray-200 dark:border-gray-700 mt-1 pt-1 px-3 py-2 bg-gray-50 dark:bg-gray-900 text-xs text-center text-gray-500">

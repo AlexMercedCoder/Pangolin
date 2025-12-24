@@ -1,7 +1,7 @@
 <script context="module" lang="ts">
   // Types based on backend Permission struct
   export type ScopeType = 'System' | 'Tenant' | 'Catalog' | 'Namespace' | 'Table' | 'View';
-  export type ActionType = 'READ' | 'WRITE' | 'CREATE' | 'DELETE' | 'ADMIN' | 'MANAGE_ACCESS' | 'MANAGE_DISCOVERY';
+  export type ActionType = 'READ' | 'WRITE' | 'CREATE' | 'DELETE' | 'ADMIN' | 'MANAGE_ACCESS' | 'MANAGE_DISCOVERY' | 'LIST';
 </script>
 
 <script lang="ts">
@@ -20,7 +20,7 @@
 
   const allScopeOptions: ScopeType[] = ['System', 'Tenant', 'Catalog', 'Namespace', 'Table', 'View'];
   $: scopeOptions = $isRoot ? allScopeOptions : allScopeOptions.filter(s => s !== 'System');
-  const actionOptions: ActionType[] = ['READ', 'WRITE', 'CREATE', 'DELETE', 'ADMIN', 'MANAGE_ACCESS', 'MANAGE_DISCOVERY'];
+  const actionOptions: ActionType[] = ['READ', 'WRITE', 'CREATE', 'DELETE', 'LIST', 'ADMIN', 'MANAGE_ACCESS', 'MANAGE_DISCOVERY'];
 
   function toggleAction(action: ActionType) {
     if (actions.includes(action)) {

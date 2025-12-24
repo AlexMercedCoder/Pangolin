@@ -72,7 +72,8 @@ impl Action {
         
         match self {
             Action::All => true,
-            Action::Write => matches!(other, Action::Read | Action::Update | Action::Delete | Action::Create),
+            Action::Write => matches!(other, Action::Read | Action::Update | Action::Delete | Action::Create | Action::List),
+            Action::Read => matches!(other, Action::List),
             _ => false,
         }
     }

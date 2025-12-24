@@ -563,10 +563,12 @@ pub async fn list_tables(
 
     match store.list_assets(tenant_id, &catalog_name, branch, ns_vec.clone()).await {
         Ok(assets) => {
-            let identifiers: Vec<TableIdentifier> = assets.into_iter().map(|a| TableIdentifier {
-                namespace: ns_vec.clone(),
-                name: a.name,
-            }).collect();
+            let identifiers: Vec<TableIdentifier> = assets.into_iter()
+                .filter(|a| a.kind == AssetType::IcebergTable)
+                .map(|a| TableIdentifier {
+                    namespace: ns_vec.clone(),
+                    name: a.name,
+                }).collect();
             (StatusCode::OK, Json(ListTablesResponse { identifiers })).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),

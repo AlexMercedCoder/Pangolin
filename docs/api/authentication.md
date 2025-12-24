@@ -4,12 +4,33 @@ Pangolin implements a secure authentication system based on JSON Web Tokens (JWT
 
 ## Authentication Flow
 
-1.  **Login**: Users authenticate against the `/api/v1/login` endpoint using their credentials.
+1.  **Login**: Users authenticate against the `/api/v1/users/login` endpoint using their credentials.
+    - **Root Login**: Omit `tenant-id` or set to `null`
+    - **Tenant-Scoped Login**: Include `tenant-id` with tenant UUID
 2.  **Token Issuance**: Upon successful authentication, the server returns a signed JWT.
 3.  **Authenticated Requests**: Clients must include this JWT in the `Authorization` header of subsequent requests:
     ```
     Authorization: Bearer <token>
     ```
+
+### Login Examples
+
+**Root Login**:
+```bash
+curl -X POST http://localhost:8080/api/v1/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password","tenant-id":null}'
+```
+
+**Tenant-Scoped Login** (for users with duplicate usernames across tenants):
+```bash
+curl -X POST http://localhost:8080/api/v1/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"user","password":"pass123","tenant-id":"<tenant-uuid>"}'
+```
+
+> [!IMPORTANT]
+> Use `tenant-id` (kebab-case), not `tenant_id` (underscore).
 
 ## Root User
 

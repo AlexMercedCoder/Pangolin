@@ -121,6 +121,9 @@
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {#if stats && $user?.role !== 'tenant-user'}
+            {#if stats.scope === 'system' && stats.tenants_count !== undefined}
+                <StatCard label="Tenants" value={stats.tenants_count} icon="🏢" color="green" />
+            {/if}
             <StatCard label="Catalogs" value={stats.catalogs_count} icon="📂" color="blue" />
             <StatCard label="Warehouses" value={stats.warehouses_count} icon="🏭" color="purple" />
             <StatCard label="Namespaces" value={stats.namespaces_count} icon="🏷️" color="yellow" />

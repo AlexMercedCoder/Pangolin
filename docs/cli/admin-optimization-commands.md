@@ -21,7 +21,9 @@ pangolin-admin stats
 
 **Output**:
 ```
-Dashboard Statistics (tenant)
+Dashboard Statistics (Scope: system)
+=====================================
+  Tenants:     3
   Catalogs:    6
   Warehouses:  2
   Namespaces:  15
@@ -29,6 +31,8 @@ Dashboard Statistics (tenant)
   Users:       5
   Branches:    8
 ```
+
+**Note**: `Tenants` count is only displayed for Root users with system-wide scope.
 
 **Scope**: Results are scoped based on your role:
 - **Root**: System-wide statistics

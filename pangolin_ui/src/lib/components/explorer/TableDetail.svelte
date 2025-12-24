@@ -13,12 +13,16 @@
     $: snapshots = table.snapshots || [];
     $: history = table.history || [];
     $: properties = table.properties || {};
+    
+    // Resolve assetId from prop or table-uuid
+    $: effectiveAssetId = assetId || table['table-uuid'];
 
     let activeTab: 'schema' | 'snapshots' | 'metadata' | 'business' = 'schema';
     
     // Business Metadata state
     let businessMetadata: any = null;
     let loadingMetadata = false;
+    let metadataAttempted = false; // Track if we've tried loading for current asset
     let editMode = false;
     let description = '';
     let tags: string[] = [];
@@ -27,25 +31,42 @@
 
     $: canEdit = $authStore.user?.role === 'tenant-admin' || $authStore.user?.role === 'root';
 
+    // Reset state when asset changes
+    $: if (effectiveAssetId) {
+        businessMetadata = null;
+        metadataAttempted = false;
+        loadingMetadata = false;
+    }
+
     onMount(async () => {
-        if (assetId) {
-            await loadMetadata();
-        }
+        // We need to wait for effectiveAssetId to be available. 
+        // Since it's reactive, we watch it instead of just running onMount once.
     });
+    
+    // Reactive loader
+    // Only load if we haven't attempted yet for this asset and tab is active
+    $: if (effectiveAssetId && activeTab === 'business' && !metadataAttempted && !loadingMetadata) {
+         loadMetadata();
+    }
 
     async function loadMetadata() {
-        if (!assetId) return;
+        if (!effectiveAssetId) return;
         loadingMetadata = true;
+        metadataAttempted = true; // Mark as attempted immediately
         try {
-            const res = await fetch(`/api/v1/business-metadata/${assetId}`, {
+            const res = await fetch(`/api/v1/assets/${effectiveAssetId}/metadata`, {
                 headers: { 'Authorization': `Bearer ${$authStore.token}` }
             });
             if (res.ok) {
                 const data = await res.json();
-                businessMetadata = data.metadata;
+                // Handle potential wrapper from API (some endpoints return { metadata: ... })
+                businessMetadata = data.metadata || data; 
                 description = businessMetadata?.description || '';
                 tags = businessMetadata?.tags || [];
                 discoverable = businessMetadata?.discoverable || false;
+            } else if (res.status === 404) {
+                 // Metadata doesn't exist yet, initialize defaults but don't loop
+                 businessMetadata = { description: '', tags: [], discoverable: false };
             }
         } catch (e) {
             console.error('Failed to load metadata:', e);
@@ -55,9 +76,9 @@
     }
 
     async function saveMetadata() {
-        if (!assetId) return;
+        if (!effectiveAssetId) return;
         try {
-            const res = await fetch(`/api/v1/business-metadata/${assetId}`, {
+            const res = await fetch(`/api/v1/assets/${effectiveAssetId}/metadata`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${$authStore.token}`,
@@ -87,6 +108,17 @@
         tags = tags.filter(t => t !== tag);
     }
 
+    $: assetKind = (table as any).kind || 'ICEBERG_TABLE';
+
+    function formatAssetType(kind: string) {
+        if (!kind) return 'Unknown';
+        return kind.replace(/_/g, ' ')
+            .toLowerCase()
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+
 </script>
 
 <div class="space-y-6">
@@ -99,9 +131,19 @@
              </div>
          </Card>
          <Card>
-            <div class="text-sm text-gray-500 dark:text-gray-400">Format Version</div>
-            <div class="font-medium text-gray-900 dark:text-white">
-                v{table['format-version'] || '1'}
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Type</div>
+                    <div class="font-medium text-gray-900 dark:text-white">
+                        {formatAssetType(assetKind)}
+                    </div>
+                </div>
+                <div class="text-right border-l border-gray-200 dark:border-gray-700 pl-4">
+                    <div class="text-sm text-gray-500 dark:text-gray-400">Version</div>
+                    <div class="font-medium text-gray-900 dark:text-white">
+                        v{table['format-version'] || '1'}
+                    </div>
+                </div>
             </div>
         </Card>
         <Card>

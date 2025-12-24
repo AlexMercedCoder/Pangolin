@@ -15,6 +15,7 @@ fn test_table_response_with_s3_credentials() {
         Some("s3://test-bucket/metadata.json".to_string()),
         metadata,
         Some(creds),
+        None,  // asset_id
     );
 
     let config = response.config.expect("Config should be present");
@@ -42,6 +43,7 @@ fn test_table_response_with_azure_credentials() {
         Some("abfs://container@account.dfs.core.windows.net/path".to_string()),
         metadata,
         Some(creds),
+        None,  // asset_id
     );
 
     let config = response.config.expect("Config should be present");
@@ -69,6 +71,7 @@ fn test_table_response_with_gcs_credentials() {
         Some("gs://my-bucket/path".to_string()),
         metadata,
         Some(creds),
+        None,  // asset_id
     );
 
     let config = response.config.expect("Config should be present");
@@ -91,6 +94,7 @@ fn test_table_response_with_no_credentials() {
         Some("s3://test-bucket/metadata.json".to_string()),
         metadata,
         None,
+        None,  // asset_id
     );
 
     let config = response.config.expect("Config should be present");
@@ -116,6 +120,7 @@ fn test_table_response_credentials_override_defaults() {
         Some("s3://test-bucket/metadata.json".to_string()),
         metadata,
         Some(creds),
+        None,  // asset_id
     );
 
     let config = response.config.expect("Config should be present");
@@ -141,6 +146,7 @@ fn test_table_response_with_mixed_credentials() {
         Some("s3://test-bucket/metadata.json".to_string()),
         metadata,
         Some(creds),
+        None,  // asset_id
     );
 
     let config = response.config.expect("Config should be present");
@@ -156,7 +162,7 @@ fn test_table_response_with_mixed_credentials() {
 fn create_test_metadata() -> TableMetadata {
     TableMetadata {
         format_version: 2,
-        table_uuid: "test-uuid-123".to_string(),
+        table_uuid: uuid::Uuid::new_v4(),
         location: "s3://test-bucket/table".to_string(),
         last_updated_ms: 1234567890,
         last_column_id: 1,

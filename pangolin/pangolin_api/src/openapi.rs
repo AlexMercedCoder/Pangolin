@@ -188,6 +188,10 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         // Views
         asset_handlers::create_view,
         asset_handlers::get_view,
+        
+        // Generic Assets
+        asset_handlers::register_asset,
+        asset_handlers::list_assets,
     ),
     components(
         schemas(
@@ -251,6 +255,9 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             // View models
             asset_handlers::CreateViewRequest, asset_handlers::ViewResponse,
             
+            // Generic Asset models
+            asset_handlers::RegisterAssetRequest, asset_handlers::RegisterAssetResponse, asset_handlers::AssetSummary,
+            
             // App models
             user_handlers::AppConfig,
             
@@ -277,6 +284,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         (name = "Audit Logging", description = "Audit log viewing and filtering endpoints"),
         (name = "System Config", description = "System configuration management endpoints"),
         (name = "Iceberg REST", description = "Iceberg REST Catalog endpoints"),
+        (name = "Assets", description = "Generic asset registration and management"),
         (name = "Data Explorer", description = "Data exploration and discovery endpoints"),
         (name = "Dashboard", description = "Dashboard statistics and summaries"),
         (name = "Search", description = "Asset search and discovery"),

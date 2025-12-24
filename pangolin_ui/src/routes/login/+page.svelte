@@ -11,6 +11,8 @@
 	let password = '';
 	let error = '';
 	let loading = false;
+	let showTenantSelector = false;
+	let tenantId = '';
 
 	import { page } from '$app/stores';
 
@@ -42,8 +44,9 @@
 		loading = true;
 
 		try {
-            console.log('Attempting login for:', username);
-			const result = await authStore.login(username, password);
+            console.log('Attempting login for:', username, 'with tenant:', tenantId);
+			const tenantIdToSend = showTenantSelector && tenantId ? tenantId : null;
+			const result = await authStore.login(username, password, tenantIdToSend);
             console.log('Login result:', result);
 			if (result.success) {
 				goto('/');
@@ -99,25 +102,56 @@
 				/>
 
 				<Input
-					label="Password"
-					type="password"
-					bind:value={password}
-					placeholder="Enter your password"
-					required
+				label="Password"
+				type="password"
+				bind:value={password}
+				placeholder="Enter your password"
+				required
+				disabled={loading}
+				on:keypress={handleKeyPress}
+			/>
+
+			<!-- Tenant-Scoped Login Option -->
+			<div class="flex items-center space-x-2">
+				<input
+					type="checkbox"
+					id="tenant-login"
+					bind:checked={showTenantSelector}
+					class="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500 dark:focus:ring-primary-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+					disabled={loading}
+				/>
+				<label
+					for="tenant-login"
+					class="text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer"
+				>
+					Tenant-specific login
+				</label>
+			</div>
+
+			{#if showTenantSelector}
+				<Input
+					label="Tenant ID"
+					type="text"
+					bind:value={tenantId}
+					placeholder="Enter tenant ID (UUID)"
 					disabled={loading}
 					on:keypress={handleKeyPress}
 				/>
+				<p class="text-xs text-gray-500 dark:text-gray-400 -mt-2">
+					Enter the tenant ID if you have duplicate usernames across tenants
+				</p>
+			{/if}
 
-				<Button
-					type="submit"
-					variant="primary"
-					fullWidth
-					{loading}
-					disabled={loading || !username || !password}
-				>
-					{loading ? 'Signing in...' : 'Sign In'}
-				</Button>
-			</form>
+			<Button
+				type="submit"
+				variant="primary"
+				fullWidth
+				{loading}
+				disabled={loading || !username || !password}
+			>
+				{loading ? 'Signing in...' : 'Sign In'}
+			</Button>
+		</form>
 
 			<!-- OAuth Options -->
 			<div class="mt-6">

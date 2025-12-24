@@ -93,10 +93,21 @@ impl PangolinClient {
     }
     
     pub async fn login(&mut self, username: &str, password: &str) -> Result<(), CliError> {
-        let body = json!({
+        self.login_with_tenant(username, password, None).await
+    }
+    
+    pub async fn login_with_tenant(&mut self, username: &str, password: &str, tenant_id: Option<&str>) -> Result<(), CliError> {
+        let mut body = json!({
             "username": username,
-            "password": password
+            "password": password,
         });
+        
+        // Add tenant-id field (kebab-case!)
+        if let Some(tid) = tenant_id {
+            body["tenant-id"] = json!(tid);
+        } else {
+            body["tenant-id"] = json!(null);
+        }
 
         let res = self.client.post(&self.url("/api/v1/users/login"))
             .json(&body)
@@ -105,7 +116,8 @@ impl PangolinClient {
             .map_err(|e| CliError::ApiError(e.to_string()))?;
 
         if !res.status().is_success() {
-            return Err(CliError::AuthError("Login failed. Check credentials.".to_string()));
+            let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            return Err(CliError::AuthError(format!("Login failed: {}", error_text)));
         }
 
         #[derive(serde::Deserialize)]

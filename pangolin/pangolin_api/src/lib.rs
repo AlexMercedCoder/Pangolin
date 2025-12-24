@@ -128,6 +128,8 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/catalogs", get(pangolin_handlers::list_catalogs).post(pangolin_handlers::create_catalog))
         .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog).put(pangolin_handlers::update_catalog).delete(pangolin_handlers::delete_catalog))
         .route("/api/v1/catalogs/:prefix/namespaces/tree", get(iceberg_handlers::list_namespaces_tree))
+        .route("/api/v1/catalogs/:catalog_name/namespaces/:namespace/assets", get(asset_handlers::list_assets).post(asset_handlers::register_asset))
+        .route("/api/v1/catalogs/:catalog_name/namespaces/:namespace/assets/:asset", get(asset_handlers::get_asset))
         // Federated Catalog Management
         .route("/api/v1/federated-catalogs", post(federated_catalog_handlers::create_federated_catalog).get(federated_catalog_handlers::list_federated_catalogs))
         .route("/api/v1/federated-catalogs/:name", get(federated_catalog_handlers::get_federated_catalog).delete(federated_catalog_handlers::delete_federated_catalog))

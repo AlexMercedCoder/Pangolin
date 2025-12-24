@@ -158,9 +158,9 @@ function createAuthStore() {
 				return { success: false, error: error.message || 'OAuth login failed' };
 			}
 		},
-		async login(username: string, password: string) {
+		async login(username: string, password: string, tenantId?: string | null) {
 			try {
-				const response = await authApi.login({ username, password });
+				const response = await authApi.login(username, password, tenantId);
 				const user: User = response.user;
 
 				update(state => ({

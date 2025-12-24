@@ -21,6 +21,7 @@ export interface Table {
     properties?: Record<string, string>;
     location?: string;
     "format-version"?: number;
+    "table-uuid"?: string;
 }
 
 export interface Asset extends Table {
@@ -124,5 +125,43 @@ export const icebergApi = {
         const response = await apiClient.post<Table>(`${baseUrl}/namespaces/${nsPath}/tables`, request);
         if (response.error) throw new Error(response.error.message);
         return response.data!;
+    },
+
+    async listAssets(catalogName: string, namespace: string[]): Promise<AssetSummary[]> {
+        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}`;
+        const nsPath = namespace.join('.');
+        const response = await apiClient.get<AssetSummary[]>(`${baseUrl}/namespaces/${nsPath}/assets`);
+        if (response.error) throw new Error(response.error.message);
+        return response.data || [];
+    },
+
+    async getAsset(catalogName: string, namespace: string[], asset: string): Promise<Asset> {
+        const baseUrl = `/api/v1/catalogs/${encodeURIComponent(catalogName)}`;
+        const nsPath = namespace.join('.');
+        const response = await apiClient.get<any>(`${baseUrl}/namespaces/${nsPath}/assets/${asset}`);
+        if (response.error) throw new Error(response.error.message);
+        
+        const data = response.data;
+        return {
+             identifier: { namespace, name: data.name },
+             name: data.name,
+             "table-uuid": data.id, 
+             // @ts-ignore
+             kind: data.kind,
+             location: data.location,
+             properties: data.properties,
+             schemas: [],
+             snapshots: [],
+             history: [],
+             "format-version": 1
+        } as Asset;
     }
 };
+
+export interface AssetSummary {
+    id: string;
+    name: string;
+    namespace: string[];
+    kind: string; 
+    identifier: TableIdentifier;
+}

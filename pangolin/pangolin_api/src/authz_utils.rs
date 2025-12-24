@@ -167,7 +167,14 @@ pub fn filter_assets(
     let required_actions = vec![Action::Read, Action::ManageDiscovery];
     
     assets.into_iter()
-        .filter(|(asset, _metadata, catalog_name, namespace)| {
+        .filter(|(asset, metadata, catalog_name, namespace)| {
+            // Check discoverable flag - if discoverable, anyone can see it
+            if let Some(meta) = metadata {
+                if meta.discoverable {
+                    return true;
+                }
+            }
+
             // Get catalog ID from the map
             if let Some(&catalog_id) = catalog_id_map.get(catalog_name) {
                 let namespace_str = namespace.join(".");

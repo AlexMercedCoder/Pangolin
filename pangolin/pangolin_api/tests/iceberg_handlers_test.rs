@@ -146,7 +146,8 @@ fn test_table_response_includes_config() {
     
     let response = TableResponse::new(
         Some("s3://bucket/table/metadata/v1.metadata.json".to_string()),
-        metadata
+        metadata,
+        None,  // asset_id
     );
     
     // Verify config is present

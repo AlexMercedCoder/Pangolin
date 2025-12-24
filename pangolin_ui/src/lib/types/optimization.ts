@@ -5,6 +5,7 @@ export interface DashboardStats {
   users_count: number;
   warehouses_count: number;
   branches_count: number;
+  tenants_count?: number;  // Only for Root users
   scope: string;
 }
 
@@ -29,6 +30,7 @@ export interface AssetSearchResult {
   namespace: string[];
   catalog: string;
   asset_type: string;
+  has_access: boolean;
 }
 
 export interface BulkOperationResponse {

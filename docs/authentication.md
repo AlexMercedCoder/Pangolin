@@ -21,6 +21,26 @@ The default mode for secure, stateless session management.
 - **Secret Key**: You **must** set `PANGOLIN_JWT_SECRET` to a strong random string (at least 32 characters).
 - **Flow**: POST credentials to `/api/v1/users/login` -> Receive JWT -> Include in header: `Authorization: Bearer <jwt>`.
 
+#### Tenant-Scoped Login
+For multi-tenant deployments, users can have the same username across different tenants. To resolve username collisions, include the `tenant-id` field in login requests:
+
+**Root Login** (no tenant context):
+```bash
+curl -X POST http://localhost:8080/api/v1/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password","tenant-id":null}'
+```
+
+**Tenant-Scoped Login** (with tenant context):
+```bash
+curl -X POST http://localhost:8080/api/v1/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"user","password":"pass123","tenant-id":"<tenant-uuid>"}'
+```
+
+> [!IMPORTANT]
+> The field name is `tenant-id` (kebab-case), not `tenant_id` (underscore). This is due to the `LoginRequest` struct using `#[serde(rename_all = "kebab-case")]`.
+
 ### 3. OAuth 2.0 / OIDC (Enterprise SSO)
 Allows users to sign in with external identity providers.
 - **Supported Providers**: Google, Microsoft (Entra ID), GitHub, Okta.

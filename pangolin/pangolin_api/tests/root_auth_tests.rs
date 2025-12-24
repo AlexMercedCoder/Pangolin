@@ -42,6 +42,7 @@ async fn test_root_login_env_vars() {
     let login_req = LoginRequest {
         username: "superadmin".to_string(),
         password: "supersecret".to_string(),
+        tenant_id: None,  // Root login
     };
 
     let req = Request::builder()
@@ -71,7 +72,7 @@ async fn test_root_cannot_create_warehouse() {
     let app = setup_app(store);
 
     // 1. Login to get token
-    let login_req = LoginRequest { username: "admin".to_string(), password: "password".to_string() };
+    let login_req = LoginRequest { username: "admin".to_string(), password: "password".to_string(), tenant_id: None };
     let req = Request::builder().method("POST").uri("/api/v1/users/login").header("content-type", "application/json").body(Body::from(serde_json::to_string(&login_req).unwrap())).unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK, "Login should succeed");
@@ -111,7 +112,7 @@ async fn test_root_cannot_create_catalog() {
     let app = setup_app(store);
 
     // 1. Login to get token
-    let login_req = LoginRequest { username: "admin".to_string(), password: "password".to_string() };
+    let login_req = LoginRequest { username: "admin".to_string(), password: "password".to_string(), tenant_id: None };
     let req = Request::builder().method("POST").uri("/api/v1/users/login").header("content-type", "application/json").body(Body::from(serde_json::to_string(&login_req).unwrap())).unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK, "Login should succeed");

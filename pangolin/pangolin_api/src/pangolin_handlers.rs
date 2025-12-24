@@ -719,6 +719,16 @@ pub async fn create_catalog(
             if let Err(e) = store.create_namespace(tenant_id, &catalog.name, ns).await {
                 tracing::warn!("Failed to create default namespace for catalog {}: {}", catalog.name, e);
             }
+
+            // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+                tenant_id,
+                session.username.clone(),
+                "create_catalog".to_string(),
+                catalog.name.clone(),
+                None
+            )).await;
+
             (StatusCode::CREATED, Json(CatalogResponse::from(catalog))).into_response()
         },
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
@@ -767,6 +777,7 @@ pub async fn get_catalog(
 pub async fn delete_catalog(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
@@ -775,6 +786,16 @@ pub async fn delete_catalog(
     match store.delete_catalog(tenant_id, name.clone()).await {
         Ok(_) => {
             tracing::info!("Successfully deleted catalog: {}", name);
+            
+            // Audit Log
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+                tenant_id,
+                session.username.clone(), // This extension might need to be added to arguments if not present
+                "delete_catalog".to_string(),
+                name,
+                None
+            )).await;
+
             StatusCode::NO_CONTENT.into_response()
         },
         Err(e) => {

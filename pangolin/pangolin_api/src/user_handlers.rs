@@ -37,6 +37,8 @@ pub struct UpdateUserRequest {
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+    /// Optional tenant ID for tenant-scoped login. If null/omitted, authenticates as Root user.
+    pub tenant_id: Option<Uuid>,
 }
 
 /// Login response with JWT token
@@ -162,6 +164,17 @@ pub async fn create_user(
     if let Err(_) = store.create_user(user.clone()).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create user").into_response();
     }
+    
+    // Audit log
+    // Log to the target tenant scope so admins can see it
+    let target_tenant = user.tenant_id.unwrap_or_default();
+    let _ = store.log_audit_event(target_tenant, pangolin_core::audit::AuditLogEntry::legacy_new(
+        target_tenant,
+        session.username.clone(),
+        "create_user".to_string(),
+        user.username.clone(),
+        None
+    )).await;
     
     (StatusCode::CREATED, Json(UserInfo::from(user))).into_response()
 }
@@ -325,7 +338,20 @@ pub async fn delete_user(
     }
     
     match store.delete_user(user_id).await {
-        Ok(_) => (StatusCode::NO_CONTENT).into_response(),
+        Ok(_) => {
+            // Audit Log
+            // Since we don't have the user object, we log to the actor's tenant context
+            let audit_tenant = session.tenant_id.unwrap_or_default();
+            let _ = store.log_audit_event(audit_tenant, pangolin_core::audit::AuditLogEntry::legacy_new(
+                audit_tenant,
+                session.username.clone(),
+                "delete_user".to_string(),
+                user_id.to_string(),
+                None
+            )).await;
+
+            (StatusCode::NO_CONTENT).into_response()
+        },
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete user: {}", e)).into_response(),
     }
 }
@@ -346,11 +372,85 @@ pub async fn login(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Json(req): Json<LoginRequest>,
 ) -> Response {
-    // Fetch user by username
-    // Fetch user by username
-    let user_opt = store.get_user_by_username(&req.username).await.unwrap_or(None);
+    // 1. Check for Root User via Environment Variables (only if tenant_id is null)
+    // This takes precedence over DB users to ensure Root is always accessible even if a tenant user shadows the name
+    if req.tenant_id.is_none() {
+        let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_else(|_| "admin".to_string());
+        let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
+
+        if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
+            // Create a temporary User object for the root user session
+            let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap(); 
+            let user = User {
+                id: root_id,
+                username: root_user,
+                email: "root@pangolin.local".to_string(),
+                password_hash: None,
+                tenant_id: None,
+                role: UserRole::Root,
+                oauth_provider: None,
+                oauth_subject: None,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                last_login: None,
+                active: true,
+            };
+            
+            // Create session
+            let session = crate::auth_middleware::create_session(
+                user.id,
+                user.username.clone(),
+                user.tenant_id,
+                user.role.clone(),
+                86400, // 24 hours
+            );
+
+            // Generate token
+            let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
+            let token = match crate::auth_middleware::generate_token(session, &secret) {
+                Ok(t) => t,
+                Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to generate token").into_response(),
+            };
+
+            let response = LoginResponse {
+                token,
+                user: UserInfo::from(user),
+                expires_at: (chrono::Utc::now() + chrono::Duration::seconds(86400)).to_rfc3339(),
+            };
+
+            return (StatusCode::OK, Json(response)).into_response();
+        }
+    }
+
+    // 2. Tenant-scoped or DB Root lookup
+    let user_opt = if let Some(tenant_id) = req.tenant_id {
+        // Tenant-scoped login: get users from this tenant only, then find by username
+        // This ensures we only look at users within the specified tenant
+        match store.list_users(Some(tenant_id)).await {
+            Ok(users) => {
+                // Find user by username within this tenant's users
+                users.into_iter().find(|u| u.username == req.username)
+            },
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        }
+    } else {
+        // Root login: tenant_id is null/omitted
+        // Note: We already checked env vars above. This is for DB-persisted root users.
+        store.get_user_by_username(&req.username).await.unwrap_or(None)
+    };
+    
     let user = match user_opt {
         Some(u) => {
+            // For tenant-scoped login, verify user is not Root
+            if req.tenant_id.is_some() && u.role == UserRole::Root {
+                return (StatusCode::UNAUTHORIZED, "Root users must login without tenant_id").into_response();
+            }
+            
+            // For Root login (no tenant_id), verify user IS Root
+            if req.tenant_id.is_none() && u.role != UserRole::Root {
+                return (StatusCode::UNAUTHORIZED, "Tenant users must login with tenant_id").into_response();
+            }
+            
             // Verify password for DB user
             if let Some(hash) = &u.password_hash {
                 match crate::auth_middleware::verify_password(&req.password, hash) {
@@ -362,31 +462,7 @@ pub async fn login(
             }
         },
         None => {
-            // Check for Root User via Environment Variables
-            let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_else(|_| "admin".to_string());
-            let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
-
-            if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
-                // Create a temporary User object for the root user session
-                // Use a deterministic UUID for root to ensure consistency across restarts
-                let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap(); 
-                User {
-                    id: root_id,
-                    username: root_user,
-                    email: "root@pangolin.local".to_string(), // Dummy email
-                    password_hash: None, // No hash needed since we verified plaintext
-                    tenant_id: None, // Root has no tenant
-                    role: UserRole::Root,
-                    oauth_provider: None,
-                    oauth_subject: None,
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                    last_login: None,
-                    active: true,
-                }
-            } else {
-                return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response();
-            }
+            return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response();
         }
     };
 

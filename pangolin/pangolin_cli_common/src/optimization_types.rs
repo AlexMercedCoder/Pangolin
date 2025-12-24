@@ -9,6 +9,7 @@ pub struct DashboardStats {
     pub users_count: usize,
     pub warehouses_count: usize,
     pub branches_count: usize,
+    pub tenants_count: Option<usize>,  // New field for Root users
     pub scope: String,
 }
 

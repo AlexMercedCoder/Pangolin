@@ -48,6 +48,7 @@ async fn test_auth_flow() {
     let login_req = LoginRequest {
         username: "admin".to_string(),
         password: password.to_string(),
+        tenant_id: None,  // Root login
     };
     
     let req = Request::builder()
@@ -71,6 +72,7 @@ async fn test_auth_flow() {
     let bad_login_req = LoginRequest {
         username: "admin".to_string(),
         password: "wrong_password".to_string(),
+        tenant_id: None,  // Root login
     };
     
     let req = Request::builder()

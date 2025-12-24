@@ -38,6 +38,7 @@ pub struct AssetSearchResult {
     pub namespace: Vec<String>,
     pub catalog: String,
     pub asset_type: String,
+    pub has_access: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -79,27 +80,66 @@ pub async fn search_assets_by_name(
     if query.q.is_empty() {
         return Err(ApiError::bad_request("Search query cannot be empty"));
     }
+
+    // Fetch user permissions for filtering (unless Root/TenantAdmin)
+    let permissions = if matches!(session.role, pangolin_core::user::UserRole::TenantUser) {
+        store.list_user_permissions(session.user_id).await.map_err(ApiError::from)?
+    } else {
+        Vec::new() // Root/TenantAdmin bypass filtering
+    };
     
     // Use the optimized search_assets method from the store
     // This pushes filtering down to the database level (SQL/Mongo)
     let assets = store.search_assets(tenant_id, &query.q, None).await
         .map_err(ApiError::from)?;
     
+    // Build catalog ID map for filtering
+    let catalogs = store.list_catalogs(tenant_id).await.map_err(ApiError::from)?;
+    let catalog_map: std::collections::HashMap<_, _> = catalogs.iter()
+        .map(|c| (c.name.clone(), c.id))
+        .collect();
+
+    // Apply permission-based filtering
+    let filtered_assets = crate::authz_utils::filter_assets(
+        assets,
+        &permissions,
+        session.role.clone(),
+        &catalog_map
+    );
+    
     // Filter by catalog if specified
     let mut all_results = Vec::new();
-    for (asset, _metadata, catalog_name, namespace) in assets {
+    for (asset, _metadata, catalog_name, namespace) in filtered_assets {
         if let Some(ref cat_filter) = query.catalog {
             if &catalog_name != cat_filter {
                 continue;
             }
         }
         
+        // Calculate access status (distinguish between discoverable-only vs accessible)
+        let has_access = if matches!(session.role, pangolin_core::user::UserRole::Root | pangolin_core::user::UserRole::TenantAdmin) {
+            true
+        } else {
+            if let Some(&catalog_id) = catalog_map.get(&catalog_name) {
+                 let namespace_str = namespace.join(".");
+                 let required_actions = vec![pangolin_core::permission::Action::Read];
+                 crate::authz_utils::has_asset_access(catalog_id, &namespace_str, asset.id, &permissions, &required_actions)
+            } else {
+                false
+            }
+        };
+
         all_results.push(AssetSearchResult {
             id: asset.id.to_string(),
             name: asset.name,
             namespace, // already a Vec<String>
             catalog: catalog_name,
-            asset_type: format!("{:?}", asset.kind), // Use debug formatter for AssetType enum
+            asset_type: match asset.kind {
+                pangolin_core::model::AssetType::IcebergTable => "table".to_string(),
+                pangolin_core::model::AssetType::View => "view".to_string(),
+                _ => format!("{:?}", asset.kind).to_lowercase(),
+            },
+            has_access,
         });
     }
     

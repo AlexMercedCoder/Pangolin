@@ -22,8 +22,26 @@ pangolin-admin --profile prod create-user --username newuser
 ```
 
 ## Authentication
-- **Login**: `login --username <user>`
+- **Login**: `login --username <user> [--password <pass>] [--tenant-id <uuid>]`
+  - Omit `--tenant-id` for Root user login
+  - Include `--tenant-id` for tenant-scoped login (resolves duplicate usernames across tenants)
 - **Logout**: Exit the REPL or simply don't use the session. Session tokens are stored in `~/.config/pangolin/cli/config.json`.
+
+### Examples
+
+**Root Login**:
+```bash
+pangolin-admin login --username admin --password password
+```
+
+**Tenant-Scoped Login** (for users with duplicate usernames):
+```bash
+# Get tenant ID first
+TENANT_ID=$(pangolin-admin list-tenants | grep "my-tenant" | awk '{print $1}')
+
+# Login with tenant context
+pangolin-admin login --username user --password pass123 --tenant-id $TENANT_ID
+```
 
 ## Core Management
 ### Tenants

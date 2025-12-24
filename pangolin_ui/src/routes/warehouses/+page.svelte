@@ -80,6 +80,7 @@
 
 	function getBucketOrContainer(warehouse: any): string {
 		return warehouse.storage_config?.['s3.bucket'] 
+			|| warehouse.storage_config?.['adls.container']
 			|| warehouse.storage_config?.['azure.container']
 			|| warehouse.storage_config?.['gcs.bucket'] 
 			|| '-';

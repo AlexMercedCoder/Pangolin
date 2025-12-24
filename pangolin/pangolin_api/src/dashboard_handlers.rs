@@ -19,6 +19,7 @@ pub struct DashboardStats {
     pub users_count: usize,
     pub warehouses_count: usize,
     pub branches_count: usize,
+    pub tenants_count: usize,
     /// Scope of statistics: "system", "tenant", or "user"
     pub scope: String,
 }
@@ -54,18 +55,29 @@ pub async fn get_dashboard_stats(
 ) -> Result<impl IntoResponse, ApiError> {
     match session.role {
         UserRole::Root => {
-            let catalogs = store.list_catalogs(session.tenant_id.unwrap_or_default()).await
+            // Aggregate statistics across ALL tenants
+            let tenants = store.list_tenants().await
                 .map_err(ApiError::from)?;
-            let warehouses = store.list_warehouses(session.tenant_id.unwrap_or_default()).await
-                .map_err(ApiError::from)?;
+            let tenants_count = tenants.len();
+            
+            let mut catalogs_count = 0;
+            let mut warehouses_count = 0;
+            
+            for tenant in &tenants {
+                catalogs_count += store.list_catalogs(tenant.id).await
+                    .map_err(ApiError::from)?.len();
+                warehouses_count += store.list_warehouses(tenant.id).await
+                    .map_err(ApiError::from)?.len();
+            }
             
             let stats = DashboardStats {
-                catalogs_count: catalogs.len(),
-                tables_count: 0,
-                namespaces_count: 0,
-                users_count: 0,
-                warehouses_count: warehouses.len(),
-                branches_count: 0,
+                catalogs_count,
+                warehouses_count,
+                tenants_count,
+                tables_count: 0,  // Expensive to compute across all tenants
+                namespaces_count: 0,  // Expensive to compute across all tenants
+                users_count: 0,  // Expensive to compute across all tenants
+                branches_count: 0,  // Expensive to compute across all tenants
                 scope: "system".to_string(),
             };
             
@@ -91,6 +103,7 @@ pub async fn get_dashboard_stats(
                 users_count: 0, 
                 warehouses_count: warehouses.len(),
                 branches_count: 0,
+                tenants_count: 0,  // Not applicable for tenant scope
                 scope: "tenant".to_string(),
             };
             
@@ -171,6 +184,7 @@ pub async fn get_dashboard_stats(
                 users_count: 0,
                 warehouses_count: accessible_warehouses_count,
                 branches_count: 0,
+                tenants_count: 0,  // Not applicable for user scope
                 scope: "user".to_string(),
             };
             

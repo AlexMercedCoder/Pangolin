@@ -206,22 +206,32 @@
 			if (formData.authMethod === 'static') {
 				storage_config['s3.access-key-id'] = formData.s3AccessKey;
 				storage_config['s3.secret-access-key'] = formData.s3SecretKey;
+			} else {
+				// IAM role for STS credential vending
+				storage_config['role_arn'] = formData.s3RoleArn;
 			}
-			// Note: IAM role (role_arn) not supported in current API
 		} else if (formData.storageType === 'azure') {
-			storage_config['azure.container'] = formData.azureContainer;
+			storage_config['adls.container'] = formData.azureContainer;
 			storage_config['adls.account-name'] = formData.azureAccountName;
 			if (formData.authMethod === 'static') {
 				storage_config['adls.account-key'] = formData.azureAccountKey;
+			} else {
+				// OAuth2 fields for Azure AD credential vending
+				storage_config['tenant_id'] = formData.azureTenantId;
+				storage_config['client_id'] = formData.azureClientId;
+				if (formData.azureClientSecret) {
+					storage_config['client_secret'] = formData.azureClientSecret;
+				}
 			}
-			// Note: OAuth fields (tenant_id, client_id, client_secret) not supported in current API
 		} else if (formData.storageType === 'gcs') {
 			storage_config['gcs.bucket'] = formData.gcsBucket;
 			storage_config['gcs.project-id'] = formData.gcsProjectId;
 			if (formData.authMethod === 'static') {
 				storage_config['gcs.service-account-file'] = formData.gcsServiceAccountKey;
+			} else {
+				// Service account email for OAuth2 credential vending
+				storage_config['service_account_email'] = formData.gcsServiceAccountEmail;
 			}
-			// Note: service_account_email not supported in current API
 		}
 
 		const request: CreateWarehouseRequest = {

@@ -262,7 +262,8 @@
     
     .form-group { margin-bottom: 1.5rem; }
     .form-group label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
-    .form-group input, textarea { width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--md-sys-color-outline); background: var(--md-sys-color-surface-container); color: inherit; box-sizing: border-box; font-family: inherit; }
+    .form-group input:not([type="checkbox"]), textarea { width: 100%; padding: 0.75rem; border-radius: 8px; border: 1px solid var(--md-sys-color-outline); background: var(--md-sys-color-surface-container); color: inherit; box-sizing: border-box; font-family: inherit; }
+    .form-group input[type="checkbox"] { width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; vertical-align: middle; accent-color: var(--md-sys-color-primary); }
     .code-font { font-family: monospace; }
     
     .actions { display: flex; justify-content: flex-end; gap: 1rem; }

@@ -16,6 +16,9 @@ pub enum AdminCommand {
         username: Option<String>,
         #[arg(short, long)]
         password: Option<String>,
+        /// Optional tenant ID for tenant-scoped login
+        #[arg(short = 't', long)]
+        tenant_id: Option<String>,
     },
     /// Switch tenant context (Root operations only)
     Use {
@@ -323,6 +326,8 @@ pub enum AdminCommand {
         resource_type: Option<String>,
         #[arg(long, help = "Filter by result (success or failure)")]
         result: Option<String>,
+        #[arg(long, help = "Filter by tenant ID (Root only)")]
+        tenant_id: Option<String>,
         #[arg(long, help = "Maximum number of results", default_value = "50")]
         limit: usize,
     },

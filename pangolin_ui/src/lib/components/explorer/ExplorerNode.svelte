@@ -7,7 +7,7 @@
     import { onMount, onDestroy } from 'svelte';
 
     export let label: string;
-    export let type: 'catalog' | 'namespace' | 'table';
+    export let type: 'catalog' | 'namespace' | 'table' | 'asset';
     export let icon: string = '📁';
     export let expanded: boolean = false;
     export let hasChildren: boolean = true;

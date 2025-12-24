@@ -5,15 +5,20 @@ BASE_URL = "http://localhost:8080/api/v1"
 ADMIN_AUTH = ("admin", "password")
 
 def setup():
-    # 1. Login to get token (Root)
+    # 1. Login to get token (Root or Tenant Admin)
     resp = requests.post(f"{BASE_URL}/users/login", json={"username": "admin", "password": "password"})
     if not resp.ok:
         print(f"Login (Root) failed: {resp.text}")
         return
-    token = resp.json()["token"]
+    login_data = resp.json()
+    token = login_data["token"]
+    # Extract tenant_id from login response (UserSession usually contains it in user object or claims)
+    # The login response has 'user': { ..., 'tenant_id': ... }
+    initial_tenant_id = login_data.get('user', {}).get('tenant_id') or login_data.get('user', {}).get('tenant-id')
     headers = {"Authorization": f"Bearer {token}"}
 
-    # 2. Create Tenant
+    # 2. Create Tenant (Only if Root)
+    tenant_id = initial_tenant_id
     tenant_payload = {
         "name": "TestTenant",
         "organization": "TestOrg",
@@ -23,18 +28,20 @@ def setup():
     if resp.status_code == 201:
         tenant = resp.json()
         print(f"Created Tenant: {tenant['id']}")
-    else: # If exists, reuse
-        resp = requests.get(f"{BASE_URL}/tenants", headers=headers)
-        tenants = resp.json()
-        if tenants:
-            # Find TestTenant if possible
-            tenant = next((t for t in tenants if t['name'] == "TestTenant"), tenants[0])
-            print(f"Using existing Tenant: {tenant['id']}")
-        else:
-            print("Failed to create/find tenant")
+        tenant_id = tenant['id']
+    elif resp.status_code == 403:
+        print("Logged in as Tenant Admin (cannot create tenants). Using current tenant.")
+        if not tenant_id:
+            print("Error: Could not determine tenant_id from login.")
             return
-
-    tenant_id = tenant['id']
+        print(f"Using default Tenant: {tenant_id}")
+    else: # If exists, reuse or fail
+        print(f"Tenant creation status: {resp.status_code} {resp.text}")
+        if tenant_id:
+             print(f"Fallback to existing tenant from login: {tenant_id}")
+        else:
+             print("Failed to ensure tenant.")
+             return
     
     # 3. Create Tenant Admin User
     # Root creates a user for this tenant

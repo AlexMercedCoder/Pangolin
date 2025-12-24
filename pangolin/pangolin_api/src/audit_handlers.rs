@@ -5,6 +5,7 @@ use axum::{
     Json,
 };
 use pangolin_core::audit::{AuditLogEntry, AuditLogFilter};
+use pangolin_core::user::{UserSession, UserRole};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -84,6 +85,7 @@ pub struct AuditCountResponse {
 pub async fn list_audit_events(
     State(store): State<AppState>,
     Extension(tenant_id): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Query(query): Query<AuditListQuery>,
 ) -> impl IntoResponse {
     // Parse query parameters into AuditLogFilter
@@ -113,7 +115,36 @@ pub async fn list_audit_events(
         offset: query.offset,
     };
 
-    match store.list_audit_events(tenant_id.0, Some(filter)).await {
+    // Root users can see events from all tenants
+    let events_result = if session.role == UserRole::Root {
+        // Fetch events from all tenants and aggregate
+        match store.list_tenants().await {
+            Ok(tenants) => {
+                let mut all_events = Vec::new();
+                for tenant in tenants {
+                    match store.list_audit_events(tenant.id, Some(filter.clone())).await {
+                        Ok(mut events) => all_events.append(&mut events),
+                        Err(e) => {
+                            tracing::warn!("Failed to fetch audit events for tenant {}: {}", tenant.id, e);
+                        }
+                    }
+                }
+                // Sort by timestamp descending
+                all_events.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                // Apply limit and offset
+                let offset = filter.offset.unwrap_or(0);
+                let limit = filter.limit.unwrap_or(100);
+                let events: Vec<_> = all_events.into_iter().skip(offset).take(limit).collect();
+                Ok(events)
+            },
+            Err(e) => Err(e)
+        }
+    } else {
+        // Non-root users only see events from their tenant
+        store.list_audit_events(tenant_id.0, Some(filter)).await
+    };
+
+    match events_result {
         Ok(events) => (StatusCode::OK, Json(events)).into_response(),
         Err(e) => {
             tracing::error!("Failed to list audit events: {}", e);
@@ -151,9 +182,31 @@ pub async fn list_audit_events(
 pub async fn get_audit_event(
     State(store): State<AppState>,
     Extension(tenant_id): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path(event_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    match store.get_audit_event(tenant_id.0, event_id).await {
+    // Root users can access events from any tenant
+    let event_result = if session.role == UserRole::Root {
+        // Try to find the event in any tenant
+        match store.list_tenants().await {
+            Ok(tenants) => {
+                let mut found_event = None;
+                for tenant in tenants {
+                    if let Ok(Some(event)) = store.get_audit_event(tenant.id, event_id).await {
+                        found_event = Some(event);
+                        break;
+                    }
+                }
+                Ok(found_event)
+            },
+            Err(e) => Err(e)
+        }
+    } else {
+        // Non-root users only see events from their tenant
+        store.get_audit_event(tenant_id.0, event_id).await
+    };
+
+    match event_result {
         Ok(Some(event)) => (StatusCode::OK, Json(event)).into_response(),
         Ok(None) => (
             StatusCode::NOT_FOUND,
@@ -205,6 +258,7 @@ pub async fn get_audit_event(
 pub async fn count_audit_events(
     State(store): State<AppState>,
     Extension(tenant_id): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Query(query): Query<AuditListQuery>,
 ) -> impl IntoResponse {
     // Parse query parameters into AuditLogFilter (same as list_audit_events)
@@ -234,7 +288,30 @@ pub async fn count_audit_events(
         offset: None, // Not needed for counting
     };
 
-    match store.count_audit_events(tenant_id.0, Some(filter)).await {
+    // Root users can count events from all tenants
+    let count_result = if session.role == UserRole::Root {
+        // Count events from all tenants and sum
+        match store.list_tenants().await {
+            Ok(tenants) => {
+                let mut total_count = 0;
+                for tenant in tenants {
+                    match store.count_audit_events(tenant.id, Some(filter.clone())).await {
+                        Ok(count) => total_count += count,
+                        Err(e) => {
+                            tracing::warn!("Failed to count audit events for tenant {}: {}", tenant.id, e);
+                        }
+                    }
+                }
+                Ok(total_count)
+            },
+            Err(e) => Err(e)
+        }
+    } else {
+        // Non-root users only count events from their tenant
+        store.count_audit_events(tenant_id.0, Some(filter)).await
+    };
+
+    match count_result {
         Ok(count) => (StatusCode::OK, Json(AuditCountResponse { count })).into_response(),
         Err(e) => {
             tracing::error!("Failed to count audit events: {}", e);

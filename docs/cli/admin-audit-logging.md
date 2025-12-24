@@ -16,6 +16,7 @@ pangolin-admin list-audit-events [OPTIONS]
 - `--action <STRING>` - Filter by action (e.g., `create_table`, `grant_permission`)
 - `--resource-type <STRING>` - Filter by resource type (e.g., `table`, `catalog`, `user`)
 - `--result <STRING>` - Filter by result (`success` or `failure`)
+- `--tenant-id <UUID>` - Filter by tenant ID (Root users only - see cross-tenant queries)
 - `--limit <NUMBER>` - Maximum number of results to return (default: 50)
 
 ### Examples
@@ -33,6 +34,12 @@ pangolin-admin list-audit-events --action create_table --limit 10
 **Filter by user and failed actions:**
 ```bash
 pangolin-admin list-audit-events --user-id "550e8400-e29b-41d4-a716-446655440000" --result failure
+```
+
+**Filter by tenant (Root users only):**
+```bash
+# View audit events for a specific tenant
+pangolin-admin list-audit-events --tenant-id "tenant-uuid-here" --limit 20
 ```
 
 ### Output
@@ -131,6 +138,9 @@ Metadata:
 - Verify actions match approved change requests.
 
 ## Notes
-- **Tenant Isolation**: You will only see audit logs for the tenant you are currently logged into.
+- **Tenant Isolation**: 
+  - Tenant users only see audit logs for their own tenant
+  - Root users can see all audit logs across all tenants
+  - Use `--tenant-id` filter to query specific tenant logs as Root
 - **Retention**: Audit logs are retained indefinitely by default (configurable per deployment).
 - **Performance**: Pagination (`--limit`, `--offset`) is recommended for large datasets.

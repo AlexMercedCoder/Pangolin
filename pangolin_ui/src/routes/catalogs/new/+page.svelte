@@ -91,7 +91,11 @@
 		const selected = warehouses.find(w => w.value === warehouseName);
 		if (selected?.full?.storage_config) {
 			const w = selected.full;
-			const bucket = w.storage_config?.['s3.bucket'] || w.storage_config?.['azure.container'] || w.storage_config?.['gcs.bucket'] || 'bucket';
+			const bucket = w.storage_config?.['s3.bucket'] 
+			           || w.storage_config?.['adls.container']
+			           || w.storage_config?.['azure.container'] 
+			           || w.storage_config?.['gcs.bucket'] 
+			           || 'bucket';
 			const type = w.storage_config?.['s3.bucket'] ? 's3' 
 			           : w.storage_config?.['adls.account-name'] ? 'azure'
 			           : w.storage_config?.['gcs.bucket'] ? 'gcs'

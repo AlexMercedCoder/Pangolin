@@ -81,6 +81,7 @@ async fn test_tenant_user_create_namespace_denied() {
     let login_req = pangolin_api::user_handlers::LoginRequest {
         username: "tenant_user".to_string(),
         password: password.to_string(),
+        tenant_id: Some(tenant_id),  // Tenant-scoped login
     };
     
     let req = Request::builder()

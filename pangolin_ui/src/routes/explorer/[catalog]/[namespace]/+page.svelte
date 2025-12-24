@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { icebergApi, type TableIdentifier, type CreateNamespaceRequest, type CreateTableRequest } from '$lib/api/iceberg';
+	import { icebergApi, type AssetSummary, type CreateNamespaceRequest, type CreateTableRequest } from '$lib/api/iceberg';
     import Button from '$lib/components/ui/Button.svelte';
     import CreateNamespaceDialog from '$lib/components/explorer/CreateNamespaceDialog.svelte';
     import CreateTableDialog from '$lib/components/explorer/CreateTableDialog.svelte';
+    import RegisterAssetModal from '$lib/components/assets/RegisterAssetModal.svelte';
     import { notifications } from '$lib/stores/notifications';
 
 	$: catalogName = $page.params.catalog || '';
@@ -12,13 +13,14 @@
     $: namespaceParts = namespaceParam ? namespaceParam.split('.') : [];
 
     let namespaces: string[][] = [];
-    let tables: TableIdentifier[] = [];
+    let assets: AssetSummary[] = [];
     let loading = true;
     let error: string | null = null;
 
     // Creation State
     let showCreateNamespace = false;
     let showCreateTable = false;
+    let showRegisterAsset = false;
     let creating = false;
 
     $: if (catalogName && namespaceParam) {
@@ -29,12 +31,12 @@
         loading = true;
         error = null;
         try {
-            const [nsList, tblList] = await Promise.all([
+            const [nsList, assetList] = await Promise.all([
                 icebergApi.listNamespaces(catalogName, namespaceParts),
-                icebergApi.listTables(catalogName, namespaceParts)
+                icebergApi.listAssets(catalogName, namespaceParts)
             ]);
             namespaces = nsList;
-            tables = tblList;
+            assets = assetList;
         } catch (e: any) {
             error = e.message;
         } finally {
@@ -42,32 +44,14 @@
         }
     }
 
-    import { triggerExplorerRefresh } from '$lib/stores/explorer';
+    // ... imports ...
 
-    async function handleCreateNamespace(event: CustomEvent) {
-        creating = true;
-        try {
-            const newName = event.detail.name;
-            // Support dot notation in name input by splitting
-            const newParts = newName.split('.');
-            // Combine current namespace parts with new parts
-            const fullNamespace = [...namespaceParts, ...newParts];
-            
-            const req: CreateNamespaceRequest = {
-                namespace: fullNamespace
-            };
-
-            await icebergApi.createNamespace(catalogName, req);
-            notifications.success(`Namespace "${newName}" created`);
-            showCreateNamespace = false;
-            triggerExplorerRefresh('content'); // Refresh sidebar content
-            loadNamespace(); // Refresh current view
-        } catch (e: any) {
-            console.error(e);
-            notifications.error(`Failed to create namespace: ${e.message}`);
-        } finally {
-            creating = false;
-        }
+    async function handleRegisterAsset() {
+        // Refresh namespace content
+        loadNamespace();
+        // Also refresh sidebar
+        notifications.success('Asset registered successfully');
+        showRegisterAsset = false;
     }
 
     async function handleCreateTable(event: CustomEvent) {
@@ -77,8 +61,7 @@
             await icebergApi.createTable(catalogName, namespaceParts, req);
             notifications.success(`Table "${req.name}" created`);
             showCreateTable = false;
-            triggerExplorerRefresh('content'); // Refresh sidebar content
-            loadNamespace(); // Refresh current view
+            loadNamespace(); // Refresh View
         } catch (e: any) {
             console.error(e);
             notifications.error(`Failed to create table: ${e.message}`);
@@ -86,9 +69,34 @@
             creating = false;
         }
     }
+
+    // ...
+
+    function getAssetIcon(kind: string) {
+        switch (kind) {
+            case 'ICEBERG_TABLE': 
+            case 'IcebergTable': return '🧊';
+            case 'VIEW': 
+            case 'View': return '👁️';
+            case 'DELTA_TABLE': 
+            case 'DeltaTable': return '🔺';
+            case 'HUDI_TABLE': 
+            case 'HudiTable': return '🔥';
+            case 'PARQUET_TABLE': 
+            case 'ParquetTable': return '📦';
+            case 'CSV_TABLE': 
+            case 'CsvTable': return '📄';
+            case 'JSON_TABLE': 
+            case 'JsonTable': return '📋';
+            case 'ML_MODEL': 
+            case 'MlModel': return '🧠';
+            default: return '📄';
+        }
+    }
 </script>
 
 <div class="h-full flex flex-col">
+    <!-- ... header ... -->
     <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-start">
         <div>
             <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
@@ -145,40 +153,47 @@
                 </section>
             {/if}
 
-            <!-- Tables -->
+            <!-- Assets -->
             <section>
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-sm font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                        Tables
+                        Assets
                     </h3>
-                    {#if namespaces.length === 0 && tables.length === 0}
-                         <!-- Empty state handled below -->
-                    {:else}
-                         <Button size="sm" variant="ghost" on:click={() => showCreateTable = true}>+ Create Table</Button>
-                    {/if}
+                    <div class="flex gap-2">
+                        {#if namespaces.length === 0 && assets.length === 0}
+                             <!-- Empty state handled below -->
+                        {:else}
+                             <Button size="sm" variant="secondary" on:click={() => showRegisterAsset = true}>Register Asset</Button>
+                             <Button size="sm" variant="ghost" on:click={() => showCreateTable = true}>+ Create Table</Button>
+                        {/if}
+                    </div>
                 </div>
                 
-                {#if tables.length > 0}
+                {#if assets.length > 0}
                     <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                         <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                              <thead class="bg-gray-50 dark:bg-gray-800">
                                 <tr>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Type</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Identifier</th>
                                 </tr>
                              </thead>
                              <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                                {#each tables as table}
+                                {#each assets as asset}
                                     <tr 
                                         class="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                                        on:click={() => goto(`/explorer/${encodeURIComponent(catalogName)}/${encodeURIComponent(namespaceParam)}/${encodeURIComponent(table.name)}`)}
+                                        on:click={() => goto(`/explorer/${encodeURIComponent(catalogName)}/${encodeURIComponent(namespaceParam)}/${encodeURIComponent(asset.name)}`)}
                                     >
                                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                                            <span>📄</span>
-                                            {table.name}
+                                            <span title={asset.kind}>{getAssetIcon(asset.kind)}</span>
+                                            {asset.name}
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                            {asset.kind}
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 font-mono">
-                                            {table.namespace.join('.')}.{table.name}
+                                            {asset.identifier.namespace.join('.')}.{asset.name}
                                         </td>
                                     </tr>
                                 {/each}
@@ -190,6 +205,7 @@
                         <p class="text-gray-500 dark:text-gray-400">This namespace is empty.</p>
                         <div class="mt-4 flex justify-center gap-2">
                              <Button size="sm" variant="secondary" on:click={() => showCreateNamespace = true}>Create Sub-Namespace</Button>
+                             <Button size="sm" variant="secondary" on:click={() => showRegisterAsset = true}>Register Asset</Button>
                              <Button size="sm" on:click={() => showCreateTable = true}>Create Table</Button>
                         </div>
                     </div>
@@ -209,5 +225,12 @@
         bind:open={showCreateTable}
         bind:loading={creating}
         on:create={handleCreateTable}
+    />
+
+    <RegisterAssetModal
+        bind:open={showRegisterAsset}
+        {catalogName}
+        namespace={namespaceParam}
+        onSuccess={handleRegisterAsset}
     />
 </div>

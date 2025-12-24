@@ -62,62 +62,83 @@ This document tracks backend improvements and bug fixes identified during testin
 - **Status**: ✅ **COMPLETED** - All credential vending infrastructure complete with PyIceberg compatibility. Ready for production use.
 - **Date Completed**: 2025-12-23
 
-### 4. Consistent Catalog Scoping for Branches
+### ✅ 4. Generic Asset Management
+- **File**: `asset_handlers.rs`
+- **Issue**: Standard Iceberg clients break when encountering non-Table assets in `list_tables` response. UI needs to view details for generic assets.
+- **Solution**:
+  - ✅ Implemented `list_assets` endpoint returning `AssetSummary` with `kind` field.
+  - ✅ Updated `iceberg_handlers::list_tables` to filter ONLY `IcebergTable` types.
+  - ✅ Implemented `get_asset` endpoint for generic asset details (CSV, Delta, etc.).
+- **Status**: ✅ **COMPLETED** - Verified with `seed_generic_assets.py` and UI Explorer.
+- **Date Completed**: 2025-12-23
+
+### 5. Consistent Catalog Scoping for Branches
 - **File**: `pangolin_handlers.rs`
 - **Issue**: Some branch-related endpoints might assume a "default" catalog if not specified.
 - **Goal**: Ensure all Pangolin-specific APIs consistently require or resolve the catalog context to stay aligned with the multi-tenant, multi-catalog architecture.
-### 5. Asset ID in Iceberg Table Response
+
+### 6. Asset ID in Iceberg Table Response
 - **File**: `iceberg_handlers.rs`
 - **Issue**: The `TableResponse` returned by `load_table` (Iceberg REST) does not currently include the internal Pangolin `asset_id` (UUID).
 - **Goal**: Add `id: Uuid` to the `TableResponse` struct and populate it from the `asset` retrieved in the handler. This is required for the UI to bridge from Iceberg metadata to Pangolin business metadata (tags, descriptions).
 - **Status**: Required for "Business Info" tab in Explorer.
 
-### 6. Permission-Aware Dashboard Statistics
+### ✅ 7. Permission-Aware Dashboard Statistics
 - **File**: `dashboard_handlers.rs`
 - **Issue**: 
     - `TenantUser` currently sees hardcoded `0` for warehouse counts.
     - Other counts (catalogs, tables, namespaces) currently return tenant-wide totals instead of filtering by what the user actually has access to.
-- **Goal**:
-    - Implement permission-aware counting for all resource types.
-    - `Root` should see system-wide stats (total across all tenants).
-    - `TenantAdmin` should see tenant-wide stats.
-    - `TenantUser` should see counts only for resources they have `Read` or `Discoverable` access to.
-- **Status**: Deferred to prevent cross-component complexity during UI verification.
-
-## Completed Items
-
-### ✅ 7. Effective Permission Aggregation
-- **Files**: `pangolin_store/src/memory.rs`, `pangolin_store/src/sqlite.rs`, `pangolin_store/src/postgres.rs`, `pangolin_store/src/mongo.rs`
-- **Issue**: `store.list_user_permissions(user_id)` only returned direct permission grants, ignoring permissions inherited from assigned roles.
-- **Solution**: Updated `list_user_permissions` in all four store implementations to return a union of direct permissions and role-based permissions.
-- **Status**: ✅ **COMPLETED** - All stores now aggregate permissions correctly. Comprehensive test coverage added.
-- **Date Completed**: 2025-12-23
-
----
-
-### ✅ 8. Permission-Aware Unified Search
-- **Files**: `optimization_handlers.rs`, `authz_utils.rs` (new)
-- **Issue**: The `unified_search` handler returned all results within a tenant without performing any permission checks.
 - **Solution**: 
-  - Created `authz_utils.rs` module with permission checking and filtering functions
-  - Updated `unified_search` to fetch user permissions and filter results
-  - Root/TenantAdmin users bypass filtering
-  - TenantUser users only see resources they have Read or Discoverable access to
-- **Status**: ✅ **COMPLETED** - All unit tests pass. No breaking changes to API contracts.
+    - Updated `get_dashboard_stats` to count accessible resources.
+- **Status**: ✅ **COMPLETED** - Basic implementation done. Enhancements tracked below.
 - **Date Completed**: 2025-12-23
 
----
-
-### ✅ 9. Standardize Authz Utilization
-- **Files**: `pangolin_handlers.rs`, `business_metadata_handlers.rs`
-- **Issue**: Handlers for `list_catalogs` and `search_assets` contained manual, incomplete permission checking logic.
-- **Solution**: 
-  - Refactored both handlers to use `authz_utils::filter_catalogs()` and `authz_utils::filter_assets()`
-  - Removed ~32 lines of duplicate permission checking code
-  - Fixed bug where Tenant-scoped permissions weren't checked in `list_catalogs`
-- **Status**: ✅ **COMPLETED** - All code compiles successfully. No breaking changes.
+### ✅ 10. Fix Permission Action Implications
+- **File**: `pangolin_core/src/permission.rs`
+- **Issue**: `Action::Read` did not imply `Action::List`.
+- **Solution**: Updated `Action::implies` logic.
+- **Status**: ✅ **COMPLETED**
 - **Date Completed**: 2025-12-23
 
----
+### ✅ 11. Implement "Discoverable" Metadata Support
+- **Files**: `pangolin_api/src/authz_utils.rs`
+- **Issue**: `filter_assets` ignored `discoverable` flag.
+- **Solution**: Updated logic to allow access if `metadata.discoverable` is true.
+- **Status**: ✅ **COMPLETED**
+- **Date Completed**: 2025-12-23
 
-## Future Improvements
+## Completed Items (Recent)
+
+### ✅ 12. Tenant Creation with Initial Admin
+- **File**: UI only
+- **Status**: ✅ **COMPLETED** - Achieved via two sequential API calls in UI (no backend changes needed)
+- **Date Completed**: 2025-12-23
+
+### ✅ 13. Root Dashboard Global Aggregation
+- **File**: `dashboard_handlers.rs`
+- **Status**: ✅ **COMPLETED** - Added `tenants_count` field and implemented cross-tenant aggregation for Root users
+- **Implementation**: Root dashboard now aggregates catalogs and warehouses across ALL tenants
+- **Date Completed**: 2025-12-23
+
+### ✅ 14. Root Audit Log Visibility
+- **File**: `audit_handlers.rs`
+- **Status**: ✅ **COMPLETED** - Updated all 3 audit handlers to support cross-tenant queries for Root users
+- **Implementation**: 
+  - `list_audit_events`: Aggregates events from all tenants for Root users
+  - `get_audit_event`: Searches across all tenants for Root users
+  - `count_audit_events`: Sums counts from all tenants for Root users
+- **Date Completed**: 2025-12-23
+
+### ✅ 15. Tenant-Scoped Login
+- **File**: `user_handlers.rs`
+- **Status**: ✅ **COMPLETED** - Added optional `tenant_id` parameter to resolve username collisions
+- **Implementation**:
+  - `LoginRequest` now accepts optional `tenant_id: Option<Uuid>`
+  - Login handler validates user belongs to specified tenant
+  - Root users must login with `tenant_id: null`
+  - Tenant users must login with their `tenant_id`
+  - Proper error messages for each scenario
+- **UI Documentation**: Created `planning/tenant_scoped_login_ui.md`
+- **Date Completed**: 2025-12-23
+
+## New Outstanding Items

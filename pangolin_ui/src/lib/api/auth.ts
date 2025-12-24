@@ -3,6 +3,7 @@ import { apiClient } from './client';
 export interface LoginRequest {
 	username: string;
 	password: string;
+	'tenant-id'?: string | null;  // Optional tenant ID for tenant-scoped login
 }
 
 export interface LoginResponse {
@@ -60,7 +61,13 @@ export const authApi = {
 		return response.data!;
 	},
 
-	async login(credentials: LoginRequest): Promise<LoginResponse> {
+	async login(username: string, password: string, tenantId?: string | null): Promise<LoginResponse> {
+		const credentials: LoginRequest = {
+			username,
+			password,
+			'tenant-id': tenantId !== undefined ? tenantId : null
+		};
+		
 		const response = await apiClient.post<any>('/api/v1/users/login', credentials);
 		if (response.error) throw new Error(response.error.message);
 		

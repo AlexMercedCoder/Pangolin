@@ -235,12 +235,15 @@ fn test_table_response_includes_credentials() {
         last_sequence_number: 0,
     };
     
-    let credentials = Some(("test_access_key".to_string(), "test_secret_key".to_string()));
+    let mut credentials = HashMap::new();
+    credentials.insert("s3.access-key-id".to_string(), "test_access_key".to_string());
+    credentials.insert("s3.secret-access-key".to_string(), "test_secret_key".to_string());
     
     let response = TableResponse::with_credentials(
         Some("s3://warehouse/test/table/metadata/v1.json".to_string()),
         metadata,
-        credentials,
+        Some(credentials),
+        None,  // asset_id
     );
     
     // Verify credentials are in config
@@ -281,6 +284,7 @@ fn test_table_response_without_credentials() {
     let response = TableResponse::new(
         Some("s3://warehouse/test/table/metadata/v1.json".to_string()),
         metadata,
+        None,  // asset_id
     );
     
     // Verify config exists but doesn't have credentials
