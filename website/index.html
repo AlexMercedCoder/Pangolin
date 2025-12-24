@@ -147,6 +147,165 @@
         </div>
     </section>
 
+    <!-- PyPangolin Section -->
+    <section id="pypangolin" class="section pypangolin">
+        <div class="container">
+            <h2 class="section-title">PyPangolin - Official Python Client</h2>
+            <p class="section-subtitle">
+                Full-featured Python library for Pangolin with PyIceberg integration, multi-format support, and secure database connection management.
+                <br><strong>Now available on PyPI:</strong> <code>pip install pypangolin</code>
+            </p>
+
+            <div class="pypangolin-intro">
+                <div class="feature-highlight">
+                    <h3>🐍 Complete Python Integration</h3>
+                    <p>PyPangolin provides a comprehensive Python interface to all Pangolin features, plus specialized support for popular data formats and database connections.</p>
+                    <a href="https://pypi.org/project/pypangolin/" target="_blank" class="btn btn-primary">View on PyPI →</a>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/pypangolin" target="_blank" class="btn btn-secondary">Documentation →</a>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">Table Format Support</h3>
+            <div class="format-grid">
+                <div class="format-card">
+                    <div class="format-icon">🧊</div>
+                    <h4>Apache Iceberg</h4>
+                    <p>Full PyIceberg integration with read/write operations</p>
+                    <span class="badge tested">✅ Tested</span>
+                </div>
+                <div class="format-card">
+                    <div class="format-icon">🔺</div>
+                    <h4>Delta Lake</h4>
+                    <p>Read/write Delta tables with automatic registration</p>
+                    <span class="badge tested">✅ Tested</span>
+                </div>
+                <div class="format-card">
+                    <div class="format-icon">🏛️</div>
+                    <h4>Apache Hudi</h4>
+                    <p>Register and manage Hudi tables</p>
+                    <span class="badge supported">Supported</span>
+                </div>
+                <div class="format-card">
+                    <div class="format-icon">🎯</div>
+                    <h4>Apache Paimon</h4>
+                    <p>Register and track Paimon tables</p>
+                    <span class="badge supported">Supported</span>
+                </div>
+                <div class="format-card">
+                    <div class="format-icon">📊</div>
+                    <h4>Parquet</h4>
+                    <p>Read/write Parquet files with metadata</p>
+                    <span class="badge tested">✅ Tested</span>
+                </div>
+                <div class="format-card">
+                    <div class="format-icon">📄</div>
+                    <h4>CSV & JSON</h4>
+                    <p>Register and manage structured files</p>
+                    <span class="badge supported">Supported</span>
+                </div>
+                <div class="format-card">
+                    <div class="format-icon">🎯</div>
+                    <h4>Lance</h4>
+                    <p>Vector database format support</p>
+                    <span class="badge supported">Supported</span>
+                </div>
+                <div class="format-card">
+                    <div class="format-icon">🌀</div>
+                    <h4>Vortex</h4>
+                    <p>High-performance columnar format</p>
+                    <span class="badge supported">Supported</span>
+                </div>
+            </div>
+
+            <h3 class="subsection-title">Database Connection Management</h3>
+            <p class="subsection-description">Securely store and manage database credentials with Fernet encryption</p>
+            <div class="database-grid">
+                <div class="db-card">
+                    <div class="db-icon">🐘</div>
+                    <h4>PostgreSQL</h4>
+                    <p>Encrypted credential storage</p>
+                    <span class="badge tested">✅ Tested</span>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">🐬</div>
+                    <h4>MySQL</h4>
+                    <p>Secure connection sharing</p>
+                    <span class="badge tested">✅ Tested</span>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">🍃</div>
+                    <h4>MongoDB</h4>
+                    <p>NoSQL database connections</p>
+                    <span class="badge tested">✅ Tested</span>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">❄️</div>
+                    <h4>Snowflake</h4>
+                    <p>Cloud data warehouse</p>
+                    <span class="badge untested">⚠️ Untested</span>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">🔴</div>
+                    <h4>Redshift</h4>
+                    <p>AWS data warehouse</p>
+                    <span class="badge untested">⚠️ Untested</span>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">☁️</div>
+                    <h4>BigQuery</h4>
+                    <p>Google Cloud analytics</p>
+                    <span class="badge untested">⚠️ Untested</span>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">🔷</div>
+                    <h4>Azure Synapse</h4>
+                    <p>Microsoft analytics service</p>
+                    <span class="badge untested">⚠️ Untested</span>
+                </div>
+                <div class="db-card">
+                    <div class="db-icon">⚡</div>
+                    <h4>Dremio</h4>
+                    <p>Arrow Flight connections</p>
+                    <span class="badge tested">✅ Tested</span>
+                </div>
+            </div>
+
+            <div class="pypangolin-features">
+                <h3 class="subsection-title">Additional Features</h3>
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <span class="check">✓</span>
+                        <div>
+                            <strong>Governance & Security</strong>
+                            <p>RBAC, permissions, service users, and business metadata</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="check">✓</span>
+                        <div>
+                            <strong>Admin & System</strong>
+                            <p>Audit logging, search, token management, and system config</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="check">✓</span>
+                        <div>
+                            <strong>Federated Catalogs</strong>
+                            <p>Connect to remote Iceberg catalogs and create SQL views</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <span class="check">✓</span>
+                        <div>
+                            <strong>Git Operations</strong>
+                            <p>Branching, merging, tagging with conflict resolution</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <!-- Ecosystem Section -->
     <section id="ecosystem" class="section ecosystem">
         <div class="container">
