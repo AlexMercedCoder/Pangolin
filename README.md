@@ -82,6 +82,7 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[CLI Reference](docs/cli/overview.md)** - Full guide for `pangolin-admin` and `pangolin-user`.
 - **[API Reference](docs/api/api_overview.md)** - Iceberg REST and Pangolin Management APIs.
 - **[Management UI](docs/ui/overview.md)** - Visual administration and data discovery.
+- **[Python Client](pypangolin/README.md)** - Official Python library (`pypangolin`).
 - **[Client Setup](docs/getting-started/client_configuration.md)** - Connecting PyIceberg, Spark, and Trino.
 
 ---

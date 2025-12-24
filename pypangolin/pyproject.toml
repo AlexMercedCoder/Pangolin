@@ -23,9 +23,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+s3 = ["pyiceberg[s3fs]>=0.5.0"]
+azure = ["pyiceberg[adlfs]>=0.5.0"]
+gcs = ["pyiceberg[gcsfs]>=0.5.0"]
 delta = ["deltalake>=0.10.0"]
+paimon = ["pypaimon>=0.1.0"]
 lance = ["lancedb>=0.1.0"]
-all = ["deltalake>=0.10.0", "lancedb>=0.1.0", "pyarrow>=12.0.0"]
+all = ["pyiceberg[s3fs,adlfs,gcsfs]", "deltalake>=0.10.0", "lancedb>=0.1.0", "pypaimon>=0.1.0", "pyarrow>=12.0.0"]
 
 [project.urls]
 Homepage = "https://github.com/AlexMercedCoder/Pangolin"

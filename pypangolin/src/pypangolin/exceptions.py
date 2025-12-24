@@ -11,6 +11,9 @@ class AuthenticationError(PangolinError):
 class AuthorizationError(PangolinError):
     pass
 
+class ForbiddenError(PangolinError):
+    pass
+
 class NotFoundError(PangolinError):
     pass
 

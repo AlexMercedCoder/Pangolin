@@ -2,6 +2,21 @@
 
 Python Client for the [Pangolin Data Catalog](https://github.com/AlexMercedCoder/Pangolin).
 
+## Documentation
+
+- [Authenticated Mode Guide](docs/auth_mode.md) - Standard operational mode.
+- [No Auth Mode Guide](docs/no_auth_mode.md) - For local development and testing.
+- [PyIceberg Integration Guide](docs/iceberg.md) - Setup and MinIO configuration.
+- [Publishing Guide](PUBLISHING.md) - Build and release instructions.
+- **Generic Asset Guides:**
+  - [Delta Lake](docs/delta.md) | [Parquet](docs/parquet.md) | [CSV](docs/csv.md) | [JSON](docs/json.md)
+  - [Lance](docs/lance.md) | [Hudi](docs/hudi.md) | [Paimon](docs/paimon.md) | [Vortex](docs/vortex.md)
+  - [Other Assets](docs/other.md) (ML Models, Video, Images, etc.)
+- [Advanced Git Operations](docs/git_operations.md)
+- [Governance & Security](docs/governance.md)
+- [Admin & System](docs/admin.md)
+- [Federated Catalogs & Views](docs/federated.md)
+
 ## Installation
 
 ```bash

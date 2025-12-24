@@ -1,13 +1,17 @@
 import requests
 from .exceptions import AuthenticationError, PangolinError
 
-def login(uri: str, username: str, password: str) -> str:
+def login(uri: str, username: str, password: str, tenant_id: str = None) -> str:
     """
     Exchange credentials for a JWT token using POST /api/v1/users/login
     """
     url = f"{uri.rstrip('/')}/api/v1/users/login"
+    payload = {"username": username, "password": password}
+    if tenant_id:
+        payload["tenant-id"] = tenant_id
+
     try:
-        response = requests.post(url, json={"username": username, "password": password})
+        response = requests.post(url, json=payload)
         
         if response.status_code == 200:
             data = response.json()

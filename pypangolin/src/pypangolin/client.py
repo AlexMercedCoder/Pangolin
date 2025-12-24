@@ -1,21 +1,31 @@
 import requests
 from typing import Optional, List, Dict, Any, Union
-from .models import Tenant, Warehouse, Catalog, Namespace, Asset
+from .models import Tenant, Warehouse, Catalog, Namespace, Asset, User
 from .auth import login
+from .git import BranchClient, TagClient, MergeOperationClient
+from .governance import RoleClient, PermissionClient, ServiceUserClient, BusinessMetadataClient
+from .admin import AuditClient, SystemClient, SearchClient, TokenClient
+from .federated import FederatedCatalogClient, ViewClient
 from .exceptions import (
     PangolinError, AuthenticationError, AuthorizationError, 
     NotFoundError, ConflictError, ValidationError
 )
 
 class PangolinClient:
-    def __init__(self, uri: str, username: str = None, password: str = None, token: str = None):
+    def __init__(self, uri: str, username: str = None, password: str = None, token: str = None, tenant_id: str = None):
         self.uri = uri.rstrip("/")
         self._token = token
-        self._current_tenant_id: Optional[str] = None
+        self._current_tenant_id: Optional[str] = tenant_id
         
         if not self._token and username and password:
-            self._token = login(self.uri, username, password)
+            self._token = login(self.uri, username, password, tenant_id=tenant_id)
             
+    def login(self, username: str, password: str, tenant_id: str = None):
+        """Authenticate and store token."""
+        self._token = login(self.uri, username, password, tenant_id=tenant_id)
+        if tenant_id:
+            self._current_tenant_id = tenant_id
+
     @property
     def token(self) -> Optional[str]:
         return self._token
@@ -32,10 +42,62 @@ class PangolinClient:
     def catalogs(self):
         return CatalogClient(self)
         
+    @property
+    def users(self):
+        return UserClient(self)
+
+    @property
+    def branches(self):
+        return BranchClient(self)
+
+    @property
+    def tags(self):
+        return TagClient(self)
+
+    @property
+    def merge_operations(self):
+        return MergeOperationClient(self)
+
+    @property
+    def roles(self):
+        return RoleClient(self)
+
+    @property
+    def permissions(self):
+        return PermissionClient(self)
+
+    @property
+    def service_users(self):
+        return ServiceUserClient(self)
+
+    @property
+    def metadata(self):
+        return BusinessMetadataClient(self)
+
+    @property
+    def audit(self):
+        return AuditClient(self)
+
+    @property
+    def system(self):
+        return SystemClient(self)
+
+    @property
+    def search(self):
+        return SearchClient(self)
+
+    @property
+    def tokens(self):
+        return TokenClient(self)
+
+    @property
+    def federated_catalogs(self):
+        return FederatedCatalogClient(self)
+
     def set_tenant(self, tenant_id: str):
         """Set the active tenant context for subsequent requests"""
         self._current_tenant_id = tenant_id
-        
+
     def _request(self, method: str, path: str, **kwargs) -> Any:
         url = f"{self.uri}{path}"
         headers = kwargs.pop("headers", {})
@@ -118,6 +180,16 @@ class TenantClient:
         self.client.set_tenant(tenant.id)
         return tenant
 
+    def update(self, tenant_id: str, properties: Dict[str, str]) -> Tenant:
+        """Update tenant properties."""
+        payload = {"properties": properties}
+        data = self.client.put(f"/api/v1/tenants/{tenant_id}", json=payload)
+        return Tenant(**data)
+
+    def delete(self, tenant_id: str):
+        """Delete a tenant."""
+        self.client.delete(f"/api/v1/tenants/{tenant_id}")
+
 
 class WarehouseClient:
     def __init__(self, client: PangolinClient):
@@ -129,6 +201,7 @@ class WarehouseClient:
         
     def create_s3(self, name: str, bucket: str, region: str = "us-east-1", 
                  access_key: str = None, secret_key: str = None, prefix: str = None,
+                 endpoint: str = None,
                  vending_strategy: Union[str, Dict] = "AwsStatic") -> Warehouse:
         
         storage_config = {
@@ -138,6 +211,7 @@ class WarehouseClient:
         if access_key: storage_config["s3.access-key-id"] = access_key
         if secret_key: storage_config["s3.secret-access-key"] = secret_key
         if prefix: storage_config["prefix"] = prefix
+        if endpoint: storage_config["s3.endpoint"] = endpoint
 
         if access_key and secret_key and vending_strategy == "AwsStatic":
             vending_strategy = {
@@ -147,7 +221,6 @@ class WarehouseClient:
                 }
             }
         elif isinstance(vending_strategy, str):
-            # Fallback for other string enums if they exist and are unit variants (e.g. "None")
              pass 
 
         payload = {
@@ -158,6 +231,43 @@ class WarehouseClient:
         
         data = self.client.post("/api/v1/warehouses", json=payload)
         return Warehouse(**data)
+
+    def update(self, name: str, storage_config: Dict[str, str] = None, 
+               vending_strategy: Union[str, Dict] = None) -> Warehouse:
+        """Update warehouse configuration."""
+        payload = {}
+        if storage_config:
+            payload["storage_config"] = storage_config
+        if vending_strategy:
+            payload["vending_strategy"] = vending_strategy
+        data = self.client.put(f"/api/v1/warehouses/{name}", json=payload)
+        return Warehouse(**data)
+
+    def delete(self, name: str):
+        """Delete a warehouse."""
+        self.client.delete(f"/api/v1/warehouses/{name}")
+
+
+class UserClient:
+    def __init__(self, client: PangolinClient):
+        self.client = client
+        
+    def create(self, username: str, email: str, role: str, tenant_id: str = None, password: str = None) -> User:
+        payload = {
+            "username": username,
+            "email": email,
+            "role": role, # "TenantAdmin", "TenantUser", "Root"
+            "tenant_id": tenant_id,
+        }
+        if password:
+            payload["password"] = password
+            
+        data = self.client.post("/api/v1/users", json=payload)
+        return User(**data)
+    
+    def list(self) -> List[User]:
+        data = self.client.get("/api/v1/users")
+        return [User(**u) for u in data]
 
 
 class CatalogClient:
@@ -172,22 +282,32 @@ class CatalogClient:
         data = self.client.get(f"/api/v1/catalogs/{name}")
         return Catalog(**data)
     
-    def create(self, name: str, warehouse: str, type: str = "pantry") -> Catalog:
+    def create(self, name: str, warehouse: str, type: str = "Local") -> Catalog:
         payload = {
             "name": name,
             "warehouse_name": warehouse,
-            "catalog_type": type # "pantry", "glue", etc. (backend uses 'catalog_type' or 'type'?)
-            # Backend struct CreateCatalogRequest: { name, warehouse_name, catalog_type }
+            "catalog_type": type # "Local", "Federated"
         }
-        # Checking backend struct: create_catalog expects CreateCatalogRequest
-        # struct: pub struct CreateCatalogRequest { pub name: String, pub warehouse_name: Option<String>, pub catalog_type: CatalogType ... }
         
         data = self.client.post("/api/v1/catalogs", json=payload)
-        # Note: the backend might return the Created Catalog struct
         return Catalog(**data)
+    
+    def update(self, name: str, properties: Dict[str, str]) -> Catalog:
+        """Update catalog properties."""
+        payload = {"properties": properties}
+        data = self.client.put(f"/api/v1/catalogs/{name}", json=payload)
+        return Catalog(**data)
+
+    def delete(self, name: str):
+        """Delete a catalog."""
+        self.client.delete(f"/api/v1/catalogs/{name}")
     
     def namespaces(self, catalog_name: str):
         return NamespaceClient(self.client, catalog_name)
+
+    def views(self, catalog_name: str):
+        """Get view client for this catalog."""
+        return ViewClient(self.client, catalog_name)
 
 
 class NamespaceClient:
@@ -208,3 +328,18 @@ class NamespaceClient:
         if parent: params["parent"] = parent
         data = self.client.get(f"/v1/{self.catalog_name}/namespaces", params=params)
         return data["namespaces"] # returns Vec<Vec<String>>
+
+    def register_asset(self, namespace: str, name: str, kind: str, location: str, properties: Dict[str, str] = None) -> Dict[str, Any]:
+        """
+        Register a generic asset (non-Iceberg) in the catalog.
+        """
+        payload = {
+            "name": name,
+            "kind": kind,
+            "location": location,
+            "properties": properties or {}
+        }
+        # Note: The API path for asset registration is under /api/v1/catalogs, not /v1 (Iceberg)
+        # We need to construct the full path carefully.
+        # Based on search results: /api/v1/catalogs/:catalog_name/namespaces/:namespace/assets
+        return self.client.post(f"/api/v1/catalogs/{self.catalog_name}/namespaces/{namespace}/assets", json=payload)
