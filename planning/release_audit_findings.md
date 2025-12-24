@@ -34,3 +34,12 @@ Tracking issues found during end-to-end testing of Docker images with MinIO.
 - [ ] Admin CLI: Login
 - [ ] Admin CLI: Create Resources
 - [ ] User CLI: List Resources
+
+## Deployment Assets Audit
+- **Status**: Verified & Updated.
+- **Findings**:
+    - Validated `docs/getting-started` and `docs/pyiceberg` content.
+    - Audited `deployment_assets` structure (`production` templates, `demo` environments).
+    - **Fix**: Updated `deployment_assets/demo/evaluate_single_tenant/demo_client.py` to include `header.X-Pangolin-Tenant` for best practice compliance.
+    - Verified `evaluate_multi_tenant` instructions are accurate for `Auth` mode.
+    - Confirmed `latest` tag usage is appropriate for generic assets.

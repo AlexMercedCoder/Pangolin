@@ -34,11 +34,13 @@ The main area where you interact with data, forms, and logs.
 
 ### Root Dashboard
 *Accessible only to system owners.*
-Provides high-level metrics on system health, total tenants, and active users across the entire platform. Features **Summary Cards** for quick insight into total warehouses, catalogs, and users.
+Provides high-level metrics on system health.
+- **Stats Cards**: Total Tenants, Warehouses, Catalogs, Namespaces, and Tables across the platform.
 
 ### Tenant Dashboard
 *The home screen for most users.*
-Displays recent activity, quick-access catalogs, and pending access requests. Includes **Real-time Statistics** for your tenant's resource usage (Tables, Storage, Compute).
+Displays recent activity and resource usage.
+- **Resource Stats**: Real-time counts of Catalogs, Warehouses, Namespaces, and Tables within your tenant.
 
 ## 🔔 Interaction Patterns
 

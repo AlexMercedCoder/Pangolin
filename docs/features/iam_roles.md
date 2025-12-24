@@ -44,11 +44,13 @@ pangolin-admin create-warehouse --name "prod-s3" --type "s3"
   "name": "s3-iam-warehouse",
   "storage_config": {
     "s3.bucket": "acme-data",
-    "s3.region": "us-east-1"
+    "s3.region": "us-east-1",
+    "s3.role-arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
   },
   "vending_strategy": {
-    "type": "AwsSts",
-    "role_arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
+    "AwsSts": {
+      "role_arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
+    }
   }
 }
 ```

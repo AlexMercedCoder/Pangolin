@@ -47,7 +47,9 @@ AWS_ALLOW_HTTP=true
 
 ### Warehouse Configuration
 
-When creating a warehouse, set `use_sts` to enable credential vending:
+To enable credential vending, configure the `vending_strategy` in your warehouse definition.
+
+**AWS S3 (STS Mode):**
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/warehouses \
@@ -55,19 +57,38 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "production_warehouse",
-    "use_sts": true,
     "storage_config": {
       "type": "s3",
       "bucket": "my-data-bucket",
       "region": "us-east-1",
-      "role_arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
+      "s3.role-arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
+    },
+    "vending_strategy": {
+       "AwsSts": {
+          "role_arn": "arn:aws:iam::123456789012:role/PangolinDataAccess"
+       }
     }
   }'
 ```
 
-**Configuration Options**:
-- `use_sts: true` - Vend temporary STS credentials to clients
-- `use_sts: false` - Pass through static credentials from environment variables
+**AWS S3 (Static Mode):**
+
+```bash
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -H "X-Pangolin-Tenant: <tenant-id>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "dev_warehouse",
+    "storage_config": {
+      "type": "s3",
+      "bucket": "my-dev-bucket",
+      "region": "us-east-1",
+      "s3.access-key-id": "AKIA...",
+      "s3.secret-access-key": "..."
+    },
+    "vending_strategy": "AwsStatic"
+  }'
+```
 
 ### Azure ADLS Gen2 Configuration
 
@@ -78,14 +99,20 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "azure_warehouse",
-    "use_sts": true,
     "storage_config": {
       "type": "azure",
-      "account_name": "mystorageaccount",
-      "container": "data",
-      "tenant_id": "azure-tenant-id",
-      "client_id": "azure-client-id",
-      "client_secret": "azure-client-secret"
+      "azure.account-name": "mystorageaccount",
+      "azure.container": "data",
+      "azure.client-id": "azure-client-id",
+      "azure.client-secret": "azure-client-secret",
+      "azure.tenant-id": "azure-tenant-id"
+    },
+    "vending_strategy": {
+       "AzureOAuth": {
+          "client_id": "azure-client-id",
+          "client_secret": "azure-client-secret",
+          "tenant_id": "azure-tenant-id"
+       }
     }
   }'
 ```
@@ -97,13 +124,13 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "azure_warehouse",
-    "use_sts": false,
     "storage_config": {
       "type": "azure",
-      "account_name": "mystorageaccount",
-      "container": "data",
-      "account_key": "your-account-key"
-    }
+      "azure.account-name": "mystorageaccount",
+      "azure.container": "data",
+      "azure.account-key": "your-account-key"
+    },
+    "vending_strategy": "AzureSas"
   }'
 ```
 
@@ -115,13 +142,13 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
   -H "Content-Type: application/json" \
   -d '{
     "name": "gcp_warehouse",
-    "use_sts": false,
     "storage_config": {
       "type": "gcs",
-      "project_id": "my-gcp-project",
-      "bucket": "my-data-bucket",
-      "service_account_key": "{...json key...}"
-    }
+      "gcp.project-id": "my-gcp-project",
+      "gcp.bucket": "my-data-bucket",
+      "gcp.service-account-key": "{...json key...}"
+    },
+    "vending_strategy": "GcpDownscoped"
   }'
 ```
 
@@ -129,34 +156,7 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
 
 ## Features
 
-### 1. Table Credential Vending
-
-Get temporary AWS credentials (Access Key, Secret Key, Session Token) scoped to a specific table's location.
-
-**Endpoint:** `POST /v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials`
-
-**Request:**
-```bash
-curl -X POST http://localhost:8080/v1/analytics/namespaces/sales/tables/transactions/credentials \
-  -H "Authorization: Bearer <token>" \
-  -H "X-Pangolin-Tenant: <tenant-id>"
-```
-
-**Response:**
-```json
-{
-  "access_key_id": "ASIA...",
-  "secret_access_key": "...",
-  "session_token": "...",
-  "expiration": "2023-10-27T10:00:00Z"
-}
-```
-
-**Use Case**: Spark jobs, Trino queries, or any client that needs direct S3 access.
-
----
-
-### 2. Presigned URLs
+### Presigned URLs
 
 Get a presigned URL to download a specific file (e.g., a metadata file or data file) without needing AWS credentials.
 
@@ -345,7 +345,7 @@ Allow Pangolin's AWS account/role to assume the data access role:
 ## Security Best Practices
 
 ### 1. **Use STS Credential Vending**
-Always use `use_sts: true` in production to vend temporary credentials instead of sharing static credentials.
+Always use `AwsSts` strategy in production to vend temporary credentials instead of sharing static credentials.
 
 ### 2. **Scope Credentials to Table Locations**
 Pangolin vends credentials scoped to specific table locations, limiting blast radius if credentials are compromised.
@@ -370,7 +370,7 @@ Add IAM policy conditions to restrict access by IP, time, or other factors:
 Review CloudTrail logs for STS AssumeRole calls to detect unusual patterns.
 
 ### 6. **Rotate Static Credentials**
-If using static credentials (`use_sts: false`), rotate them regularly.
+If using static credentials (`AwsStatic`), rotate them regularly.
 
 ---
 
@@ -400,7 +400,7 @@ If using static credentials (`use_sts: false`), rotate them regularly.
 
 **Solution**:
 1. Remove `s3.access-key-id` and `s3.secret-access-key` from PyIceberg config
-2. Verify warehouse has `use_sts: true`
+2. Verify warehouse has `vending_strategy` configured correctly
 3. Check Pangolin logs for credential vending requests
 
 ### "Invalid security token" errors
@@ -473,7 +473,7 @@ AWS_STS_REGIONAL_ENDPOINTS=regional
 
 ## Related Documentation
 
-- [Warehouse Management](./warehouse_management.md) - Creating and configuring warehouses
-- [Authentication](../authentication.md) - User authentication and tokens
+- [Warehouse Management](../warehouse/README.md) - Creating and configuring warehouses
+- [Authentication](../architecture/authentication.md) - User authentication and tokens
 - [Client Configuration](../getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup
 - [AWS S3 Storage](../warehouse/s3.md) - S3 storage backend configuration

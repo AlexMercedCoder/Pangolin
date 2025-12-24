@@ -13,6 +13,7 @@ def main():
             "type": "rest",
             "uri": "http://localhost:8080/v1/demo",
             "header.X-Iceberg-Access-Delegation": "vended-credentials",
+            "header.X-Pangolin-Tenant": "00000000-0000-0000-0000-000000000000", # Explicitly set default tenant
             # MinIO credentials for local access if running outside docker
             "s3.endpoint": "http://localhost:9000",
             "s3.access-key-id": "minioadmin",

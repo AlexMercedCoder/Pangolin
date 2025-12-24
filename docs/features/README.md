@@ -6,6 +6,8 @@ This directory contains detailed documentation for the core features of the Pang
 Basic data operations and lifecycle management.
 - **[Entities](./entities.md)**: Understanding the Pangolin core models.
 - **[Asset Management](./asset_management.md)**: Handling Tables, Views, and other assets.
+- **[Generic Assets](./generic_assets.md)**: Cataloging ML Models, Videos, and Files.
+- **[Modern Table Formats](./table_formats.md)**: Support for Delta Lake, Hudi, and Paimon.
 - **[Warehouse Management](./warehouse_management.md)**: Configuring storage backends.
 - **[Time Travel](./time_travel.md)**: Querying historical data states.
 - **[Tag Management](./tag_management.md)**: Versioning with tags.

@@ -115,18 +115,19 @@ Pangolin uses the `vending_strategy` field to configure credential vending. The 
   "name": "prod-s3",
   "storage_config": {
     "bucket": "my-datalake",
-    "region": "us-east-1"
+    "region": "us-east-1",
+    "s3.role-arn": "arn:aws:iam::123456789:role/PangolinDataAccess"
   },
   "vending_strategy": {
-    "type": "AwsSts",
-    "role_arn": "arn:aws:iam::123456789:role/PangolinDataAccess",
-    "external_id": null
+    "AwsSts": {
+       "role_arn": "arn:aws:iam::123456789:role/PangolinDataAccess"
+    }
   }
 }
 ```
 
-**Pros**: Most secure, credentials expire, fine-grained permissions  
-**Cons**: Requires IAM role setup
+> [!NOTE]
+> STS Vending requires `PANGOLIN_STS_ROLE_ARN` server configuration.
 
 #### 2. AwsStatic - AWS Static Credentials
 
@@ -135,54 +136,18 @@ Pangolin uses the `vending_strategy` field to configure credential vending. The 
   "name": "dev-s3",
   "storage_config": {
     "bucket": "my-dev-datalake",
-    "region": "us-east-1"
+    "region": "us-east-1",
+    "s3.access-key-id": "AKIAIOSFODNN7EXAMPLE",
+    "s3.secret-access-key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
   },
-  "vending_strategy": {
-    "type": "AwsStatic",
-    "access_key_id": "AKIAIOSFODNN7EXAMPLE",
-    "secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-  }
+  "vending_strategy": "AwsStatic"
 }
 ```
 
-**Pros**: Simple, works everywhere  
+**Pros**: Simple, works everywhere (Development)
 **Cons**: Less secure, credentials don't expire
 
-#### 3. AzureSas - Azure SAS Tokens
-
-```json
-{
-  "name": "prod-azure",
-  "storage_config": {
-    "account_name": "mystorageaccount",
-    "container": "datalake"
-  },
-  "vending_strategy": {
-    "type": "AzureSas",
-    "account_name": "mystorageaccount",
-    "account_key": "your-account-key"
-  }
-}
-```
-
-#### 4. GcpDownscoped - GCP Service Account
-
-```json
-{
-  "name": "prod-gcs",
-  "storage_config": {
-    "bucket": "my-datalake",
-    "project_id": "my-project"
-  },
-  "vending_strategy": {
-    "type": "GcpDownscoped",
-    "service_account_email": "iceberg@my-project.iam.gserviceaccount.com",
-    "private_key": "-----BEGIN PRIVATE KEY-----\n..."
-  }
-}
-```
-
-#### 5. None - No Credential Vending
+#### 3. Client Provided (No Vending)
 
 ```json
 {
@@ -190,13 +155,11 @@ Pangolin uses the `vending_strategy` field to configure credential vending. The 
   "storage_config": {
     "bucket": "my-datalake"
   },
-  "vending_strategy": {
-    "type": "None"
-  }
+  "vending_strategy": "None"
 }
 ```
 
-Clients must provide their own credentials.
+Clients must provide their own credentials via environment variables or Spark/Iceberg config.
 
 ### Deprecated: use_sts Field
 

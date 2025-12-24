@@ -11,6 +11,7 @@ This directory contains detailed technical documentation for the Pangolin archit
 ## Logic & Patterns
 - **[Branching](./branching.md)**: Explanation of the "Git-for-Data" model, including branching, committing, and 3-way merge logic.
 - **[Caching](./caching.md)**: Details on the multi-layered caching strategy using `moka` (Metadata) and `DashMap` (ObjectStore).
+- **[Dependencies](./dependencies.md)**: Comprehensive list of libraries and frameworks used in Backend and Frontend.
 
 ## Legacy Docs
 - `catalog-store-trait.md`: (Ref `traits.md`)
