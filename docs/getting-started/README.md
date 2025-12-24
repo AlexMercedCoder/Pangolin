@@ -11,6 +11,7 @@ Get up and running in minutes.
 Fine-tune Pangolin for your environment.
 - **[Environment Variables](./env_vars.md)**: Comprehensive list of all configuration options.
 - **[Configuration Overview](./configuration.md)**: Principles of runtime and storage setup.
+- **[Nested Namespaces](./nested_namespaces.md)**: Guide to creating and managing hierarchical namespaces.
 - **[Storage Backend Logic](./storage-backend-logic.md)**: How backends determine which credentials to use (vending vs client-side).
 - **[Dependencies](./dependencies.md)**: System requirements and library overview.
 

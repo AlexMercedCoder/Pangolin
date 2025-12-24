@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pypangolin"
+version = "0.1.0"
+description = "Python client for Pangolin Data Catalog"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+    { name = "Alex Merced", email = "alex@alexmerced.com" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "requests>=2.28.0",
+    "pydantic>=2.0.0",
+    "pyiceberg>=0.5.0",
+]
+
+[project.optional-dependencies]
+delta = ["deltalake>=0.10.0"]
+lance = ["lancedb>=0.1.0"]
+all = ["deltalake>=0.10.0", "lancedb>=0.1.0", "pyarrow>=12.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/AlexMercedCoder/Pangolin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pypangolin"]
