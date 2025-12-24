@@ -100,6 +100,15 @@ pub enum AssetType {
     JsonTable,
     View,
     MlModel,
+    ApachePaimon,
+    Vortex,
+    Lance,
+    Nimble,
+    Directory,
+    VideoFile,
+    ImageFile,
+    DbConnString,
+    Other,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

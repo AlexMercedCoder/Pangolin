@@ -6,12 +6,12 @@
 
     let requests: AccessRequest[] = [];
     let loading = true;
-    let selectedStatus: 'Pending' | 'Approved' | 'Rejected' | 'All' = 'Pending';
+    let selectedStatus: 'pending' | 'approved' | 'rejected' | 'all' = 'pending';
     
     // Modal state for Approve/Reject
     let showReviewModal = false;
     let selectedRequest: AccessRequest | null = null;
-    let reviewAction: 'Approved' | 'Rejected' = 'Approved';
+    let reviewAction: 'approved' | 'rejected' = 'approved';
     let reviewComment = '';
 
 	onMount(async () => {
@@ -33,11 +33,11 @@
         }
     }
 
-    $: filteredRequests = selectedStatus === 'All' 
+    $: filteredRequests = selectedStatus === 'all' 
         ? requests 
         : requests.filter(r => r.status === selectedStatus);
 
-    function openReviewModal(request: AccessRequest, action: 'Approved' | 'Rejected') {
+    function openReviewModal(request: AccessRequest, action: 'approved' | 'rejected') {
         selectedRequest = request;
         reviewAction = action;
         reviewComment = '';
@@ -51,7 +51,7 @@
                 status: reviewAction,
                 comment: reviewComment
             });
-            notifications.success(`Request ${reviewAction.toLowerCase()}`);
+            notifications.success(`Request ${reviewAction}`);
             showReviewModal = false;
             loadRequests();
         } catch (e) {
@@ -75,10 +75,10 @@
 
     <!-- Filters -->
     <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700 pb-4">
-        {#each ['Pending', 'Approved', 'Rejected', 'All'] as status}
+        {#each ['pending', 'approved', 'rejected', 'all'] as status}
             <button
                 on:click={() => selectedStatus = status as any}
-                class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {selectedStatus === status ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}"
+                class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {selectedStatus === status ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'} capitalize"
             >
                 {status}
             </button>
@@ -92,7 +92,7 @@
         </div>
     {:else if filteredRequests.length === 0}
          <div class="text-center py-12 text-gray-500 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-            No {selectedStatus === 'All' ? '' : selectedStatus.toLowerCase()} requests found.
+            No {selectedStatus === 'all' ? '' : selectedStatus} requests found.
         </div>
     {:else}
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -121,9 +121,9 @@
                             </td>
                             <td class="px-6 py-4">
                                 <span class="px-2 py-1 text-xs font-medium rounded-full 
-                                    {req.status === 'Approved' ? 'bg-green-100 text-green-800' : 
-                                     req.status === 'Rejected' ? 'bg-error-100 text-error-800' : 
-                                     'bg-yellow-100 text-yellow-800'}">
+                                    {req.status === 'approved' ? 'bg-green-100 text-green-800' : 
+                                     req.status === 'rejected' ? 'bg-error-100 text-error-800' : 
+                                     'bg-yellow-100 text-yellow-800'} capitalize">
                                     {req.status}
                                 </span>
                             </td>
@@ -131,15 +131,15 @@
                                 {req.reason || '-'}
                             </td>
                             <td class="px-6 py-4 text-right space-x-2">
-                                {#if req.status === 'Pending'}
+                                {#if req.status === 'pending'}
                                     <button 
-                                        on:click={() => openReviewModal(req, 'Approved')}
+                                        on:click={() => openReviewModal(req, 'approved')}
                                         class="text-xs font-medium text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1 rounded"
                                     >
                                         Approve
                                     </button>
                                     <button 
-                                        on:click={() => openReviewModal(req, 'Rejected')}
+                                        on:click={() => openReviewModal(req, 'rejected')}
                                         class="text-xs font-medium text-error-600 hover:text-error-700 bg-error-50 hover:bg-error-100 px-3 py-1 rounded"
                                     >
                                         Reject
@@ -193,9 +193,9 @@
             </button>
             <button
                 on:click={submitReview}
-                class="px-4 py-2 text-white rounded-lg {reviewAction === 'Approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-error-600 hover:bg-error-700'}"
+                class="px-4 py-2 text-white rounded-lg {reviewAction === 'approved' ? 'bg-green-600 hover:bg-green-700' : 'bg-error-600 hover:bg-error-700'}"
             >
-                Confirm {reviewAction}
+                Confirm {reviewAction.charAt(0).toUpperCase() + reviewAction.slice(1)}
             </button>
         </div>
     </div>

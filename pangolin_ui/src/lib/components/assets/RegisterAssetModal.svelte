@@ -25,6 +25,15 @@
         { value: 'JSON_TABLE', label: 'JSON Table' },
         { value: 'VIEW', label: 'View' },
         { value: 'ML_MODEL', label: 'ML Model' },
+        { value: 'APACHE_PAIMON', label: 'Apache Paimon' },
+        { value: 'VORTEX', label: 'Vortex' },
+        { value: 'LANCE', label: 'Lance' },
+        { value: 'NIMBLE', label: 'Nimble' },
+        { value: 'DIRECTORY', label: 'Directory' },
+        { value: 'VIDEO_FILE', label: 'Video File' },
+        { value: 'IMAGE_FILE', label: 'Image File' },
+        { value: 'DB_CONN_STRING', label: 'DB Connection String' },
+        { value: 'OTHER', label: 'Other' },
     ];
 
     function addProperty() {

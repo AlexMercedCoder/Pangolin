@@ -218,8 +218,26 @@ pub async fn search_assets(
 
             // Map to response format with has_access and discoverable flags
             let mapped_results: Vec<_> = filtered_results.into_iter().map(|(asset, metadata, catalog, namespace)| {
-                // User has access if they passed the filter
-                let has_access = true;
+                // User has access if they are admin OR have specific read permission
+                // If they only see it because it's discoverable, has_access should be false
+                let has_access = if matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
+                    true
+                } else {
+                    if let Some(&catalog_id) = catalog_map.get(&catalog) {
+                        let ns_str = namespace.join(".");
+                        let required_actions = vec![pangolin_core::permission::Action::Read];
+                        crate::authz_utils::has_asset_access(
+                            catalog_id,
+                            &ns_str,
+                            asset.id,
+                            &permissions,
+                            &required_actions
+                        )
+                    } else {
+                        false
+                    }
+                };
+
                 let is_discoverable = metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
                 
                 serde_json::json!({
@@ -349,7 +367,40 @@ pub async fn update_access_request(
     match store.get_access_request(request_id).await {
         Ok(Some(mut request)) => {
             match payload.status {
-                RequestStatus::Approved => request.approve(session.user_id, payload.comment),
+                RequestStatus::Approved => {
+                    request.approve(session.user_id, payload.comment);
+                    
+                    // Grant Read Permission automatically
+                    if let Ok(Some((_, catalog_name, namespace_vec))) = store.get_asset_by_id(request.tenant_id, request.asset_id).await {
+                         // Resolve Catalog ID from name (needed for PermissionScope)
+                         if let Ok(catalogs) = store.list_catalogs(request.tenant_id).await {
+                             if let Some(catalog) = catalogs.iter().find(|c| c.name == catalog_name) {
+                                  // Construct the Permission Scope
+                                  let scope = pangolin_core::permission::PermissionScope::Asset {
+                                      catalog_id: catalog.id,
+                                      namespace: namespace_vec.join("."),
+                                      asset_id: request.asset_id
+                                  };
+                                  
+                                  // Define Actions (Read)
+                                  let mut actions = std::collections::HashSet::new();
+                                  actions.insert(pangolin_core::permission::Action::Read);
+                                  
+                                  // Create the Permission Object
+                                  let permission = pangolin_core::permission::Permission::new(
+                                      request.user_id,
+                                      scope,
+                                      actions,
+                                      session.user_id // Granted by the approving admin
+                                  );
+                                  
+                                  // Save to Store
+                                  let _ = store.create_permission(permission).await;
+                                  tracing::info!("Automatically granted READ permission for approved request {}", request.id);
+                             }
+                         }
+                    }
+                },
                 RequestStatus::Rejected => request.reject(session.user_id, payload.comment),
                 RequestStatus::Pending => return (StatusCode::BAD_REQUEST, "Cannot set status back to pending").into_response(),
             }

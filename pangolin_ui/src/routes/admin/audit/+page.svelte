@@ -176,7 +176,7 @@
 									{formatDate(event.timestamp)}
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-									{event.username}
+									{event.username}{#if $isRoot && event.tenant_id}<span class="text-gray-400 font-normal">:{event.tenant_id}</span>{/if}
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap">
 									<Badge variant={getActionColor(event.action)}>{event.action.replace('_', ' ')}</Badge>

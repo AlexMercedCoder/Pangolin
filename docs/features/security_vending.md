@@ -13,6 +13,7 @@ Instead of sharing long-term cloud credentials with clients (e.g., Spark jobs, D
 - ✅ Centralized audit trail of data access
 - ✅ Support for cross-account/cross-cloud access
 - ✅ **Multi-cloud support:** S3, Azure ADLS Gen2, Google Cloud Storage
+- ⚠️ **Local Filesystem:** Supported for dev/test (no credential vending involved)
 
 ---
 

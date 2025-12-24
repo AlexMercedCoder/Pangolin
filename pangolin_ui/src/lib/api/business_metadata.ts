@@ -12,8 +12,10 @@ export interface BusinessMetadata {
     updated_by: string;
 }
 
+
 export interface AccessRequest {
     id: string; // UUID
+    tenant_id?: string; // UUID (optional as it might effectively be on some responses)
     user_id: string; // UUID
     asset_id: string; // UUID
     reason?: string;
@@ -61,16 +63,38 @@ export const businessMetadataApi = {
     },
 
     listRequests: async (): Promise<AccessRequest[]> => {
-        // Correct path according to backend handler usually has /api/v1
-        const response = await apiClient.get<AccessRequest[]>(`/api/v1/access-requests`);
+        const response = await apiClient.get<any[]>(`/api/v1/access-requests`);
         if (response.error) throw new Error(response.error.message);
-        return response.data || [];
+        return (response.data || []).map(r => ({
+            id: r.id,
+            user_id: r['user-id'],
+            asset_id: r['asset-id'],
+            tenant_id: r['tenant-id'],
+            reason: r.reason,
+            requested_at: r['requested-at'],
+            status: r.status,
+            reviewed_by: r['reviewed-by'],
+            reviewed_at: r['reviewed-at'],
+            review_comment: r['review-comment']
+        }));
     },
 
     getRequest: async (requestId: string): Promise<AccessRequest> => {
-        const response = await apiClient.get<AccessRequest>(`/api/v1/access-requests/${requestId}`);
+        const response = await apiClient.get<any>(`/api/v1/access-requests/${requestId}`);
         if (response.error) throw new Error(response.error.message);
-        return response.data!;
+        const r = response.data!;
+        return {
+            id: r.id,
+            user_id: r['user-id'],
+            asset_id: r['asset-id'],
+            tenant_id: r['tenant-id'],
+            reason: r.reason,
+            requested_at: r['requested-at'],
+            status: r.status,
+            reviewed_by: r['reviewed-by'],
+            reviewed_at: r['reviewed-at'],
+            review_comment: r['review-comment']
+        };
     },
 
     updateRequestStatus: async (requestId: string, payload: UpdateRequestStatus): Promise<void> => {

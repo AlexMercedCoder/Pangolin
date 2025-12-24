@@ -58,18 +58,22 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 ### 🏁 1. Getting Started
 - **[Installation & Setup](docs/getting-started/getting_started.md)** - Get running in 5 minutes.
 - **[Auth Modes](docs/authentication.md)** - Understanding Auth vs No-Auth and OAuth.
+- **[Service Users](docs/features/service_users.md)** - API keys for programmatic access.
+- **[Multi-Tenancy](docs/features/multi_tenancy.md)** - Understanding isolation.
 - **[User Scopes](docs/getting-started/getting_started.md#user-scopes)** - Roles: Root, Tenant Admin, and Tenant User.
 - **[Configuration](docs/getting-started/configuration.md)** - Server configuration options.
 - **[Environment Variables](docs/getting-started/env_vars.md)** - Complete metadata and storage reference.
 
 ### 🏗️ 2. Core Infrastructure
 - **[Warehouses](docs/warehouse/README.md)** - Managing S3, Azure, and GCS storage.
+- **[Credential Vending](docs/features/security_vending.md)** - Secure direct-to-storage access.
 - **[Catalogs](docs/features/asset_management.md)** - Creating Local and Federated catalogs.
 - **[Backend Storage](docs/backend_storage/README.md)** - Metadata persistence with Postgres, Mongo, or SQLite.
 
 ### 🧪 3. Data Management (API, CLI, UI)
 - **[Branching & Versioning](docs/features/branch_management.md)** - Git-style workflows and auto-add nuances.
 - **[Permissions & RBAC](docs/permissions.md)** - Asset-level access and cascading grants.
+- **[IAM Roles](docs/features/iam_roles.md)** - Cloud provider integration.
 - **[Business Metadata](docs/features/business_catalog.md)** - Tags, search, and data discovery.
 - **[Audit Logging](docs/features/audit_logs.md)** - Security tracking across all tools.
 - **[Maintenance](docs/features/maintenance.md)** - Snapshots, orphan files, and storage optimization.

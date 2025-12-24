@@ -91,20 +91,31 @@ pub async fn auth_middleware(
         .unwrap_or(false);
     
     if no_auth_enabled {
-        // In NO_AUTH mode, create a default TenantAdmin user session
-        let session = create_session(
-            Uuid::nil(),
-            "tenant_admin".to_string(),
-            None,
-            UserRole::TenantAdmin,
-            86400,
-        );
-        req.extensions_mut().insert(session);
-        // Also insert TenantId for NO_AUTH mode (default tenant)
-        let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
-        req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
-        // In NO_AUTH mode, we are effectively a tenant admin
-        return next.run(req).await;
+        // If config request, allow through (UI needs this to check status)
+        if req.uri().path().contains("/config") {
+             return next.run(req).await;
+        }
+
+        // If Authorization header is present, try to use it (allow testing specific users)
+        if req.headers().contains_key(header::AUTHORIZATION) {
+            // Let normal auth flow proceed, which will verify the token
+            // This works because user_handlers.rs bypasses password check to issue valid tokens
+        } else {
+            // No token provided? Default to TenantAdmin for easy dev access
+            // In NO_AUTH mode, create a default TenantAdmin user session
+            let session = create_session(
+                Uuid::nil(),
+                "tenant_admin".to_string(),
+                None,
+                UserRole::TenantAdmin,
+                86400,
+            );
+            req.extensions_mut().insert(session);
+            // Also insert TenantId for NO_AUTH mode (default tenant)
+            let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+            req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
+            return next.run(req).await;
+        }
     }
 
     // Check for X-API-Key header (Service User authentication)

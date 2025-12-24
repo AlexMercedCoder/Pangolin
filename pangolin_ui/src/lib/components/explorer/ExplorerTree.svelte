@@ -99,6 +99,33 @@
             case 'JsonTable': return '📋';
             case 'ML_MODEL': 
             case 'MlModel': return '🧠';
+            case 'APACHE_PAIMON':
+            case 'ApachePaimon':
+            case 'apachepaimon': return '🦈';
+            case 'VORTEX':
+            case 'Vortex':
+            case 'vortex': return '🌀';
+            case 'LANCE':
+            case 'Lance':
+            case 'lance': return '🏹';
+            case 'NIMBLE':
+            case 'Nimble':
+            case 'nimble': return '🏃';
+            case 'DIRECTORY':
+            case 'Directory':
+            case 'directory': return '📁';
+            case 'VIDEO_FILE':
+            case 'VideoFile':
+            case 'videofile': return '🎬';
+            case 'IMAGE_FILE':
+            case 'ImageFile':
+            case 'imagefile': return '🖼️';
+            case 'DB_CONN_STRING':
+            case 'DbConnString':
+            case 'dbconnstring': return '🔗';
+            case 'OTHER':
+            case 'Other':
+            case 'other': return '📦';
             default: return '📄';
         }
     }

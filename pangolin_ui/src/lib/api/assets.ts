@@ -8,7 +8,16 @@ export type AssetType =
     | 'CSV_TABLE'
     | 'JSON_TABLE'
     | 'VIEW'
-    | 'ML_MODEL';
+    | 'ML_MODEL'
+    | 'APACHE_PAIMON'
+    | 'VORTEX'
+    | 'LANCE'
+    | 'NIMBLE'
+    | 'DIRECTORY'
+    | 'VIDEO_FILE'
+    | 'IMAGE_FILE'
+    | 'DB_CONN_STRING'
+    | 'OTHER';
 
 export interface RegisterAssetRequest {
     name: string;

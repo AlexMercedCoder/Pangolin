@@ -30,4 +30,4 @@ Detailed configuration for different storage backends.
 To enable **Credential Vending**, PyIceberg must send the `X-Iceberg-Access-Delegation` header with the value `vended-credentials`. This tells Pangolin that the client expects temporary storage keys for its operations.
 
 ### Tenant Context
-Pangolin uses either a standard `token` or the custom `X-Pangolin-Tenant` header to determine the tenant context. For PyIceberg, use the `token` property for the best experience.
+While Pangolin extracts tenant context from the authentication token, we **strongly recommend** explicitly setting the `header.X-Pangolin-Tenant` property in your PyIceberg configuration. This ensures reliable routing for all operations, especially during initial connection.

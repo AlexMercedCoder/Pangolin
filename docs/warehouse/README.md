@@ -228,6 +228,7 @@ The `use_sts` boolean field is deprecated. Use `vending_strategy` instead.
 | [AWS S3](s3.md) | ✅ Production | Most common, excellent performance |
 | [Azure Blob](azure.md) | ✅ Production | Azure-native deployments |
 | [Google Cloud Storage](gcs.md) | ✅ Production | GCP-native deployments |
+| [Local Filesystem](local.md) | ⚠️ Dev/Test | Local development & testing |
 
 ## Quick Start
 

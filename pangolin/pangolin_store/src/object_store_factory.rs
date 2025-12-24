@@ -11,11 +11,27 @@ pub fn create_object_store(
         create_s3_store(storage_config, location)
     } else if location.starts_with("az://") || location.starts_with("abfs://") {
         create_azure_store(storage_config, location)
-    } else if location.starts_with("gs://") {
-        create_gcp_store(storage_config, location)
+    } else if location.starts_with("file://") || location.starts_with("/") {
+        create_local_store(storage_config, location)
     } else {
         Err(anyhow::anyhow!("Unsupported scheme for location: {}", location))
     }
+}
+
+fn create_local_store(
+    _config: &HashMap<String, String>,
+    location: &str,
+) -> Result<Box<dyn ObjectStore>> {
+    let path = if location.starts_with("file://") {
+        location.strip_prefix("file://").unwrap()
+    } else {
+        location
+    };
+    
+    // Ensure directory exists
+    std::fs::create_dir_all(path)?;
+    
+    Ok(Box::new(object_store::local::LocalFileSystem::new_with_prefix(path)?))
 }
 
 fn create_s3_store(

@@ -110,7 +110,6 @@
             <TableDetail {table} />
         {/if}
     </div>
-    </div>
 </div>
 
 <RequestAccessModal 
