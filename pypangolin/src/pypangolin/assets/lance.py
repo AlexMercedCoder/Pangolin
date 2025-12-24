@@ -24,3 +24,20 @@ class LanceAsset(BaseAsset):
         
         # 2. Register
         return cls.register(client, catalog, namespace, name, location, **kwargs)
+    
+    @classmethod
+    def read(cls, client, catalog, namespace, name):
+        """Read Lance dataset from registered asset location."""
+        try:
+            import lancedb
+        except ImportError:
+            raise ImportError("Please install 'lancedb' (pip install pypangolin[lance]) to use LanceAsset")
+        
+        asset = client.get(f"/api/v1/catalogs/{catalog}/namespaces/{namespace}/assets/{name}")
+        location = asset.get("location")
+        
+        # Connect to lancedb and read the table
+        db = lancedb.connect(location)
+        table = db.open_table(name)
+        return table.to_pandas()
+

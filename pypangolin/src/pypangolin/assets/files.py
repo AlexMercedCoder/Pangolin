@@ -37,6 +37,14 @@ class ParquetAsset(BaseAsset):
     def write(cls, client, catalog, namespace, name, data, location, **kwargs):
         write_dataframe(location, data, format="parquet", **kwargs)
         return cls.register(client, catalog, namespace, name, location, **kwargs)
+    
+    @classmethod
+    def read(cls, client, catalog, namespace, name):
+        """Read Parquet file from registered asset location."""
+        import pandas as pd
+        asset = client.get(f"/api/v1/catalogs/{catalog}/namespaces/{namespace}/assets/{name}")
+        location = asset.get("location")
+        return pd.read_parquet(location)
 
 class CsvAsset(BaseAsset):
     @classmethod
@@ -47,6 +55,14 @@ class CsvAsset(BaseAsset):
     def write(cls, client, catalog, namespace, name, data, location, **kwargs):
         write_dataframe(location, data, format="csv", **kwargs)
         return cls.register(client, catalog, namespace, name, location, **kwargs)
+    
+    @classmethod
+    def read(cls, client, catalog, namespace, name):
+        """Read CSV file from registered asset location."""
+        import pandas as pd
+        asset = client.get(f"/api/v1/catalogs/{catalog}/namespaces/{namespace}/assets/{name}")
+        location = asset.get("location")
+        return pd.read_csv(location)
 
 class JsonAsset(BaseAsset):
     @classmethod
@@ -57,3 +73,12 @@ class JsonAsset(BaseAsset):
     def write(cls, client, catalog, namespace, name, data, location, **kwargs):
         write_dataframe(location, data, format="json", **kwargs)
         return cls.register(client, catalog, namespace, name, location, **kwargs)
+    
+    @classmethod
+    def read(cls, client, catalog, namespace, name):
+        """Read JSON file from registered asset location."""
+        import pandas as pd
+        asset = client.get(f"/api/v1/catalogs/{catalog}/namespaces/{namespace}/assets/{name}")
+        location = asset.get("location")
+        return pd.read_json(location)
+
