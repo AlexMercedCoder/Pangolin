@@ -85,6 +85,16 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[Python Client](pypangolin/README.md)** - Official Python library (`pypangolin`).
 - **[Client Setup](docs/getting-started/client_configuration.md)** - Connecting PyIceberg, Spark, and Trino.
 
+### 📖 5. Best Practices
+- **[Deployment](docs/best-practices/deployment.md)** - Production deployment, Docker, Kubernetes, HA setup.
+- **[Scalability](docs/best-practices/scalability.md)** - Horizontal scaling, database optimization, caching.
+- **[Security](docs/best-practices/security.md)** - Authentication, encryption, audit logging, compliance.
+- **[Permissions Management](docs/best-practices/permissions.md)** - RBAC patterns, least privilege, access control.
+- **[Branch Management](docs/best-practices/branching.md)** - Git-like workflows, merge strategies, conflict resolution.
+- **[Business Metadata](docs/best-practices/metadata.md)** - Metadata strategy, governance, data classification.
+- **[Apache Iceberg](docs/best-practices/iceberg.md)** - Table design, partitioning, schema evolution, performance.
+- **[Generic Assets](docs/best-practices/generic-assets.md)** - Managing ML models, files, media, and artifacts.
+
 ---
 
 ## 🚦 Project Status
