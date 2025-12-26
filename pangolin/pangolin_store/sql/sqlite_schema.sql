@@ -212,10 +212,56 @@ CREATE TABLE IF NOT EXISTS system_settings (
 );
 
 -- Federated Catalog Stats
-CREATE TABLE IF NOT EXISTS federated_sync_stats (
-    tenant_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS federated_sync_stats (\n    tenant_id TEXT NOT NULL,
     catalog_name TEXT NOT NULL,
     stats TEXT NOT NULL, -- JSON
     PRIMARY KEY (tenant_id, catalog_name),
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );
+
+-- Service Users (Machine-to-Machine Authentication)
+CREATE TABLE IF NOT EXISTS service_users (\n    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    tenant_id TEXT NOT NULL,
+    api_key_hash TEXT NOT NULL UNIQUE,
+    role TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    created_by TEXT NOT NULL,
+    last_used INTEGER,
+    expires_at INTEGER,
+    active INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_service_users_tenant ON service_users(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_service_users_api_key ON service_users(api_key_hash);
+
+-- Merge Operations
+CREATE TABLE IF NOT EXISTS merge_operations (\n    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL,
+    catalog_name TEXT NOT NULL,
+    source_branch TEXT NOT NULL,
+    target_branch TEXT NOT NULL,
+    base_commit_id TEXT,
+    status TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    result_commit_id TEXT,
+    completed_at INTEGER,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_merge_operations_tenant_catalog ON merge_operations(tenant_id, catalog_name);
+CREATE INDEX IF NOT EXISTS idx_merge_operations_status ON merge_operations(status);
+
+-- Merge Conflicts
+CREATE TABLE IF NOT EXISTS merge_conflicts (\n    id TEXT PRIMARY KEY,
+    operation_id TEXT NOT NULL,
+    conflict_type TEXT NOT NULL, -- JSON
+    asset_id TEXT,
+    description TEXT NOT NULL,
+    resolution TEXT, -- JSON
+    resolved_by TEXT,
+    resolved_at INTEGER,
+    FOREIGN KEY (operation_id) REFERENCES merge_operations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_merge_conflicts_operation ON merge_conflicts(operation_id);
