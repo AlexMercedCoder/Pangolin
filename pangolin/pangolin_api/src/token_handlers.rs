@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use uuid::Uuid;
 use crate::auth::Claims;
-use crate::iceberg_handlers::AppState;
+use crate::iceberg::AppState;
 use pangolin_core::user::UserRole;
 use pangolin_core::token::TokenInfo;
 use utoipa::ToSchema;

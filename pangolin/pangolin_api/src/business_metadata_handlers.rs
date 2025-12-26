@@ -12,7 +12,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
 use pangolin_core::user::{UserSession, UserRole};
 use pangolin_core::permission::{Action, PermissionScope};
 use uuid::Uuid;
-use crate::iceberg_handlers::AppState;
+use crate::iceberg::AppState;
 use utoipa::ToSchema;
 
 #[derive(Deserialize, Serialize, ToSchema)]

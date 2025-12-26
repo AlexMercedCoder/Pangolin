@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use pangolin_store::CatalogStore;
 use pangolin_core::user::UserSession;
-use crate::iceberg_handlers::AppState;
+use crate::iceberg::AppState;
 use crate::error::ApiError;
 use utoipa::ToSchema;
 use uuid::Uuid;

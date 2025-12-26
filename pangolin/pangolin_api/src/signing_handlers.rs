@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use pangolin_store::CatalogStore;
-use crate::iceberg_handlers::AppState;
+use crate::iceberg::AppState;
 use crate::auth::TenantId;
 use axum::Extension;
 use utoipa::{ToSchema, IntoParams};

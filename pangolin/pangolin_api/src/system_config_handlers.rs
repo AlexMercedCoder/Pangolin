@@ -8,7 +8,7 @@ use std::sync::Arc;
 use pangolin_store::CatalogStore;
 use pangolin_core::model::SystemSettings;
 use pangolin_core::user::UserSession;
-use crate::iceberg_handlers::AppState;
+use crate::iceberg::AppState;
 use pangolin_core::user::UserRole;
 
 /// Get system settings

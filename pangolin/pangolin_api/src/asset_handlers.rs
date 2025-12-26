@@ -13,7 +13,8 @@ use crate::auth::TenantId;
 use crate::authz::check_permission;
 use pangolin_core::permission::{PermissionScope, Action};
 use pangolin_core::user::UserSession;
-use crate::iceberg_handlers::{AppState, parse_table_identifier};
+use crate::iceberg::AppState;
+use crate::iceberg::parse_table_identifier;
 use utoipa::ToSchema;
 
 #[derive(Deserialize, ToSchema)]
@@ -320,7 +321,7 @@ pub struct AssetSummary {
     pub name: String,
     pub namespace: Vec<String>,
     pub kind: AssetType,
-    pub identifier: crate::iceberg_handlers::TableIdentifier,
+    pub identifier: crate::iceberg::TableIdentifier,
 }
 
 /// List all assets in a namespace (Iceberg tables + Generic assets)
@@ -406,7 +407,7 @@ pub async fn list_assets(
                     name: asset.name.clone(),
                     namespace: namespace_parts.clone(),
                     kind: asset.kind,
-                    identifier: crate::iceberg_handlers::TableIdentifier {
+                    identifier: crate::iceberg::TableIdentifier {
                         namespace: namespace_parts.clone(),
                         name: asset.name,
                     }
@@ -422,7 +423,7 @@ pub async fn list_assets(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::iceberg_handlers::AppState;
+    use crate::iceberg::AppState;
     use pangolin_core::user::UserSession;
     use pangolin_core::permission::{PermissionScope, Action};
     use crate::tenant::TenantId;

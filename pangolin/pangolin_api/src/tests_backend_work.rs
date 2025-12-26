@@ -2,7 +2,7 @@
 mod tests {
     use super::*;
     use crate::token_handlers;
-    use crate::iceberg_handlers;
+    use crate::iceberg;
     use crate::system_config_handlers;
     use crate::federated_catalog_handlers;
     use crate::pangolin_handlers;

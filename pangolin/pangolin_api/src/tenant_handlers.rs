@@ -12,7 +12,7 @@ use pangolin_store::CatalogStore;
 use pangolin_core::model::Tenant;
 use uuid::Uuid;
 use crate::auth::TenantId;
-use crate::iceberg_handlers::AppState;
+use crate::iceberg::AppState;
 use utoipa::ToSchema;
 use pangolin_core::user::{UserSession, UserRole};
 

@@ -7,7 +7,7 @@ use tower_http::cors::{CorsLayer, Any};
 use axum::http::{HeaderValue, Method};
 use utoipa::OpenApi;
 
-pub mod iceberg_handlers;
+pub mod iceberg;
 pub mod pangolin_handlers;
 pub mod tenant_handlers;
 pub mod warehouse_handlers;
@@ -77,26 +77,26 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
             .url("/api-docs/openapi.json", openapi::ApiDoc::openapi()))
         // System Config
         .route("/api/v1/config/settings", get(system_config_handlers::get_system_settings).put(system_config_handlers::update_system_settings))
-        .route("/v1/config", get(iceberg_handlers::get_iceberg_catalog_config_handler))
-        .route("/v1/:prefix/config", get(iceberg_handlers::get_iceberg_catalog_config_handler))
-        .route("/v1/:prefix/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
-        .route("/v1/:prefix/namespaces/:namespace", delete(iceberg_handlers::delete_namespace))
-        .route("/v1/:prefix/namespaces/:namespace/properties", post(iceberg_handlers::update_namespace_properties))
-        .route("/v1/:prefix/namespaces/:namespace/tables", get(iceberg_handlers::list_tables).post(iceberg_handlers::create_table))
-        .route("/v1/:prefix/namespaces/:namespace/tables/:table", get(iceberg_handlers::load_table).post(iceberg_handlers::update_table).delete(iceberg_handlers::delete_table).head(iceberg_handlers::table_exists))
-        .route("/v1/:prefix/namespaces/:namespace/tables/:table/maintenance", post(iceberg_handlers::perform_maintenance))
-        .route("/v1/:prefix/namespaces/:namespace/tables/:table/metrics", post(iceberg_handlers::report_metrics))
-        .route("/v1/:prefix/tables/rename", post(iceberg_handlers::rename_table))
+        .route("/v1/config", get(iceberg::config::get_iceberg_catalog_config_handler))
+        .route("/v1/:prefix/config", get(iceberg::config::get_iceberg_catalog_config_handler))
+        .route("/v1/:prefix/namespaces", get(iceberg::namespaces::list_namespaces).post(iceberg::namespaces::create_namespace))
+        .route("/v1/:prefix/namespaces/:namespace", delete(iceberg::namespaces::delete_namespace))
+        .route("/v1/:prefix/namespaces/:namespace/properties", post(iceberg::namespaces::update_namespace_properties))
+        .route("/v1/:prefix/namespaces/:namespace/tables", get(iceberg::tables::list_tables).post(iceberg::tables::create_table))
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table", get(iceberg::tables::load_table).post(iceberg::tables::update_table).delete(iceberg::tables::delete_table).head(iceberg::tables::table_exists))
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table/maintenance", post(iceberg::tables::perform_maintenance))
+        .route("/v1/:prefix/namespaces/:namespace/tables/:table/metrics", post(iceberg::tables::report_metrics))
+        .route("/v1/:prefix/tables/rename", post(iceberg::tables::rename_table))
         // PyIceberg compatibility: it might append v1/config to a path that already includes v1/prefix
-        .route("/v1/:prefix/v1/config", get(iceberg_handlers::get_iceberg_catalog_config_handler))
-        .route("/v1/:prefix/v1/namespaces", get(iceberg_handlers::list_namespaces).post(iceberg_handlers::create_namespace))
-        .route("/v1/:prefix/v1/namespaces/:namespace", delete(iceberg_handlers::delete_namespace))
-        .route("/v1/:prefix/v1/namespaces/:namespace/properties", post(iceberg_handlers::update_namespace_properties))
-        .route("/v1/:prefix/v1/namespaces/:namespace/tables", get(iceberg_handlers::list_tables).post(iceberg_handlers::create_table))
-        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table", get(iceberg_handlers::load_table).post(iceberg_handlers::update_table).delete(iceberg_handlers::delete_table).head(iceberg_handlers::table_exists))
-        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/maintenance", post(iceberg_handlers::perform_maintenance))
-        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/metrics", post(iceberg_handlers::report_metrics))
-        .route("/v1/:prefix/v1/tables/rename", post(iceberg_handlers::rename_table))
+        .route("/v1/:prefix/v1/config", get(iceberg::config::get_iceberg_catalog_config_handler))
+        .route("/v1/:prefix/v1/namespaces", get(iceberg::namespaces::list_namespaces).post(iceberg::namespaces::create_namespace))
+        .route("/v1/:prefix/v1/namespaces/:namespace", delete(iceberg::namespaces::delete_namespace))
+        .route("/v1/:prefix/v1/namespaces/:namespace/properties", post(iceberg::namespaces::update_namespace_properties))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables", get(iceberg::tables::list_tables).post(iceberg::tables::create_table))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table", get(iceberg::tables::load_table).post(iceberg::tables::update_table).delete(iceberg::tables::delete_table).head(iceberg::tables::table_exists))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/maintenance", post(iceberg::tables::perform_maintenance))
+        .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/metrics", post(iceberg::tables::report_metrics))
+        .route("/v1/:prefix/v1/tables/rename", post(iceberg::tables::rename_table))
         // Pangolin Extended APIs
         // Branch Operations
         .route("/api/v1/branches", post(pangolin_handlers::create_branch).get(pangolin_handlers::list_branches))
@@ -127,7 +127,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Catalog Management
         .route("/api/v1/catalogs", get(pangolin_handlers::list_catalogs).post(pangolin_handlers::create_catalog))
         .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog).put(pangolin_handlers::update_catalog).delete(pangolin_handlers::delete_catalog))
-        .route("/api/v1/catalogs/:prefix/namespaces/tree", get(iceberg_handlers::list_namespaces_tree))
+        .route("/api/v1/catalogs/:prefix/namespaces/tree", get(iceberg::namespaces::list_namespaces_tree))
         .route("/api/v1/catalogs/:catalog_name/namespaces/:namespace/assets", get(asset_handlers::list_assets).post(asset_handlers::register_asset))
         .route("/api/v1/catalogs/:catalog_name/namespaces/:namespace/assets/:asset", get(asset_handlers::get_asset))
         // Federated Catalog Management

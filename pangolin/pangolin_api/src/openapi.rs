@@ -15,7 +15,7 @@ use crate::merge_handlers;
 use crate::business_metadata_handlers;
 use crate::audit_handlers;
 use crate::system_config_handlers;
-use crate::iceberg_handlers;
+use crate::iceberg;
 use crate::signing_handlers;
 use crate::asset_handlers;
 use crate::dashboard_handlers;
@@ -165,21 +165,21 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         system_config_handlers::update_system_settings,
 
         // Iceberg REST endpoints
-        iceberg_handlers::list_namespaces,
-        iceberg_handlers::get_iceberg_catalog_config_handler,
-        iceberg_handlers::create_namespace,
-        iceberg_handlers::list_tables,
-        iceberg_handlers::create_table,
-        iceberg_handlers::load_table,
-        iceberg_handlers::update_table,
-        iceberg_handlers::rename_table,
-        iceberg_handlers::delete_table,
-        iceberg_handlers::delete_namespace,
-        iceberg_handlers::update_namespace_properties,
-        iceberg_handlers::report_metrics,
-        iceberg_handlers::perform_maintenance,
-        iceberg_handlers::table_exists,
-        iceberg_handlers::list_namespaces_tree,
+        iceberg::namespaces::list_namespaces,
+        iceberg::config::get_iceberg_catalog_config_handler,
+        iceberg::namespaces::create_namespace,
+        iceberg::tables::list_tables,
+        iceberg::tables::create_table,
+        iceberg::tables::load_table,
+        iceberg::tables::update_table,
+        iceberg::tables::rename_table,
+        iceberg::tables::delete_table,
+        iceberg::namespaces::delete_namespace,
+        iceberg::namespaces::update_namespace_properties,
+        iceberg::tables::report_metrics,
+        iceberg::tables::perform_maintenance,
+        iceberg::tables::table_exists,
+        iceberg::namespaces::list_namespaces_tree,
 
         // Signing / Credential Vending
         signing_handlers::get_table_credentials,
@@ -242,12 +242,12 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             optimization_handlers::UnifiedSearchResult, optimization_handlers::UnifiedSearchResponse, optimization_handlers::UnifiedSearchQuery, optimization_handlers::SearchResultType,
             
             // Iceberg/Data models
-            iceberg_handlers::ListNamespacesResponse, iceberg_handlers::CreateNamespaceRequest, iceberg_handlers::CreateNamespaceResponse,
-            iceberg_handlers::CreateTableRequest, iceberg_handlers::TableResponse, iceberg_handlers::ListTablesResponse, iceberg_handlers::TableIdentifier,
-            iceberg_handlers::CommitTableRequest, iceberg_handlers::CommitRequirement, iceberg_handlers::CommitUpdate, iceberg_handlers::RenameTableRequest,
-            iceberg_handlers::UpdateNamespacePropertiesRequest, iceberg_handlers::UpdateNamespacePropertiesResponse,
-            iceberg_handlers::NamespaceNode, iceberg_handlers::ListNamespacesTreeResponse,
-            iceberg_handlers::MaintenanceRequest,
+            iceberg::types::ListNamespacesResponse, iceberg::types::CreateNamespaceRequest, iceberg::types::CreateNamespaceResponse,
+            iceberg::types::CreateTableRequest, iceberg::types::TableResponse, iceberg::types::ListTablesResponse, iceberg::types::TableIdentifier,
+            iceberg::types::CommitTableRequest, iceberg::types::CommitRequirement, iceberg::types::CommitUpdate, iceberg::types::RenameTableRequest,
+            iceberg::types::UpdateNamespacePropertiesRequest, iceberg::types::UpdateNamespacePropertiesResponse,
+            iceberg::types::NamespaceNode, iceberg::types::ListNamespacesTreeResponse,
+            iceberg::tables::MaintenanceRequest,
             
             // Signing/Vending models
             signing_handlers::StorageCredential, signing_handlers::LoadCredentialsResponse, signing_handlers::PresignResponse, signing_handlers::PresignParams,

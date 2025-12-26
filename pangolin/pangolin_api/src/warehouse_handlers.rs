@@ -10,7 +10,7 @@ use pangolin_store::CatalogStore;
 use pangolin_core::model::{Warehouse, VendingStrategy};
 use uuid::Uuid;
 use crate::auth::TenantId;
-use crate::iceberg_handlers::AppState;
+use crate::iceberg::AppState;
 use pangolin_core::user::UserRole;
 use utoipa::ToSchema;
 
