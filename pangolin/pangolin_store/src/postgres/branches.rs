@@ -83,6 +83,15 @@ impl PostgresStore {
         if result.rows_affected() == 0 {
              return Err(anyhow::anyhow!("Branch not found"));
         }
+        
+        // Also delete assets associated with this branch
+        sqlx::query("DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch = $3")
+            .bind(tenant_id)
+            .bind(catalog_name)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+        
         Ok(())
     }
 

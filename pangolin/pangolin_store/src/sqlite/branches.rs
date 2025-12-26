@@ -71,12 +71,25 @@ impl SqliteStore {
     }
 
     pub async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
-        sqlx::query("DELETE FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?")
+        let result = sqlx::query("DELETE FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&name)
             .execute(&self.pool)
             .await?;
+        
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Branch '{}' not found", name));
+        }
+        
+        // Also delete assets associated with this branch
+        sqlx::query("DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ? AND branch = ?")
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(&name)
+            .execute(&self.pool)
+            .await?;
+        
         Ok(())
     }
 
