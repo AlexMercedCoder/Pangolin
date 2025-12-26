@@ -71,6 +71,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()>;
     async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>>;
     async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>>;
+    async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()>;
     async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()>;
     
     /// Find assets that exist in both branches (potential conflicts)

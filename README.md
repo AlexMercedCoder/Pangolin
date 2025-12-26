@@ -62,7 +62,7 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[Multi-Tenancy](docs/features/multi_tenancy.md)** - Understanding isolation.
 - **[User Scopes](docs/getting-started/getting_started.md#user-scopes)** - Roles: Root, Tenant Admin, and Tenant User.
 - **[Configuration](docs/getting-started/configuration.md)** - Server configuration options.
-- **[Environment Variables](docs/getting-started/env_vars.md)** - Complete metadata and storage reference.
+- **[Environment Variables](docs/environment-variables.md)** - **Complete reference for all environment variables** (DATABASE_URL, storage backends, S3/MinIO, authentication, etc.)
 
 ### 🏗️ 2. Core Infrastructure
 - **[Warehouses](docs/warehouse/README.md)** - Managing S3, Azure, and GCS storage.

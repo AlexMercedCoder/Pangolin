@@ -197,6 +197,10 @@ impl CatalogStore for PostgresStore {
         self.list_branches(tenant_id, catalog_name).await
     }
 
+    async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
+        self.delete_branch(tenant_id, catalog_name, name).await
+    }
+
     async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, target_branch: String, source_branch: String) -> Result<()> {
         self.merge_branch(tenant_id, catalog_name, target_branch, source_branch).await
     }

@@ -460,6 +460,17 @@ impl CatalogStore for MemoryStore {
         Ok(branches)
     }
 
+    async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
+        let key = (tenant_id, catalog_name.to_string(), name.clone());
+        if self.branches.remove(&key).is_some() {
+            // Also remove assets associated with this branch
+            self.assets.retain(|k, _| !(k.0 == tenant_id && k.1 == catalog_name && k.2 == name));
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Branch '{}' not found", name))
+        }
+    }
+
     async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch_name: String, target_branch_name: String) -> Result<()> {
         // 1. Get Source Branch
         let source_branch = self.get_branch(tenant_id, catalog_name, source_branch_name.clone()).await?

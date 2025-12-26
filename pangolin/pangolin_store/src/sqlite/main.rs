@@ -182,6 +182,7 @@ impl CatalogStore for SqliteStore {
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> { self.create_branch(tenant_id, catalog_name, branch).await }
     async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>> { self.get_branch(tenant_id, catalog_name, name).await }
     async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>> { self.list_branches(tenant_id, catalog_name).await }
+    async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> { self.delete_branch(tenant_id, catalog_name, name).await }
     async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()> { self.merge_branch(tenant_id, catalog_name, source_branch, target_branch).await }
 
     async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()> { self.create_tag(tenant_id, catalog_name, tag).await }

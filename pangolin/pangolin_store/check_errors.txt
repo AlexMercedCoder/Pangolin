@@ -1,0 +1,592 @@
+    Checking pangolin_store v0.2.0 (/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store)
+warning: unused import: `CatalogType`
+ --> pangolin_store/src/memory.rs:7:14
+  |
+7 |     Catalog, CatalogType, Namespace, Warehouse, Asset, Commit, Branch, Tag, BranchType, Tenant,
+  |              ^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `BusinessMetadata`
+  --> pangolin_store/src/memory.rs:16:40
+   |
+16 | use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest};
+   |                                        ^^^^^^^^^^^^^^^^
+
+warning: unused import: `OAuthProvider`
+ --> pangolin_store/src/postgres/main.rs:8:43
+  |
+8 | use pangolin_core::user::{User, UserRole, OAuthProvider};
+  |                                           ^^^^^^^^^^^^^
+
+warning: unused import: `PermissionGrant`
+ --> pangolin_store/src/postgres/main.rs:9:51
+  |
+9 | use pangolin_core::permission::{Role, Permission, PermissionGrant, UserRole as UserRoleAssignment};
+  |                                                   ^^^^^^^^^^^^^^^
+
+warning: unused import: `RequestStatus`
+  --> pangolin_store/src/postgres/main.rs:11:55
+   |
+11 | use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+   |                                                       ^^^^^^^^^^^^^
+
+warning: unused import: `TimeZone`
+  --> pangolin_store/src/postgres/main.rs:17:29
+   |
+17 | use chrono::{DateTime, Utc, TimeZone};
+   |                             ^^^^^^^^
+
+warning: unused import: `Document`
+ --> pangolin_store/src/mongo/merge.rs:3:26
+  |
+3 | use mongodb::bson::{doc, Document};
+  |                          ^^^^^^^^
+
+warning: unused import: `futures::stream::TryStreamExt`
+ --> pangolin_store/src/mongo/merge.rs:6:5
+  |
+6 | use futures::stream::TryStreamExt;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `from_bson_uuid` and `to_bson_uuid`
+ --> pangolin_store/src/mongo/signer.rs:2:19
+  |
+2 | use super::main::{to_bson_uuid, from_bson_uuid};
+  |                   ^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `Warehouse`
+ --> pangolin_store/src/mongo/signer.rs:7:28
+  |
+7 | use pangolin_core::model::{Warehouse, VendingStrategy};
+  |                            ^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> pangolin_store/src/mongo/signer.rs:8:5
+  |
+8 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_store/src/mongo/signer.rs:9:5
+  |
+9 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `object_store::aws::AmazonS3Builder`
+  --> pangolin_store/src/mongo/signer.rs:10:5
+   |
+10 | use object_store::aws::AmazonS3Builder;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `RequestStatus`
+  --> pangolin_store/src/sqlite/main.rs:11:55
+   |
+11 | use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+   |                                                       ^^^^^^^^^^^^^
+
+warning: unused import: `sqlx::Row`
+ --> pangolin_store/src/sqlite/users.rs:4:5
+  |
+4 | use sqlx::Row;
+  |     ^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+ --> pangolin_store/src/sqlite/permissions.rs:6:5
+  |
+6 | use chrono::Utc;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/sqlite/service_users.rs:2:5
+  |
+2 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::str::FromStr`
+ --> pangolin_store/src/sqlite/service_users.rs:8:5
+  |
+8 | use std::str::FromStr;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `DateTime`
+ --> pangolin_store/src/sqlite/business_metadata.rs:6:14
+  |
+6 | use chrono::{DateTime, Utc, TimeZone};
+  |              ^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> pangolin_store/src/sqlite/business_metadata.rs:9:5
+  |
+9 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::memory::MemoryStore`
+ --> pangolin_store/src/tests/multi_cloud.rs:1:5
+  |
+1 | use crate::memory::MemoryStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::CatalogStore`
+ --> pangolin_store/src/tests/multi_cloud.rs:2:5
+  |
+2 | use crate::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Credentials` and `Signer`
+ --> pangolin_store/src/tests/multi_cloud.rs:3:21
+  |
+3 | use crate::signer::{Signer, Credentials};
+  |                     ^^^^^^  ^^^^^^^^^^^
+
+warning: unused imports: `Tenant`, `VendingStrategy`, and `Warehouse`
+ --> pangolin_store/src/tests/multi_cloud.rs:4:28
+  |
+4 | use pangolin_core::model::{Warehouse, VendingStrategy, Tenant};
+  |                            ^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> pangolin_store/src/tests/multi_cloud.rs:5:5
+  |
+5 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+ --> pangolin_store/src/tests/multi_cloud.rs:6:5
+  |
+6 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused imports: `AuditAction`, `AuditLogEntry`, `AuditLogFilter`, `AuditResult`, and `ResourceType`
+   --> pangolin_store/src/tests/audit_tests.rs:1:28
+    |
+  1 | use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
+    |                            ^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `CatalogStore` and `MemoryStore`
+   --> pangolin_store/src/tests/audit_tests.rs:2:13
+    |
+  2 | use crate::{CatalogStore, MemoryStore};
+    |             ^^^^^^^^^^^^  ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_store/src/tests/audit_tests.rs:3:5
+    |
+  3 | use uuid::Uuid;
+    |     ^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+   --> pangolin_store/src/tests/audit_tests.rs:4:5
+    |
+  4 | use chrono::Utc;
+    |     ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::postgres::PostgresStore`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:3:5
+    |
+  3 | use crate::postgres::PostgresStore;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::CatalogStore`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:4:5
+    |
+  4 | use crate::CatalogStore;
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `AuditAction`, `AuditLogEntry`, `AuditLogFilter`, `AuditResult`, and `ResourceType`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:5:28
+    |
+  5 | use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
+    |                            ^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `SystemSettings` and `Tenant`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:6:28
+    |
+  6 | use pangolin_core::model::{SystemSettings, Tenant};
+    |                            ^^^^^^^^^^^^^^  ^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ServiceUser` and `UserRole`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:7:27
+    |
+  7 | use pangolin_core::user::{ServiceUser, UserRole};
+    |                           ^^^^^^^^^^^  ^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:8:5
+    |
+  8 | use std::collections::HashMap;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:9:5
+    |
+  9 | use uuid::Uuid;
+    |     ^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:10:5
+    |
+ 10 | use chrono::Utc;
+    |     ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::postgres::PostgresStore`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:3:5
+    |
+  3 | use crate::postgres::PostgresStore;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::CatalogStore`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:4:5
+    |
+  4 | use crate::CatalogStore;
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ConflictResolution`, `ConflictType`, `MergeConflict`, `MergeOperation`, `MergeStatus`, `ResolutionStrategy`, and `Tenant`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:6:5
+    |
+  6 |     ConflictResolution, ConflictType, MergeConflict, MergeOperation, MergeStatus,
+    |     ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^
+  7 |     ResolutionStrategy, Tenant,
+    |     ^^^^^^^^^^^^^^^^^^  ^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:9:5
+    |
+  9 | use std::collections::HashMap;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:10:5
+    |
+ 10 | use uuid::Uuid;
+    |     ^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:11:5
+    |
+ 11 | use chrono::Utc;
+    |     ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::mongo::MongoStore`
+   --> pangolin_store/src/tests/mongo_parity_tests.rs:3:5
+    |
+  3 | use crate::mongo::MongoStore;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:174:1
+    |
+174 | pub mod mongo_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::CatalogStore`
+   --> pangolin_store/src/tests/mongo_parity_tests.rs:4:5
+    |
+  4 | use crate::CatalogStore;
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:174:1
+    |
+174 | pub mod mongo_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ConflictResolution`, `ConflictType`, `MergeConflict`, `MergeOperation`, `MergeStatus`, `ResolutionStrategy`, and `Tenant`
+   --> pangolin_store/src/tests/mongo_parity_tests.rs:6:5
+    |
+  6 |     ConflictResolution, ConflictType, MergeConflict, MergeOperation, MergeStatus,
+    |     ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^
+  7 |     ResolutionStrategy, Tenant,
+    |     ^^^^^^^^^^^^^^^^^^  ^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:174:1
+    |
+174 | pub mod mongo_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ServiceUser` and `UserRole`
+   --> pangolin_store/src/tests/mongo_parity_tests.rs:9:27
+    |
+  9 | use pangolin_core::user::{ServiceUser, UserRole};
+    |                           ^^^^^^^^^^^  ^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:174:1
+    |
+174 | pub mod mongo_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+   --> pangolin_store/src/tests/mongo_parity_tests.rs:10:5
+    |
+ 10 | use std::collections::HashMap;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:174:1
+    |
+174 | pub mod mongo_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_store/src/tests/mongo_parity_tests.rs:11:5
+    |
+ 11 | use uuid::Uuid;
+    |     ^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:174:1
+    |
+174 | pub mod mongo_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+   --> pangolin_store/src/tests/mongo_parity_tests.rs:12:5
+    |
+ 12 | use chrono::Utc;
+    |     ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:174:1
+    |
+174 | pub mod mongo_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Duration` and `Utc`
+ --> pangolin_store/src/azure_signer.rs:2:14
+  |
+2 | use chrono::{Duration, Utc};
+  |              ^^^^^^^^  ^^^
+
+warning: unused import: `azure_storage_blobs::prelude::*`
+ --> pangolin_store/src/azure_signer.rs:4:5
+  |
+4 | use azure_storage_blobs::prelude::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `DateTime` and `Utc`
+ --> pangolin_store/src/gcp_signer.rs:2:14
+  |
+2 | use chrono::{DateTime, Utc};
+  |              ^^^^^^^^  ^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_store/src/object_store_factory.rs:4:5
+  |
+4 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+error[E0782]: expected a type, found a trait
+   --> pangolin_store/src/mongo/signer.rs:176:28
+    |
+176 |                  let url = object_store::signer::Signer::sign(&store, &ObjPath::from(key), std::time::Duration::from_secs(3600)).await?;
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: you can add the `dyn` keyword if you want a trait object
+    |
+176 |                  let url = <dyn object_store::signer::Signer>::sign(&store, &ObjPath::from(key), std::time::Duration::from_secs(3600)).await?;
+    |                            ++++                             +
+
+error[E0282]: type annotations needed
+   --> pangolin_store/src/mongo/signer.rs:176:22
+    |
+176 |                  let url = object_store::signer::Signer::sign(&store, &ObjPath::from(key), std::time::Duration::from_secs(3600)).await?;
+    |                      ^^^
+177 |                  return Ok(url.to_string());
+    |                            --- type must be known at this point
+    |
+help: consider giving `url` an explicit type
+    |
+176 |                  let url: /* Type */ = object_store::signer::Signer::sign(&store, &ObjPath::from(key), std::time::Duration::from_secs(3600)).await?;
+    |                         ++++++++++++
+
+warning: unused import: `object_store::ObjectStore`
+  --> pangolin_store/src/mongo/signer.rs:11:5
+   |
+11 | use object_store::ObjectStore;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `futures::stream::TryStreamExt`
+  --> pangolin_store/src/mongo/signer.rs:13:5
+   |
+13 | use futures::stream::TryStreamExt;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `now`
+    --> pangolin_store/src/memory.rs:1273:13
+     |
+1273 |         let now = chrono::Utc::now();
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_now`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `client`
+  --> pangolin_store/src/gcp_signer.rs:52:13
+   |
+52 |         let client = Client::new(config);
+   |             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_client`
+
+warning: value assigned to `param_count` is never read
+  --> pangolin_store/src/postgres/audit.rs:75:17
+   |
+75 |                 param_count += 1;
+   |                 ^^^^^^^^^^^^^^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `param_count` is never read
+   --> pangolin_store/src/postgres/main.rs:861:17
+    |
+861 |                 param_count += 1;
+    |                 ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `param_index` is never read
+   --> pangolin_store/src/postgres/main.rs:927:17
+    |
+927 |                 param_index += 1;
+    |                 ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `param_count` is never read
+   --> pangolin_store/src/postgres/audit.rs:219:17
+    |
+219 |                 param_count += 1;
+    |                 ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: unused variable: `tenant_id`
+   --> pangolin_store/src/lib.rs:235:35
+    |
+235 |     async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::bu...
+    |                                   ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tenant_id`
+
+warning: unused variable: `tags`
+   --> pangolin_store/src/lib.rs:235:65
+    |
+235 | ... tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::business_metadata::BusinessMetad...
+    |                                   ^^^^ help: if this is intentional, prefix it with an underscore: `_tags`
+
+warning: unused variable: `query`
+   --> pangolin_store/src/lib.rs:235:52
+    |
+235 |     async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<pangolin_core::bu...
+    |                                                    ^^^^^ help: if this is intentional, prefix it with an underscore: `_query`
+
+Some errors have detailed explanations: E0282, E0782.
+For more information about an error, try `rustc --explain E0282`.
+warning: `pangolin_store` (lib) generated 66 warnings
+error: could not compile `pangolin_store` (lib) due to 2 previous errors; 66 warnings emitted
