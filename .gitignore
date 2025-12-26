@@ -31,3 +31,13 @@ ui_*.log
 # Test output files
 test_output*.txt
 *_output*.txt
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary/Debug files
+temp_*
+tmp_*
+debug_*

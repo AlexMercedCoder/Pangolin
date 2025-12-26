@@ -10,27 +10,26 @@ Pangolin is built as a high-performance Rust backend (`pangolin_api`) paired wit
 
 The backend is organized as a Cargo workspace with multiple crates.
 
-### Core Frameworks
+### core Frameworks
 | Dependency | Version | Purpose |
 | :--- | :--- | :--- |
 | **[axum](https://github.com/tokio-rs/axum)** | `0.7` | High-performance, ergonomic async web framework. Handles HTTP routing, extractors, and middleware. |
 | **[tokio](https://tokio.rs/)** | `1.0` | Asynchronous runtime. Provides the event loop, async TCP, and task scheduling. |
-| **[tower](https://github.com/tower-rs/tower)** | `0.4` | Modular service primitives. Used for middleware (logging, CORS, timeout) composition. |
+| **[utoipa](https://github.com/juhaku/utoipa)** | `4.2` | OpenAPI documentation generator (used for Swagger UI). |
 
 ### Data & Serialization
 | Dependency | Version | Purpose |
 | :--- | :--- | :--- |
-| **[serde](https://serde.rs/)** | `1.0` | Serialization/Deserialization framework. Used everywhere for JSON processing. |
-| **[serde_json](https://github.com/serde-rs/json)** | `1.0` | JSON support for Serde. |
-| **[uuid](https://github.com/uuid-rs/uuid)** | `1.0` | Generation and parsing of UUIDs (standard for IDs in Pangolin). |
+| **[serde](https://serde.rs/)** | `1.0` | Serialization/Deserialization framework. |
+| **[sqlx](https://github.com/launchbadge/sqlx)** | `0.8` | (In `pangolin_store`) Async SQL toolkit for PostgreSQL and SQLite. |
+| **[mongodb](https://github.com/mongodb/mongo-rust-driver)** | `3.4` | (In `pangolin_store`) Official async driver for MongoDB. |
 | **[chrono](https://github.com/chronotope/chrono)** | `0.4` | Date and Time handling. |
-| **[sqlx](https://github.com/launchbadge/sqlx)** | `0.7` | (In `pangolin_store`) Async SQL toolkit. Used for PostgreSQL and SQLite interaction. |
-| **[mongodb](https://github.com/mongodb/mongo-rust-driver)** | `2.8` | (In `pangolin_store`) Official async driver for MongoDB. |
 
 ### Storage & Cloud
 | Dependency | Version | Purpose |
 | :--- | :--- | :--- |
-| **[object_store](https://github.com/apache/arrow-rs/tree/master/object_store)** | `0.11` | Unified interface for object storage. Handles interactions with AWS S3, Azure Blob, GCS, and local files. |
+| **[object_store](https://github.com/apache/arrow-rs/tree/master/object_store)** | `0.11` | Unified interface for S3, Azure Blob, GCS, and local files. |
+| **[aws-sdk-s3](https://github.com/awslabs/aws-sdk-rust)** | `1.0` | Native AWS SDK for S3 and STS. |
 
 ### Utility & Logging
 | Dependency | Version | Purpose |

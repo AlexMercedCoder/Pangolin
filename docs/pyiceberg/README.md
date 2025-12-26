@@ -11,6 +11,10 @@ For multi-tenant environments where security is enforced via JWT tokens.
 - **[Credential Vending](./auth_vended_creds.md)** (Recommended): Pangolin manages storage keys.
 - **[Client-Provided Credentials](./auth_client_creds.md)**: You provide storage keys to the client.
 
+### Service Users (Machine Identity)
+For automation and CI/CD where persistent access is needed.
+- **[API Key Authentication](./auth_api_key.md)**: Using Service User API keys.
+
 ### No-Auth (Evaluation)
 For rapid local testing and development.
 - **[Credential Vending](./no_auth_vended_creds.md)**: Test the vending flow without RBAC.

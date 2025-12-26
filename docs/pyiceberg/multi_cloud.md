@@ -86,6 +86,37 @@ catalog = load_catalog(
 
 ---
 
+## 🗄️ On-Premise & S3-Compatible (MinIO)
+
+For testing or private cloud deployments using MinIO or other S3-compatible storage.
+
+### Configuration
+
+```python
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog(
+    "minio",
+    **{
+        "type": "rest",
+        "uri": "http://localhost:8080/v1/minio",
+        "token": "YOUR_TOKEN",
+        
+        # Mandatory for MinIO
+        "s3.endpoint": "http://localhost:9000",
+        "s3.path-style-access": "true",
+        "s3.region": "us-east-1",
+    }
+)
+```
+
+| Property | Description |
+| :--- | :--- |
+| `s3.endpoint` | The full HTTP(S) URL of your MinIO server. |
+| `s3.path-style-access` | Must be `true` for MinIO to use `endpoint/bucket/key` instead of `bucket.endpoint/key`. |
+
+---
+
 ## 🎛️ Hybrid Cloud Scenarios
 
 Pangolin allows you to manage catalogs across different clouds from a single control plane. One tenant can have an S3 warehouse for analytics and a GCS warehouse for ML workloads.

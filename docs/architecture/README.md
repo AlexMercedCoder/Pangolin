@@ -2,17 +2,23 @@
 
 This directory contains detailed technical documentation for the Pangolin architecture.
 
-## Core Components
-- **[Models](./models.md)**: Details the core data structures (Structs), including Tenant, Warehouse, and Asset definitions.
-- **[Enums](./enums.md)**: Exhaustive list of system enumerations like `AssetType`, `CatalogType`, and `VendingStrategy`.
-- **[Traits](./traits.md)**: Deep dive into the `CatalogStore` and `Signer` traits which define the storage and security interfaces.
-- **[Handlers](./handlers.md)**: Breakdown of the API handler modules and their functional domains.
+## 🏗️ Core Structure
+- **[High-Level Architecture](./architecture.md)**: Overall system design, component interaction, and multi-tenant isolation.
+- **[API Handlers](./handlers.md)**: Map of API endpoints categorized by functional domain (Iceberg, Versioning, Admin).
+- **[Models](./models.md)**: Comprehensive guide to core system structs (Tenant, Asset, Merge, User).
+- **[Enums](./enums.md)**: Exhaustive list of system enumerations and their serialized values.
 
-## Logic & Patterns
-- **[Branching](./branching.md)**: Explanation of the "Git-for-Data" model, including branching, committing, and 3-way merge logic.
-- **[Caching](./caching.md)**: Details on the multi-layered caching strategy using `moka` (Metadata) and `DashMap` (ObjectStore).
-- **[Dependencies](./dependencies.md)**: Comprehensive list of libraries and frameworks used in Backend and Frontend.
+## 🔧 Interfaces & Logic
+- **[System Traits](./traits.md)**: In-depth look at `CatalogStore` and `Signer` interfaces.
+- **[Branching & Merging](./branching.md)**: Operational details of the "Git-for-Data" versioning model.
+- **[Caching Strategy](./caching.md)**: multi-layered performance optimizations for metadata and cloud backends.
 
-## Legacy Docs
-- `catalog-store-trait.md`: (Ref `traits.md`)
-- `signer-trait.md`: (Ref `traits.md`)
+## 🔐 Security & Operations
+- **[Authentication](./authentication.md)**: Deep dive into JWT, Service User API Keys, and RBAC.
+- **[Storage & Connectivity](./storage_and_connectivity.md)**: Cloud connectivity, modular store structure, and credential vending.
+- **[Dependencies](./dependencies.md)**: Final list of technology stack and library versions.
+
+---
+
+## 📅 Status
+All documents in this directory were audited and updated in **December 2025** to reflect the modularized backend and enhanced security features.

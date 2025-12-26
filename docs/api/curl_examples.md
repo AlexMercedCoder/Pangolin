@@ -460,7 +460,8 @@ curl -X POST http://localhost:8080/api/v1/service-users \
   -d '{
     "name": "ci-cd-pipeline",
     "description": "Service user for CI/CD automation",
-    "expires_at": "2026-12-31T23:59:59Z"
+    "role": "TenantUser",
+    "expires_in_days": 30
   }'
 ```
 
@@ -523,9 +524,12 @@ curl -X POST http://localhost:8080/api/v1/permissions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": "USER_ID",
-    "scope": "catalog:production",
-    "actions": ["read", "write"]
+    "user-id": "USER_ID",
+    "scope": {
+      "type": "catalog",
+      "catalog-id": "550e8400-e29b-41d4-a716-446655440000"
+    },
+    "actions": ["Read", "Write"]
   }'
 ```
 
@@ -775,7 +779,7 @@ curl -X POST http://localhost:8080/api/v1/conflicts/CONFLICT_ID/resolve \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "strategy": "use_source"
+    "strategy": "TakeSource"
   }'
 ```
 
@@ -1082,8 +1086,18 @@ curl -X POST http://localhost:8080/api/v1/validate/names \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "new_table_v2",
-    "type": "asset"
+    "resource_type": "catalog",
+    "names": ["new_catalog_v2"]
   }'
+
+### Bulk Asset Deletion
+```bash
+curl -X POST http://localhost:8080/api/v1/bulk/assets/delete \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "asset_ids": ["uuid-1", "uuid-2"]
+  }'
+```
 ```
 

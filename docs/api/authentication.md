@@ -8,9 +8,9 @@ Pangolin implements a secure authentication system based on JSON Web Tokens (JWT
     - **Root Login**: Omit `tenant-id` or set to `null`
     - **Tenant-Scoped Login**: Include `tenant-id` with tenant UUID
 2.  **Token Issuance**: Upon successful authentication, the server returns a signed JWT.
-3.  **Authenticated Requests**: Clients must include this JWT in the `Authorization` header of subsequent requests:
+3.  **API Key Authentication (Service Users)**: Machine accounts use a static API key passed in the `X-API-Key` header.
     ```
-    Authorization: Bearer <token>
+    X-API-Key: <your-api-key>
     ```
 
 ### Login Examples
@@ -47,19 +47,22 @@ Pangolin supports the following roles:
 -   **TenantAdmin**: Tenant-level administration. Can manage warehouses, catalogs, and users within a tenant.
 -   **TenantUser**: Standard access. Can read/write data based on catalog permissions.
 
-## Token Generation
+## API Key Authentication (Service Users)
 
-For automation and scripts, users can generate long-lived JWT tokens:
+Service users are intended for machine-to-machine communication (CI/CD, automated scripts). They do not use JWT tokens; instead, they use a persistent API key.
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/tokens \
-  -H "Content-Type: application/json" \
-  -d '{
-    "tenant_id": "your-tenant-id",
-    "username": "your-username",
-    "expires_in_hours": 720
-  }'
+curl http://localhost:8080/api/v1/catalogs \
+  -H "X-API-Key: pgl_key_abc123..." \
+  -H "X-Pangolin-Tenant: <tenant-uuid>"
 ```
+
+> [!TIP]
+> API keys are only displayed once upon creation. If lost, the key must be rotated via the `/api/v1/service-users/{id}/rotate` endpoint.
+
+## Token Generation (Users)
+
+For temporary programmatic access by human users, you can generate long-lived JWT tokens:
 
 ## Token Revocation
 

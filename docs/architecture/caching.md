@@ -15,7 +15,8 @@ Reading Iceberg metadata files (snapshots, manifests) from S3/GCS is a high-late
 - **Value**: Byte vector (`Vec<u8>`).
 
 ### Usage
-- Used by all CatalogStore implementations (`MemoryStore`, `SqliteStore`, `PostgresStore`, `MongoStore`).
+- Used by all `CatalogStore` implementations (`MemoryStore`, `SqliteStore`, `PostgresStore`, `MongoStore`).
+- Shared across all modular sub-backends (e.g., `postgres/assets.rs` and `postgres/tenants.rs` both leverage the same cache instance).
 - Implements a `get_or_fetch` pattern to handle cache misses transparently.
 
 ```rust

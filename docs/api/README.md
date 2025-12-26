@@ -71,7 +71,9 @@ Authentication methods:
 - `GET/PUT /api/v1/access-requests/{id}` - Get/update access request
 
 **Audit Logs**:
-- `GET /api/v1/audit` - List audit events
+- `GET /api/v1/audit` - List audit events (with filtering)
+- `GET /api/v1/audit/count` - Get audit event counts
+- `GET /api/v1/audit/{id}` - Get specific audit event
 
 **Warehouse Management**:
 - `GET /api/v1/warehouses` - List warehouses
@@ -82,40 +84,19 @@ Authentication methods:
 - `GET /api/v1/catalogs` - List catalogs
 - `POST /api/v1/catalogs` - Create catalog
 - `GET /api/v1/catalogs/{name}` - Get catalog
-- `PUT /api/v1/catalogs/{name}` - Update catalog
-- `DELETE /api/v1/catalogs/{name}` - Delete catalog
+- `GET /api/v1/catalogs/{prefix}/namespaces/tree` - Get tree structure
 
-**Federated Catalog Management**:
-- `GET /api/v1/federated-catalogs` - List federated catalogs
-- `POST /api/v1/federated-catalogs` - Create federated catalog
-- `GET /api/v1/federated-catalogs/{name}` - Get federated catalog
-- `DELETE /api/v1/federated-catalogs/{name}` - Delete federated catalog
-- `POST /api/v1/federated-catalogs/{name}/test` - Test federated connection
+**Service Users & API Keys**:
+- `POST /api/v1/service-users` - Create service user
+- `GET /api/v1/service-users` - List service users
+- `POST /api/v1/service-users/{id}/rotate` - Rotate API key
 
-**Permission & Role Management**:
-- `GET /api/v1/roles` - List roles
-- `POST /api/v1/roles` - Create role
-- `GET /api/v1/permissions` - List permissions
-- `POST /api/v1/permissions` - Grant permission
-- `DELETE /api/v1/permissions/{id}` - Revoke permission
+## Interactive Documentation
 
-**Token Management**:
-- `POST /api/v1/tokens` - Generate JWT token
-- `POST /api/v1/auth/revoke` - Revoke current token
-- `POST /api/v1/auth/revoke/{token_id}` - Revoke specific token
-- `GET /api/v1/users/{user_id}/tokens` - List user tokens (Admin)
-- `DELETE /api/v1/tokens/{token_id}` - Delete specific token (Admin)
+Pangolin provides an interactive Swagger UI for live API exploration:
 
-**System Configuration**:
-- `GET /api/v1/config/settings` - Get system settings (Admin)
-- `PUT /api/v1/config/settings` - Update system settings (Admin)
-
-**Federated Catalog Operations**:
-- `POST /api/v1/federated-catalogs/{name}/sync` - Trigger sync
-- `GET /api/v1/federated-catalogs/{name}/stats` - Get sync stats
-
-**Data Explorer**:
-- `GET /api/v1/catalogs/{prefix}/namespaces/tree` - Get namespace tree structure
+- **Swagger UI**: `http://localhost:8080/swagger-ui`
+- **OpenAPI JSON**: `http://localhost:8080/api-docs/openapi.json`
 
 ## Contents
 

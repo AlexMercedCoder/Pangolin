@@ -3,78 +3,58 @@
 This document lists the handler modules responsible for the API implementation, grouped by their domain/functionality.
 
 ## Iceberg Core
-**File**: `iceberg_handlers.rs`
+**File**: `iceberg_handlers.rs` (Refactor to `iceberg/` in progress)
 **Purpose**: Implements the Apache Iceberg REST Catalog Specification.
 - `get_iceberg_catalog_config_handler`: Catalog configuration endpoint.
 - `list_namespaces` / `create_namespace` / `delete_namespace`: Namespace management.
 - `list_tables` / `create_table`: Table lifecycle.
 - `load_table` / `update_table` / `delete_table`: Table operations.
 - `report_metrics`: Metrics reporting.
+- **Planned Refactor**: See [Iceberg Modularization Plan](../../planning/modularization_plan_iceberg.md).
 
 ## Tenant & Storage Management
 **Files**: 
-- `tenant_handlers.rs`
-- `warehouse_handlers.rs`
-**Purpose**: Manages the multi-tenant architecture and physical storage layers.
-- **Tenants**: Create, list, details, delete tenants.
-- **Warehouses**: Configure S3/GCS/Azure storage buckets and vending strategies.
+- `tenant_handlers.rs`: Create, list, details, delete tenants.
+- `warehouse_handlers.rs`: Configure S3/GCS/Azure storage buckets and vending strategies.
+- `asset_handlers.rs`: Generic asset management (Tables, Views, etc.) outside the Iceberg scope.
 
 ## Catalog Management
 **Files**: 
-- `pangolin_handlers.rs` (Partial)
-- `federated_catalog_handlers.rs`
-**Purpose**: Manages logical catalogs and federation.
-- **Catalogs**: Create local or federated catalogs.
-- **Federated**: Sync, status checks, and configuration for external catalogs.
+- `pangolin_handlers.rs`: Core catalog, branch, and tag management.
+- `federated_catalog_handlers.rs`: Sync, status, and config for external catalogs.
+- `federated_proxy.rs`: Proxy logic for forwarding requests to federated backends.
 
 ## Access Control & Authentication
 **Files**:
-- `auth_middleware.rs`
-- `oauth_handlers.rs`
-- `token_handlers.rs`
-- `permission_handlers.rs`
-- `user_handlers.rs`
-- `service_user_handlers.rs`
-**Purpose**: Handles identity, authentication, and authorization.
-- **OAuth**: Google/GitHub login flows.
-- **Tokens**: JWT generation, rotation, and revocation.
-- **Permissions**: Role-based access control (RBAC), granting/revoking roles.
-- **Users**: User profiles and service accounts.
+- `auth_middleware.rs`: JWT and API key validation layer.
+- `oauth_handlers.rs`: Google/GitHub/Microsoft OIDC flows.
+- `token_handlers.rs`: Token generation, rotation, and revocation.
+- `permission_handlers.rs`: RBAC management (Role CRUD, assignments, grants).
+- `user_handlers.rs`: User profile management and basic login.
+- `service_user_handlers.rs`: Machine-to-machine account management and API key rotation.
 
 ## Data Versioning (Git-for-Data)
 **Files**:
-- `pangolin_handlers.rs` (Partial)
-- `merge_handlers.rs`
-- `conflict_detector.rs`
-**Purpose**: Implements Nessie-like branching and merging capabilities.
-- **Branches**: Create, list, delete branches (`main`, `dev`, etc.).
-- **Commits**: View commit history.
-- **Tags**: Tag specific commits.
-- **Merges**: Create merge operations, detect conflicts, resolving conflicts (3-way merge).
+- `merge_handlers.rs`: Merge operation lifecycle (Start, Complete, Abort).
+- `conflict_detector.rs`: Logic for detecting schema and data conflicts between branches.
+- `pangolin_handlers.rs` (Versioning parts): Branching and tagging logic.
 
 ## Governance & Metadata
 **Files**:
-- `audit_handlers.rs`
-- `business_metadata_handlers.rs`
-- `signing_handlers.rs`
-**Purpose**: Data governance, auditing, and secure access vending.
-- **Audit**: Immutable log of all system actions.
-- **Business Metadata**: Tagging, descriptions, and ownership metadata.
-- **Signing**: Vending temporary AWS/Azure/GCP credentials for data access (S3/ADLS/GCS).
+- `audit_handlers.rs`: Enhanced audit logging with filtering and count endpoints (Isolated by user/resource).
+- `business_metadata_handlers.rs`: Business tagging, descriptions, access requests, and ownership.
+- `signing_handlers.rs`: Endpoint for vending temporary cloud credentials.
 
 ## Optimization & Search
 **Files**:
-- `optimization_handlers.rs`
-- `dashboard_handlers.rs`
-**Purpose**: High-performance endpoints for UI and data discovery.
-- **Unified Search**: Multi-backend optimized search (Assets, Namespaces, Catalogs).
-- **Dashboard**: Aggregated statistics for finding data faster.
-- **Validation**: Name validation logic.
+- `optimization_handlers.rs`: Unified search, bulk operations, and name validation.
+- `dashboard_handlers.rs`: Aggregated statistics for the UI.
 
-## System
+## System & Background
 **Files**:
-- `system_config_handlers.rs`
-- `cleanup_job.rs`
-**Purpose**: Global system settings and background maintenance.
-- **Config**: SMTP settings, default retention policies.
-- **Cleanup**: Background jobs for expired tokens and orphan files.
+- `system_config_handlers.rs`: Global settings (SMTP, defaults).
+- `cleanup_job.rs`: Background worker for expired tokens.
+
+## CLI Admin Handlers
+**File**: `pangolin_cli_admin/src/handlers.rs` (Refactor to `handlers/` in progress)
+- **Planned Refactor**: See [CLI Modularization Plan](../../planning/modularization_plan_cli.md).

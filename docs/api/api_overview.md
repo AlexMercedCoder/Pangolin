@@ -13,6 +13,7 @@ Pangolin exposes a multi-tenant REST API split into three core functional areas:
 | `tokens` | POST | Generate a long-lived JWT token for a specific user. |
 | `auth/revoke` | POST | Invalidate current user token. |
 | `service-users` | GET/POST | Manage programmatic API identities. |
+| `service-users/{id}` | GET/PUT/DELETE | Manage specific service user. |
 | `service-users/{id}/rotate` | POST | Rotate API key for a service user. |
 
 ---
@@ -62,10 +63,12 @@ Pangolin is 100% compliant with the [Apache Iceberg REST Specification](https://
 ### 4. Search & Optimization
 | Endpoint | Method | Use Case |
 | :--- | :--- | :--- |
-| `search` | GET | Unified search across Catalogs, Namespaces, and Tables. |
-| `search/assets` | GET | Optimized lookup for specific tables/views by name. |
-| `validate/names` | POST | Check if an asset name is valid and available. |
-| `bulk/assets/delete` | POST | Bulk deletion of assets. |
+| `search` | GET | Unified search across Catalogs, Namespaces, Tables, and Branches. |
+| `search/assets` | GET | Optimized lookup for specific tables/views by name with permission filtering. |
+| `validate/names` | POST | Check if a catalog or warehouse name is available. |
+| `bulk/assets/delete` | POST | Bulk deletion of assets (up to 100). |
+| `dashboard/stats` | GET | Global platform statistics. |
+| `catalogs/{name}/summary` | GET | Catalog-specific statistics. |
 
 
 ---

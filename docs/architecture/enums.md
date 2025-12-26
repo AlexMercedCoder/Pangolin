@@ -1,119 +1,74 @@
-# Pangolin Enums & Models
+# Pangolin Enums
 
-This document details the core data structures and enumerations defined in `pangolin_core`.
+This document details the core enumerations defined in `pangolin_core`. These define the discrete states and types used across the system.
 
-## Enums
+## Data & Storage
 
 ### AssetType
-Defines the type of data asset being managed.
-- `IcebergTable`: Apache Iceberg table format.
-- `DeltaTable`: Delta Lake table format.
-- `HudiTable`: Apache Hudi table format.
-- `ParquetTable`: Raw Parquet file table.
-- `CsvTable`: CSV file table.
-- `JsonTable`: JSON file table.
-- `View`: Virtual view definition.
-- `MlModel`: Machine Learning model artifact.
+Defines the format and nature of a data asset.
+- `SCREAMING_SNAKE_CASE` serialization.
+- `IcebergTable`, `DeltaTable`, `HudiTable`, `ParquetTable`, `CsvTable`, `JsonTable`.
+- `View`, `MlModel`, `ApachePaimon`, `Vortex`, `Lance`, `Nimble`.
+- `Directory`, `VideoFile`, `ImageFile`, `DbConnString`, `Other`.
 
 ### CatalogType
-Defines the nature of a catalog.
-- `Local`: Managed natively by Pangolin.
+Defines the nature of a catalog backend.
+- `Local`: Native Pangolin catalog with full versioning.
 - `Federated`: Proxy to an external Iceberg REST catalog.
 
 ### BranchType
-Defines the purpose of a branch.
-- `Ingest`: For data ingestion pipelines.
-- `Experimental`: For testing and development.
-- (Default): Standard branch.
+Defines the purpose and behavior of a branch.
+- `Ingest`: For transient data ingestion; can be merged.
+- `Experimental`: For sandbox testing; limited merge capabilities.
 
 ### VendingStrategy
-Defines how credentials are vended for a warehouse.
-- `AwsSts`: AWS Security Token Service (AssumeRole).
-- `AwsStatic`: Static IAM Access Keys.
-- `AzureSas`: Azure Shared Access Signatures.
-- `GcpDownscoped`: GCP Downscoped Token.
-- `None`: No credential vending (proxy only).
-
-### ConflictType
-Types of conflicts that can occur during a merge.
-- `SchemaChange`: Incompatible schema evolution.
-- `DataOverlap`: Concurrent writes to the same partitions.
-- `MetadataConflict`: Conflicting table properties.
-- `DeletionConflict`: Asset deleted in one branch but modified in another.
-
-### ResolutionStrategy
-Strategies for resolving merge conflicts.
-- `AutoMerge`: Automatically apply non-conflicting changes.
-- `TakeSource`: Overwrite with source branch version.
-- `TakeTarget`: Keep target branch version.
-- `Manual`: Require human intervention.
-- `ThreeWayMerge`: Use base commit to reconcile changes.
-
-### MergeStatus
-Status lifecycle of a merge operation.
-- `Pending` -> `Conflicted` -> `Resolving` -> `Ready` -> `Completed`
-- `Aborted` (Terminal state)
+Configuration for how cloud credentials are vended.
+- `AwsSts`: AWS STS AssumeRole with external ID support.
+- `AwsStatic`: Static IAM credentials.
+- `AzureSas`: Azure Blob SAS tokens.
+- `GcpDownscoped`: GCP Downscoped access tokens.
+- `None`: No vending; client provides own credentials.
 
 ---
 
-## Core Models
+## Identity & Access
 
-### Tenant
-Top-level isolation boundary.
-- `id`: UUID
-- `name`: String
-- `properties`: Map<String, String>
+### UserRole
+Defines the high-level authorization tier for a user.
+- `Root`: Global system administrator.
+- `TenantAdmin`: Administrative control over a specific tenant.
+- `TenantUser`: Standard user within a tenant with granular permissions.
 
-### Warehouse
-Physical storage configuration.
-- `id`: UUID
-- `tenant_id`: UUID
-- `storage_config`: Map containing bucket/endpoint details.
-- `vending_strategy`: Configuration for credential vending.
+### OAuthProvider
+Supported identity providers for OIDC login.
+- `Google`, `Microsoft`, `GitHub`, `Okta`.
 
-### Catalog
-Logical grouping of namespaces and tables.
-- `id`: UUID
-- `name`: String
-- `catalog_type`: `CatalogType`
-- `warehouse_name`: Link to physical storage.
-- `federated_config`: Config for external proxy (if Federated).
+### PermissionScope
+Defines the target boundary for a permission grant.
+- `Tenant`: Applies to all assets in the tenant.
+- `Catalog`: Scoped to a specific catalog ID.
+- `Namespace`: Scoped to a catalog + namespace path.
+- `Asset`: Scoped to a specific asset ID.
+- `Tag`: Applies to all assets with a matching business tag.
 
-### Namespace
-Hierarchical organization unit (e.g., `db.schema`).
-- `name`: List<String> parts.
-- `properties`: Map<String, String>.
+### Action
+Atomic actions that can be permitted.
+- `Read`, `Write`, `Delete`, `Create`, `Update`, `List`, `All`.
+- `IngestBranching`, `ExperimentalBranching`.
+- `ManageDiscovery`: Ability to edit business metadata.
 
-### Asset
-The primary unit of management (Table, View).
-- `id`: UUID
-- `name`: String
-- `kind`: `AssetType`
-- `location`: s3:// path.
-- `properties`: Key-value pairs.
+---
 
-### Branch
-Nessie-like branching structure.
-- `name`: String
-- `head_commit_id`: Pointer to the latest commit.
-- `branch_type`: `BranchType`
-- `assets`: List of assets visible in this branch.
+## Conflict & Versioning
 
-### Commit
-Immutable record of changes.
-- `id`: UUID
-- `parent_id`: Previous commit UUID.
-- `operations`: List of `Put` or `Delete` actions.
+### ConflictType
+Reasons for merge failure.
+- `SchemaChange`, `DataOverlap`, `MetadataConflict`, `DeletionConflict`.
 
-### MergeOperation
-State tracking for a branch merge.
-- `source_branch`: Branch being merged.
-- `target_branch`: Destination branch.
-- `conflicts`: List of `MergeConflict` IDs.
-- `status`: Current `MergeStatus`.
+### ResolutionStrategy
+Strategies for resolving detected conflicts.
+- `AutoMerge`, `TakeSource`, `TakeTarget`, `Manual`, `ThreeWayMerge`.
 
-### MergeConflict
-Detail record for a specific conflict.
-- `conflict_type`: `ConflictType`.
-- `resolution`: `ConflictResolution` (if resolved).
-- `description`: Human-readable explanation.
+### MergeStatus
+Lifecycle of a merge operation.
+- `Pending` (Detection) -> `Conflicted` / `Ready` -> `Resolving` -> `Completed` / `Aborted`.

@@ -5,110 +5,156 @@ This document details the core data structures (Structs) defined in `pangolin_co
 ## Identity & Storage
 
 ### Tenant
-Top-level isolation boundary for multitenancy.
-- **id**: `Uuid` - Unique identifier.
-- **name**: `String` - Tenant name (e.g., "acme-corp").
-- **properties**: `HashMap<String, String>` - Custom metadata.
+The root multi-tenancy isolation boundary.
+- `id`: `Uuid`
+- `name`: `String`
+- `properties`: `HashMap<String, String>`
 
 ### Warehouse
-Defines the connection to physical object storage (S3, GCS, Azure).
-- **id**: `Uuid`
-- **name**: `String` - Unique name within a tenant.
-- **tenant_id**: `Uuid` - Owner tenant.
-- **storage_config**: `HashMap<String, String>` - Endpoint, region, bucket.
-- **vending_strategy**: `Option<VendingStrategy>` - Logic for vending temporary credentials.
+Physical storage backend configuration (S3, GCS, ADLS).
+- `id`: `Uuid`
+- `name`: `String` (Unique per tenant)
+- `tenant_id`: `Uuid`
+- `storage_config`: `HashMap<String, String>`
+- `vending_strategy`: `Option<VendingStrategy>`
+- `use_sts`: `bool` (Legacy flag)
 
 ### Catalog
-A logical grouping of assets, maps to an Iceberg Catalog.
-- **id**: `Uuid`
-- **name**: `String`
-- **catalog_type**: `CatalogType` (Local or Federated)
-- **warehouse_name**: `Option<String>` - Link to the storage backend.
-- **storage_location**: `Option<String>` - Base path prefix.
-- **federated_config**: `Option<FederatedCatalogConfig>` - Upstream catalog details.
+Logical grouping for assets, maps to an Iceberg Catalog.
+- `id`: `Uuid` (For granular permissions)
+- `name`: `String`
+- `catalog_type`: `CatalogType` (Local or Federated)
+- `warehouse_name`: `Option<String>`
+- `storage_location`: `Option<String>`
+- `federated_config`: `Option<FederatedCatalogConfig>`
+- `properties`: `HashMap<String, String>`
 
 ---
 
 ## Asset Management
 
 ### Namespace
-Hierarchical container for assets (equivalent to Schema/Database).
-- **name**: `Vec<String>` - Parts of the path (e.g., `["accounting", "finance"]`).
-- **properties**: `HashMap<String, String>`.
+Hierarchical organization unit (`db.schema`).
+- `name`: `Vec<String>` (Path parts)
+- `properties`: `HashMap<String, String>`
 
 ### Asset
-Represents a managed data artifact (Table, View, Model).
-- **id**: `Uuid`
-- **name**: `String`
-- **kind**: `AssetType` (e.g., IcebergTable, View).
-- **location**: `String` - Absolute object store path.
-- **properties**: `HashMap<String, String>`.
+Managed data artifact.
+- `id`: `Uuid`
+- `name`: `String`
+- `kind`: `AssetType`
+- `location`: `String` (Object store URI)
+- `properties`: `HashMap<String, String>`
 
 ---
 
 ## Version Control
 
 ### Branch
-A pointer to a specific commit history, enabling Git-like data versioning.
-- **name**: `String` (e.g., "main", "dev").
-- **head_commit_id**: `Option<Uuid>` - Latest commit on this branch.
-- **branch_type**: `BranchType`.
-- **assets**: `Vec<String>` - List of asset names currently tracked on this branch.
+Pointer to a commit history chain.
+- `name`: `String`
+- `head_commit_id`: `Option<Uuid>`
+- `branch_type`: `BranchType`
+- `assets`: `Vec<String>` (Visible asset names)
 
 ### Tag
-A named reference to a specific commit (immutable).
-- **name**: `String` (e.g., "v1.0").
-- **commit_id**: `Uuid`.
+Named immutable reference to a commit.
+- `name`: `String`
+- `commit_id`: `Uuid`
 
 ### Commit
-An immutable record of a state change.
-- **id**: `Uuid`
-- **parent_id**: `Option<Uuid>` - Previous commit.
-- **timestamp**: `i64` - Epoch time.
-- **author**: `String` - User who made the change.
-- **operations**: `Vec<CommitOperation>` - List of atomic changes (Put/Delete).
+Immutable record of atomic changes.
+- `id`: `Uuid`
+- `parent_id`: `Option<Uuid>`
+- `timestamp`: `i64` (Epoch)
+- `author`: `String`
+- `message`: `String`
+- `operations`: `Vec<CommitOperation>` (Put or Delete)
 
 ---
 
-## Merge Operations
+## Security & Identity
+
+### User
+Human user profile.
+- `id`: `Uuid`
+- `username`: `String`
+- `email`: `String`
+- `password_hash`: `Option<String>` (BCrypt)
+- `oauth_provider`: `Option<OAuthProvider>`
+- `tenant_id`: `Option<Uuid>`
+- `role`: `UserRole`
+- `active`: `bool`
+
+### ServiceUser
+Machine account for API key access.
+- `id`: `Uuid`
+- `name`: `String`
+- `tenant_id`: `Uuid`
+- `api_key_hash`: `String`
+- `role`: `UserRole`
+- `last_used`: `Option<DateTime<Utc>>`
+- `active`: `bool`
+
+### Role
+A named group of permissions within a tenant.
+- `id`: `Uuid`
+- `name`: `String`
+- `tenant_id`: `Uuid`
+- `permissions`: `Vec<PermissionGrant>`
+
+### Permission
+Directly assigned permission grant.
+- `id`: `Uuid`
+- `user_id`: `Uuid`
+- `scope`: `PermissionScope`
+- `actions`: `HashSet<Action>`
+
+### PermissionGrant
+Permission definition stored within a Role.
+- `scope`: `PermissionScope`
+- `actions`: `HashSet<Action>`
+
+---
+
+## Merge & Discovery
 
 ### MergeOperation
-Tracks the state of merging one branch into another.
-- **id**: `Uuid`
-- **source_branch**: `String`.
-- **target_branch**: `String`.
-- **base_commit_id**: `Option<Uuid>` - Common ancestor.
-- **status**: `MergeStatus`.
-- **conflicts**: `Vec<Uuid>` - List of `MergeConflict` IDs to resolve.
-- **result_commit_id**: `Option<Uuid>` - The final commit ID if successful.
+State tracking for branch reconciliation.
+- `id`: `Uuid`
+- `source_branch`: `String`
+- `target_branch`: `String`
+- `base_commit_id`: `Option<Uuid>`
+- `status`: `MergeStatus`
+- `conflicts`: `Vec<Uuid>`
 
-### MergeConflict
-Represents a specific issue preventing an automatic merge.
-- **id**: `Uuid`
-- **conflict_type**: `ConflictType`.
-- **description**: `String` - Human-readable detail.
-- **resolution**: `Option<ConflictResolution>` - Records how it was fixed.
+### BusinessMetadata
+Governance metadata for an asset.
+- `asset_id`: `Uuid`
+- `owner`: `String`
+- `tags`: `Vec<String>`
+- `description`: `Option<String>`
 
-### ConflictResolution
-Details on how a conflict was resolved.
-- **strategy**: `ResolutionStrategy` (e.g., TakeSource).
-- **resolved_by**: `Uuid` - User ID.
-- **resolved_value**: `Option<serde_json::Value>` - The final data/schema used.
+### AccessRequest
+Workflow record for requesting asset access.
+- `id`: `Uuid`
+- `asset_id`: `Uuid`
+- `requester_id`: `Uuid`
+- `status`: `String` (Pending/Approved/Rejected)
 
 ---
 
-## System Entities
+## System
 
-### Credentials
-Temporary access tokens returned to clients.
-- **Aws**: AccessKey, SecretKey, SessionToken.
-- **Azure**: SAS Token, Account Name.
-- **Gcp**: Access Token.
+### SystemSettings
+Global configuration for a tenant.
+- `allow_public_signup`: `Option<bool>`
+- `default_warehouse_bucket`: `Option<String>`
+- `default_retention_days`: `Option<i32>`
+- `smtp_host`: `Option<String>`, etc.
 
-### AuditLogEntry
-Record of system activity.
-- **id**: `Uuid`.
-- **actor_id**: `Uuid` - User ID.
-- **action**: `String` - (e.g., "create_table").
-- **resource**: `String` - (e.g., "namespace/table").
-- **status**: `String` ("Success", "Failed").
+### SyncStats
+Performance metrics for federated catalogs.
+- `last_synced_at`: `Option<DateTime<Utc>>`
+- `sync_status`: `String`
+- `tables_synced`: `i32`

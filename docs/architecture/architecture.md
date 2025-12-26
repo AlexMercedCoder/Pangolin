@@ -27,8 +27,9 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is fu
 
 ### 3. Storage Layer (`pangolin_store`)
 - **Metadata Persistence**: Abstracted via the `CatalogStore` trait.
+    - **Modular Backends**: All backends are refactored into focused submodules (e.g., `tenants.rs`, `warehouses.rs`, `assets.rs`) for better maintainability.
     - `MemoryStore`: Concurrent in-memory store for rapid development/testing.
-    - `PostgresStore`: SQL backend using `sqlx` for relational scale.
+    - `PostgresStore`: SQL backend using `sqlx` for production scale.
     - `MongoStore`: Document backend for high-availability deployments.
     - `SqliteStore`: Embedded backend for local dev and edge use cases.
 - **Performance**: Direct `assets_by_id` lookup for O(1) authorization checks.
@@ -37,13 +38,14 @@ Pangolin is a Rust-based, multi-tenant, branch-aware lakehouse catalog. It is fu
 
 ### 4. Security & Isolation
 - **Authentication**:
-    - **JWT**: Standard for UI and human CLI access.
-    - **API Keys**: Distributed via **Service Users** for programmatic/CI-CD access.
-    - **OAuth 2.0**: OIDC integration with Google, Microsoft, GitHub, and Okta.
+    - **JWT**: Standard for UI and corporate identity access.
+    - **API Keys**: Managed via **Service Users** for machine-to-machine/CI-CD access. Includes automatic rotation and usage tracking.
+    - **OAuth 2.0 / OIDC**: Native integration with Google, Microsoft, GitHub, and custom providers.
 - **Authorization**:
     - **RBAC**: Role-based access control with 3 default tiers (Root, TenantAdmin, TenantUser).
-    - **TBAC**: Tag-based access control allowing permissions to flow to assets with specific labels.
-- **Tenant Isolation**: Strictly enforced at the middleware layer; storage queries always include `tenant_id`.
+    - **TBAC**: Tag-based access control allowing permissions to flow to assets with specific business labels.
+    - **Access Requests**: Integrated workflow for users to request access to restricted assets via the UI.
+- **Tenant Isolation**: Strictly enforced at the middleware layer; all store queries are scoped by `tenant_id`.
 
 ### 5. Git-like Data Lifecycle
 - **Branching Engine**: Supports full and partial catalog branching.

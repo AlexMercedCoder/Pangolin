@@ -19,10 +19,26 @@ graph TD
 
 ### Key Components
 
-1. **Storage Backend** (`CatalogStore` trait): PostgreSQL, MongoDB, SQLite, or Memory
+1. **Storage Backend** (`CatalogStore` trait): PostgreSQL, MongoDB, SQLite, or Memory. All backends follow a modular directory structure (e.g., `src/postgres/tenants.rs`) to prevent monolithic file growth.
 2. **Object Store Factory**: Creates S3/Azure/GCS clients from warehouse config
 3. **Credential Vending**: Returns temporary credentials to PyIceberg
 4. **Warehouse Configuration**: Stores S3 endpoint, bucket, and access credentials
+
+---
+
+## Modular Storage Architecture
+
+As of December 2025, all Pangolin storage backends have been refactored into a modular pattern. See the **[Backend Architecture Audit](../../planning/backend_architecture_audit.md)** for detailed status.
+
+Each backend now resides in its own directory:
+- `pangolin_store/src/postgres/`
+- `pangolin_store/src/mongo/`
+- `pangolin_store/src/sqlite/`
+- `pangolin_store/src/memory/`
+
+Within these directories, logic is subdivided by functional domain (e.g., `assets.rs`, `namespaces.rs`, `auth.rs`), making the codebase much easier to audit and extend.
+
+---
 
 ## Critical Configuration Requirements
 

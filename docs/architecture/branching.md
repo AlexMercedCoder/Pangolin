@@ -20,35 +20,24 @@ A **Commit** is an immutable record of a state change.
 ### 3. Tags
 A **Tag** is an immutable reference to a specific commit. Useful for marking releases (e.g., `Q1_REPORT_FINAL`).
 
-## Workflows
+---
 
-### Isolation (Experimentation)
-1. User creates branch `dev/experiment` from `main`.
-2. Changes made in `dev/experiment` are isolated. `main` users continue to see the old data.
-3. If the experiment fails, the branch is deleted. No impact on production.
+## Merge Lifecycle
 
-### Zero-Copy Ingestion
-1. ETL job writes data to `etl-job-123` branch.
-2. Data quality checks run against this branch.
-3. If checks pass, `etl-job-123` is merged into `main` atomically.
-4. If checks fail, the branch is discarded.
+Merging is managed via the `MergeOperation` model, which tracks the transition from initiation to completion.
 
-## Merge Logic
+### 1. Initiation
+A merge is started between a `source` and `target` branch. Pangolin identifies the **Base Commit** (common ancestor) to perform a 3-way analysis.
 
-Merging involves taking changes from a `source` branch and applying them to a `target` branch.
+### 2. Conflict Detection
+Pangolin automatically detects:
+- **Schema Conflict**: Incompatible evolution on both branches.
+- **Data Conflict**: Concurrent writes to overlapping partitions.
+- **Metadata Conflict**: Conflicting table property changes.
 
-### 3-Way Merge Strategy
-Pangolin uses a 3-way merge algorithm to detect conflicts:
-1. Identify the **Base Commit** (common ancestor).
-2. Compare **Source** vs **Base** to find changes.
-3. Compare **Target** vs **Base** to find changes.
-4. Detect conflicts where both Source and Target modified the same asset.
+### 3. Resolution
+- **Auto-Merge**: Orthogonal changes are applied automatically, and the operation moves to `Completed`.
+- **Manual Intervention**: If conflicts are found, the operation enters `Conflicted` status. Users must use the API to resolve each conflict using a `ResolutionStrategy` (`TakeSource`, `TakeTarget`, or `ThreeWayMerge`).
 
-### Conflict Types
-- **Schema Conflict**: Table schema evolved incompatibly in both branches.
-- **Data Conflict**: Both branches wrote to the same partitions.
-- **Metadata Conflict**: Table properties changed incompatibly.
-
-### Resolution
-- **Auto-Merge**: If changes are orthogonal (e.g., Branch A touched Table X, Branch B touched Table Y), they are merged automatically.
-- **Manual**: If a conflict is detected, the merge operation pauses (`Conflicted` status) and requires API intervention to choose a winner (`TakeSource` or `TakeTarget`).
+### 4. Completion
+Once all conflicts are resolved, the merge is finalized, creating a new commit on the target branch.

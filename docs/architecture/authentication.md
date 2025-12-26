@@ -119,11 +119,11 @@ Tokens are signed JWTs containing:
 4. Extract claims and create session
 5. Insert session into request extensions
 
-### 3. API Key Authentication
+### 3. API Key Authentication (Service Users Only)
 
 **Location**: [auth_middleware.rs:L135-154](file:///home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_api/src/auth_middleware.rs#L135-154)
 
-API keys provide long-lived authentication for programmatic access.
+API keys provide long-lived authentication specifically for **Service Users** (machine accounts). Regular human users cannot use API keys; they use Bearer tokens.
 
 #### Header Format
 ```
@@ -131,14 +131,29 @@ X-API-Key: <api_key_value>
 ```
 
 #### How It Works
-1. Extract API key from `X-API-Key` header
-2. Look up key in store via `get_api_key_by_value`
-3. Verify key is not expired
-4. Create session from key's user context
-5. Insert session into request extensions
+1. Extract API key from `X-API-Key` header.
+2. Hash the key and look up the matching record in the store via `get_service_user_by_api_key_hash`.
+3. Verify the service account is active and not expired.
+4. Create a session with the service user's ID, tenant context, and role.
+5. Track usage via `update_service_user_last_used`.
 
-\u003e [!NOTE]
-\u003e API keys are managed through the `/api/v1/users/{user_id}/tokens` endpoints.
+> [!TIP]
+> Use Service Users for CI/CD pipelines, Spark clusters, or any non-interactive automation.
+
+---
+
+## Granular Permissions (RBAC)
+
+**Location**: [permission.rs](file:///home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_core/src/permission.rs)
+
+Beyond roles, Pangolin supports fine-grained permission grants at the Asset, Namespace, or Catalog level.
+
+### Permission Structure
+- **Scope**: Where the permission applies (Tenant, Catalog, Namespace, Asset, or Tag).
+- **Actions**: What is allowed (`Read`, `Write`, `Create`, `Delete`, `ManageDiscovery`, etc.).
+
+### Multi-Tenant Isolation
+The auth middleware automatically extracts the tenant context from the user's session or the `X-Pangolin-Tenant` header (for Root users). All subsequent storage operations are strictly scoped to this tenant ID.
 
 ## Authentication Flow
 

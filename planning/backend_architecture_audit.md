@@ -87,13 +87,10 @@ Same as PostgresStore structure above - break main.rs into 15+ focused modules.
 
 ---
 
-### 3. **MongoStore** (`pangolin_store/src/mongo.rs`)
-- **Current Size**: 2,112 lines, 87 KB
-- **Methods**: 100+ trait implementations
-- **Complexity**: **HIGH**
-
-**Recommended Structure:**
-Same modular structure as PostgresStore (17 modules).
+### 3. **MongoStore** (`pangolin_store/src/mongo/mod.rs`)
+- **Current Size**: ~400 lines in `mod.rs` (delegated)
+- **Status**: ✅ **FULLY MODULARIZED** (Dec 26, 2025)
+- **Complexity**: ✅ **LOW**
 
 ---
 
@@ -129,12 +126,24 @@ iceberg/
 
 ---
 
-### 5. **MemoryStore** (`pangolin_store/src/memory.rs`)
-- **Current Size**: 1,820 lines, 75 KB
-- **Complexity**: **MEDIUM-HIGH**
+### 5. **MemoryStore** (`pangolin_store/src/memory/mod.rs`)
+- **Current Size**: ~450 lines in `mod.rs` (delegated)
+- **Status**: 🟡 **IN PROGRESS** (Dec 26, 2025)
+- **Complexity**: ✅ **LOW** (Modular structure created, fixing remaining compilation errors)
 
-**Recommended Structure:**
-Same modular structure as PostgresStore (17 modules).
+**Remaining Technical Debt (27 Compilation Errors):**
+- ❌ **Type Resolution**: `Utc` type undeclared in `signer.rs` and others.
+- ❌ **Trait Signature Mismatches**:
+    - `revoke_token`: Incompatible type for trait.
+    - `search_assets`: Incompatible return type for trait.
+    - `get_federated_catalog_stats`: Incompatible return type for trait.
+    - `get_system_settings`: Incompatible return type for trait.
+    - `update_system_settings`: Incompatible return type for trait.
+- ❌ **Internal Delegation Issues**:
+    - Missing `_internal` suffix for merge operation methods (`complete_merge_operation_internal`, `abort_merge_operation_internal`, `get_merge_conflict_internal`).
+    - Incorrect parameter counts in `mod.rs` delegation calls.
+- ❌ **Tuple Access Issues**: `search_namespaces` and `search_branches` attempting to access `.catalog_name` on tuples instead of indexing/cloning correctly.
+- ❌ **Type Mismatches**: `Option<T>` vs `T` in several `Result` return paths.
 
 ---
 
@@ -356,6 +365,8 @@ The Pangolin backend has grown significantly and would greatly benefit from modu
 **Next Steps**:
 1. ✅ **COMPLETE**: SqliteStore refactoring
 2. ✅ **COMPLETE**: PostgresStore refactoring
-3. Replicate same pattern for MongoStore and MemoryStore
-4. Consider Iceberg handlers refactoring
-5. Document the modular pattern for future development
+3. 🟡 **IN PROGRESS**: MemoryStore refactoring (Fixing compilation errors)
+4. **TODO**: MongoStore refactoring
+5. 💡 **TODO**: Iceberg handlers refactoring (See [modularization_plan_iceberg.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/planning/modularization_plan_iceberg.md))
+6. 💡 **TODO**: CLI handlers refactoring (See [modularization_plan_cli.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/planning/modularization_plan_cli.md))
+7. Document the modular pattern for future development
