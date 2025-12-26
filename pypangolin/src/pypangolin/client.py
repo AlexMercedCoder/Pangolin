@@ -202,7 +202,8 @@ class WarehouseClient:
     def create_s3(self, name: str, bucket: str, region: str = "us-east-1", 
                  access_key: str = None, secret_key: str = None, prefix: str = None,
                  endpoint: str = None,
-                 vending_strategy: Union[str, Dict] = "AwsStatic") -> Warehouse:
+                 vending_strategy: Union[str, Dict] = "AwsStatic",
+                 **kwargs) -> Warehouse:
         
         storage_config = {
             "s3.bucket": bucket,
@@ -212,6 +213,9 @@ class WarehouseClient:
         if secret_key: storage_config["s3.secret-access-key"] = secret_key
         if prefix: storage_config["prefix"] = prefix
         if endpoint: storage_config["s3.endpoint"] = endpoint
+        
+        # Merge extra config from kwargs
+        storage_config.update(kwargs)
 
         if access_key and secret_key and vending_strategy == "AwsStatic":
             vending_strategy = {

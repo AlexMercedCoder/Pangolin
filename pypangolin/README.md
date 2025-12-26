@@ -26,6 +26,21 @@ client.login("username", "password")
 
 # Work with catalogs
 catalogs = client.catalogs.list()
+
+### Warehouse Management
+
+```python
+# Create an S3 warehouse with custom configuration (e.g. MinIO)
+warehouse = client.warehouses.create_s3(
+    name="minio_warehouse",
+    bucket="my-bucket",
+    endpoint="http://minio:9000",
+    access_key="minio",
+    secret_key="minio123",
+    # Pass extra S3 properties via kwargs
+    **{"s3.path-style-access": "true"}
+)
+```
 ```
 
 ### PyIceberg Integration

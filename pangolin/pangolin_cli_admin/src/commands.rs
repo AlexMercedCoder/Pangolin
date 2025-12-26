@@ -90,6 +90,8 @@ pub enum AdminCommand {
         region: Option<String>,
         #[arg(long)]
         endpoint: Option<String>,
+        #[arg(short = 'P', long = "property")]
+        properties: Vec<String>,
     },
     DeleteWarehouse {
         name: String,

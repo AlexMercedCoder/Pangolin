@@ -41,6 +41,7 @@ fn create_s3_store(
     // Use bucket from config if available, otherwise parse from location
     let bucket = config
         .get("s3.bucket")
+        .or_else(|| config.get("bucket"))
         .map(|s| s.as_str())
         .or_else(|| {
             // Fallback: parse from location
@@ -53,15 +54,18 @@ fn create_s3_store(
 
     let region = config
         .get("s3.region")
+        .or_else(|| config.get("region"))
         .map(|s| s.as_str())
         .unwrap_or("us-east-1");
     let access_key = config
         .get("s3.access-key-id")
+        .or_else(|| config.get("access_key_id"))
         .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id"))?;
     let secret_key = config
         .get("s3.secret-access-key")
+        .or_else(|| config.get("secret_access_key"))
         .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key"))?;
-    let endpoint = config.get("s3.endpoint");
+    let endpoint = config.get("s3.endpoint").or_else(|| config.get("endpoint"));
 
     let mut builder = object_store::aws::AmazonS3Builder::new()
         .with_region(region)
@@ -72,6 +76,14 @@ fn create_s3_store(
 
     if let Some(ep) = endpoint {
         builder = builder.with_endpoint(ep);
+    }
+    
+    println!("DEBUG: s3.path-style-access config check: {:?}", config.get("s3.path-style-access"));
+    if let Some(true) = config.get("s3.path-style-access").map(|s| s == "true") {
+        println!("DEBUG: Enabling path-style access (virtual_hosted_style_request = false)");
+        builder = builder.with_virtual_hosted_style_request(false);
+    } else {
+        println!("DEBUG: Path-style access NOT enabled");
     }
 
     Ok(Box::new(builder.build()?))

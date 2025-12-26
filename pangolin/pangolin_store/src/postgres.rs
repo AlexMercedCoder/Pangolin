@@ -2181,11 +2181,16 @@ impl PostgresStore {
             .fetch_all(&self.pool)
             .await?;
 
+        tracing::info!("DEBUG_POSTGRES: get_warehouse_for_location checking {} warehouses for location: {}", rows.len(), location);
+
         for row in rows {
             let config: serde_json::Value = row.try_get("storage_config")?;
+            tracing::info!("DEBUG_POSTGRES: Checking warehouse ID: {:?}, config: {:?}", row.try_get::<Uuid, _>("id"), config);
+            
             if let Some(config_map) = config.as_object() {
                 // Check if location contains the bucket/container name (like MemoryStore/SQLiteStore)
                 let s3_match = config_map.get("s3.bucket")
+                    .or_else(|| config_map.get("bucket"))
                     .and_then(|v| v.as_str())
                     .map(|b| location.contains(b))
                     .unwrap_or(false);
@@ -2200,6 +2205,7 @@ impl PostgresStore {
 
                 if s3_match || azure_match || gcp_match {
                     let storage_config: HashMap<String, String> = serde_json::from_value(config)?;
+                    tracing::info!("DEBUG_POSTGRES: Match found!");
                     return Ok(Some(Warehouse {
                         id: row.try_get("id")?,
                         tenant_id: row.try_get("tenant_id")?,
@@ -2210,6 +2216,8 @@ impl PostgresStore {
                             .ok()
                             .and_then(|v: serde_json::Value| serde_json::from_value(v).ok()),
                     }));
+                } else {
+                     tracing::info!("DEBUG_POSTGRES: No match. s3_match={}, azure_match={}, gcp_match={}", s3_match, azure_match, gcp_match);
                 }
             }
         }
@@ -2217,12 +2225,12 @@ impl PostgresStore {
     }
 
     fn get_object_store_cache_key(&self, config: &HashMap<String, String>, location: &str) -> String {
-        let endpoint = config.get("s3.endpoint").or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
-        let bucket = config.get("s3.bucket").or_else(|| config.get("azure.container")).or_else(|| config.get("gcp.bucket")).map(|s| s.as_str()).unwrap_or_else(|| {
+        let endpoint = config.get("s3.endpoint").or_else(|| config.get("endpoint")).or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
+        let bucket = config.get("s3.bucket").or_else(|| config.get("bucket")).or_else(|| config.get("azure.container")).or_else(|| config.get("gcp.bucket")).map(|s| s.as_str()).unwrap_or_else(|| {
             location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")).and_then(|s| s.split('/').next()).unwrap_or("")
         });
-        let access_key = config.get("s3.access-key-id").or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account-key")).map(|s| s.as_str()).unwrap_or("");
-        let region = config.get("s3.region").or_else(|| config.get("azure.region")).or_else(|| config.get("gcp.region")).map(|s| s.as_str()).unwrap_or("");
+        let access_key = config.get("s3.access-key-id").or_else(|| config.get("access_key_id")).or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account-key")).map(|s| s.as_str()).unwrap_or("");
+        let region = config.get("s3.region").or_else(|| config.get("region")).or_else(|| config.get("azure.region")).or_else(|| config.get("gcp.region")).map(|s| s.as_str()).unwrap_or("");
         crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
     }
 

@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::CreateUser { username, email, role, password, tenant_id } => handlers::handle_create_user(&client, username, email, role, password, tenant_id).await?,
             AdminCommand::DeleteUser { username } => handlers::handle_delete_user(&client, username).await?,
             AdminCommand::ListWarehouses => handlers::handle_list_warehouses(&client).await?,
-            AdminCommand::CreateWarehouse { name, type_, bucket, access_key, secret_key, region, endpoint } => handlers::handle_create_warehouse(&client, name, type_, bucket, access_key, secret_key, region, endpoint).await?,
+            AdminCommand::CreateWarehouse { name, type_, bucket, access_key, secret_key, region, endpoint, properties } => handlers::handle_create_warehouse(&client, name, type_, bucket, access_key, secret_key, region, endpoint, properties).await?,
             AdminCommand::DeleteWarehouse { name } => handlers::handle_delete_warehouse(&client, name).await?,
             AdminCommand::ListCatalogs => handlers::handle_list_catalogs(&client).await?,
             AdminCommand::CreateCatalog { name, warehouse } => handlers::handle_create_catalog(&client, name, warehouse).await?,
@@ -221,8 +221,8 @@ async fn main() -> anyhow::Result<()> {
                                     AdminCommand::ListWarehouses => {
                                         if let Err(e) = handlers::handle_list_warehouses(&client).await { eprintln!("Error: {}", e); }
                                     },
-                                    AdminCommand::CreateWarehouse { name, type_, bucket, access_key, secret_key, region, endpoint } => {
-                                        if let Err(e) = handlers::handle_create_warehouse(&client, name, type_, bucket, access_key, secret_key, region, endpoint).await { eprintln!("Error: {}", e); }
+                                    AdminCommand::CreateWarehouse { name, type_, bucket, access_key, secret_key, region, endpoint, properties } => {
+                                        if let Err(e) = handlers::handle_create_warehouse(&client, name, type_, bucket, access_key, secret_key, region, endpoint, properties).await { eprintln!("Error: {}", e); }
                                     },
                                     AdminCommand::DeleteWarehouse { name } => {
                                         if let Err(e) = handlers::handle_delete_warehouse(&client, name).await { eprintln!("Error: {}", e); }

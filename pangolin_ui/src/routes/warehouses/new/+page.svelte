@@ -17,6 +17,7 @@
 	let bucket = '';
 	let region = 'us-east-1';
 	let endpoint = '';
+	let pathStyle = false;
 	let accessKeyId = '';
 	let secretAccessKey = '';
 	let roleArn = '';
@@ -51,6 +52,7 @@
 				request.storage_config.bucket = bucket;
 				request.storage_config.region = region;
 				if (endpoint) request.storage_config.endpoint = endpoint;
+				if (pathStyle) request.storage_config['s3.path-style-access'] = 'true';
 				
 				if (use_sts) {
 					// Add IAM role configuration for STS
@@ -178,6 +180,19 @@
 								helpText="For MinIO or custom S3-compatible endpoints"
 								disabled={loading}
 							/>
+
+							<div class="flex items-center gap-2">
+								<input
+									type="checkbox"
+									id="path_style"
+									bind:checked={pathStyle}
+									disabled={loading}
+									class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+								/>
+								<label for="path_style" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+									Use Path-Style Access (Required for MinIO)
+								</label>
+							</div>
 							
 							{#if use_sts}
 								<div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">

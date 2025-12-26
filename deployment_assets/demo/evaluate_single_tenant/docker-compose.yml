@@ -9,6 +9,8 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_DOMAIN: minio
+
     command: server /data --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -17,6 +19,32 @@ services:
       retries: 3
     volumes:
       - minio_data:/data
+    networks:
+      default:
+        aliases:
+          - warehouse.minio
+
+  mongo:
+    image: mongo:latest
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pangolin
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
 
   createbuckets:
     image: minio/mc
@@ -69,3 +97,5 @@ services:
 
 volumes:
   minio_data:
+  mongo_data:
+  postgres_data:

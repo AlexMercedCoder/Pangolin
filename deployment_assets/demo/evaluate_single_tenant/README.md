@@ -75,9 +75,12 @@ curl -X POST http://localhost:8080/api/v1/catalogs \
 ### 3. Run PyIceberg Test (Jupyter)
 The included Jupyter notebook server has PyIceberg pre-installed.
 
+> [!IMPORTANT]
+> To verify file persistence in MinIO, you must run the Python logic **inside the Jupyter Notebook container**. Running scripts from your host machine will fail to write data unless you configure your `/etc/hosts` to resolve `minio` to `127.0.0.1`.
+
 1. Open **Jupyter Notebook**: http://localhost:8888
 2. Create a new **Python 3** notebook.
-3. Run the following code to verify connectivity:
+3. Run the content of `demo_client.py`:
 
 ```python
 from pyiceberg.catalog import load_catalog
@@ -85,33 +88,42 @@ from pyiceberg.schema import Schema
 from pyiceberg.types import NestedField, StringType, IntegerType
 import pyarrow as pa
 
-# 1. Connect to Pangolin
-# We use the 'demo' catalog we created earlier.
-# credentials are 'vended-credentials' to use the API's S3 vending.
+# 1. Connect to Pangolin (using internal Docker names)
 catalog = load_catalog(
     "pangolin",
     **{
         "type": "rest",
         "uri": "http://pangolin-api:8080/v1/demo",
         "header.X-Iceberg-Access-Delegation": "vended-credentials",
+        "header.X-Pangolin-Tenant": "00000000-0000-0000-0000-000000000000",
     }
 )
 
-# 2. Create Namespace
-print("Creating namespace 'test_ns'...")
+# 2. Create Namespace and Table
 try:
-    catalog.create_namespace("test_ns")
-    print("Namespace created.")
-except Exception as e:
-    print(f"Namespace likely exists: {e}")
+    catalog.create_namespace("demo_ns")
+except:
+    pass
 
-# 3. Define Schema and Create/Load Table
 schema = Schema(
     NestedField(1, "id", IntegerType(), required=True),
-    NestedField(2, "data", StringType(), required=False),
+    NestedField(2, "name", StringType(), required=False),
 )
 
-print(f"Successfully loaded table: {table}")
+try:
+    table = catalog.create_table("demo_ns.users", schema=schema)
+except:
+    table = catalog.load_table("demo_ns.users")
+
+# 3. Write Data (Required for MinIO Persistence)
+# Pangolin's MemoryStore keeps metadata in memory, but data files are written to MinIO.
+# You must write data to see files in the bucket.
+df = pa.Table.from_pylist(
+    [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}],
+    schema=schema.as_arrow()
+)
+table.append(df)
+print("Data written to MinIO!")
 ```
 
 ## Service URLs

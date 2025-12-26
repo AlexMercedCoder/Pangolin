@@ -206,7 +206,8 @@ pub async fn handle_create_warehouse(
     access_key_opt: Option<String>,
     secret_key_opt: Option<String>,
     region_opt: Option<String>,
-    endpoint_opt: Option<String>
+    endpoint_opt: Option<String>,
+    properties: Vec<String>
 ) -> Result<(), CliError> {
     // Check if root
     if client.config.tenant_id.is_none() {
@@ -215,6 +216,15 @@ pub async fn handle_create_warehouse(
 
     // Interactive config based on type
     let mut storage_config = serde_json::Map::new();
+    
+    // Parse generic properties first (can be overridden by explicit args if needed, or act as base)
+    for prop in properties {
+        if let Some((k, v)) = prop.split_once('=') {
+            storage_config.insert(k.to_string(), Value::String(v.to_string()));
+        } else {
+             println!("Warning: Ignoring invalid property '{}'. format must be key=value", prop);
+        }
+    }
     
     match type_.as_str() {
         "s3" => {

@@ -2205,11 +2205,15 @@ impl SqliteStore {
             .fetch_all(&self.pool)
             .await?;
         
+        tracing::info!("DEBUG_SQLITE: get_warehouse_for_location checking {} warehouses for location: {}", rows.len(), location);
+
         for row in rows {
             let config_str: String = row.get("storage_config");
+            tracing::info!("DEBUG_SQLITE: Checking warehouse ID: {:?}, config: {}", row.get::<String, _>("id"), config_str);
+
             if let Ok(config) = serde_json::from_str::<std::collections::HashMap<String, String>>(&config_str) {
                  // Check if location contains the bucket/container name (like MemoryStore does)
-                 let s3_match = config.get("s3.bucket").map(|b| location.contains(b)).unwrap_or(false);
+                 let s3_match = config.get("s3.bucket").or_else(|| config.get("bucket")).map(|b| location.contains(b)).unwrap_or(false);
                  let azure_match = config.get("azure.container").map(|c| location.contains(c)).unwrap_or(false);
                  let gcp_match = config.get("gcp.bucket").map(|b| location.contains(b)).unwrap_or(false);
                  
@@ -2217,6 +2221,7 @@ impl SqliteStore {
                       let vending_strategy_str: Option<String> = row.get("vending_strategy");
                       let vending_strategy = vending_strategy_str.and_then(|s| serde_json::from_str(&s).ok());
                       
+                      tracing::info!("DEBUG_SQLITE: Match found!");
                       return Ok(Some(Warehouse {
                           id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                           tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
@@ -2225,19 +2230,23 @@ impl SqliteStore {
                           storage_config: config,
                           vending_strategy,
                       }));
+                 } else {
+                     tracing::info!("DEBUG_SQLITE: No match. s3_match={}, azure_match={}, gcp_match={}", s3_match, azure_match, gcp_match);
                  }
+            } else {
+                tracing::info!("DEBUG_SQLITE: Failed to parse storage_config json");
             }
         }
         Ok(None)
     }
 
     fn get_object_store_cache_key(&self, config: &std::collections::HashMap<String, String>, location: &str) -> String {
-        let endpoint = config.get("s3.endpoint").or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
-        let bucket = config.get("s3.bucket").or_else(|| config.get("azure.container")).or_else(|| config.get("gcp.bucket")).map(|s| s.as_str()).unwrap_or_else(|| {
+        let endpoint = config.get("s3.endpoint").or_else(|| config.get("endpoint")).or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
+        let bucket = config.get("s3.bucket").or_else(|| config.get("bucket")).or_else(|| config.get("azure.container")).or_else(|| config.get("gcp.bucket")).map(|s| s.as_str()).unwrap_or_else(|| {
             location.strip_prefix("s3://").or_else(|| location.strip_prefix("az://")).or_else(|| location.strip_prefix("gs://")).and_then(|s| s.split('/').next()).unwrap_or("")
         });
-        let access_key = config.get("s3.access-key-id").or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account-key")).map(|s| s.as_str()).unwrap_or("");
-        let region = config.get("s3.region").or_else(|| config.get("azure.region")).or_else(|| config.get("gcp.region")).map(|s| s.as_str()).unwrap_or("");
+        let access_key = config.get("s3.access-key-id").or_else(|| config.get("access_key_id")).or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account-key")).map(|s| s.as_str()).unwrap_or("");
+        let region = config.get("s3.region").or_else(|| config.get("region")).or_else(|| config.get("azure.region")).or_else(|| config.get("gcp.region")).map(|s| s.as_str()).unwrap_or("");
         crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
     }
 

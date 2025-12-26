@@ -168,3 +168,4 @@ pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
 
 pub mod multi_cloud;
 pub mod audit_tests;
+pub mod s3_compatibility;

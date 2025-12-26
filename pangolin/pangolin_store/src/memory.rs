@@ -1341,14 +1341,19 @@ impl CatalogStore for MemoryStore {
 
 
 impl MemoryStore {
-    fn get_warehouse_for_location(&self, location: &str) -> Option<Warehouse> {
+    pub fn get_warehouse_for_location(&self, location: &str) -> Option<Warehouse> {
         let warehouses_map: Vec<Warehouse> = self.warehouses
             .iter()
             .map(|entry| entry.value().clone())
             .collect();
+        
+        println!("DEBUG_MEM: get_warehouse_for_location checking {} warehouses for location: {}", warehouses_map.len(), location);
+        for w in &warehouses_map {
+             println!("DEBUG_MEM: Warehouse {} config keys: {:?}", w.name, w.storage_config.keys());
+        }
 
         for warehouse in warehouses_map {
-            if let Some(bucket) = warehouse.storage_config.get("s3.bucket") {
+            if let Some(bucket) = warehouse.storage_config.get("s3.bucket").or_else(|| warehouse.storage_config.get("bucket")) {
                 if location.contains(bucket) {
                     return Some(warehouse);
                 }
@@ -1369,10 +1374,10 @@ impl MemoryStore {
 
     // Helper methods for performance optimizations
     fn get_object_store_cache_key(&self, config: &std::collections::HashMap<String, String>, location: &str) -> String {
-        let endpoint = config.get("s3.endpoint").or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
+        let endpoint = config.get("s3.endpoint").or_else(|| config.get("endpoint")).or_else(|| config.get("azure.endpoint")).or_else(|| config.get("gcp.endpoint")).map(|s| s.as_str()).unwrap_or("");
         let bucket = self.extract_bucket_from_location(location);
-        let access_key = config.get("s3.access-key-id").or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account")).map(|s| s.as_str()).unwrap_or("");
-        let region = config.get("s3.region").map(|s| s.as_str()).unwrap_or("us-east-1");
+        let access_key = config.get("s3.access-key-id").or_else(|| config.get("access_key_id")).or_else(|| config.get("azure.account-name")).or_else(|| config.get("gcp.service-account")).map(|s| s.as_str()).unwrap_or("");
+        let region = config.get("s3.region").or_else(|| config.get("region")).map(|s| s.as_str()).unwrap_or("us-east-1");
         
         crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
     }

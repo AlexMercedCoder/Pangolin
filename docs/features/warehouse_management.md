@@ -97,11 +97,11 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
 ### MinIO (S3-Compatible)
 
 ```json
-{
   "type": "s3",
   "bucket": "minio-bucket",
   "endpoint": "http://minio:9000",
-  "allow_http": true
+  "allow_http": true,
+  "s3.path-style-access": "true"
 }
 ```
 
