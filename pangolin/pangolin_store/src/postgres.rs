@@ -861,6 +861,416 @@ impl CatalogStore for PostgresStore {
         Ok(settings)
     }
 
+    // Service User Operations
+    async fn create_service_user(&self, service_user: pangolin_core::user::ServiceUser) -> Result<()> {
+        let role_str = match service_user.role {
+            UserRole::Root => "Root",
+            UserRole::TenantAdmin => "TenantAdmin",
+            UserRole::TenantUser => "TenantUser",
+        };
+
+        sqlx::query(
+            "INSERT INTO service_users (id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
+        )
+        .bind(service_user.id)
+        .bind(service_user.name)
+        .bind(service_user.description)
+        .bind(service_user.tenant_id)
+        .bind(service_user.api_key_hash)
+        .bind(role_str)
+        .bind(service_user.created_at)
+        .bind(service_user.created_by)
+        .bind(service_user.last_used)
+        .bind(service_user.expires_at)
+        .bind(service_user.active)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_service_user(&self, id: Uuid) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        let row = sqlx::query(
+            "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active 
+             FROM service_users WHERE id = $1"
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            self.row_to_service_user(row)
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_service_user_by_api_key_hash(&self, api_key_hash: &str) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        let row = sqlx::query(
+            "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active 
+             FROM service_users WHERE api_key_hash = $1 AND active = true"
+        )
+        .bind(api_key_hash)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            self.row_to_service_user(row)
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_service_users(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        let rows = sqlx::query(
+            "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active 
+             FROM service_users WHERE tenant_id = $1 ORDER BY created_at DESC"
+        )
+        .bind(tenant_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut service_users = Vec::new();
+        for row in rows {
+            if let Some(su) = self.row_to_service_user(row)? {
+                service_users.push(su);
+            }
+        }
+
+        Ok(service_users)
+    }
+
+    async fn update_service_user(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        active: Option<bool>,
+    ) -> Result<()> {
+        let mut updates = Vec::new();
+        let mut bind_idx = 2; // $1 is id
+
+        if name.is_some() {
+            updates.push(format!("name = ${}", bind_idx));
+            bind_idx += 1;
+        }
+        if description.is_some() {
+            updates.push(format!("description = ${}", bind_idx));
+            bind_idx += 1;
+        }
+        if active.is_some() {
+            updates.push(format!("active = ${}", bind_idx));
+        }
+
+        if updates.is_empty() {
+            return Ok(());
+        }
+
+        let query_str = format!(
+            "UPDATE service_users SET {} WHERE id = $1",
+            updates.join(", ")
+        );
+
+        let mut query = sqlx::query(&query_str).bind(id);
+
+        if let Some(n) = name {
+            query = query.bind(n);
+        }
+        if let Some(d) = description {
+            query = query.bind(d);
+        }
+        if let Some(a) = active {
+            query = query.bind(a);
+        }
+
+        query.execute(&self.pool).await?;
+        Ok(())
+    }
+
+    async fn delete_service_user(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM service_users WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn update_service_user_last_used(&self, id: Uuid, timestamp: DateTime<Utc>) -> Result<()> {
+        sqlx::query("UPDATE service_users SET last_used = $1 WHERE id = $2")
+            .bind(timestamp)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // Merge Operation Methods
+    async fn create_merge_operation(&self, operation: pangolin_core::model::MergeOperation) -> Result<()> {
+        let status_str = match operation.status {
+            pangolin_core::model::MergeStatus::Pending => "Pending",
+            pangolin_core::model::MergeStatus::Conflicted => "Conflicted",
+            pangolin_core::model::MergeStatus::Resolving => "Resolving",
+            pangolin_core::model::MergeStatus::Ready => "Ready",
+            pangolin_core::model::MergeStatus::Completed => "Completed",
+            pangolin_core::model::MergeStatus::Aborted => "Aborted",
+        };
+
+        sqlx::query(
+            "INSERT INTO merge_operations (id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, conflicts, initiated_by, initiated_at, completed_at, result_commit_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
+        )
+        .bind(operation.id)
+        .bind(operation.tenant_id)
+        .bind(operation.catalog_name)
+        .bind(operation.source_branch)
+        .bind(operation.target_branch)
+        .bind(operation.base_commit_id)
+        .bind(status_str)
+        .bind(&operation.conflicts)
+        .bind(operation.initiated_by)
+        .bind(operation.initiated_at)
+        .bind(operation.completed_at)
+        .bind(operation.result_commit_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_merge_operation(&self, operation_id: Uuid) -> Result<Option<pangolin_core::model::MergeOperation>> {
+        let row = sqlx::query(
+            "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, conflicts, initiated_by, initiated_at, completed_at, result_commit_id
+             FROM merge_operations WHERE id = $1"
+        )
+        .bind(operation_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let status_str: String = row.get("status");
+            let status = match status_str.as_str() {
+                "Pending" => pangolin_core::model::MergeStatus::Pending,
+                "Conflicted" => pangolin_core::model::MergeStatus::Conflicted,
+                "Resolving" => pangolin_core::model::MergeStatus::Resolving,
+                "Ready" => pangolin_core::model::MergeStatus::Ready,
+                "Completed" => pangolin_core::model::MergeStatus::Completed,
+                "Aborted" => pangolin_core::model::MergeStatus::Aborted,
+                _ => pangolin_core::model::MergeStatus::Pending,
+            };
+
+            Ok(Some(pangolin_core::model::MergeOperation {
+                id: row.get("id"),
+                tenant_id: row.get("tenant_id"),
+                catalog_name: row.get("catalog_name"),
+                source_branch: row.get("source_branch"),
+                target_branch: row.get("target_branch"),
+                base_commit_id: row.get("base_commit_id"),
+                status,
+                conflicts: row.get("conflicts"),
+                initiated_by: row.get("initiated_by"),
+                initiated_at: row.get("initiated_at"),
+                completed_at: row.get("completed_at"),
+                result_commit_id: row.get("result_commit_id"),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+        let rows = sqlx::query(
+            "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, conflicts, initiated_by, initiated_at, completed_at, result_commit_id
+             FROM merge_operations WHERE tenant_id = $1 AND catalog_name = $2 ORDER BY initiated_at DESC"
+        )
+        .bind(tenant_id)
+        .bind(catalog_name)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut operations = Vec::new();
+        for row in rows {
+            let status_str: String = row.get("status");
+            let status = match status_str.as_str() {
+                "Pending" => pangolin_core::model::MergeStatus::Pending,
+                "Conflicted" => pangolin_core::model::MergeStatus::Conflicted,
+                "Resolving" => pangolin_core::model::MergeStatus::Resolving,
+                "Ready" => pangolin_core::model::MergeStatus::Ready,
+                "Completed" => pangolin_core::model::MergeStatus::Completed,
+                "Aborted" => pangolin_core::model::MergeStatus::Aborted,
+                _ => pangolin_core::model::MergeStatus::Pending,
+            };
+
+            operations.push(pangolin_core::model::MergeOperation {
+                id: row.get("id"),
+                tenant_id: row.get("tenant_id"),
+                catalog_name: row.get("catalog_name"),
+                source_branch: row.get("source_branch"),
+                target_branch: row.get("target_branch"),
+                base_commit_id: row.get("base_commit_id"),
+                status,
+                conflicts: row.get("conflicts"),
+                initiated_by: row.get("initiated_by"),
+                initiated_at: row.get("initiated_at"),
+                completed_at: row.get("completed_at"),
+                result_commit_id: row.get("result_commit_id"),
+            });
+        }
+
+        Ok(operations)
+    }
+
+    async fn update_merge_operation_status(&self, operation_id: Uuid, status: pangolin_core::model::MergeStatus) -> Result<()> {
+        let status_str = match status {
+            pangolin_core::model::MergeStatus::Pending => "Pending",
+            pangolin_core::model::MergeStatus::Conflicted => "Conflicted",
+            pangolin_core::model::MergeStatus::Resolving => "Resolving",
+            pangolin_core::model::MergeStatus::Ready => "Ready",
+            pangolin_core::model::MergeStatus::Completed => "Completed",
+            pangolin_core::model::MergeStatus::Aborted => "Aborted",
+        };
+
+        sqlx::query("UPDATE merge_operations SET status = $1 WHERE id = $2")
+            .bind(status_str)
+            .bind(operation_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn complete_merge_operation(&self, operation_id: Uuid, result_commit_id: Uuid) -> Result<()> {
+        sqlx::query(
+            "UPDATE merge_operations SET status = 'Completed', result_commit_id = $1, completed_at = $2 WHERE id = $3"
+        )
+        .bind(result_commit_id)
+        .bind(Utc::now())
+        .bind(operation_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn abort_merge_operation(&self, operation_id: Uuid) -> Result<()> {
+        sqlx::query(
+            "UPDATE merge_operations SET status = 'Aborted', completed_at = $1 WHERE id = $2"
+        )
+        .bind(Utc::now())
+        .bind(operation_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    // Merge Conflict Methods
+    async fn create_merge_conflict(&self, conflict: pangolin_core::model::MergeConflict) -> Result<()> {
+        let conflict_type_str = serde_json::to_string(&conflict.conflict_type)?;
+        let resolution_json = conflict.resolution.as_ref().map(|r| serde_json::to_value(r)).transpose()?;
+
+        sqlx::query(
+            "INSERT INTO merge_conflicts (id, merge_operation_id, conflict_type, asset_id, description, resolution, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)"
+        )
+        .bind(conflict.id)
+        .bind(conflict.merge_operation_id)
+        .bind(conflict_type_str)
+        .bind(conflict.asset_id)
+        .bind(conflict.description)
+        .bind(resolution_json)
+        .bind(conflict.created_at)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    async fn get_merge_conflict(&self, conflict_id: Uuid) -> Result<Option<pangolin_core::model::MergeConflict>> {
+        let row = sqlx::query(
+            "SELECT id, merge_operation_id, conflict_type, asset_id, description, resolution, created_at
+             FROM merge_conflicts WHERE id = $1"
+        )
+        .bind(conflict_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let conflict_type_str: String = row.get("conflict_type");
+            let conflict_type: pangolin_core::model::ConflictType = serde_json::from_str(&conflict_type_str)?;
+            
+            let resolution_json: Option<serde_json::Value> = row.get("resolution");
+            let resolution = resolution_json.map(|v| serde_json::from_value(v)).transpose()?;
+
+            Ok(Some(pangolin_core::model::MergeConflict {
+                id: row.get("id"),
+                merge_operation_id: row.get("merge_operation_id"),
+                conflict_type,
+                asset_id: row.get("asset_id"),
+                description: row.get("description"),
+                resolution,
+                created_at: row.get("created_at"),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        let rows = sqlx::query(
+            "SELECT id, merge_operation_id, conflict_type, asset_id, description, resolution, created_at
+             FROM merge_conflicts WHERE merge_operation_id = $1 ORDER BY created_at"
+        )
+        .bind(operation_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut conflicts = Vec::new();
+        for row in rows {
+            let conflict_type_str: String = row.get("conflict_type");
+            let conflict_type: pangolin_core::model::ConflictType = serde_json::from_str(&conflict_type_str)?;
+            
+            let resolution_json: Option<serde_json::Value> = row.get("resolution");
+            let resolution = resolution_json.map(|v| serde_json::from_value(v)).transpose()?;
+
+            conflicts.push(pangolin_core::model::MergeConflict {
+                id: row.get("id"),
+                merge_operation_id: row.get("merge_operation_id"),
+                conflict_type,
+                asset_id: row.get("asset_id"),
+                description: row.get("description"),
+                resolution,
+                created_at: row.get("created_at"),
+            });
+        }
+
+        Ok(conflicts)
+    }
+
+    async fn resolve_merge_conflict(&self, conflict_id: Uuid, resolution: pangolin_core::model::ConflictResolution) -> Result<()> {
+        let resolution_json = serde_json::to_value(&resolution)?;
+
+        sqlx::query("UPDATE merge_conflicts SET resolution = $1 WHERE id = $2")
+            .bind(resolution_json)
+            .bind(conflict_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    async fn add_conflict_to_operation(&self, operation_id: Uuid, conflict_id: Uuid) -> Result<()> {
+        sqlx::query(
+            "UPDATE merge_operations SET conflicts = array_append(conflicts, $1) WHERE id = $2 AND NOT ($1 = ANY(conflicts))"
+        )
+        .bind(conflict_id)
+        .bind(operation_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     // Federated Catalog Operations
     async fn sync_federated_catalog(&self, tenant_id: Uuid, catalog_name: &str) -> Result<()> {
         let stats = SyncStats {

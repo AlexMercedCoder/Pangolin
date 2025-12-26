@@ -110,13 +110,19 @@ pub async fn create_service_user(
 
     let service_user_id = service_user.id;
 
-    match store.create_service_user(service_user).await {
+    match store.create_service_user(service_user.clone()).await {
         Ok(_) => {
             let response = ApiKeyResponse {
-                service_user_id,
-                name: payload.name,
+                id: service_user.id,
+                name: service_user.name,
+                description: service_user.description,
+                tenant_id: service_user.tenant_id,
+                role: service_user.role,
                 api_key,  // Only shown once!
-                expires_at,
+                created_at: service_user.created_at,
+                created_by: service_user.created_by,
+                expires_at: service_user.expires_at,
+                active: service_user.active,
             };
             (StatusCode::CREATED, Json(response)).into_response()
         }
@@ -354,13 +360,19 @@ pub async fn rotate_api_key(
     let mut updated_service_user = service_user.clone();
     updated_service_user.api_key_hash = new_api_key_hash;
 
-    match store.create_service_user(updated_service_user).await {
+    match store.create_service_user(updated_service_user.clone()).await {
         Ok(_) => {
             let response = ApiKeyResponse {
-                service_user_id: id,
-                name: service_user.name,
+                id: updated_service_user.id,
+                name: updated_service_user.name,
+                description: updated_service_user.description,
+                tenant_id: updated_service_user.tenant_id,
+                role: updated_service_user.role,
                 api_key: new_api_key,  // Only shown once!
-                expires_at: service_user.expires_at,
+                created_at: updated_service_user.created_at,
+                created_by: updated_service_user.created_by,
+                expires_at: updated_service_user.expires_at,
+                active: updated_service_user.active,
             };
             (StatusCode::OK, Json(response)).into_response()
         }

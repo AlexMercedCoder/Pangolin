@@ -14,12 +14,14 @@ This audit identifies critical gaps in feature implementation across Pangolin's 
 | **Core Catalog** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **User Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Role Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Service Users** | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ |
-| **System Settings** | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
-| **Audit Logs (Enhanced)** | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Service Users** | ✅ | ✅ ✓ | ✅ ✓ | ❌ | ✅ | ❌ | ✅ | ✅ |
+| **System Settings** | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **Audit Logs (Enhanced)** | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **Token Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Merge Operations** | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ⚠️ | ❌ |
+| **Merge Operations** | ✅ | ✅ ✓ | ✅ ✓ | ❌ | ✅ | ✅ | ⚠️ | ❌ |
 | **Business Metadata** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+**Legend**: ✅ = Complete, ✅ ✓ = Complete with Regression Tests, ❌ = Missing, ⚠️ = Partial
 
 ---
 
@@ -30,9 +32,15 @@ This audit identifies critical gaps in feature implementation across Pangolin's 
 
 **Backend Status**:
 - ✅ **MemoryStore**: Complete implementation
-- ❌ **PostgresStore**: Methods return "Operation not supported" error
-- ❌ **MongoStore**: Methods missing entirely
+- ✅ **PostgresStore**: **COMPLETE** with regression tests (15 tests)
+- ✅ **MongoStore**: **COMPLETE** with regression tests (7 tests)
 - ❌ **SqliteStore**: Methods missing entirely
+
+**PostgreSQL Implementation** (✅ Complete - Dec 26, 2025):
+- ✅ Migration: `20251226000000_add_service_users_audit_system.sql`
+- ✅ All 7 trait methods implemented in `postgres.rs`
+- ✅ Regression tests: `tests/postgres_parity_tests.rs`
+- ✅ Verified: Create, Get, List, Update, Delete, Get by API key hash, Update last used
 
 **API Surface** (Already Exists):
 - `POST /api/v1/service-users` - Create service user
@@ -45,6 +53,9 @@ This audit identifies critical gaps in feature implementation across Pangolin's 
 **Files**:
 - API: `pangolin_api/src/service_user_handlers.rs` (✅ Complete with utoipa docs)
 - Core: `pangolin_core/src/user.rs` (✅ `ServiceUser` struct defined)
+- Store: `pangolin_store/src/postgres.rs` (✅ All methods implemented)
+- Tests: `pangolin_store/src/tests/postgres_parity_tests.rs` (✅ 15 regression tests)
+- Migration: `pangolin_store/migrations/20251226000000_add_service_users_audit_system.sql` (✅ Applied)
 - UI: `pangolin_ui/src/routes/+layout.svelte` (✅ Service Users nav link exists)
 - PyPangolin: `pypangolin/src/pypangolin/governance.py` (✅ `ServiceUserClient` implemented)
 
@@ -56,10 +67,11 @@ This audit identifies critical gaps in feature implementation across Pangolin's 
 - ✅ **pypangolin**: No changes needed - already implemented
 
 **Action Required**:
-1. Implement `service_users` table in PostgreSQL migration
-2. Implement 7 trait methods in `PostgresStore` (create, get, get_by_hash, list, update, delete, update_last_used)
-3. Port implementations to `MongoStore` and `SqliteStore`
-4. **NEW**: Implement CLI commands for service user management
+1. ~~Implement `service_users` table in PostgreSQL migration~~ ✅ DONE
+2. ~~Implement 7 trait methods in `PostgresStore`~~ ✅ DONE
+3. ~~Implement 7 trait methods in `MongoStore`~~ ✅ DONE (Dec 26, 2025)
+4. Port implementation to `SqliteStore`
+5. **NEW**: Implement CLI commands for service user management
 
 ---
 
@@ -68,9 +80,15 @@ This audit identifies critical gaps in feature implementation across Pangolin's 
 
 **Backend Status**:
 - ✅ **MemoryStore**: Complete
-- ❌ **PostgresStore**: Missing table and methods
+- ✅ **PostgresStore**: **COMPLETE** with regression tests (3 tests)
 - ✅ **MongoStore**: Complete
 - ✅ **SqliteStore**: Complete
+
+**PostgreSQL Implementation** (✅ Complete - Dec 26, 2025):
+- ✅ Migration: `20251226000000_add_service_users_audit_system.sql`
+- ✅ Both trait methods implemented in `postgres.rs`
+- ✅ Regression tests: `tests/postgres_parity_tests.rs`
+- ✅ Verified: Get default settings, Update settings, Upsert behavior
 
 **API Surface** (Already Exists):
 - `GET /api/v1/config/settings` - Get system settings
@@ -89,21 +107,28 @@ This audit identifies critical gaps in feature implementation across Pangolin's 
 - ❌ **pypangolin**: **NEEDS IMPLEMENTATION** - No client methods exist
 
 **Action Required**:
-1. Implement `system_settings` table in PostgreSQL migration
-2. Implement 2 trait methods in `PostgresStore` (get, update)
+1. ~~Implement `system_settings` table in PostgreSQL migration~~ ✅ DONE
+2. ~~Implement 2 trait methods in `PostgresStore` (get, update)~~ ✅ DONE
 3. **NEW**: Implement CLI commands for system settings
 4. **NEW**: Add `SystemSettingsClient` to pypangolin
 
 ---
 
 ### 3. Audit Logs (Enhanced Schema)
-**Current State**: API exists, but PostgreSQL schema is outdated.
+**Current State**: API exists, PostgreSQL schema updated.
 
 **Backend Status**:
 - ✅ **MemoryStore**: Uses current `AuditLogEntry` struct
-- ⚠️ **PostgresStore**: Uses old schema (missing `user_id`, `resource_type`, `resource_id`, `ip_address`, `user_agent`, `result`, `error_message`, `metadata`)
+- ✅ **PostgresStore**: **COMPLETE** with regression tests (2 tests)
 - ✅ **MongoStore**: Schema-less, handles current struct
 - ✅ **SqliteStore**: Appears to use current schema
+
+**PostgreSQL Implementation** (✅ Complete - Dec 26, 2025):
+- ✅ Migration: `20251226000000_add_service_users_audit_system.sql`
+- ✅ Schema updated with 8 new columns
+- ✅ Renamed columns: `actor` → `username`, `resource` → `resource_name`
+- ✅ Regression tests: `tests/postgres_parity_tests.rs`
+- ✅ Verified: Enhanced schema logging, Filtering by user_id
 
 **Schema Mismatch**:
 ```sql
@@ -139,20 +164,32 @@ ALTER TABLE audit_logs RENAME COLUMN resource TO resource_name;
 - ❌ **pypangolin**: **NEEDS IMPLEMENTATION** - No audit log client exists
 
 **Action Required**:
-1. Create migration to update `audit_logs` table schema
-2. Update `log_audit_event` and `list_audit_events` in `PostgresStore`
+1. ~~Create migration to update `audit_logs` table schema~~ ✅ DONE
+2. ~~Update `log_audit_event` and `list_audit_events` in `PostgresStore`~~ ✅ DONE (methods were already updated)
 3. **NEW**: Add `AuditLogClient` to pypangolin
 
 ---
 
 ### 4. Merge Operations & Conflicts
-**Current State**: API exists, MemoryStore complete, but other stores lack persistence.
+**Current State**: API exists, CLI exists, UI partial.
 
 **Backend Status**:
-- ✅ **MemoryStore**: Complete
-- ❌ **PostgresStore**: Missing tables and methods
-- ❌ **MongoStore**: Missing collections and methods
-- ❌ **SqliteStore**: Missing tables and methods
+- ✅ **MemoryStore**: Complete implementation
+- ✅ **PostgresStore**: **COMPLETE** with regression tests (12 tests)
+- ✅ **MongoStore**: **COMPLETE** with regression tests (11 tests)
+- ❌ **SqliteStore**: Methods missing entirely
+
+**PostgreSQL Implementation** (✅ Complete - Dec 26, 2025):
+- ✅ Migration: `20251226010000_add_merge_operations.sql`
+- ✅ All 11 trait methods implemented in `postgres.rs` (6 for operations, 5 for conflicts)
+- ✅ Regression tests: `tests/postgres_merge_tests.rs`
+- ✅ Verified: All CRUD operations for both MergeOperation and MergeConflict
+
+**MongoDB Implementation** (✅ Complete - Dec 26, 2025):
+- ✅ All 11 trait methods implemented in `mongo.rs`
+- ✅ Regression tests: `tests/mongo_parity_tests.rs`
+- ✅ Live tested: Verified via API with MongoDB backend
+- ✅ No migration needed (schema-less)
 
 **Impact of Fixing**:
 - ✅ **API**: No changes needed
@@ -162,9 +199,11 @@ ALTER TABLE audit_logs RENAME COLUMN resource TO resource_name;
 - ❌ **pypangolin**: **NEEDS IMPLEMENTATION**
 
 **Action Required**:
-1. Implement `merge_operations` and `merge_conflicts` tables
-2. Implement 9 trait methods across all stores
-3. **NEW**: Add merge operation support to pypangolin
+1. ~~Implement `merge_operations` and `merge_conflicts` tables in PostgreSQL~~ ✅ DONE
+2. ~~Implement 11 trait methods in `PostgresStore`~~ ✅ DONE
+3. ~~Implement 11 trait methods in `MongoStore`~~ ✅ DONE (Dec 26, 2025)
+4. Port implementation to `SqliteStore`
+5. **NEW**: Add merge operation support to pypangolin
 
 ---
 

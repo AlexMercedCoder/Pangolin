@@ -76,12 +76,18 @@ pub struct ServiceUser {
 }
 
 /// API Key response (only shown once on creation)
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ApiKeyResponse {
-    pub service_user_id: Uuid,
+    pub id: Uuid,
     pub name: String,
-    pub api_key: String,  // Plain text, only shown once
+    pub description: Option<String>,
+    pub tenant_id: Uuid,
+    pub role: UserRole,
+    pub api_key: String,  // Plain text, only shown once on creation
+    pub created_at: DateTime<Utc>,
+    pub created_by: Uuid,
     pub expires_at: Option<DateTime<Utc>>,
+    pub active: bool,
 }
 
 impl ServiceUser {

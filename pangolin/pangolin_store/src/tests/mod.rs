@@ -169,3 +169,7 @@ pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
 pub mod multi_cloud;
 pub mod audit_tests;
 pub mod s3_compatibility;
+pub mod postgres_parity_tests;
+pub mod postgres_merge_tests;
+pub mod mongo_parity_tests;
+pub mod memory_parity_tests;

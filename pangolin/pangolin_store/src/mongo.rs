@@ -135,6 +135,18 @@ impl MongoStore {
     fn federated_sync_stats(&self) -> Collection<Document> {
         self.db.collection("federated_sync_stats")
     }
+
+    fn merge_operations(&self) -> Collection<Document> {
+        self.db.collection("merge_operations")
+    }
+
+    fn merge_conflicts(&self) -> Collection<Document> {
+        self.db.collection("merge_conflicts")
+    }
+
+    fn service_users(&self) -> Collection<Document> {
+        self.db.collection("service_users")
+    }
 }
 
 #[async_trait]
@@ -764,6 +776,192 @@ impl CatalogStore for MongoStore {
         let options = mongodb::options::UpdateOptions::builder().upsert(true).build();
         self.system_settings().update_one(filter, update).with_options(options).await?;
         Ok(settings)
+    }
+
+    // Service User Methods
+    async fn create_service_user(&self, service_user: pangolin_core::user::ServiceUser) -> Result<()> {
+        let doc = mongodb::bson::to_document(&service_user)?;
+        self.service_users().insert_one(doc).await?;
+        Ok(())
+    }
+
+    async fn get_service_user(&self, id: Uuid) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        let filter = doc! { "_id": id.to_string() };
+        if let Some(doc) = self.service_users().find_one(filter).await? {
+            Ok(Some(mongodb::bson::from_document(doc)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_service_user_by_api_key_hash(&self, api_key_hash: &str) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        let filter = doc! { "api_key_hash": api_key_hash };
+        if let Some(doc) = self.service_users().find_one(filter).await? {
+            Ok(Some(mongodb::bson::from_document(doc)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_service_users(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        let filter = doc! { "tenant_id": tenant_id.to_string() };
+        let mut cursor = self.service_users().find(filter).await?;
+        let mut users = Vec::new();
+        
+        while cursor.advance().await? {
+            users.push(mongodb::bson::from_document(cursor.deserialize_current()?)?)
+;
+        }
+        
+        Ok(users)
+    }
+
+    async fn update_service_user(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        active: Option<bool>,
+    ) -> Result<()> {
+        let filter = doc! { "_id": id.to_string() };
+        let mut update_doc = doc! {};
+        
+        if let Some(n) = name {
+            update_doc.insert("name", n);
+        }
+        if let Some(d) = description {
+            update_doc.insert("description", d);
+        }
+        if let Some(a) = active {
+            update_doc.insert("active", a);
+        }
+        
+        if !update_doc.is_empty() {
+            let update = doc! { "$set": update_doc };
+            self.service_users().update_one(filter, update).await?;
+        }
+        
+        Ok(())
+    }
+
+    async fn delete_service_user(&self, id: Uuid) -> Result<()> {
+        let filter = doc! { "_id": id.to_string() };
+        self.service_users().delete_one(filter).await?;
+        Ok(())
+    }
+
+    async fn update_service_user_last_used(&self, id: Uuid, timestamp: chrono::DateTime<chrono::Utc>) -> Result<()> {
+        let filter = doc! { "_id": id.to_string() };
+        let update = doc! { "$set": { "last_used": timestamp.to_rfc3339() } };
+        self.service_users().update_one(filter, update).await?;
+        Ok(())
+    }
+
+    // Merge Operation Methods
+    async fn create_merge_operation(&self, operation: pangolin_core::model::MergeOperation) -> Result<()> {
+        let doc = mongodb::bson::to_document(&operation)?;
+        self.merge_operations().insert_one(doc).await?;
+        Ok(())
+    }
+
+    async fn get_merge_operation(&self, operation_id: Uuid) -> Result<Option<pangolin_core::model::MergeOperation>> {
+        let filter = doc! { "_id": operation_id.to_string() };
+        if let Some(doc) = self.merge_operations().find_one(filter).await? {
+            Ok(Some(mongodb::bson::from_document(doc)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+        let filter = doc! {
+            "tenant_id": tenant_id.to_string(),
+            "catalog_name": catalog_name
+        };
+        let mut cursor = self.merge_operations().find(filter).await?;
+        let mut operations = Vec::new();
+        
+        while cursor.advance().await? {
+            operations.push(mongodb::bson::from_document(cursor.deserialize_current()?)?);
+        }
+        
+        Ok(operations)
+    }
+
+    async fn update_merge_operation_status(&self, operation_id: Uuid, status: pangolin_core::model::MergeStatus) -> Result<()> {
+        let filter = doc! { "_id": operation_id.to_string() };
+        let status_str = format!("{:?}", status);
+        let update = doc! { "$set": { "status": status_str } };
+        self.merge_operations().update_one(filter, update).await?;
+        Ok(())
+    }
+
+    async fn complete_merge_operation(&self, operation_id: Uuid, result_commit_id: Uuid) -> Result<()> {
+        let filter = doc! { "_id": operation_id.to_string() };
+        let update = doc! {
+            "$set": {
+                "status": "Completed",
+                "result_commit_id": result_commit_id.to_string(),
+                "completed_at": chrono::Utc::now().to_rfc3339()
+            }
+        };
+        self.merge_operations().update_one(filter, update).await?;
+        Ok(())
+    }
+
+    async fn abort_merge_operation(&self, operation_id: Uuid) -> Result<()> {
+        let filter = doc! { "_id": operation_id.to_string() };
+        let update = doc! {
+            "$set": {
+                "status": "Aborted",
+                "completed_at": chrono::Utc::now().to_rfc3339()
+            }
+        };
+        self.merge_operations().update_one(filter, update).await?;
+        Ok(())
+    }
+
+    // Merge Conflict Methods
+    async fn create_merge_conflict(&self, conflict: pangolin_core::model::MergeConflict) -> Result<()> {
+        let doc = mongodb::bson::to_document(&conflict)?;
+        self.merge_conflicts().insert_one(doc).await?;
+        Ok(())
+    }
+
+    async fn get_merge_conflict(&self, conflict_id: Uuid) -> Result<Option<pangolin_core::model::MergeConflict>> {
+        let filter = doc! { "_id": conflict_id.to_string() };
+        if let Some(doc) = self.merge_conflicts().find_one(filter).await? {
+            Ok(Some(mongodb::bson::from_document(doc)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        let filter = doc! { "merge_operation_id": operation_id.to_string() };
+        let mut cursor = self.merge_conflicts().find(filter).await?;
+        let mut conflicts = Vec::new();
+        
+        while cursor.advance().await? {
+            conflicts.push(mongodb::bson::from_document(cursor.deserialize_current()?)?);
+        }
+        
+        Ok(conflicts)
+    }
+
+    async fn resolve_merge_conflict(&self, conflict_id: Uuid, resolution: pangolin_core::model::ConflictResolution) -> Result<()> {
+        let filter = doc! { "_id": conflict_id.to_string() };
+        let resolution_doc = mongodb::bson::to_document(&resolution)?;
+        let update = doc! { "$set": { "resolution": resolution_doc } };
+        self.merge_conflicts().update_one(filter, update).await?;
+        Ok(())
+    }
+
+    async fn add_conflict_to_operation(&self, operation_id: Uuid, conflict_id: Uuid) -> Result<()> {
+        let filter = doc! { "_id": operation_id.to_string() };
+        let update = doc! { "$addToSet": { "conflicts": conflict_id.to_string() } };
+        self.merge_operations().update_one(filter, update).await?;
+        Ok(())
     }
 
     // Federated Catalog Operations
