@@ -347,6 +347,7 @@ POST /api/v1/catalogs/{catalog_name}/namespaces
 - ✅ Table creation works
 - ✅ Metadata files written to MinIO
 - ✅ Full Iceberg integration verified
+- ✅ **PostgresStore Live Test**: Confirmed same resolutions in PostgreSQL environment (Dec 26, 2025)
 
 ### Testing Results
 

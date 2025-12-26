@@ -42,6 +42,22 @@ impl ObjectStoreCache {
             .clone()
     }
 
+    /// Try to get or insert ObjectStore instance with a Result-returning factory
+    pub fn try_get_or_insert<F, E>(&self, key: String, factory: F) -> std::result::Result<Arc<dyn ObjectStore>, E>
+    where
+        F: FnOnce() -> std::result::Result<Arc<dyn ObjectStore>, E>,
+    {
+        // DashMap doesn't have a try_entry API, so we check first
+        if let Some(store) = self.cache.get(&key) {
+            return Ok(store.clone());
+        }
+
+        // If not present, we use the factory and insert
+        let store = factory()?;
+        self.cache.insert(key, store.clone());
+        Ok(store)
+    }
+
     /// Clear the cache
     pub fn clear(&self) {
         self.cache.clear();

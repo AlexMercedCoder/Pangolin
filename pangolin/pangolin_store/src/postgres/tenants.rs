@@ -1,0 +1,116 @@
+use super::PostgresStore;
+use anyhow::Result;
+use pangolin_core::model::{Tenant, TenantUpdate};
+use uuid::Uuid;
+use sqlx::Row;
+
+impl PostgresStore {
+    // Tenant Operations
+    pub async fn create_tenant(&self, tenant: Tenant) -> Result<()> {
+        // DB has status, created_at, updated_at which are not in Tenant model?
+        // We should insert default values or values from properties if mapped.
+        // For now, insert "Active" and current time if not provided by model, 
+        // essentially ignoring them from the model input but maintaining DB integrity.
+        
+        sqlx::query("INSERT INTO tenants (id, name, status, created_at, updated_at, properties) VALUES ($1, $2, $3, $4, $5, $6)")
+            .bind(tenant.id)
+            .bind(tenant.name)
+            .bind("Active") // Default status
+            .bind(chrono::Utc::now()) // Default created_at
+            .bind(chrono::Utc::now()) // Default updated_at
+            .bind(serde_json::to_value(&tenant.properties)?)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn get_tenant(&self, id: Uuid) -> Result<Option<Tenant>> {
+        let row: Option<sqlx::postgres::PgRow> = sqlx::query("SELECT id, name, properties FROM tenants WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        if let Some(row) = row {
+            Ok(Some(Tenant {
+                id: row.get("id"),
+                name: row.get("name"),
+                properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn list_tenants(&self) -> Result<Vec<Tenant>> {
+        let rows = sqlx::query("SELECT id, name, properties FROM tenants")
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut tenants = Vec::new();
+        for row in rows {
+            tenants.push(Tenant {
+                id: row.get("id"),
+                name: row.get("name"),
+                properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
+            });
+        }
+        Ok(tenants)
+    }
+
+    pub async fn update_tenant(&self, tenant_id: Uuid, updates: TenantUpdate) -> Result<Tenant> {
+        let mut query = String::from("UPDATE tenants SET ");
+        let mut set_clauses = Vec::new();
+        let mut bind_count = 1;
+
+        if updates.name.is_some() {
+            set_clauses.push(format!("name = ${}", bind_count));
+            bind_count += 1;
+        }
+        if updates.properties.is_some() {
+            set_clauses.push(format!("properties = ${}", bind_count));
+            bind_count += 1;
+        }
+
+        // Always update updated_at
+        set_clauses.push(format!("updated_at = ${}", bind_count));
+        bind_count += 1;
+
+        if set_clauses.len() == 1 { // Only updated_at
+             return self.get_tenant(tenant_id).await?
+                .ok_or_else(|| anyhow::anyhow!("Tenant not found"));
+        }
+
+        query.push_str(&set_clauses.join(", "));
+        query.push_str(&format!(" WHERE id = ${} RETURNING id, name, properties", bind_count));
+
+        let mut q = sqlx::query(&query);
+        if let Some(name) = &updates.name {
+            q = q.bind(name);
+        }
+        if let Some(properties) = &updates.properties {
+            q = q.bind(serde_json::to_value(properties)?);
+        }
+        q = q.bind(chrono::Utc::now());
+        q = q.bind(tenant_id);
+
+        let row: sqlx::postgres::PgRow = q.fetch_one(&self.pool).await?;
+
+        Ok(Tenant {
+            id: row.get("id"),
+            name: row.get("name"),
+            properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
+        })
+    }
+
+    pub async fn delete_tenant(&self, tenant_id: Uuid) -> Result<()> {
+        let result = sqlx::query("DELETE FROM tenants WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&self.pool)
+            .await?;
+        
+        if result.rows_affected() == 0 {
+             return Err(anyhow::anyhow!("Tenant not found"));
+        }
+        Ok(())
+    }
+}

@@ -660,26 +660,19 @@ pub async fn create_table(
          format!("{}/{}/{}", base_loc.trim_end_matches('/'), ns_vec.join("/"), tbl_name)
     } else {
         // Fallback: Resolve warehouse bucket if possible
-        let mut bucket_name = "warehouse".to_string();
-        let mut scheme = "s3";
-        
-        if let Some(warehouse_name) = &catalog.warehouse_name {
+        let (bucket_name, scheme) = if let Some(warehouse_name) = &catalog.warehouse_name {
             if let Ok(Some(wh)) = store.get_warehouse(tenant_id, warehouse_name.clone()).await {
-                 if let Some(b) = wh.storage_config.get("s3.bucket") {
-                     bucket_name = b.clone();
-                     scheme = "s3";
-                 } else if let Some(c) = wh.storage_config.get("azure.container") {
-                     bucket_name = c.clone();
-                     scheme = "abfss"; // Azure
-                 } else if let Some(b) = wh.storage_config.get("gcp.bucket") {
-                     bucket_name = b.clone();
-                     scheme = "gs"; // GCP
-                 } else if let Some(b) = wh.storage_config.get("bucket") {
-                     // Legacy fallback
-                     bucket_name = b.clone();
-                 }
+                 let b = wh.storage_config.get("s3.bucket").or(wh.storage_config.get("bucket")).cloned().unwrap_or_else(|| "warehouse".to_string());
+                 let s = if wh.storage_config.contains_key("azure.container") { "abfss" }
+                        else if wh.storage_config.contains_key("gcp.bucket") { "gs" }
+                        else { "s3" };
+                 (b, s)
+            } else {
+                ("warehouse".to_string(), "s3")
             }
-        }
+        } else {
+            ("warehouse".to_string(), "s3")
+        };
         format!("{}://{}/{}/{}/{}", scheme, bucket_name, catalog_name, ns_vec.join("/"), tbl_name)
     };
 
