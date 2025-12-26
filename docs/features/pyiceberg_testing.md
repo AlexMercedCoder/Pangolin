@@ -144,9 +144,8 @@ Pangolin supports both **OAuth 2.0** and **Basic Authentication**.
 
 > **Note**: For detailed configuration of OAuth providers (Google, GitHub, etc.), please see [Authentication](../authentication.md).
 
-### Option 1: Using an OAuth Token (Recommended)
-
-After logging in via the UI/OAuth flow, you can use your JWT token directly.
+### Option 1: Standard OAuth2 (Recommended for Production)
+The most secure way to authenticate scripts and services is using the standard OAuth2 client credentials flow with a Service User.
 
 ```python
 from pyiceberg.catalog import load_catalog
@@ -154,10 +153,27 @@ from pyiceberg.catalog import load_catalog
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "http://localhost:8080/iceberg/default", # 'default' is the catalog name
+        "uri": "http://localhost:8080/api/v1/iceberg/default", 
         "type": "rest",
-        "token": "YOUR_JWT_TOKEN",            # Token from UI or OAuth callback
-        # No S3 keys needed if Credential Vending is active
+        "credential": "<service_user_id>:<service_user_api_key>",
+        "oauth2-server-uri": "http://localhost:8080/v1/rest/v1/oauth/tokens",
+    }
+)
+```
+
+### Option 2: Using an Existing Token (Temporary)
+
+If you have a JWT token from the UI or another login flow, you can use it directly.
+
+```python
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "http://localhost:8080/api/v1/iceberg/default",
+        "type": "rest",
+        "token": "YOUR_JWT_TOKEN",            # Token from UI or Login
     }
 )
 ```

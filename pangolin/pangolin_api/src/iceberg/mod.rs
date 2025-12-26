@@ -13,6 +13,7 @@ use crate::federated_proxy::FederatedCatalogProxy;
 pub mod config;
 pub mod namespaces;
 pub mod tables;
+pub mod oauth;
 pub mod types;
 
 // Re-export types for convenience

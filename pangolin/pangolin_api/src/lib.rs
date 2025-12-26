@@ -97,6 +97,11 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/maintenance", post(iceberg::tables::perform_maintenance))
         .route("/v1/:prefix/v1/namespaces/:namespace/tables/:table/metrics", post(iceberg::tables::report_metrics))
         .route("/v1/:prefix/v1/tables/rename", post(iceberg::tables::rename_table))
+        .route("/v1/:prefix/v1/oauth/tokens", post(iceberg::oauth::handle_oauth_token))
+        .route("/v1/:prefix/oauth/tokens", post(iceberg::oauth::handle_oauth_token)) // Support non-nested v1 too just in case
+        // Support /api/v1/iceberg prefix style
+        .route("/api/v1/iceberg/:prefix/v1/oauth/tokens", post(iceberg::oauth::handle_oauth_token))
+        .route("/api/v1/iceberg/:prefix/oauth/tokens", post(iceberg::oauth::handle_oauth_token))
         // Pangolin Extended APIs
         // Branch Operations
         .route("/api/v1/branches", post(pangolin_handlers::create_branch).get(pangolin_handlers::list_branches))

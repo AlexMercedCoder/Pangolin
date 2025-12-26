@@ -17,6 +17,7 @@ log = "0.4"
 env_logger = "0.10"
 serde_json = "1.0"
 urlencoding = "2.1"
+chrono = { version = "0.4", features = ["serde"] }
 
 [[bin]]
 name = "pangolin-admin"

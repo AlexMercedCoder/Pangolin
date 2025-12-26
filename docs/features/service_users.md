@@ -38,17 +38,29 @@ curl -H "X-API-Key: pgl_YOUR_SECRET_KEY" \
      https://your-pangolin-api.com/api/v1/catalogs
 ```
 
-### Integration: PyIceberg
+### Integration: PyIceberg (Standard OAuth2)
+PyIceberg supports standard OAuth2, which is the recommended way to use Service Users.
+
 ```python
 from pyiceberg.catalog import load_catalog
 
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "https://api.pangolin.io",
-        "header.X-API-Key": "pgl_YOUR_SECRET_KEY",
+        "uri": "https://api.pangolin.io/api/v1/iceberg/default",
+        "credential": "<service_user_uuid>:<api_key>",
+        "oauth2-server-uri": "https://api.pangolin.io/v1/rest/v1/oauth/tokens",
+        "type": "rest",
     }
 )
+```
+
+### Integration: Custom Clients (X-API-Key)
+For simple HTTP clients that don't support OAuth2, you can use the header:
+```python
+import requests
+headers = {"X-API-Key": "pgl_YOUR_SECRET_KEY"}
+response = requests.get("https://api.pangolin.io/api/v1/catalogs", headers=headers)
 ```
 
 ---

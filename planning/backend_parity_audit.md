@@ -17,8 +17,8 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 | **Core Catalog** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **User Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Role Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Service Users** | ✅ | ✅ | ✅ ✓ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| **System Settings** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **Service Users** | ✅ | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **System Settings** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **Audit Logs (Enhanced)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **Token Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Merge Operations** | ✅ | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ⚠️ | ❌ |
@@ -65,7 +65,7 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 **Impact of Fixing**:
 - ✅ **API**: No changes needed - already complete
 - ✅ **utoipa/OpenAPI**: No regeneration needed - already documented
-- ❌ **CLI**: **NEEDS IMPLEMENTATION** - No CLI commands exist for service users
+- ✅ **CLI**: **IMPLEMENTED** - Full command suite exists (`pangolin-admin user ...`)
 - ✅ **UI**: No changes needed - already functional
 - ✅ **pypangolin**: No changes needed - already implemented
 
@@ -74,7 +74,7 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 2. ~~Implement 7 trait methods in `PostgresStore`~~ ✅ DONE
 3. ~~Implement 7 trait methods in `MongoStore`~~ ✅ DONE (Dec 26, 2025)
 4. ~~Port implementation to `SqliteStore`~~ ✅ DONE
-5. **NEW**: Implement CLI commands for service user management
+5. ~~Implement CLI commands for service user management~~ ✅ DONE
 
 ---
 
@@ -105,14 +105,15 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 **Impact of Fixing**:
 - ✅ **API**: No changes needed
 - ✅ **utoipa/OpenAPI**: No regeneration needed
-- ❌ **CLI**: **NEEDS IMPLEMENTATION** - No CLI commands exist
+- ✅ **CLI**: **IMPLEMENTED** - Commands available
+
 - ✅ **UI**: No changes needed
 - ❌ **pypangolin**: **NEEDS IMPLEMENTATION** - No client methods exist
 
 **Action Required**:
 1. ~~Implement `system_settings` table in PostgreSQL migration~~ ✅ DONE
 2. ~~Implement 2 trait methods in `PostgresStore` (get, update)~~ ✅ DONE
-3. **NEW**: Implement CLI commands for system settings
+3. ~~Implement CLI commands for system settings~~ ✅ DONE
 4. **NEW**: Add `SystemSettingsClient` to pypangolin
 
 ---
@@ -219,7 +220,7 @@ ALTER TABLE audit_logs RENAME COLUMN resource TO resource_name;
 
 ### Medium-Term (Feature Parity)
 4. **MongoStore & SqliteStore Service Users**: Enable multi-backend support
-5. **CLI for Service Users & System Settings**: Enable headless management
+5. ~~**CLI for Service Users & System Settings**: Enable headless management~~ ✅ DONE
 6. **PyPangolin Audit & Settings Clients**: Enable SDK-based management
 
 ### Long-Term (Architecture)
