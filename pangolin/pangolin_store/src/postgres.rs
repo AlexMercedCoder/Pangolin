@@ -2171,6 +2171,28 @@ impl Signer for PostgresStore {
 }
 
 impl PostgresStore {
+    fn row_to_service_user(&self, row: sqlx::postgres::PgRow) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        let role_str: String = row.get("role");
+        let role = match role_str.as_str() {
+            "Root" => UserRole::Root,
+            "TenantAdmin" => UserRole::TenantAdmin,
+            _ => UserRole::TenantUser,
+        };
+
+        Ok(Some(pangolin_core::user::ServiceUser {
+            id: row.get("id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            tenant_id: row.get("tenant_id"),
+            api_key_hash: row.get("api_key_hash"),
+            role,
+            created_at: row.get("created_at"),
+            created_by: row.get("created_by"),
+            last_used: row.get("last_used"),
+            expires_at: row.get("expires_at"),
+            active: row.get("active"),
+        }))
+    }
 }
 
 

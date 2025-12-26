@@ -39,6 +39,8 @@
 		await loadWarehouse();
 	});
 
+	let usePathStyle = false;
+
 	async function loadWarehouse() {
 		if (!warehouseName) return;
 
@@ -54,6 +56,7 @@
 				bucket = warehouse.storage_config.bucket || '';
 				region = warehouse.storage_config.region || 'us-east-1';
 				endpoint = warehouse.storage_config.endpoint || '';
+                usePathStyle = warehouse.storage_config['s3.path-style-access'] === 'true';
 			} else if (storageType === 'azure') {
 				accountName = warehouse.storage_config.account_name || '';
 				container = warehouse.storage_config.container || '';
@@ -89,6 +92,11 @@
 				request.storage_config!.bucket = bucket;
 				request.storage_config!.region = region;
 				if (endpoint) request.storage_config!.endpoint = endpoint;
+                if (usePathStyle) {
+                    // We need to cast to any or add index signature to UpdateWarehouseRequest storage_config definition if strict
+                    // Assuming flexible dict/map
+                    (request.storage_config as any)['s3.path-style-access'] = 'true';
+                }
 			} else if (storageType === 'azure') {
 				request.storage_config!.account_name = accountName;
 				request.storage_config!.container = container;
@@ -222,6 +230,18 @@
 									placeholder="http://localhost:9000"
 									disabled={submitting}
 								/>
+                                <div class="flex items-center gap-2 pt-2">
+                                    <input
+                                        type="checkbox"
+                                        id="path_style"
+                                        bind:checked={usePathStyle}
+                                        disabled={submitting}
+                                        class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                    />
+                                    <label for="path_style" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Use Path-Style Access (Required for MinIO)
+                                    </label>
+                                </div>
 							</div>
 						{:else if storageType === 'azure'}
 							<div class="grid gap-4">

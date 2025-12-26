@@ -148,6 +148,12 @@
                 <dd class="mt-1 text-sm text-gray-900 dark:text-white font-mono">{warehouse.storage_config.endpoint}</dd>
               </div>
             {/if}
+            {#if warehouse.storage_config['s3.path-style-access'] === 'true'}
+              <div>
+                <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Path-Style Access</dt>
+                <dd class="mt-1 text-sm text-gray-900 dark:text-white">Enabled</dd>
+              </div>
+            {/if}
             {#if warehouse.storage_config.account_name}
               <div>
                 <dt class="text-sm font-medium text-gray-700 dark:text-gray-300">Account Name</dt>
