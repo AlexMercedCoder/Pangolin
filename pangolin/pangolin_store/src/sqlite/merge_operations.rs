@@ -10,7 +10,7 @@ use super::SqliteStore;
 impl SqliteStore {
     pub async fn create_merge_operation(&self, operation: MergeOperation) -> Result<()> {
         sqlx::query(
-            "INSERT INTO merge_operations (id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, created_by, created_at, result_commit_id, completed_at)
+            "INSERT INTO merge_operations (id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, initiated_by, initiated_at, result_commit_id, completed_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(operation.id.to_string())
@@ -20,8 +20,8 @@ impl SqliteStore {
         .bind(operation.target_branch)
         .bind(operation.base_commit_id.map(|id| id.to_string()))
         .bind(format!("{:?}", operation.status))
-        .bind(operation.created_by.to_string())
-        .bind(operation.created_at.timestamp())
+        .bind(operation.initiated_by.to_string())
+        .bind(operation.initiated_at.timestamp())
         .bind(operation.result_commit_id.map(|id| id.to_string()))
         .bind(operation.completed_at.map(|t| t.timestamp()))
         .execute(&self.pool)
@@ -32,7 +32,7 @@ impl SqliteStore {
 
     pub async fn get_merge_operation(&self, operation_id: Uuid) -> Result<Option<MergeOperation>> {
         let row = sqlx::query(
-            "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, created_by, created_at, result_commit_id, completed_at
+            "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, initiated_by, initiated_at, result_commit_id, completed_at
              FROM merge_operations WHERE id = ?"
         )
         .bind(operation_id.to_string())
@@ -44,8 +44,9 @@ impl SqliteStore {
                 let status_str: String = row.get("status");
                 let status = match status_str.as_str() {
                     "Pending" => MergeStatus::Pending,
-                    "InProgress" => MergeStatus::InProgress,
                     "Conflicted" => MergeStatus::Conflicted,
+                    "Resolving" => MergeStatus::Resolving,
+                    "Ready" => MergeStatus::Ready,
                     "Completed" => MergeStatus::Completed,
                     "Aborted" => MergeStatus::Aborted,
                     _ => MergeStatus::Pending,
@@ -59,10 +60,11 @@ impl SqliteStore {
                     target_branch: row.get("target_branch"),
                     base_commit_id: row.get::<Option<String>, _>("base_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
                     status,
-                    created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                    created_at: Utc.timestamp_opt(row.get("created_at"), 0).unwrap(),
+                    conflicts: vec![], // Not stored in DB, populated separately
+                    initiated_by: Uuid::parse_str(&row.get::<String, _>("initiated_by"))?,
+                    initiated_at: chrono::DateTime::from_timestamp(row.get("initiated_at"), 0).unwrap(),
+                    completed_at: row.get::<Option<i64>, _>("completed_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                     result_commit_id: row.get::<Option<String>, _>("result_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
-                    completed_at: row.get::<Option<i64>, _>("completed_at").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
                 }))
             }
             None => Ok(None),
@@ -71,7 +73,7 @@ impl SqliteStore {
 
     pub async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<MergeOperation>> {
         let rows = sqlx::query(
-            "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, created_by, created_at, result_commit_id, completed_at
+            "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, initiated_by, initiated_at, result_commit_id, completed_at
              FROM merge_operations WHERE tenant_id = ? AND catalog_name = ?"
         )
         .bind(tenant_id.to_string())
@@ -84,8 +86,9 @@ impl SqliteStore {
             let status_str: String = row.get("status");
             let status = match status_str.as_str() {
                 "Pending" => MergeStatus::Pending,
-                "InProgress" => MergeStatus::InProgress,
                 "Conflicted" => MergeStatus::Conflicted,
+                "Resolving" => MergeStatus::Resolving,
+                "Ready" => MergeStatus::Ready,
                 "Completed" => MergeStatus::Completed,
                 "Aborted" => MergeStatus::Aborted,
                 _ => MergeStatus::Pending,
@@ -99,10 +102,11 @@ impl SqliteStore {
                 target_branch: row.get("target_branch"),
                 base_commit_id: row.get::<Option<String>, _>("base_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
                 status,
-                created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                created_at: Utc.timestamp_opt(row.get("created_at"), 0).unwrap(),
+                conflicts: vec![], // Not stored in DB, populated separately
+                initiated_by: Uuid::parse_str(&row.get::<String, _>("initiated_by"))?,
+                initiated_at: chrono::DateTime::from_timestamp(row.get("initiated_at"), 0).unwrap(),
+                completed_at: row.get::<Option<i64>, _>("completed_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                 result_commit_id: row.get::<Option<String>, _>("result_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
-                completed_at: row.get::<Option<i64>, _>("completed_at").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
             });
         }
 
@@ -144,17 +148,16 @@ impl SqliteStore {
         let resolution_json = conflict.resolution.as_ref().map(|r| serde_json::to_string(r)).transpose()?;
 
         sqlx::query(
-            "INSERT INTO merge_conflicts (id, operation_id, conflict_type, asset_id, description, resolution, resolved_by, resolved_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO merge_conflicts (id, operation_id, conflict_type, asset_id, description, resolution, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
         )
         .bind(conflict.id.to_string())
-        .bind(conflict.operation_id.to_string())
+        .bind(conflict.merge_operation_id.to_string())
         .bind(conflict_type_json)
         .bind(conflict.asset_id.map(|id| id.to_string()))
         .bind(conflict.description)
         .bind(resolution_json)
-        .bind(conflict.resolved_by.map(|id| id.to_string()))
-        .bind(conflict.resolved_at.map(|t| t.timestamp()))
+        .bind(conflict.created_at.timestamp())
         .execute(&self.pool)
         .await?;
         
@@ -163,7 +166,7 @@ impl SqliteStore {
 
     pub async fn get_merge_conflict(&self, conflict_id: Uuid) -> Result<Option<MergeConflict>> {
         let row = sqlx::query(
-            "SELECT id, operation_id, conflict_type, asset_id, description, resolution, resolved_by, resolved_at
+            "SELECT id, operation_id, conflict_type, asset_id, description, resolution, created_at
              FROM merge_conflicts WHERE id = ?"
         )
         .bind(conflict_id.to_string())
@@ -180,13 +183,12 @@ impl SqliteStore {
 
                 Ok(Some(MergeConflict {
                     id: Uuid::parse_str(&row.get::<String, _>("id"))?,
-                    operation_id: Uuid::parse_str(&row.get::<String, _>("operation_id"))?,
+                    merge_operation_id: Uuid::parse_str(&row.get::<String, _>("operation_id"))?,
                     conflict_type,
                     asset_id: row.get::<Option<String>, _>("asset_id").map(|s| Uuid::parse_str(&s)).transpose()?,
                     description: row.get("description"),
                     resolution,
-                    resolved_by: row.get::<Option<String>, _>("resolved_by").map(|s| Uuid::parse_str(&s)).transpose()?,
-                    resolved_at: row.get::<Option<i64>, _>("resolved_at").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
+                    created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
                 }))
             }
             None => Ok(None),
@@ -195,7 +197,7 @@ impl SqliteStore {
 
     pub async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<MergeConflict>> {
         let rows = sqlx::query(
-            "SELECT id, operation_id, conflict_type, asset_id, description, resolution, resolved_by, resolved_at
+            "SELECT id, operation_id, conflict_type, asset_id, description, resolution, created_at
              FROM merge_conflicts WHERE operation_id = ?"
         )
         .bind(operation_id.to_string())
@@ -212,13 +214,12 @@ impl SqliteStore {
 
             conflicts.push(MergeConflict {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
-                operation_id: Uuid::parse_str(&row.get::<String, _>("operation_id"))?,
+                merge_operation_id: Uuid::parse_str(&row.get::<String, _>("operation_id"))?,
                 conflict_type,
                 asset_id: row.get::<Option<String>, _>("asset_id").map(|s| Uuid::parse_str(&s)).transpose()?,
                 description: row.get("description"),
                 resolution,
-                resolved_by: row.get::<Option<String>, _>("resolved_by").map(|s| Uuid::parse_str(&s)).transpose()?,
-                resolved_at: row.get::<Option<i64>, _>("resolved_at").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
+                created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
             });
         }
 

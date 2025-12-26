@@ -20,7 +20,7 @@ impl SqliteStore {
         .bind(service_user.description)
         .bind(service_user.tenant_id.to_string())
         .bind(service_user.api_key_hash)
-        .bind(service_user.role.to_string())
+        .bind(format!("{:?}", service_user.role))
         .bind(service_user.created_at.timestamp())
         .bind(service_user.created_by.to_string())
         .bind(service_user.last_used.map(|t| t.timestamp()))
@@ -44,7 +44,12 @@ impl SqliteStore {
         match row {
             Some(row) => {
                 let role_str: String = row.get("role");
-                let role = UserRole::from_str(&role_str)?;
+                let role = match role_str.as_str() {
+                    "Root" => UserRole::Root,
+                    "TenantAdmin" => UserRole::TenantAdmin,
+                    "TenantUser" => UserRole::TenantUser,
+                    _ => UserRole::TenantUser,
+                };
                 
                 Ok(Some(ServiceUser {
                     id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -53,10 +58,10 @@ impl SqliteStore {
                     tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
                     api_key_hash: row.get("api_key_hash"),
                     role,
-                    created_at: Utc.timestamp_opt(row.get("created_at"), 0).unwrap(),
+                    created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
                     created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                    last_used: row.get::<Option<i64>, _>("last_used").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
-                    expires_at: row.get::<Option<i64>, _>("expires_at").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
+                    last_used: row.get::<Option<i64>, _>("last_used").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                    expires_at: row.get::<Option<i64>, _>("expires_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                     active: row.get::<i32, _>("active") != 0,
                 }))
             }
@@ -76,7 +81,12 @@ impl SqliteStore {
         match row {
             Some(row) => {
                 let role_str: String = row.get("role");
-                let role = UserRole::from_str(&role_str)?;
+                let role = match role_str.as_str() {
+                    "Root" => UserRole::Root,
+                    "TenantAdmin" => UserRole::TenantAdmin,
+                    "TenantUser" => UserRole::TenantUser,
+                    _ => UserRole::TenantUser,
+                };
                 
                 Ok(Some(ServiceUser {
                     id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -85,10 +95,10 @@ impl SqliteStore {
                     tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
                     api_key_hash: row.get("api_key_hash"),
                     role,
-                    created_at: Utc.timestamp_opt(row.get("created_at"), 0).unwrap(),
+                    created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
                     created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                    last_used: row.get::<Option<i64>, _>("last_used").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
-                    expires_at: row.get::<Option<i64>, _>("expires_at").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
+                    last_used: row.get::<Option<i64>, _>("last_used").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                    expires_at: row.get::<Option<i64>, _>("expires_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                     active: row.get::<i32, _>("active") != 0,
                 }))
             }
@@ -108,7 +118,12 @@ impl SqliteStore {
         let mut users = Vec::new();
         for row in rows {
             let role_str: String = row.get("role");
-            let role = UserRole::from_str(&role_str)?;
+            let role = match role_str.as_str() {
+                "Root" => UserRole::Root,
+                "TenantAdmin" => UserRole::TenantAdmin,
+                "TenantUser" => UserRole::TenantUser,
+                _ => UserRole::TenantUser,
+            };
             
             users.push(ServiceUser {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -117,10 +132,10 @@ impl SqliteStore {
                 tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
                 api_key_hash: row.get("api_key_hash"),
                 role,
-                created_at: Utc.timestamp_opt(row.get("created_at"), 0).unwrap(),
+                created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
                 created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                last_used: row.get::<Option<i64>, _>("last_used").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
-                expires_at: row.get::<Option<i64>, _>("expires_at").map(|t| Utc.timestamp_opt(t, 0).unwrap()),
+                last_used: row.get::<Option<i64>, _>("last_used").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                expires_at: row.get::<Option<i64>, _>("expires_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                 active: row.get::<i32, _>("active") != 0,
             });
         }

@@ -361,6 +361,10 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn store_token(&self, _token: pangolin_core::token::TokenInfo) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
+    
+    async fn validate_token(&self, _token: &str) -> Result<Option<pangolin_core::token::TokenInfo>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 
     // System Configuration
     async fn get_system_settings(&self, _tenant_id: Uuid) -> Result<pangolin_core::model::SystemSettings> {
