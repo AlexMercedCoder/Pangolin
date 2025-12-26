@@ -1,59 +1,222 @@
 # Backend Parity Audit
 
-## Goal
-To identify gaps in feature implementation across the four supported backend stores: `MemoryStore`, `PostgresStore`, `MongoStore`, and `SqliteStore`. The goal is to ensure full feature parity so that users can switch backends without losing functionality.
+## Executive Summary
+This audit identifies critical gaps in feature implementation across Pangolin's four backend stores: `MemoryStore`, `PostgresStore`, `MongoStore`, and `SqliteStore`. The primary issue is that **the API layer is already fully implemented** for Service Users, System Settings, and enhanced Audit Logs, but **only MemoryStore has complete backend support**. This causes runtime failures when using PostgreSQL, MongoDB, or SQLite in production.
+
+**Critical Finding**: The UI is currently broken in production (PostgreSQL) mode due to missing backend implementations, not missing API endpoints.
+
+---
 
 ## Summary of Findings
 
-| Feature | Memory | Postgres | Mongo | SQLite |
-| :--- | :---: | :---: | :---: | :---: |
-| **Core Catalog (Tenants, Warehouses, Catalogs, Assets)** | ✅ | ✅ | ✅ | ✅ |
-| **User Management** | ✅ | ✅ | ✅ | ✅ |
-| **Role Management** | ✅ | ✅ | ✅ | ✅ |
-| **Service Users** | ✅ | ❌ MISSING | ❌ MISSING | ❌ MISSING |
-| **System Settings** | ✅ | ❌ MISSING | ✅ | ✅ |
-| **Audit Logs (Schema)** | ✅ | ⚠️ OUTDATED | ✅ | ✅ |
-| **Token Management** | ✅ | ✅ | ✅ | ✅ |
-| **Merge Operations (Conflicts, etc.)** | ✅ | ❌ MISSING | ❌ MISSING | ❌ MISSING |
-| **Business Metadata** | ✅ | ✅ | ✅ | ✅ |
+| Feature | Memory | Postgres | Mongo | SQLite | API Exists? | CLI Exists? | UI Exists? | PyPangolin Exists? |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Core Catalog** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **User Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Role Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Service Users** | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ |
+| **System Settings** | ✅ | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **Audit Logs (Enhanced)** | ✅ | ⚠️ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Token Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Merge Operations** | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ⚠️ | ❌ |
+| **Business Metadata** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-## Detailed Gaps
+---
 
-### 1. Service Users
-The `ServiceUser` feature (for machine-to-machine authentication) is currently only implemented in `MemoryStore`.
-- **PostgresStore**: Methods return "Operation not supported". No table implementation.
-- **MongoStore**: Methods missing from implementation.
-- **SqliteStore**: Methods missing from implementation.
+## Detailed Gaps & Impact Analysis
+
+### 1. Service Users (Machine-to-Machine Auth)
+**Current State**: API fully implemented, UI functional, pypangolin client exists.
+
+**Backend Status**:
+- ✅ **MemoryStore**: Complete implementation
+- ❌ **PostgresStore**: Methods return "Operation not supported" error
+- ❌ **MongoStore**: Methods missing entirely
+- ❌ **SqliteStore**: Methods missing entirely
+
+**API Surface** (Already Exists):
+- `POST /api/v1/service-users` - Create service user
+- `GET /api/v1/service-users` - List service users
+- `GET /api/v1/service-users/{id}` - Get service user
+- `PUT /api/v1/service-users/{id}` - Update service user
+- `DELETE /api/v1/service-users/{id}` - Delete service user
+- `POST /api/v1/service-users/{id}/rotate` - Rotate API key
+
+**Files**:
+- API: `pangolin_api/src/service_user_handlers.rs` (✅ Complete with utoipa docs)
+- Core: `pangolin_core/src/user.rs` (✅ `ServiceUser` struct defined)
+- UI: `pangolin_ui/src/routes/+layout.svelte` (✅ Service Users nav link exists)
+- PyPangolin: `pypangolin/src/pypangolin/governance.py` (✅ `ServiceUserClient` implemented)
+
+**Impact of Fixing**:
+- ✅ **API**: No changes needed - already complete
+- ✅ **utoipa/OpenAPI**: No regeneration needed - already documented
+- ❌ **CLI**: **NEEDS IMPLEMENTATION** - No CLI commands exist for service users
+- ✅ **UI**: No changes needed - already functional
+- ✅ **pypangolin**: No changes needed - already implemented
 
 **Action Required**:
-- Implement `ServiceUser` structs and methods for all persistent stores.
-- Create `service_users` table/collection in schemas.
+1. Implement `service_users` table in PostgreSQL migration
+2. Implement 7 trait methods in `PostgresStore` (create, get, get_by_hash, list, update, delete, update_last_used)
+3. Port implementations to `MongoStore` and `SqliteStore`
+4. **NEW**: Implement CLI commands for service user management
+
+---
 
 ### 2. System Settings
-Configuration for system-wide behaviors (e.g., default buckets, SMTP).
-- **PostgresStore**: Missing `system_settings` table and method implementations.
-- **MongoStore**: Implemented.
-- **SqliteStore**: Implemented.
+**Current State**: API fully implemented, UI functional.
+
+**Backend Status**:
+- ✅ **MemoryStore**: Complete
+- ❌ **PostgresStore**: Missing table and methods
+- ✅ **MongoStore**: Complete
+- ✅ **SqliteStore**: Complete
+
+**API Surface** (Already Exists):
+- `GET /api/v1/config/settings` - Get system settings
+- `PUT /api/v1/config/settings` - Update system settings
+
+**Files**:
+- API: `pangolin_api/src/system_config_handlers.rs` (✅ Complete with utoipa docs)
+- Core: `pangolin_core/src/model.rs` (✅ `SystemSettings` struct defined)
+- UI: Routes exist for system config
+
+**Impact of Fixing**:
+- ✅ **API**: No changes needed
+- ✅ **utoipa/OpenAPI**: No regeneration needed
+- ❌ **CLI**: **NEEDS IMPLEMENTATION** - No CLI commands exist
+- ✅ **UI**: No changes needed
+- ❌ **pypangolin**: **NEEDS IMPLEMENTATION** - No client methods exist
 
 **Action Required**:
-- Implement `system_settings` table and methods for key-value storage in Postgres.
+1. Implement `system_settings` table in PostgreSQL migration
+2. Implement 2 trait methods in `PostgresStore` (get, update)
+3. **NEW**: Implement CLI commands for system settings
+4. **NEW**: Add `SystemSettingsClient` to pypangolin
 
-### 3. Audit Logs
-- **PostgresStore**: Use of an outdated schema. The `AuditLogEntry` struct has evolved (adding `user_id`, `resource_type`, `ip_address`, etc.), but the Postgres table is missing these columns, causing inserts to fail or lose data.
-- **Mongo/Sqlite**: Appear to handle the struct correctly (Mongo is schema-less, Sqlite likely updated or generic).
+---
+
+### 3. Audit Logs (Enhanced Schema)
+**Current State**: API exists, but PostgreSQL schema is outdated.
+
+**Backend Status**:
+- ✅ **MemoryStore**: Uses current `AuditLogEntry` struct
+- ⚠️ **PostgresStore**: Uses old schema (missing `user_id`, `resource_type`, `resource_id`, `ip_address`, `user_agent`, `result`, `error_message`, `metadata`)
+- ✅ **MongoStore**: Schema-less, handles current struct
+- ✅ **SqliteStore**: Appears to use current schema
+
+**Schema Mismatch**:
+```sql
+-- Current Postgres (OUTDATED)
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    timestamp TIMESTAMPTZ NOT NULL,
+    actor TEXT NOT NULL,          -- Should be 'username'
+    action TEXT NOT NULL,
+    resource TEXT,                 -- Should be 'resource_name'
+    details JSONB
+);
+
+-- Required (NEW COLUMNS)
+ALTER TABLE audit_logs ADD COLUMN user_id UUID;
+ALTER TABLE audit_logs ADD COLUMN resource_type TEXT;
+ALTER TABLE audit_logs ADD COLUMN resource_id UUID;
+ALTER TABLE audit_logs ADD COLUMN ip_address TEXT;
+ALTER TABLE audit_logs ADD COLUMN user_agent TEXT;
+ALTER TABLE audit_logs ADD COLUMN result TEXT;
+ALTER TABLE audit_logs ADD COLUMN error_message TEXT;
+ALTER TABLE audit_logs ADD COLUMN metadata JSONB;
+ALTER TABLE audit_logs RENAME COLUMN actor TO username;
+ALTER TABLE audit_logs RENAME COLUMN resource TO resource_name;
+```
+
+**Impact of Fixing**:
+- ✅ **API**: No changes needed
+- ✅ **utoipa/OpenAPI**: No regeneration needed
+- ✅ **CLI**: Already implemented
+- ✅ **UI**: No changes needed
+- ❌ **pypangolin**: **NEEDS IMPLEMENTATION** - No audit log client exists
 
 **Action Required**:
-- Migrate Postgres `audit_logs` table to match current `AuditLogEntry` fields.
+1. Create migration to update `audit_logs` table schema
+2. Update `log_audit_event` and `list_audit_events` in `PostgresStore`
+3. **NEW**: Add `AuditLogClient` to pypangolin
+
+---
 
 ### 4. Merge Operations & Conflicts
-Advanced branching features including merge conflict resolution.
-- **Postgres/Mongo/Sqlite**: Likely missing robust implementation for `MergeOperation` and `MergeConflict` persistence compared to `MemoryStore`.
+**Current State**: API exists, MemoryStore complete, but other stores lack persistence.
+
+**Backend Status**:
+- ✅ **MemoryStore**: Complete
+- ❌ **PostgresStore**: Missing tables and methods
+- ❌ **MongoStore**: Missing collections and methods
+- ❌ **SqliteStore**: Missing tables and methods
+
+**Impact of Fixing**:
+- ✅ **API**: No changes needed
+- ✅ **utoipa/OpenAPI**: No regeneration needed
+- ✅ **CLI**: Already implemented
+- ⚠️ **UI**: Partial implementation
+- ❌ **pypangolin**: **NEEDS IMPLEMENTATION**
 
 **Action Required**:
-- Verify and implement persistence for merge operations and conflict resolution states.
+1. Implement `merge_operations` and `merge_conflicts` tables
+2. Implement 9 trait methods across all stores
+3. **NEW**: Add merge operation support to pypangolin
+
+---
 
 ## Recommendations
 
-1.  **Prioritize Postgres**: As the primary production store, `PostgresStore` must be brought up to parity immediately. This is addressed in the current `implementation_plan.md`.
-2.  **Standardize Trait Tests**: Create a shared integration test suite that runs against ALL stores to enforce parity automatically. Currently, features are often added to Memory/Postgres but missed in others.
-3.  **Refactor Mongo/Sqlite**: Once Postgres is fixed, port the logic to Mongo and SQLite to maintain the "run anywhere" promise of Pangolin.
+### Immediate Priorities (Fix Production)
+1. **PostgresStore Service Users**: Unblock UI service user management
+2. **PostgresStore System Settings**: Unblock UI system config
+3. **PostgresStore Audit Logs Schema**: Fix data loss and enable proper audit trails
+
+### Medium-Term (Feature Parity)
+4. **MongoStore & SqliteStore Service Users**: Enable multi-backend support
+5. **CLI for Service Users & System Settings**: Enable headless management
+6. **PyPangolin Audit & Settings Clients**: Enable SDK-based management
+
+### Long-Term (Architecture)
+7. **Shared Integration Tests**: Prevent future parity drift
+8. **Merge Operations Persistence**: Complete advanced branching features
+
+---
+
+## Context for Future Sessions
+
+### Key Files to Review
+1. **Trait Definition**: `pangolin_store/src/lib.rs` - `CatalogStore` trait
+2. **MemoryStore Reference**: `pangolin_store/src/memory.rs` - Complete implementation
+3. **PostgresStore**: `pangolin_store/src/postgres.rs` - Needs updates
+4. **Migration Template**: `pangolin_store/migrations/20251226000000_add_service_users_audit_system.sql` - Already created
+5. **API Handlers**: `pangolin_api/src/service_user_handlers.rs`, `system_config_handlers.rs`
+
+### Current Error Messages
+- Service Users: `"Operation not supported by this store"`
+- System Settings: `"relation "system_settings" does not exist"`
+- Audit Logs: `"column "user_id" does not exist"`
+
+### Testing Strategy
+1. **Compile**: `cargo check -p pangolin_store`
+2. **Migration**: Start API to apply migrations
+3. **API Test**: `curl -X GET http://localhost:8080/api/v1/service-users -H "Authorization: Bearer $TOKEN"`
+4. **UI Test**: Navigate to Service Users page, verify no errors
+
+### Database Connection
+```bash
+# PostgreSQL (Docker)
+DATABASE_URL=postgres://admin:password@localhost:5432/pangolin
+
+# Apply migrations automatically on API startup
+cd pangolin && cargo run
+```
+
+### Why This Matters
+- **Production Impact**: UI is broken for PostgreSQL users
+- **Multi-Tenancy**: Service users are critical for machine-to-machine auth
+- **Compliance**: Enhanced audit logs are required for enterprise deployments
+- **Backend Flexibility**: Users expect to switch stores without losing features
