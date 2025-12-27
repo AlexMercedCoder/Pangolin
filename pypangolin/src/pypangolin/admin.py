@@ -6,9 +6,16 @@ class AuditClient:
     def __init__(self, client):
         self.client = client
 
-    def list_events(self, limit: int = 100, offset: int = 0) -> List[AuditEvent]:
+    def list_events(self, limit: int = 100, offset: int = 0, 
+                   user_id: str = None, resource_type: str = None, 
+                   start_time: str = None, end_time: str = None) -> List[AuditEvent]:
         """List audit events."""
         params = {"limit": limit, "offset": offset}
+        if user_id: params["user_id"] = user_id
+        if resource_type: params["resource_type"] = resource_type
+        if start_time: params["start_time"] = start_time
+        if end_time: params["end_time"] = end_time
+        
         data = self.client.get("/api/v1/audit", params=params)
         return [AuditEvent(**e) for e in data]
 

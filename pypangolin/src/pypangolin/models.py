@@ -125,6 +125,8 @@ class AuditEvent(BaseModel):
     resource_type: str
     resource_id: Optional[str] = None
     timestamp: str  # ISO 8601
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
     result: str
     error_message: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None

@@ -104,6 +104,19 @@ DeltaAsset.write(
 ✅ **Governance** - Role-based access control and business metadata  
 ✅ **Federated Catalogs** - Connect to remote Iceberg catalogs  
 ✅ **Type-Safe** - Pydantic models for all API responses  
+✅ **Audit Logging** - Comprehensive audit logs with user attribution
+
+## Verification
+
+To run the end-to-end verification suite against a local Pangolin + MinIO stack:
+
+```bash
+# Ensure MinIO is running and buckets exist
+python3 scripts/ensure_buckets.py
+
+# Run verification script
+python3 scripts/verify_pypangolin_live.py
+```
 
 ## License
 

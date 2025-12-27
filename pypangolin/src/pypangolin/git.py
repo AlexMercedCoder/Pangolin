@@ -13,6 +13,7 @@ class BranchClient:
             "from_branch": from_branch,
             "catalog": catalog_name
         }
+        print(f"DEBUG CLIENT: Create branch {name} from {from_branch} in {catalog_name} via /api/v1/branches")
         data = self.client.post("/api/v1/branches", json=payload)
         return Branch(**data)
 
