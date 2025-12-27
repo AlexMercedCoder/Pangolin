@@ -333,6 +333,10 @@ impl CatalogStore for MemoryStore {
     async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
         self.list_permissions_internal(None, None).await
     }
+
+    async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
+        self.list_permissions_internal(Some(user_id), None).await
+    }
     
     // Token operations
     async fn store_token(&self, token_info: pangolin_core::token::TokenInfo) -> Result<()> {
