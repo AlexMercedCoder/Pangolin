@@ -6,7 +6,7 @@ Pangolin follow a "Configuration-over-Code" philosophy, allowing for flexible de
 
 Most settings are managed via **Environment Variables** at startup. This includes everything from the port number to the metadata persistence backend.
 
-- For a complete list of variables, see **[Environment Variables](./env_vars.md)**.
+- For a complete list of variables, see **[Environment Variables](../environment-variables.md)**.
 - For deployment-specific patterns, see **[Deployment Guide](./deployment.md)**.
 
 ## Client Configuration Discovery

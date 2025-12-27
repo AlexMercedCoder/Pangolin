@@ -21,6 +21,7 @@ def main():
             # We rely on Pangolin's Vended Credentials for S3 access.
             # These point to 'http://minio:9000' which is accessible within the Docker network.
             # Do NOT override s3.endpoint here unless you are configuring /etc/hosts on your machine.
+            # Ensure your Warehouse creation step included "s3.path-style-access": "true" for MinIO.
         }
     )
 

@@ -120,6 +120,10 @@ Pangolin uses the following collections:
 - `branches` - Branching information
 - `tags` - Snapshot tags
 - `commits` - Commit history
+- `service_users` - API identities
+- `system_settings` - Global configuration
+- `merge_operations` - Merge tracking
+- `merge_conflicts` - Conflict resolution data
 db.tenants.createIndex({ "name": 1 }, { unique: true })
 
 // Warehouses

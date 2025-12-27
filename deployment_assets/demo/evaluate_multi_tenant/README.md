@@ -50,6 +50,7 @@ You must create a Tenant and a specific Tenant Admin user to manage resources.
    - **Access Key**: `minioadmin`
    - **Secret Key**: `minioadmin`
    - **Vending Strategy**: `AWS Static` (Ensure "Use STS" is **UNCHECKED**)
+   - **Path Style Access**: `true`
    - Click **Create**
 3. Go to **Catalogs** → **Create Catalog**
    - **Name**: `acme_cat`

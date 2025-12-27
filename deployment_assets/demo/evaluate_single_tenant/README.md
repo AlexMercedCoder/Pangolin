@@ -30,6 +30,7 @@ Since the memory store starts empty, you must create a Warehouse and Catalog bef
    - **Access Key**: `minioadmin`
    - **Secret Key**: `minioadmin`
    - **Vending Strategy**: `AWS Static`
+   - **Path Style Access**: `true` (Add as property or check box if available)
    - Click **Create**.
 3. Go to **Catalogs** → **Create Catalog**
    - **Name**: `demo`
@@ -58,7 +59,8 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
       "region": "us-east-1",
       "endpoint": "http://minio:9000",
       "access_key_id": "minioadmin",
-      "secret_access_key": "minioadmin"
+      "secret_access_key": "minioadmin",
+      "s3.path-style-access": "true"
     }
   }'
 

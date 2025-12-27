@@ -63,7 +63,7 @@ Every log entry follows a standardized structure:
 | `user_id` | UUID of the actor. |
 | `username` | Readable name of the actor. |
 | `action` | The operation (e.g., `create_table`, `merge_branch`). |
-| `resource` | Path to the affected object (e.g., `catalog/ns/table`). |
+| `resource_name` | Path to the affected object (e.g., `catalog/ns/table`). |
 | `result` | `success` or `failure`. |
 | `timestamp` | UTC ISO8601 string. |
 | `metadata` | Action-specific JSON (e.g., old/new schema ID). |

@@ -18,6 +18,8 @@ Targeted at Root and Tenant Admins for infrastructure and identity management.
 | `create-catalog` | Provision Iceberg or Federated catalogs. | Admin |
 | `grant-permission`| Assign RBAC/TBAC roles and access levels. | Admin |
 | `list-audit-events`| Comprehensive forensic and security tracking. | Admin |
+| `create-service-user`| Manage machine-to-machine API identities. | Admin |
+| `update-system-settings`| Configure global platform defaults. | Root |
 
 ### 2. `pangolin-user` (The Data Tool)
 Targeted at Data Engineers and Analysts for discovery and versioning.

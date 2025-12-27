@@ -132,11 +132,14 @@ The comprehensive schema includes:
 
 **Governance & Security**:
 - `users` - Root and Tenant user accounts
+- `service_users` - Machine-to-machine API identities
 - `roles` - RBAC role definitions
 - `user_roles` - Role assignments to users
 - `permissions` - Direct (TBAC/RBAC) permission grants
 - `access_requests` - Data discovery access workflows
 - `audit_logs` - Comprehensive tamper-evident trail
+- `merge_operations` - Branch merge tracking
+- `merge_conflicts` - Conflict details for merges
 - `revoked_tokens` - Blacklisted JWT identifiers
 - `active_tokens` - (Internal) Session tracking for active tokens
 
