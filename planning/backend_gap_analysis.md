@@ -7,7 +7,8 @@ This document details the findings from the investigation into:
 
 **Key Findings**:
 *   **MemoryStore** is missing the `list_merge_conflicts` implementation.
-*   **All Backends** (Memory, Postgres, Mongo, SQLite) lack "Asset Propagation" logic in `create_branch`. When a branch is created, it starts empty (no assets), causing subsequent reads to fail even if the branch metadata exists.
+*   **All Backends** (Memory, Postgres, Mongo, SQLite) now support "Asset Propagation" via the API Handler. The Store methods remain simple, but the API coordinates the copy.
+*   **Merge Operations** are now fully verified across all backends.
 *   **PyIceberg Parsing** is correct; the 404 was a legitimate "Asset Not Found" response from the backend, not a parsing error.
 
 ---
@@ -20,7 +21,7 @@ The following table summarizes the status of critical methods across backends, f
 | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
 | **Merge Conficts** | `list_merge_conflicts` | ❌ **Missing** | ✅ Implemented | ✅ Implemented | ✅ Implemented | **Blocking** |
 | **Merge Conficts** | `resolve_merge_conflict` | ✅ Implemented | ✅ Implemented | ✅ Implemented | ✅ Implemented | OK |
-| **Assets** | `create_branch` (Asset Copy) | ❌ **Missing** | ❌ **Missing** | ❌ **Missing** | ❌ **Missing** | **Blocking** |
+| **Assets** | `create_branch` (Asset Copy) | ✅ Resolved | ✅ Resolved | ✅ Resolved | ✅ Resolved | **Fixed** (via API) |
 
 ### Detailed Findings
 

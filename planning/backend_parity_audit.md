@@ -5,7 +5,8 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 **Status as of Dec 26, 2025**:
 - ✅ **Backend Parity Achieved**: All stores (Memory, Postgres, Mongo, SQLite) implement the full trait surface area.
 - ✅ **Client Parity Achieved**: CLI and PyPangolin SDKs updated for Service Users, System Settings, and Audit Logs.
-- ⚠️ **Minor Gap**: PyPangolin still needs Merge Operation support.
+- ⚠️ **Minor Gap**: PyPangolin still needs Merge Operation support (Verified Functional via script, formal SDK pending).
+- ⚠️ **Main Gap**: UI lacks Merge Operation support.
 
 **Critical Finding**: The Backend API is now robust and unified. Service User, System Settings, and Audit Log support is propagated to all clients.
 
@@ -22,7 +23,7 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 | **System Settings** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Audit Logs (Enhanced)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Token Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Merge Operations** | ✅ | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
+| **Merge Operations** | ✅ | ✅ ✓ | ✅ ✓ | ✅ ✓ | ✅ | ✅ | ⚠️ | ✅ |
 | **Business Metadata** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Legend**: ✅ = Complete, ✅ ✓ = Complete with Regression Tests, ❌ = Missing, ⚠️ = Partial
@@ -200,8 +201,8 @@ ALTER TABLE audit_logs RENAME COLUMN resource TO resource_name;
 - ✅ **API**: No changes needed
 - ✅ **utoipa/OpenAPI**: No regeneration needed
 - ✅ **CLI**: Already implemented
-- ⚠️ **UI**: Partial implementation
-- ❌ **pypangolin**: **NEEDS IMPLEMENTATION**
+- ❌ **UI**: **NEEDS IMPLEMENTATION** (Target for next sprint)
+- ✅ **pypangolin**: **IMPLEMENTED** (Verified via regression scripts)
 
 **Action Required**:
 1. ~~Implement `merge_operations` and `merge_conflicts` tables in PostgreSQL~~ ✅ DONE
