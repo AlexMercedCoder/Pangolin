@@ -97,13 +97,14 @@ impl MongoStore {
     }
 
     pub async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, target_branch: String, source_branch: String) -> Result<()> {
+
         let source = self.get_branch(tenant_id, catalog_name, source_branch.clone()).await?
             .ok_or_else(|| anyhow::anyhow!("Source branch not found"))?;
             
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
-            "name": target_branch
+            "name": &target_branch
         };
         
         let update = doc! {
@@ -113,6 +114,18 @@ impl MongoStore {
         };
         
         self.db.collection::<Document>("branches").update_one(filter, update).await?;
+
+        // Sync assets from source to target (Simulating Fast-Forward Merge)
+        // Iterate known namespaces to find assets
+        let namespaces = self.list_namespaces(tenant_id, catalog_name, None).await?;
+        for ns in namespaces {
+             let assets = self.list_assets(tenant_id, catalog_name, Some(source_branch.clone()), ns.name.clone()).await?;
+             for asset in assets {
+                 // Upsert asset into target branch
+                 self.create_asset(tenant_id, catalog_name, Some(target_branch.clone()), ns.name.clone(), asset).await?;
+             }
+        }
+
         Ok(())
     }
 }

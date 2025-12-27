@@ -13,9 +13,11 @@ Administrators can provision and rotate keys directly from the terminal.
 ```bash
 pangolin-admin create-service-user \
   --name "etl-pipeline" \
-  --role "TenantUser" \
-  --expires-in-days 365
+  --role "TenantUser"
 ```
+
+> [!NOTE]
+> Ensure you record the **Service User ID (UUID)** from the output. If the CLI does not display the ID, use the Management UI or the API directly to retrieve it after creation.
 
 **Rotate API Key:**
 ```bash
@@ -47,9 +49,10 @@ from pyiceberg.catalog import load_catalog
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "https://api.pangolin.io/api/v1/iceberg/default",
+        "uri": "http://localhost:8080/v1/default/",
         "credential": "<service_user_uuid>:<api_key>",
-        "oauth2-server-uri": "https://api.pangolin.io/v1/rest/v1/oauth/tokens",
+        "oauth2-server-uri": "http://localhost:8080/v1/default/v1/oauth/tokens",
+        "scope": "catalog",
         "type": "rest",
     }
 )

@@ -42,4 +42,12 @@ impl MemoryStore {
     pub(crate) async fn get_merge_conflict_internal(&self, conflict_id: Uuid) -> Result<Option<MergeConflict>> {
         Ok(self.merge_conflicts.get(&conflict_id).map(|c| c.value().clone()))
     }
+
+    pub(crate) async fn list_merge_conflicts_internal(&self, operation_id: Uuid) -> Result<Vec<MergeConflict>> {
+        let conflicts = self.merge_conflicts.iter()
+            .filter(|c| c.value().merge_operation_id == operation_id)
+            .map(|c| c.value().clone())
+            .collect();
+        Ok(conflicts)
+    }
 }

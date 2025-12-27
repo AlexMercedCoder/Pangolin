@@ -9,3 +9,4 @@ ALTER TABLE assets ALTER COLUMN branch_name SET NOT NULL;
 -- Drop and recreate PK to include branch_name
 ALTER TABLE assets DROP CONSTRAINT assets_pkey;
 ALTER TABLE assets ADD PRIMARY KEY (tenant_id, catalog_name, branch_name, namespace_path, name);
+

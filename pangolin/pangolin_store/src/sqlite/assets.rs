@@ -218,12 +218,13 @@ impl SqliteStore {
             
             props.insert("metadata_location".to_string(), new_location);
             
-            let update_result = sqlx::query("UPDATE assets SET properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+            let update_result = sqlx::query("UPDATE assets SET properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
                 .bind(serde_json::to_string(&props)?)
                 .bind(tenant_id.to_string())
                 .bind(catalog_name)
                 .bind(&namespace_path)
                 .bind(&table)
+                .bind(&branch_name)
                 .execute(&mut *tx)
                 .await?;
                 

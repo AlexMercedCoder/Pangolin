@@ -153,13 +153,19 @@ from pyiceberg.catalog import load_catalog
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "http://localhost:8080/api/v1/iceberg/default", 
+        "uri": "http://localhost:8080/v1/default/", 
         "type": "rest",
-        "credential": "<service_user_id>:<service_user_api_key>",
-        "oauth2-server-uri": "http://localhost:8080/v1/rest/v1/oauth/tokens",
+        "credential": "service_user_uuid:service_user_api_key",
+        "oauth2-server-uri": "http://localhost:8080/v1/default/v1/oauth/tokens",
+        "scope": "catalog"
     }
 )
 ```
+
+> [!NOTE]
+> *   **URI Suffix**: Ensure your `uri` ends with a trailing slash `/`.
+> *   **Auth Endpoint**: `oauth2-server-uri` must be the full path: `{base_url}/v1/{catalog_name}/v1/oauth/tokens`. Pangolin also supports the `/api/v1/iceberg/{catalog_name}/v1/oauth/tokens` prefix for compatibility.
+> *   **Credential Format**: Must be `client_id:client_secret` (UUID:API_Key).
 
 ### Option 2: Using an Existing Token (Temporary)
 

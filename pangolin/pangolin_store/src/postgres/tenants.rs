@@ -7,17 +7,9 @@ use sqlx::Row;
 impl PostgresStore {
     // Tenant Operations
     pub async fn create_tenant(&self, tenant: Tenant) -> Result<()> {
-        // DB has status, created_at, updated_at which are not in Tenant model?
-        // We should insert default values or values from properties if mapped.
-        // For now, insert "Active" and current time if not provided by model, 
-        // essentially ignoring them from the model input but maintaining DB integrity.
-        
-        sqlx::query("INSERT INTO tenants (id, name, status, created_at, updated_at, properties) VALUES ($1, $2, $3, $4, $5, $6)")
+        sqlx::query("INSERT INTO tenants (id, name, properties) VALUES ($1, $2, $3)")
             .bind(tenant.id)
             .bind(tenant.name)
-            .bind("Active") // Default status
-            .bind(chrono::Utc::now()) // Default created_at
-            .bind(chrono::Utc::now()) // Default updated_at
             .bind(serde_json::to_value(&tenant.properties)?)
             .execute(&self.pool)
             .await?;
@@ -71,11 +63,7 @@ impl PostgresStore {
             bind_count += 1;
         }
 
-        // Always update updated_at
-        set_clauses.push(format!("updated_at = ${}", bind_count));
-        bind_count += 1;
-
-        if set_clauses.len() == 1 { // Only updated_at
+        if set_clauses.is_empty() {
              return self.get_tenant(tenant_id).await?
                 .ok_or_else(|| anyhow::anyhow!("Tenant not found"));
         }
@@ -90,7 +78,6 @@ impl PostgresStore {
         if let Some(properties) = &updates.properties {
             q = q.bind(serde_json::to_value(properties)?);
         }
-        q = q.bind(chrono::Utc::now());
         q = q.bind(tenant_id);
 
         let row: sqlx::postgres::PgRow = q.fetch_one(&self.pool).await?;

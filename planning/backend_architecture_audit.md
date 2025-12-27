@@ -136,10 +136,10 @@ iceberg/
 
 ---
 
-### 6. **CLI Admin Handlers** (`pangolin_cli_admin/src/handlers.rs`)
-- **Current Size**: 1,786 lines, 74 KB
-- **Functions**: 75 handler functions
-- **Complexity**: **HIGH**
+### 6. **CLI Admin Handlers** (`pangolin_cli_admin/src/handlers/`)
+- **Status**: ✅ **FULLY MODULARIZED** (Dec 26, 2025)
+- **Structure**: Broken into 14 domain-specific modules
+- **Complexity**: ✅ **LOW**
 
 **Issues:**
 - All CLI commands in single file
@@ -357,5 +357,5 @@ The Pangolin backend has grown significantly and would greatly benefit from modu
 3. ✅ **COMPLETE**: MemoryStore refactoring
 4. ✅ **COMPLETE**: MongoStore refactoring
 5. ✅ **COMPLETE**: Iceberg handlers refactoring
-6. 💡 **TODO**: CLI handlers refactoring (See [modularization_plan_cli.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/planning/modularization_plan_cli.md))
+6. ✅ **COMPLETE**: CLI handlers refactoring (See [modularization_plan_cli.md](file:///home/alexmerced/development/personal/Personal/2026/pangolin/planning/modularization_plan_cli.md))
 7. Document the modular pattern for future development

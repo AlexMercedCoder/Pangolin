@@ -71,9 +71,15 @@ impl MemoryStore {
                 let namespace_parts: Vec<String> = parts[0..parts.len()-1].iter().map(|s| s.to_string()).collect();
 
                 // Get asset from source
-                if let Some(asset) = self.get_asset_internal(tenant_id, catalog_name, Some(source_branch_name.clone()), namespace_parts.clone(), asset_name).await? {
+                if let Some(asset) = self.get_asset_internal(tenant_id, catalog_name, Some(source_branch_name.clone()), namespace_parts.clone(), asset_name.clone()).await? {
+                    tracing::info!("MemoryStore: Merging asset {} from {} to {}. Location: {:?}", asset_name, source_branch_name, target_branch_name, asset.properties.get("metadata_location"));
                     // Write to target
                     self.create_asset_internal(tenant_id, catalog_name, Some(target_branch_name.clone()), namespace_parts.clone(), asset).await?;
+                    
+                    // Verify
+                    if let Some(updated) = self.get_asset_internal(tenant_id, catalog_name, Some(target_branch_name.clone()), namespace_parts.clone(), asset_name.clone()).await? {
+                         tracing::info!("MemoryStore: VERIFICATION: Asset {} on {} is now at {:?}", asset_name, target_branch_name, updated.properties.get("metadata_location"));
+                    }
                 
                     // Ensure branch exists
                     let mut branch = self.get_branch_internal(tenant_id, catalog_name, target_branch_name.clone()).await?

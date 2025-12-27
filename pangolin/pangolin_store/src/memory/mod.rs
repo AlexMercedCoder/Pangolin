@@ -413,6 +413,10 @@ impl CatalogStore for MemoryStore {
     async fn get_merge_conflict(&self, conflict_id: Uuid) -> Result<Option<pangolin_core::model::MergeConflict>> {
         self.get_merge_conflict_internal(conflict_id).await
     }
+
+    async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        self.list_merge_conflicts_internal(operation_id).await
+    }
     
     // Federated catalog operations
     async fn get_federated_catalog_stats(&self, tenant_id: Uuid, catalog_name: &str) -> Result<SyncStats> {

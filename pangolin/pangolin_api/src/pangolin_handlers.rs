@@ -137,6 +137,7 @@ pub async fn create_branch(
 
     let scope = PermissionScope::Catalog { catalog_id: catalog.id };
     
+    // Check permission
     match crate::authz::check_permission(&store, &session, &required_action, &scope).await {
         Ok(true) => (),
         Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
@@ -150,15 +151,13 @@ pub async fn create_branch(
     // 2. If assets are specified, copy them from `from_branch`.
     
     let mut branch_assets = vec![];
+    tracing::info!("create_branch called for branch: {}, from: {}", payload.name, from_branch);
+    
+    // ...
 
     if let Some(assets_to_copy) = &payload.assets {
+        tracing::info!("Explicit asset list provided: {} assets", assets_to_copy.len());
         for asset_name in assets_to_copy {
-            // We need the namespace for the asset. 
-            // The current API `CreateBranchRequest` only lists asset names, but assets are scoped by namespace.
-            // This is a limitation. The user request said "specified tables".
-            // Assuming for now that `assets` contains "namespace.table" strings or we need to change the request to be more structured.
-            // Let's assume "namespace.table" format for simplicity in this MVP.
-            
             let parts: Vec<&str> = asset_name.split('.').collect();
             if parts.len() < 2 {
                 continue; // Skip invalid format
@@ -168,18 +167,38 @@ pub async fn create_branch(
             
             // Get asset from source branch
             if let Ok(Some(asset)) = store.get_asset(tenant_id, catalog_name, Some(from_branch.to_string()), namespace_parts.clone(), table_name.clone()).await {
-                // Create asset in new branch
-                if let Ok(_) = store.create_asset(tenant_id, catalog_name, Some(payload.name.clone()), namespace_parts, asset).await {
+                // Create asset in new branch with NEW ID to avoid unique constraint violation
+                let mut new_asset = asset.clone();
+                new_asset.id = uuid::Uuid::new_v4();
+                if let Ok(_) = store.create_asset(tenant_id, catalog_name, Some(payload.name.clone()), namespace_parts, new_asset).await {
                     branch_assets.push(asset_name.clone());
                 }
             }
         }
     } else {
-        // If no assets specified, maybe we copy ALL assets? 
-        // Or create an empty branch?
-        // The user said "a branch shouldn't apply to the whole catalog but only to specified tables".
-        // This implies if you don't specify tables, you might get an empty branch or it's an error?
-        // Let's assume empty branch if None.
+        tracing::info!("No explicit assets. Auto-propagating from {}", from_branch);
+        // ...
+        if let Ok(namespaces) = store.list_namespaces(tenant_id, catalog_name, None).await {
+            tracing::info!("Found {} namespaces", namespaces.len());
+            for ns in namespaces {
+                if let Ok(assets) = store.list_assets(tenant_id, catalog_name, Some(from_branch.to_string()), ns.name.clone()).await {
+                    tracing::info!("Found {} assets in namespace {:?} on branch {}", assets.len(), ns.name, from_branch);
+                    for asset in assets {
+                        let mut new_asset = asset.clone();
+                        new_asset.id = uuid::Uuid::new_v4();
+                        match store.create_asset(tenant_id, catalog_name, Some(payload.name.clone()), ns.name.clone(), new_asset.clone()).await {
+                            Ok(_) => {
+                                tracing::info!("Copied asset {} to branch {}", asset.name, payload.name);
+                                branch_assets.push(format!("{}.{}", ns.name.join("."), asset.name));
+                            },
+                            Err(e) => tracing::error!("Failed to copy asset {}: {}", asset.name, e),
+                        }
+                    }
+                } else {
+                    tracing::warn!("Failed to list assets in namespace {:?}", ns.name);
+                }
+            }
+        }
     }
 
     let branch = Branch {
@@ -334,7 +353,7 @@ pub async fn merge_branch(
     }
 
     // No conflicts - proceed with merge
-    match store.merge_branch(tenant_id, catalog_name, payload.source_branch.clone(), payload.target_branch.clone()).await {
+    match store.merge_branch(tenant_id, catalog_name, payload.target_branch.clone(), payload.source_branch.clone()).await {
         Ok(_) => {
             // Complete the merge operation
             let commit_id = uuid::Uuid::new_v4(); // In real implementation, get actual commit ID
@@ -349,11 +368,13 @@ pub async fn merge_branch(
                 None
             )).await;
             
-            (StatusCode::OK, Json(serde_json::json!({
-                "status": "merged",
-                "operation_id": operation.id,
-                "commit_id": commit_id
-            }))).into_response()
+            // Return full updated operation object to satisfy SDK Pydantic model
+            let mut result_op = operation.clone();
+            result_op.status = pangolin_core::model::MergeStatus::Completed;
+            result_op.result_commit_id = Some(commit_id);
+            result_op.completed_at = Some(chrono::Utc::now());
+
+            (StatusCode::OK, Json(result_op)).into_response()
         },
         Err(e) => {
             let _ = store.abort_merge_operation(operation.id).await;
@@ -718,6 +739,17 @@ pub async fn create_catalog(
             };
             if let Err(e) = store.create_namespace(tenant_id, &catalog.name, ns).await {
                 tracing::warn!("Failed to create default namespace for catalog {}: {}", catalog.name, e);
+            }
+
+            // Create 'main' branch
+             let main_branch = pangolin_core::model::Branch {
+                name: "main".to_string(),
+                head_commit_id: None,
+                branch_type: pangolin_core::model::BranchType::Ingest,
+                assets: vec![],
+             };
+            if let Err(e) = store.create_branch(tenant_id, &catalog.name, main_branch).await {
+                tracing::warn!("Failed to create main branch for catalog {}: {}", catalog.name, e);
             }
 
             // Audit Log

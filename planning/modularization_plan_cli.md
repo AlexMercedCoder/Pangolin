@@ -1,4 +1,10 @@
-# CLI Admin Modularization Plan
+# CLI Admin Modularization Plan [COMPLETED]
+
+> [!NOTE]
+> This plan was successfully executed on Dec 26, 2025. The code now resides in `pangolin_cli_admin/src/handlers/`.
+
+## archival
+This document is kept for historical reference. See `pangolin_cli_admin/src/handlers/` for the current implementation.
 
 ## Goal
 Refactor the monolithic `pangolin_cli_admin/src/handlers.rs` (~1,800 lines) into a modular structure. This file contains the logic for over 75 CLI commands, making it difficult to navigate and maintain.

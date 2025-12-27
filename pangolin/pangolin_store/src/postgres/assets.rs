@@ -42,13 +42,14 @@ impl PostgresStore {
                 _ => pangolin_core::model::AssetType::IcebergTable,
             };
             
-            Ok(Some(Asset {
+            let a = Asset {
                 id: row.get("id"),
                 name: row.get("name"),
                 kind,
                 location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
-            }))
+            };
+            Ok(Some(a))
         } else {
             Ok(None)
         }
@@ -104,13 +105,14 @@ impl PostgresStore {
                 _ => pangolin_core::model::AssetType::IcebergTable,
             };
             
-            assets.push(Asset {
+            let a = Asset {
                 id: row.get("id"),
                 name: row.get("name"),
                 kind,
                 location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
-            });
+            };
+            assets.push(a);
         }
         Ok(assets)
     }

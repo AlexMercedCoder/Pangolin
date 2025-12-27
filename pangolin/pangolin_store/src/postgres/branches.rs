@@ -119,6 +119,29 @@ impl PostgresStore {
         if result.rows_affected() == 0 {
             return Err(anyhow::anyhow!("Target branch not found"));
         }
+
+        // 3. Sync Assets (Fast-Forward Merge)
+        // Copy assets from source_branch to target_branch, overwriting target assets if they exist.
+        // We use ON CONFLICT based on the PK (tenant_id, catalog_name, branch_name, namespace_path, name).
+        sqlx::query(
+            "INSERT INTO assets (tenant_id, catalog_name, branch_name, namespace_path, name, asset_type, metadata_location, properties, id)
+             SELECT tenant_id, catalog_name, $1, namespace_path, name, asset_type, metadata_location, properties, gen_random_uuid()
+             FROM assets
+             WHERE tenant_id = $2 AND catalog_name = $3 AND branch_name = $4
+             ON CONFLICT (tenant_id, catalog_name, branch_name, namespace_path, name)
+             DO UPDATE SET
+                metadata_location = EXCLUDED.metadata_location,
+                properties = EXCLUDED.properties,
+                asset_type = EXCLUDED.asset_type,
+                id = EXCLUDED.id"
+        )
+        .bind(&target_branch)
+        .bind(tenant_id)
+        .bind(catalog_name)
+        .bind(&source_branch)
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 }

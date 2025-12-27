@@ -79,7 +79,28 @@ For programmatic access (CI/CD, ETL, automation), use **Service Users**.
 
 ## 🐍 Connecting with PyIceberg
 
-### Option A: Manual Token (Access Token)
+### Option A: Standard OAuth2 Credential Flow (Recommended)
+Use a Service User's `client_id` (UUID) and `client_secret` (API Key) for automated authentication.
+
+```python
+from pyiceberg.catalog import load_catalog
+
+catalog = load_catalog(
+    "pangolin",
+    **{
+        "uri": "http://localhost:8080/v1/default/",
+        "type": "rest",
+        "credential": "<service_user_uuid>:<api_key>",
+        "oauth2-server-uri": "http://localhost:8080/v1/default/v1/oauth/tokens",
+        "scope": "catalog"
+    }
+)
+```
+
+> [!NOTE]
+> The `oauth2-server-uri` must be the full path. Pangolin supports paths starting with both `/v1/...` and `/api/v1/iceberg/...`.
+
+### Option B: Manual Token (Access Token)
 If you have a JWT from a previous login:
 ```python
 from pyiceberg.catalog import load_catalog
@@ -87,8 +108,7 @@ from pyiceberg.catalog import load_catalog
 catalog = load_catalog(
     "pangolin",
     **{
-        "uri": "http://localhost:8080",
-        "prefix": "analytics",
+        "uri": "http://localhost:8080/v1/default/",
         "token": "YOUR_JWT_TOKEN",
     }
 )

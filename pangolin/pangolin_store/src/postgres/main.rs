@@ -1075,6 +1075,7 @@ impl CatalogStore for PostgresStore {
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>> {
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
         
+        // Postgres stores namespace_path as TEXT[]
         let row = sqlx::query("SELECT metadata_location FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4 AND name = $5")
             .bind(tenant_id)
             .bind(catalog_name)
@@ -1092,33 +1093,30 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn update_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String, expected_location: Option<String>, new_location: String) -> Result<()> {
-        
-        tracing::info!("update_metadata_location: tenant_id={}, catalog={}, namespace={:?}, table={}, expected={:?}, new={}", 
-            tenant_id, catalog_name, namespace, table, expected_location, new_location);
-
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
         
         let result = if let Some(expected) = expected_location {
             // Update only if current location matches expected
-            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND branch_name = $4 AND namespace_path = $5 AND name = $6 AND metadata_location = $7")
-                .bind(new_location)
+            // Sync properties JSONB as well
+            sqlx::query("UPDATE assets SET metadata_location = $1, properties = jsonb_set(COALESCE(properties, '{}'::jsonb), '{metadata_location}', to_jsonb($1::text)) WHERE tenant_id = $2 AND catalog_name = $3 AND branch_name = $4 AND namespace_path = $5 AND name = $6 AND metadata_location = $7")
+                .bind(&new_location)
                 .bind(tenant_id)
                 .bind(catalog_name)
                 .bind(&branch_name)
                 .bind(&namespace)
-                .bind(table)
-                .bind(expected)
+                .bind(&table)
+                .bind(&expected)
                 .execute(&self.pool)
                 .await?
         } else {
             // Update if no metadata_location exists (create or first commit)
-            sqlx::query("UPDATE assets SET metadata_location = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND branch_name = $4 AND namespace_path = $5 AND name = $6 AND metadata_location IS NULL")
-                .bind(new_location)
+            sqlx::query("UPDATE assets SET metadata_location = $1, properties = jsonb_set(COALESCE(properties, '{}'::jsonb), '{metadata_location}', to_jsonb($1::text)) WHERE tenant_id = $2 AND catalog_name = $3 AND branch_name = $4 AND namespace_path = $5 AND name = $6 AND metadata_location IS NULL")
+                .bind(&new_location)
                 .bind(tenant_id)
                 .bind(catalog_name)
                 .bind(&branch_name)
                 .bind(&namespace)
-                .bind(table)
+                .bind(&table)
                 .execute(&self.pool)
                 .await?
         };

@@ -117,6 +117,29 @@ impl SqliteStore {
         if result.rows_affected() == 0 {
             return Err(anyhow::anyhow!("Target branch not found"));
         }
+
+        // 3. Sync Assets (Fast-Forward Merge)
+        // Copy assets from source_branch to target_branch, overwriting target assets if they exist.
+        // using ON CONFLICT based on idx_assets_isolation (tenant_id, catalog_name, branch_name, namespace_path, name)
+        sqlx::query(
+            "INSERT INTO assets (tenant_id, catalog_name, branch_name, namespace_path, name, asset_type, metadata_location, properties, id)
+             SELECT tenant_id, catalog_name, ?, namespace_path, name, asset_type, metadata_location, properties, (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6))))
+             FROM assets
+             WHERE tenant_id = ? AND catalog_name = ? AND branch_name = ?
+             ON CONFLICT (tenant_id, catalog_name, branch_name, namespace_path, name)
+             DO UPDATE SET
+                metadata_location = excluded.metadata_location,
+                properties = excluded.properties,
+                asset_type = excluded.asset_type,
+                id = excluded.id"
+        )
+        .bind(&target_branch)
+        .bind(tenant_id.to_string())
+        .bind(catalog_name)
+        .bind(&source_branch)
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 }

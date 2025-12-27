@@ -4,9 +4,10 @@
 This audit tracks feature implementation across Pangolin's four backend stores.
 **Status as of Dec 26, 2025**:
 - ✅ **Backend Parity Achieved**: All stores (Memory, Postgres, Mongo, SQLite) implement the full trait surface area.
-- ❌ **Client Gaps Remain**: CLI and PyPangolin SDKs still need updates for Service Users, System Settings, and Audit Logs.
+- ✅ **Client Parity Achieved**: CLI and PyPangolin SDKs updated for Service Users, System Settings, and Audit Logs.
+- ⚠️ **Minor Gap**: PyPangolin still needs Merge Operation support.
 
-**Critical Finding**: The Backend API is now robust and unified. Focus should shift to Client tools (CLI/SDK).
+**Critical Finding**: The Backend API is now robust and unified. Service User, System Settings, and Audit Log support is propagated to all clients.
 
 ---
 
@@ -18,10 +19,10 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 | **User Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Role Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Service Users** | ✅ | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **System Settings** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **Audit Logs (Enhanced)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **System Settings** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Audit Logs (Enhanced)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Token Management** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Merge Operations** | ✅ | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ⚠️ | ❌ |
+| **Merge Operations** | ✅ | ✅ | ✅ ✓ | ✅ | ✅ | ✅ | ⚠️ | ✅ |
 | **Business Metadata** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 **Legend**: ✅ = Complete, ✅ ✓ = Complete with Regression Tests, ❌ = Missing, ⚠️ = Partial
@@ -108,13 +109,13 @@ This audit tracks feature implementation across Pangolin's four backend stores.
 - ✅ **CLI**: **IMPLEMENTED** - Commands available
 
 - ✅ **UI**: No changes needed
-- ❌ **pypangolin**: **NEEDS IMPLEMENTATION** - No client methods exist
+- ✅ **pypangolin**: **IMPLEMENTED** - `SystemClient` exists
 
 **Action Required**:
 1. ~~Implement `system_settings` table in PostgreSQL migration~~ ✅ DONE
 2. ~~Implement 2 trait methods in `PostgresStore` (get, update)~~ ✅ DONE
 3. ~~Implement CLI commands for system settings~~ ✅ DONE
-4. **NEW**: Add `SystemSettingsClient` to pypangolin
+4. ~~Add `SystemSettingsClient` to pypangolin~~ ✅ DONE
 
 ---
 
@@ -165,12 +166,12 @@ ALTER TABLE audit_logs RENAME COLUMN resource TO resource_name;
 - ✅ **utoipa/OpenAPI**: No regeneration needed
 - ✅ **CLI**: Already implemented
 - ✅ **UI**: No changes needed
-- ❌ **pypangolin**: **NEEDS IMPLEMENTATION** - No audit log client exists
+- ✅ **pypangolin**: **IMPLEMENTED** - `AuditClient` updated with new filters
 
 **Action Required**:
 1. ~~Create migration to update `audit_logs` table schema~~ ✅ DONE
 2. ~~Update `log_audit_event` and `list_audit_events` in `PostgresStore`~~ ✅ DONE (methods were already updated)
-3. **NEW**: Add `AuditLogClient` to pypangolin
+3. ~~Add `AuditLogClient` to pypangolin~~ ✅ DONE
 
 ---
 

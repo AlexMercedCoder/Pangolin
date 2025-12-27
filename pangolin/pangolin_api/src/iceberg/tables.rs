@@ -336,13 +336,15 @@ pub async fn create_table(
                  return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write metadata").into_response();
             }
 
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::success(
                 tenant_id,
+                Some(session.user_id),
                 session.username.clone(),
-                "create_table".to_string(),
+                pangolin_core::audit::AuditAction::CreateTable,
+                pangolin_core::audit::ResourceType::Table,
+                Some(asset.id),
                 format!("{}/{}/{}", catalog_name, ns_name, tbl_name),
-                Some(location.clone())
-            )).await;
+            ).with_metadata(serde_json::json!({ "location": location.clone() }))).await;
 
             let credentials = match store.get_catalog(tenant_id, catalog_name.clone()).await {
                 Ok(Some(c)) => {
@@ -667,13 +669,15 @@ pub async fn update_table(
 
         match store.update_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone(), current_metadata_location.clone(), new_metadata_location.clone()).await {
             Ok(_) => {
-                let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+                let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::success(
                     tenant_id,
+                    Some(session.user_id),
                     session.username.clone(),
-                    "update_table".to_string(),
+                    pangolin_core::audit::AuditAction::UpdateTable,
+                    pangolin_core::audit::ResourceType::Table,
+                    Some(asset.id),
                     format!("{}/{}/{}", catalog_name, namespace, table_name),
-                    Some(new_metadata_location.clone())
-                )).await;
+                ).with_metadata(serde_json::json!({ "new_metadata_location": new_metadata_location.clone() }))).await;
 
                 return (StatusCode::OK, Json(TableResponse::new(
                     Some(new_metadata_location.clone()),
@@ -740,12 +744,14 @@ pub async fn rename_table(
 
     match store.rename_asset(tenant_id, &catalog_name, branch, source_ns.clone(), source_name.clone(), dest_ns.clone(), dest_name.clone()).await {
         Ok(_) => {
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::success(
                 tenant_id,
+                Some(session.user_id),
                 session.username.clone(),
-                "rename_table".to_string(),
+                pangolin_core::audit::AuditAction::RenameTable,
+                pangolin_core::audit::ResourceType::Table,
+                None, // Cannot determine asset ID easily without lookup
                 format!("{}/{}.{} -> {}.{}", catalog_name, source_ns.join("."), source_name, dest_ns.join("."), dest_name),
-                None
             )).await;
             
             StatusCode::NO_CONTENT.into_response()

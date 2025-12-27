@@ -253,8 +253,8 @@ pub async fn complete_merge(
     match store.merge_branch(
         operation.tenant_id,
         &operation.catalog_name,
-        operation.source_branch.clone(),
         operation.target_branch.clone(),
+        operation.source_branch.clone(),
     ).await {
         Ok(_) => {
             // TODO: merge_branch should return the commit ID

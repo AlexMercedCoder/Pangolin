@@ -19,19 +19,29 @@ use crate::auth::Claims;
 use crate::error::ApiError;
 use crate::iceberg::AppState;
 
-#[derive(Deserialize)]
+use utoipa::ToSchema;
+
+#[derive(Deserialize, ToSchema)]
 pub struct OAuthTokenRequest {
+    #[schema(example = "client_credentials")]
     grant_type: String,
+    #[schema(example = "a1b2c3d4-e5f6-7890-1234-567890abcdef")]
     client_id: String,
+    #[schema(example = "pgl_...")]
     client_secret: String,
+    #[schema(example = "catalog")]
     scope: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct OAuthTokenResponse {
+    #[schema(example = "eyJhbGciOiJIUzI1Ni...")]
     access_token: String,
+    #[schema(example = "Bearer")]
     token_type: String,
+    #[schema(example = 3600)]
     expires_in: u64,
+    #[schema(example = "urn:ietf:params:oauth:token-type:access_token")]
     issued_token_type: String,
 }
 
@@ -45,6 +55,18 @@ pub struct OAuthTokenResponse {
 /// - `client_secret` -> Service User API Key
 /// 
 /// If valid, it returns a standard Pangolin JWT signed by the server key.
+#[utoipa::path(
+    post,
+    path = "/v1/{prefix}/v1/oauth/tokens",
+    operation_id = "oauth_token",
+    request_body(content = OAuthTokenRequest, content_type = "application/x-www-form-urlencoded"),
+    responses(
+        (status = 200, description = "Token issued successfully", body = OAuthTokenResponse),
+        (status = 400, description = "Invalid grant_type or format"),
+        (status = 401, description = "Invalid client credentials")
+    ),
+    tag = "Authentication"
+)]
 pub async fn handle_oauth_token(
     State(store): State<AppState>,
     Form(payload): Form<OAuthTokenRequest>,

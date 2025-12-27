@@ -65,7 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_namespaces_tenant_catalog ON namespaces(tenant_id
 
 -- Assets (Added ID)
 CREATE TABLE IF NOT EXISTS assets (
-    id TEXT PRIMARY KEY,
+    id TEXT,
     tenant_id TEXT NOT NULL,
     catalog_name TEXT NOT NULL,
     namespace_path TEXT NOT NULL, -- JSON array

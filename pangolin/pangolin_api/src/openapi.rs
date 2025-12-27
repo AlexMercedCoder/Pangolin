@@ -180,6 +180,9 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         iceberg::tables::perform_maintenance,
         iceberg::tables::table_exists,
         iceberg::namespaces::list_namespaces_tree,
+        
+        // Iceberg OAuth
+        iceberg::oauth::handle_oauth_token,
 
         // Signing / Credential Vending
         signing_handlers::get_table_credentials,
@@ -218,6 +221,9 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             federated_catalog_handlers::CreateFederatedCatalogRequest, federated_catalog_handlers::FederatedCatalogResponse,
             service_user_handlers::CreateServiceUserRequest, service_user_handlers::UpdateServiceUserRequest,
             oauth_handlers::OAuthCallback, oauth_handlers::AuthorizeParams,
+            
+            // Iceberg OAuth types
+            iceberg::oauth::OAuthTokenRequest, iceberg::oauth::OAuthTokenResponse,
             
             // Branch/Tag/Merge types
             pangolin_handlers::CreateBranchRequest, pangolin_handlers::ListBranchParams, pangolin_handlers::MergeBranchRequest, pangolin_handlers::BranchResponse,

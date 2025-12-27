@@ -8,8 +8,17 @@ use futures::stream::TryStreamExt;
 
 impl MongoStore {
     pub async fn create_tenant_internal(&self, tenant: Tenant) -> Result<()> {
-        self.tenants().insert_one(tenant).await?;
-        Ok(())
+        tracing::info!("DEBUG_MONGO: create_tenant_internal: {:?}", tenant.id);
+        match self.tenants().insert_one(tenant).await {
+            Ok(_) => {
+                tracing::info!("DEBUG_MONGO: Tenant created successfully");
+                Ok(())
+            },
+            Err(e) => {
+                tracing::error!("DEBUG_MONGO: Failed to create tenant: {:?}", e);
+                Err(anyhow::anyhow!("Mongo Error: {:?}", e))
+            }
+        }
     }
 
     pub async fn get_tenant(&self, id: Uuid) -> Result<Option<Tenant>> {
