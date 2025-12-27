@@ -17,6 +17,8 @@ services:
       retries: 3
     volumes:
       - minio_data:/data
+    networks:
+      demo:
 
   createbuckets:
     image: minio/mc
@@ -27,9 +29,12 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb myminio/warehouse;
+      /usr/bin/mc mb myminio/bucket;
       /usr/bin/mc anonymous set public myminio/warehouse;
       exit 0;
       "
+    networks:
+      demo:
 
   pangolin-api:
     image: alexmerced/pangolin-api:latest
@@ -54,6 +59,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    networks:
+      demo:
 
   pangolin-ui:
     image: alexmerced/pangolin-ui:latest
@@ -64,6 +71,8 @@ services:
       - ORIGIN=http://localhost:3000
     depends_on:
       - pangolin-api
+    networks:
+      demo:
 
   datanotebook:
     image: alexmerced/datanotebook:latest
@@ -74,7 +83,12 @@ services:
     depends_on:
       - pangolin-api
       - minio
+    networks:
+      demo:
 
 volumes:
   minio_data:
   sqlite_data:
+
+networks:
+  demo:

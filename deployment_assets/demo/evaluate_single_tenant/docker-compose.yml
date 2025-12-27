@@ -20,31 +20,7 @@ services:
     volumes:
       - minio_data:/data
     networks:
-      default:
-        aliases:
-          - warehouse.minio
-
-  mongo:
-    image: mongo:latest
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: pangolin
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
+      demo:
 
   createbuckets:
     image: minio/mc
@@ -55,9 +31,12 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb myminio/warehouse;
+      /usr/bin/mc mb myminio/bucket;
       /usr/bin/mc anonymous set public myminio/warehouse;
       exit 0;
       "
+    networks:
+      demo:
 
   pangolin-api:
     image: alexmerced/pangolin-api:latest
@@ -74,6 +53,8 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    networks:
+      demo:
 
   pangolin-ui:
     image: alexmerced/pangolin-ui:latest
@@ -84,6 +65,8 @@ services:
       - ORIGIN=http://localhost:3000
     depends_on:
       - pangolin-api
+    networks:
+      demo:
 
   datanotebook:
     image: alexmerced/datanotebook:latest
@@ -94,8 +77,8 @@ services:
     depends_on:
       - pangolin-api
       - minio
+    networks:
+      demo:
 
-volumes:
-  minio_data:
-  mongo_data:
-  postgres_data:
+networks:
+  demo:
