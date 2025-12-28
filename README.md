@@ -56,44 +56,57 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 ## 📚 Documentation Index
 
 ### 🏁 1. Getting Started
-- **[Installation & Setup](docs/getting-started/getting_started.md)** - Get running in 5 minutes.
-- **[Auth Modes](docs/authentication.md)** - Understanding Auth vs No-Auth and OAuth.
-- **[Service Users](docs/features/service_users.md)** - API keys for programmatic access.
-- **[Multi-Tenancy](docs/features/multi_tenancy.md)** - Understanding isolation.
-- **[User Scopes](docs/getting-started/getting_started.md#user-scopes)** - Roles: Root, Tenant Admin, and Tenant User.
-- **[Configuration](docs/getting-started/configuration.md)** - Server configuration options.
-- **[Environment Variables](docs/environment-variables.md)** - **Complete reference for all environment variables** (DATABASE_URL, storage backends, S3/MinIO, authentication, etc.)
+*Quickest path from zero to a running lakehouse.*
+- **[Onboarding Index](docs/getting-started/README.md)** - **Start Here!**
+- **[Installation Guide](docs/getting-started/getting_started.md)** - Run Pangolin in 5 minutes.
+- **[Auth Modes](docs/getting-started/auth-mode.md)** - Understanding Auth vs No-Auth.
+- **[Deployment Guide](docs/getting-started/deployment.md)** - Local, Docker, and Production setup.
+- **[Environment Variables](docs/getting-started/env_vars.md)** - Complete system configuration reference.
 
 ### 🏗️ 2. Core Infrastructure
-- **[Warehouses](docs/warehouse/README.md)** - Managing S3, Azure, and GCS storage.
-- **[Credential Vending](docs/features/security_vending.md)** - Secure direct-to-storage access.
-- **[Catalogs](docs/features/asset_management.md)** - Creating Local and Federated catalogs.
-- **[Backend Storage](docs/backend_storage/README.md)** - Metadata persistence with Postgres, Mongo, or SQLite.
+*Managing the foundations: storage and metadata.*
+- **[Infrastructure Features](docs/features/README.md)** - Index of all platform capabilities.
+- **[Warehouse Management](docs/warehouse/README.md)** - Configuring S3, Azure, and GCS storage.
+- **[Metadata Backends](docs/backend_storage/README.md)** - Memory, Postgres, MongoDB, and SQLite.
+- **[Asset Management](docs/features/asset_management.md)** - Tables, Views, and CRUD operations.
+- **[Federated Catalogs](docs/features/federated_catalogs.md)** - Proxying external REST catalogs.
 
-### 🧪 3. Data Management (API, CLI, UI)
-- **[Branching & Versioning](docs/features/branch_management.md)** - Git-style workflows and auto-add nuances.
-- **[Permissions & RBAC](docs/permissions.md)** - Asset-level access and cascading grants.
-- **[IAM Roles](docs/features/iam_roles.md)** - Cloud provider integration.
-- **[Business Metadata](docs/features/business_catalog.md)** - Tags, search, and data discovery.
-- **[Audit Logging](docs/features/audit_logs.md)** - Security tracking across all tools.
-- **[Maintenance](docs/features/maintenance.md)** - Snapshots, orphan files, and storage optimization.
+### ⚖️ 3. Governance & Security
+*Multi-tenancy, RBAC, and auditing.*
+- **[Security Concepts](docs/features/security_vending.md)** - Identity and Credential Vending principles.
+- **[Credential Vending (IAM Roles)](docs/features/iam_roles.md)** - Scoped cloud access (STS, SAS, Downscoped).
+- **[Permission System](docs/permissions.md)** - Understanding RBAC and granular grants.
+- **[Service Users](docs/features/service_users.md)** - Programmatic access and API key management.
+- **[Audit Logging](docs/features/audit_logs.md)** - Global action tracking and compliance.
 
-### 🛠️ 4. Tooling & APIs
-- **[CLI Reference](docs/cli/overview.md)** - Full guide for `pangolin-admin` and `pangolin-user`.
-- **[API Reference](docs/api/api_overview.md)** - Iceberg REST and Pangolin Management APIs.
-- **[Management UI](docs/ui/overview.md)** - Visual administration and data discovery.
-- **[Python Client](pypangolin/README.md)** - Official Python library (`pypangolin`).
-- **[Client Setup](docs/getting-started/client_configuration.md)** - Connecting PyIceberg, Spark, and Trino.
+### 🧪 4. Data Life Cycle
+*Git-for-Data and maintenance workflows.*
+- **[Branch Management](docs/features/branch_management.md)** - Working with isolated data environments.
+- **[Merge Operations](docs/features/merge_operations.md)** - The 3-way merge workflow.
+- **[Business Metadata & Discovery](docs/features/business_catalog.md)** - Search, tags, and access requests.
+- **[Maintenance Utilities](docs/features/maintenance.md)** - Snapshot expiration and compaction.
 
-### 📖 5. Best Practices
-- **[Deployment](docs/best-practices/deployment.md)** - Production deployment, Docker, Kubernetes, HA setup.
-- **[Scalability](docs/best-practices/scalability.md)** - Horizontal scaling, database optimization, caching.
-- **[Security](docs/best-practices/security.md)** - Authentication, encryption, audit logging, compliance.
-- **[Permissions Management](docs/best-practices/permissions.md)** - RBAC patterns, least privilege, access control.
-- **[Branch Management](docs/best-practices/branching.md)** - Git-like workflows, merge strategies, conflict resolution.
-- **[Business Metadata](docs/best-practices/metadata.md)** - Metadata strategy, governance, data classification.
-- **[Apache Iceberg](docs/best-practices/iceberg.md)** - Table design, partitioning, schema evolution, performance.
-- **[Generic Assets](docs/best-practices/generic-assets.md)** - Managing ML models, files, media, and artifacts.
+### 🛠️ 5. Interfaces & Integration
+*Connecting tools and using our management layers.*
+- **[Management UI](docs/ui/README.md)** - Visual guide to the administration portal.
+- **[PyPangolin SDK (Official)](pypangolin/README.md)** - Rich Python client with Git-like operations and types.
+- **[PyIceberg Integration](docs/pyiceberg/README.md)** - Native Python client configuration.
+- **[CLI Reference](docs/cli/README.md)** - Documentation for `pangolin-admin` and `pangolin-user`.
+- **[API Reference](docs/api/README.md)** - Iceberg REST and Management API specs.
+
+### 🏗️ 6. Architecture & Internals
+*Deep-dives for developers and contributors.*
+- **[Architecture Overview](docs/architecture/README.md)** - System design and component interaction.
+- **[Data Models](docs/architecture/models.md)** - Understanding the internal schema.
+- **[CatalogStore Trait](docs/architecture/catalog-store-trait.md)** - Extending Pangolin storage.
+- **[Developer Utilities](docs/utilities/README.md)** - Tools for contributors (e.g. OpenAPI generation).
+
+### 🎓 7. Best Practices
+*Production guides and operational wisdom.*
+- **[Best Practices Index](docs/best-practices/README.md)** - Complete guide to operating Pangolin.
+- **[Deployment & Security](docs/best-practices/deployment.md)** - Production checklists.
+- **[Scalability](docs/best-practices/scalability.md)** - Tuning for high performance.
+- **[Iceberg Tuning](docs/best-practices/iceberg.md)** - Optimizing table layout and compaction.
 
 ---
 
