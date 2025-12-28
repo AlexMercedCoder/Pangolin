@@ -48,6 +48,24 @@ While not a custom cache, all persistent stores utilize connection pooling:
 - **SQLite**: `sqlx::SqlitePool`
 - **MongoDB**: `mongodb::Client` internal pooling
 
+## 4. Wrapper Caching (`CachedCatalogStore`)
+**Location**: `pangolin_api/src/cached_store.rs`
+**Backend**: `moka`
+**Wrapper Pattern**: Implements the `CatalogStore` trait and wraps another store instance.
+
+To reduce database load for high-frequency "Read Configuration" paths, the `CachedCatalogStore` wraps the primary storage backend.
+
+### Caching Logic
+- **Scope**: Currently caches `get_warehouse` calls (critical for every STS/Signer request).
+- **Key**: `(TenantId, WarehouseName)` tuple.
+- **Strategy**: Read-Through / Write-Update / Delete-Invalidate.
+  - **Read**: Check cache -> Return if hit -> Fetch from inner DB -> Insert to cache -> Return.
+  - **Update**: Update inner DB -> Update cache with new value immediately.
+  - **Delete**: Invalidate cache key -> Delete from inner DB.
+
+### Future Expansion
+- This pattern establishes the architectural precedent for caching `get_tenant`, `get_user`, and other high-read, low-write entities.
+
 ## Future Caching Plans
 - **Manifest Caching**: Parsing Avro manifest files is CPU intensive. Future optimizations may cache the parsed `ManifestFile` structs rather than just the raw bytes.
 - **Distributed Cache**: For horizontal scaling, replacing in-memory `moka` with Redis.

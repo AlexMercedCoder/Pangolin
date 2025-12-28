@@ -79,6 +79,24 @@ Low-level object storage cleanup.
 - `get_system_settings(tenant_id: Uuid) -> Result<SystemSettings>`
 - `update_system_settings(tenant_id: Uuid, settings: SystemSettings) -> Result<SystemSettings>`
 
+### 10. Federated Catalog Operations
+- `sync_federated_catalog(tenant_id: Uuid, catalog_name: &str) -> Result<()>`
+- `get_federated_catalog_stats(tenant_id: Uuid, catalog_name: &str) -> Result<SyncStats>`
+
+### 11. Token Lifecycle
+- `revoke_token(token_id: Uuid, expires_at: DateTime<Utc>, reason: Option<String>) -> Result<()>`
+- `is_token_revoked(token_id: Uuid) -> Result<bool>`
+- `cleanup_expired_tokens() -> Result<usize>`
+- `list_active_tokens(tenant_id: Uuid, user_id: Option<Uuid>, pagination: Option<PaginationParams>) -> Result<Vec<TokenInfo>>`
+- `store_token(token: TokenInfo) -> Result<()>`
+- `validate_token(token: &str) -> Result<Option<TokenInfo>>`
+
+### 12. Permissions & Roles
+- `create_permission(permission: Permission) -> Result<()>`
+- `revoke_permission(permission_id: Uuid) -> Result<()>`
+- `list_permissions(tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Permission>>`
+- `list_user_permissions(user_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Permission>>`
+
 ---
 
 ## Implementation Requirements

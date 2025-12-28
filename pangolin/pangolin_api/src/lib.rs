@@ -130,6 +130,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // Warehouse Management
         .route("/api/v1/warehouses", get(warehouse_handlers::list_warehouses).post(warehouse_handlers::create_warehouse))
         .route("/api/v1/warehouses/:name", get(warehouse_handlers::get_warehouse).put(warehouse_handlers::update_warehouse).delete(warehouse_handlers::delete_warehouse))
+        .route("/api/v1/warehouses/:name/credentials", get(warehouse_handlers::get_warehouse_credentials))
         // Catalog Management
         .route("/api/v1/catalogs", get(pangolin_handlers::list_catalogs).post(pangolin_handlers::create_catalog))
         .route("/api/v1/catalogs/:name", get(pangolin_handlers::get_catalog).put(pangolin_handlers::update_catalog).delete(pangolin_handlers::delete_catalog))

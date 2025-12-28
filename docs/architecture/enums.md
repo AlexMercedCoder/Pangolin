@@ -31,6 +31,18 @@ Configuration for how cloud credentials are vended.
 
 ---
 
+## Federated Catalogs
+
+### SyncStats
+Statistics returned after a catalog sync operation.
+- `last_synced_at`: Timestamp of last sync.
+- `sync_status`: "Success", "Failed", "Syncing".
+- `tables_synced`: Count of tables synchronized.
+- `namespaces_synced`: Count of namespaces synchronized.
+- `error_message`: Optional error details.
+
+---
+
 ## Identity & Access
 
 ### UserRole

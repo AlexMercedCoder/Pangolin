@@ -16,6 +16,7 @@ This document lists the handler modules responsible for the API implementation, 
 **Files**: 
 - `tenant_handlers.rs`: Create, list, details, delete tenants.
 - `warehouse_handlers.rs`: Configure S3/GCS/Azure storage buckets and vending strategies.
+  - **New in v0.5.0**: `get_warehouse_credentials` for direct integration testing of STS/SAS flows.
 - `asset_handlers.rs`: Generic asset management (Tables, Views, etc.) outside the Iceberg scope.
 
 ## Catalog Management

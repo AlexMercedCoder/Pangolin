@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  localstack:
+    image: localstack/localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,sts,iam
+      - DEFAULT_REGION=us-east-1
+      - DEBUG=1
+    volumes:
+      - ./init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh
+      - ./trust-policy.json:/etc/localstack/init/ready.d/trust-policy.json
+    networks:
+      test-net:
+
+  pangolin-api:
+    image: alexmerced/pangolin-api:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - PANGOLIN_STORE_TYPE=memory
+      - PANGOLIN_NO_AUTH=true
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - S3_ENDPOINT=http://localstack:4566
+    depends_on:
+      localstack:
+        condition: service_started
+    networks:
+      test-net:
+
+networks:
+  test-net:

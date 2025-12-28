@@ -1,5 +1,6 @@
 pub mod memory;
 pub mod signer;
+pub mod aws_utils;
 pub mod postgres;
 pub mod mongo;
 pub mod sqlite;

@@ -11,6 +11,8 @@ The `Signer` trait provides a secure mechanism for Pangolin to vend temporary, d
 The `Credentials` enum encapsulates provider-specific access tokens.
 
 ```rust
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(tag = "type")]
 pub enum Credentials {
     // AWS S3 credentials (STS or Static)
     Aws {
@@ -61,31 +63,14 @@ pub trait Signer: Send + Sync {
 A default implementation of the `Signer` trait is provided for basic setups, though full cloud integrations typically require the `aws-sts`, `azure-oauth`, or `gcp-oauth` feature flags.
 - `prefix`: S3 prefix to scope credentials to (e.g., "warehouse1/catalog1/")
 
-**Returns**: `Result<VendedCredentials>` - Temporary credentials
-
-**VendedCredentials Structure**:
-pub struct VendedCredentials {
-    pub access_key_id: String,
-    pub secret_access_key: String,
-    pub session_token: Option<String>,
-    pub expiration: Option<DateTime<Utc>>,
-}
-```
+**Returns**: `Result<Credentials>`
 
 **Usage**:
 ```rust
-let creds = signer.vend_credentials(
-    &warehouse.storage_config,
-    "warehouse1/catalog1/",
+let creds = store.get_table_credentials(
+    "s3://warehouse1/catalog1/table1"
 ).await?;
-
-// Return to client for direct S3 access
 ```
-
-**Use Cases**:
-- PyIceberg client credential vending
-- Spark/Trino engine access
-- Direct write operations from compute engines
 
 ## Credential Vending Flow
 

@@ -5,6 +5,7 @@ use sqlx::Row;
 use std::collections::HashMap;
 use crate::signer::{Signer, Credentials};
 use pangolin_core::model::VendingStrategy;
+use object_store::aws::AmazonS3Builder;
 
 #[async_trait]
 impl Signer for SqliteStore {
@@ -56,8 +57,14 @@ impl Signer for SqliteStore {
         // 2. Check Vending Strategy
         if let Some(strategy) = vending_strategy {
              match strategy {
-                 VendingStrategy::AwsSts { role_arn: _, external_id: _ } => {
-                     Err(anyhow::anyhow!("AWS STS vending not implemented yet via VendingStrategy in SqliteStore"))
+                 VendingStrategy::AwsSts { role_arn, external_id } => {
+                     let client = crate::aws_utils::create_sts_client(&storage_config).await?;
+                     crate::aws_utils::assume_role(
+                         &client, 
+                         Some(&role_arn), 
+                         external_id.as_deref(), 
+                         "pangolin-sqlite-sts"
+                     ).await
                  }
                  VendingStrategy::AwsStatic { access_key_id, secret_access_key } => {
                      Ok(Credentials::Aws {
@@ -88,72 +95,22 @@ impl Signer for SqliteStore {
              }
         } else {
             // Legacy Logic
-            let access_key = storage_config.get("s3.access-key-id")
-                .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id"))?;
-            let secret_key = storage_config.get("s3.secret-access-key")
-                .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key"))?;
-                
             if use_sts {
-                  // Existing STS Logic restored for backward compatibility
-                  let region = storage_config.get("s3.region")
-                      .map(|s| s.as_str())
-                      .unwrap_or("us-east-1");
-                      
-                  let endpoint = storage_config.get("s3.endpoint")
-                      .map(|s| s.as_str());
-  
-                  let creds = aws_credential_types::Credentials::new(
-                      access_key.to_string(),
-                      secret_key.to_string(),
-                      None,
-                      None,
-                      "legacy_provider"
-                  );
-                  
-                  let config_loader = aws_config::from_env()
-                      .region(aws_config::Region::new(region.to_string()))
-                      .credentials_provider(creds);
-                      
-                  let config = if let Some(ep) = endpoint {
-                       config_loader.endpoint_url(ep).load().await
-                  } else {
-                       config_loader.load().await
-                  };
-                  
-                  let client = aws_sdk_sts::Client::new(&config);
-                  
-                  let role_arn = storage_config.get("s3.role-arn").map(|s| s.as_str());
-              
-                  if let Some(arn) = role_arn {
-                       let resp = client.assume_role()
-                          .role_arn(arn)
-                          .role_session_name("pangolin-sqlite-legacy")
-                          .send()
-                          .await
-                          .map_err(|e| anyhow::anyhow!("STS AssumeRole failed: {}", e))?;
-                          
-                       let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in AssumeRole response"))?;
-                       Ok(Credentials::Aws {
-                           access_key_id: c.access_key_id,
-                           secret_access_key: c.secret_access_key,
-                           session_token: Some(c.session_token),
-                           expiration: chrono::DateTime::from_timestamp(c.expiration.secs(), c.expiration.subsec_nanos()),
-                       })
-                  } else {
-                       let resp = client.get_session_token()
-                          .send()
-                          .await
-                          .map_err(|e| anyhow::anyhow!("STS GetSessionToken failed: {}", e))?;
-                          
-                       let c = resp.credentials.ok_or_else(|| anyhow::anyhow!("No credentials in GetSessionToken response"))?;
-                       Ok(Credentials::Aws {
-                           access_key_id: c.access_key_id,
-                           secret_access_key: c.secret_access_key,
-                           session_token: Some(c.session_token),
-                           expiration: chrono::DateTime::from_timestamp(c.expiration.secs(), c.expiration.subsec_nanos()),
-                       })
-                  }
-             } else {
+                 let client = crate::aws_utils::create_sts_client(&storage_config).await?;
+                 let role_arn = storage_config.get("s3.role-arn").map(|s| s.as_str());
+                 
+                 crate::aws_utils::assume_role(
+                     &client, 
+                     role_arn, 
+                     None, 
+                     "pangolin-sqlite-legacy"
+                 ).await
+            } else {
+                let access_key = storage_config.get("s3.access-key-id")
+                    .ok_or_else(|| anyhow::anyhow!("Missing s3.access-key-id"))?;
+                let secret_key = storage_config.get("s3.secret-access-key")
+                    .ok_or_else(|| anyhow::anyhow!("Missing s3.secret-access-key"))?;
+                    
                 Ok(Credentials::Aws {
                     access_key_id: access_key.clone(),
                     secret_access_key: secret_key.clone(),
@@ -164,7 +121,71 @@ impl Signer for SqliteStore {
         }
     }
 
-    async fn presign_get(&self, _location: &str) -> Result<String> {
-        Err(anyhow::anyhow!("SqliteStore does not support presigning yet"))
+    async fn presign_get(&self, location: &str) -> Result<String> {
+        // 1. Find the warehouse
+        let warehouses = sqlx::query("SELECT id, name, storage_config FROM warehouses")
+            .fetch_all(&self.pool)
+            .await?;
+            
+        let mut target_config = None;
+        
+        for row in warehouses {
+             let storage_config_str: String = row.get("storage_config");
+             let storage_config: HashMap<String, String> = serde_json::from_str(&storage_config_str)?;
+             
+             let bucket_opt = storage_config.get("s3.bucket").map(|s| s.clone());
+             
+             if let Some(bucket) = bucket_opt {
+                if location.contains(&bucket) {
+                    target_config = Some((storage_config, bucket));
+                    break;
+                }
+             }
+        }
+        
+        let (config, bucket) = target_config.ok_or_else(|| anyhow::anyhow!("No warehouse found for location: {}", location))?;
+        
+        let prefix = format!("s3://{}/", bucket);
+        if !location.starts_with(&prefix) {
+             return Err(anyhow::anyhow!("Location {} does not match bucket {}", location, bucket));
+        }
+        let key = &location[prefix.len()..];
+        
+        // Use logic similar to MemoryStore's private helper, but inline here or move to common?
+        // Let's duplicate inline for now to avoid modifying trait signature or extensive refactoring.
+        // It's small enough.
+        
+        let region = config.get("s3.region").map(|s| aws_config::Region::new(s.to_string())).unwrap_or(aws_config::Region::new("us-east-1"));
+        let access_key = config.get("s3.access-key-id").unwrap_or(&String::new()).to_string();
+        let secret_key = config.get("s3.secret-access-key").unwrap_or(&String::new()).to_string();
+        
+         let creds = aws_credential_types::Credentials::new(
+            access_key,
+            secret_key,
+            None,
+            None,
+            "presigner"
+        );
+        
+        let config_loader = aws_config::from_env()
+            .region(region)
+            .credentials_provider(creds);
+            
+         let sdk_config = if let Some(ep) = config.get("s3.endpoint") {
+            config_loader.endpoint_url(ep).load().await
+        } else {
+            config_loader.load().await
+        };
+        
+        let client = aws_sdk_s3::Client::new(&sdk_config);
+        let presigning_config = aws_sdk_s3::presigning::PresigningConfig::expires_in(std::time::Duration::from_secs(3600))?;
+        
+        let presigned_req = client.get_object()
+            .bucket(bucket)
+            .key(key)
+            .presigned(presigning_config)
+            .await?;
+            
+        Ok(presigned_req.uri().to_string())
     }
 }

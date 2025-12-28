@@ -13,6 +13,12 @@ use crate::auth::TenantId;
 use crate::iceberg::AppState;
 use pangolin_core::user::UserRole;
 use utoipa::ToSchema;
+use pangolin_store::signer::Credentials;
+
+#[derive(Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct GetCredentialsParams {
+    location: String,
+}
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct CreateWarehouseRequest {
@@ -215,3 +221,28 @@ pub async fn update_warehouse(
 }
 
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/warehouses/{name}/credentials",
+    tag = "Warehouses",
+    params(
+        ("name" = String, Path, description = "Warehouse name"),
+        ("location" = String, Query, description = "Location to get credentials for")
+    ),
+    responses(
+        (status = 200, description = "Credentials returned", body = Credentials),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_warehouse_credentials(
+    State(store): State<AppState>,
+    Extension(_tenant): Extension<TenantId>,
+    Path(_name): Path<String>,
+    Query(params): Query<GetCredentialsParams>,
+) -> impl IntoResponse {
+    match store.get_table_credentials(&params.location).await {
+        Ok(creds) => (StatusCode::OK, Json(creds)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response(),
+    }
+}
