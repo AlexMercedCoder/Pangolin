@@ -8,6 +8,7 @@ use axum::http::{HeaderValue, Method};
 use utoipa::OpenApi;
 
 pub mod iceberg;
+pub mod cached_store;
 pub mod pangolin_handlers;
 pub mod tenant_handlers;
 pub mod warehouse_handlers;

@@ -1,0 +1,1532 @@
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/tenants.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/warehouses.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/catalogs.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/namespaces.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/assets.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/branches.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/tags.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/commits.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/io.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+ --> pangolin_store/src/memory/audit.rs:4:5
+  |
+4 | use chrono::Utc;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `pangolin_core::audit::*`
+ --> pangolin_store/src/memory/audit.rs:5:5
+  |
+5 | use pangolin_core::audit::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/audit.rs:6:5
+  |
+6 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/users.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_core::user::*`
+ --> pangolin_store/src/memory/service_users.rs:4:5
+  |
+4 | use pangolin_core::user::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/service_users.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/roles.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/permissions.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_core::token::*`
+ --> pangolin_store/src/memory/tokens.rs:4:5
+  |
+4 | use pangolin_core::token::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/tokens.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_core::business_metadata::*`
+ --> pangolin_store/src/memory/business_metadata.rs:4:5
+  |
+4 | use pangolin_core::business_metadata::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Asset`, `Branch`, `Catalog`, and `Namespace`
+ --> pangolin_store/src/memory/business_metadata.rs:5:28
+  |
+5 | ...::{Asset, Catalog, Namespace, Branch};
+  |       ^^^^^  ^^^^^^^  ^^^^^^^^^  ^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/business_metadata.rs:6:5
+  |
+6 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/access_requests.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/merge.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/federated.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/settings.rs:5:5
+  |
+5 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+ --> pangolin_store/src/memory/signer.rs:3:5
+  |
+3 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused imports: `DateTime` and `Utc`
+ --> pangolin_store/src/memory/signer.rs:7:14
+  |
+7 | ...::{Utc, DateTime};
+  |       ^^^  ^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/memory/signer.rs:8:5
+  |
+8 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `OAuthProvider`
+ --> pangolin_store/src/postgres/main.rs:8:43
+  |
+8 | ...e, OAuthProvider};
+  |       ^^^^^^^^^^^^^
+
+warning: unused import: `PermissionGrant`
+ --> pangolin_store/src/postgres/main.rs:9:51
+  |
+9 | ...n, PermissionGrant, U...
+  |       ^^^^^^^^^^^^^^^
+
+warning: unused import: `RequestStatus`
+  --> pangolin_store/src/postgres/main.rs:11:55
+   |
+11 | ...t, RequestStatus};
+   |       ^^^^^^^^^^^^^
+
+warning: unused import: `TimeZone`
+  --> pangolin_store/src/postgres/main.rs:17:29
+   |
+17 | ...c, TimeZone};
+   |       ^^^^^^^^
+
+warning: unused import: `Document`
+ --> pangolin_store/src/mongo/merge.rs:4:26
+  |
+4 | ...c, Document};
+  |       ^^^^^^^^
+
+warning: unused import: `futures::stream::TryStreamExt`
+ --> pangolin_store/src/mongo/merge.rs:7:5
+  |
+7 | use futures::stream::TryStreamExt;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `from_bson_uuid` and `to_bson_uuid`
+ --> pangolin_store/src/mongo/signer.rs:2:19
+  |
+2 | ...::{to_bson_uuid, from_bson_uuid};
+  |       ^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `Warehouse`
+ --> pangolin_store/src/mongo/signer.rs:7:28
+  |
+7 | ...::{Warehouse, V...
+  |       ^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> pangolin_store/src/mongo/signer.rs:8:5
+  |
+8 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_store/src/mongo/signer.rs:9:5
+  |
+9 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `object_store::aws::AmazonS3Builder`
+  --> pangolin_store/src/mongo/signer.rs:10:5
+   |
+10 | use object_store::aws::AmazonS3Builder;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `object_store::path::Path as ObjPath`
+  --> pangolin_store/src/mongo/signer.rs:12:5
+   |
+12 | use ...as ObjPath;
+   |     ...^^^^^^^^^^
+
+warning: unused import: `RequestStatus`
+  --> pangolin_store/src/sqlite/main.rs:11:55
+   |
+11 | ...t, RequestStatus};
+   |       ^^^^^^^^^^^^^
+
+warning: unused import: `sqlx::Row`
+ --> pangolin_store/src/sqlite/users.rs:4:5
+  |
+4 | use sqlx::Row;
+  |     ^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+ --> pangolin_store/src/sqlite/permissions.rs:6:5
+  |
+6 | use chrono::Utc;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `async_trait::async_trait`
+ --> pangolin_store/src/sqlite/service_users.rs:2:5
+  |
+2 | use async_trait::async_trait;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::str::FromStr`
+ --> pangolin_store/src/sqlite/service_users.rs:8:5
+  |
+8 | use std::str::FromStr;
+  |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `DateTime`
+ --> pangolin_store/src/sqlite/business_metadata.rs:6:14
+  |
+6 | ...::{DateTime, U...
+  |       ^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> pangolin_store/src/sqlite/business_metadata.rs:9:5
+  |
+9 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::memory::MemoryStore`
+ --> pangolin_store/src/tests/multi_cloud.rs:1:5
+  |
+1 | use crate::memory::MemoryStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::CatalogStore`
+ --> pangolin_store/src/tests/multi_cloud.rs:2:5
+  |
+2 | use crate::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Credentials` and `Signer`
+ --> pangolin_store/src/tests/multi_cloud.rs:3:21
+  |
+3 | ...::{Signer, Credentials};
+  |       ^^^^^^  ^^^^^^^^^^^
+
+warning: unused imports: `Tenant`, `VendingStrategy`, and `Warehouse`
+ --> pangolin_store/src/tests/multi_cloud.rs:4:28
+  |
+4 | ...::{Warehouse, VendingStrategy, Tenant};
+  |       ^^^^^^^^^  ^^^^^^^^^^^^^^^  ^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+ --> pangolin_store/src/tests/multi_cloud.rs:5:5
+  |
+5 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+ --> pangolin_store/src/tests/multi_cloud.rs:6:5
+  |
+6 | use uuid::Uuid;
+  |     ^^^^^^^^^^
+
+warning: unused imports: `AuditAction`, `AuditLogEntry`, `AuditLogFilter`, `AuditResult`, and `ResourceType`
+   --> pangolin_store/src/tests/audit_tests.rs:1:28
+    |
+  1 | ...::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
+    |       ^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `CatalogStore` and `MemoryStore`
+   --> pangolin_store/src/tests/audit_tests.rs:2:13
+    |
+  2 | ...::{CatalogStore, MemoryStore};
+    |       ^^^^^^^^^^^^  ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_store/src/tests/audit_tests.rs:3:5
+    |
+  3 | use uuid::Uuid;
+    |     ^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+   --> pangolin_store/src/tests/audit_tests.rs:4:5
+    |
+  4 | use chrono::Utc;
+    |     ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:170:1
+    |
+170 | pub mod audit_tests;
+    | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::postgres::PostgresStore`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:3:5
+    |
+  3 | use crate::postgres::PostgresStore;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::CatalogStore`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:4:5
+    |
+  4 | use crate::CatalogStore;
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `AuditAction`, `AuditLogEntry`, `AuditLogFilter`, `AuditResult`, and `ResourceType`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:5:28
+    |
+  5 | ...::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
+    |       ^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `SystemSettings` and `Tenant`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:6:28
+    |
+  6 | ...::{SystemSettings, Tenant};
+    |       ^^^^^^^^^^^^^^  ^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ServiceUser` and `UserRole`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:7:27
+    |
+  7 | ...::{ServiceUser, UserRole};
+    |       ^^^^^^^^^^^  ^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:8:5
+    |
+  8 | use std::collections::HashMap;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:9:5
+    |
+  9 | use uuid::Uuid;
+    |     ^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+   --> pangolin_store/src/tests/postgres_parity_tests.rs:10:5
+    |
+ 10 | use chrono::Utc;
+    |     ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:172:1
+    |
+172 | pub mod postgres_parity_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::postgres::PostgresStore`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:3:5
+    |
+  3 | use crate::postgres::PostgresStore;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::CatalogStore`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:4:5
+    |
+  4 | use crate::CatalogStore;
+    |     ^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `ConflictResolution`, `ConflictType`, `MergeConflict`, `MergeOperation`, `MergeStatus`, `ResolutionStrategy`, and `Tenant`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:6:5
+    |
+  6 |     ConflictResolution, ConflictType, MergeConflict, MergeOperation, MergeStatus,
+    |     ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^
+  7 |     ResolutionStrategy, Tenant,
+    |     ^^^^^^^^^^^^^^^^^^  ^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:9:5
+    |
+  9 | use std::collections::HashMap;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:10:5
+    |
+ 10 | use uuid::Uuid;
+    |     ^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+   --> pangolin_store/src/tests/postgres_merge_tests.rs:11:5
+    |
+ 11 | use chrono::Utc;
+    |     ^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:173:1
+    |
+173 | pub mod postgres_merge_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::postgres::PostgresStore`
+   --> pangolin_store/src/tests/postgres_bulk_ops_tests.rs:1:5
+    |
+  1 | use crate::postgres::PostgresStore;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:176:1
+    |
+176 | pub mod postgres_bulk_ops_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::bulk_ops_tests::test_bulk_ops_and_ancestry`
+   --> pangolin_store/src/tests/mongo_bulk_ops_tests.rs:1:5
+    |
+  1 | use...nd_ancestry;
+    |    ...^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:177:1
+    |
+177 | pub mod mongo_bulk_ops_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::mongo::MongoStore`
+   --> pangolin_store/src/tests/mongo_bulk_ops_tests.rs:2:5
+    |
+  2 | use crate::mongo::MongoStore;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:177:1
+    |
+177 | pub mod mongo_bulk_ops_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::env`
+   --> pangolin_store/src/tests/mongo_bulk_ops_tests.rs:3:5
+    |
+  3 | use std::env;
+    |     ^^^^^^^^
+    |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+   --> pangolin_store/src/tests/mod.rs:177:1
+    |
+177 | pub mod mongo_bulk_ops_tests;
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Duration` and `Utc`
+ --> pangolin_store/src/azure_signer.rs:2:14
+  |
+2 | ...::{Duration, Utc};
+  |       ^^^^^^^^  ^^^
+
+warning: unused import: `azure_storage_blobs::prelude::*`
+ --> pangolin_store/src/azure_signer.rs:4:5
+  |
+4 | use azure_storage_blobs::prelude::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `DateTime` and `Utc`
+ --> pangolin_store/src/gcp_signer.rs:2:14
+  |
+2 | ...::{DateTime, Utc};
+  |       ^^^^^^^^  ^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_store/src/object_store_factory.rs:4:5
+  |
+4 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `object_store::ObjectStore`
+  --> pangolin_store/src/mongo/signer.rs:11:5
+   |
+11 | use object_store::ObjectStore;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `futures::stream::TryStreamExt`
+  --> pangolin_store/src/mongo/signer.rs:13:5
+   |
+13 | use futures::stream::TryStreamExt;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `client`
+  --> pangolin_store/src/gcp_signer.rs:52:13
+   |
+52 | ...et client = ...
+   |       ^^^^^^ help: if this is intentional, prefix it with an underscore: `_client`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `tenant_id`
+   --> pangolin_store/src/memory/mod.rs:353:38
+    |
+353 | ...f, tenant_id: U...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tenant_id`
+
+warning: value assigned to `param_count` is never read
+  --> pangolin_store/src/postgres/audit.rs:75:17
+   |
+75 | ...   param_count += 1;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `param_count` is never read
+   --> pangolin_store/src/postgres/main.rs:920:17
+    |
+920 | ...   param_count += 1;
+    |       ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `param_index` is never read
+   --> pangolin_store/src/postgres/main.rs:986:17
+    |
+986 | ...   param_index += 1;
+    |       ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: value assigned to `param_count` is never read
+   --> pangolin_store/src/postgres/audit.rs:219:17
+    |
+219 | ...   param_count += 1;
+    |       ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: unused variable: `tenant_id`
+   --> pangolin_store/src/lib.rs:267:35
+    |
+267 | ...f, tenant_id: U...
+    |       ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_tenant_id`
+
+warning: unused variable: `tags`
+   --> pangolin_store/src/lib.rs:267:65
+    |
+267 | ...r, tags: O...
+    |       ^^^^ help: if this is intentional, prefix it with an underscore: `_tags`
+
+warning: unused variable: `query`
+   --> pangolin_store/src/lib.rs:267:52
+    |
+267 | ...d, query: &...
+    |       ^^^^^ help: if this is intentional, prefix it with an underscore: `_query`
+
+warning: field `signer` is never read
+  --> pangolin_store/src/memory/main.rs:26:16
+   |
+13 | ...ct MemoryStore {
+   |       ----------- field in this struct
+...
+26 | ...crate) signer: cr...
+   |           ^^^^^^
+   |
+   = note: `MemoryStore` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `key` is never read
+  --> pangolin_store/src/signer.rs:41:5
+   |
+40 | pub struct SignerImpl {
+   |            ---------- field in this struct
+41 |     key: String,
+   |     ^^^
+   |
+   = note: `SignerImpl` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: field `client` is never read
+  --> pangolin_store/src/mongo/main.rs:15:16
+   |
+14 | ...ct MongoStore {
+   |       ---------- field in this struct
+15 | ...crate) client: C...
+   |           ^^^^^^
+   |
+   = note: `MongoStore` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+
+warning: methods `branches`, `tags`, `commits`, `audit_logs`, `user_roles`, and `permissions` are never used
+   --> pangolin_store/src/mongo/main.rs:90:19
+    |
+ 21 | impl MongoStore {
+    | --------------- methods in this implementation
+...
+ 90 |     pub(crate) fn branches(&self...
+    |                   ^^^^^^^^
+...
+ 94 |     pub(crate) fn tags(&self) ->...
+    |                   ^^^^
+...
+ 98 |     pub(crate) fn commits(&self)...
+    |                   ^^^^^^^
+...
+102 |     pub(crate) fn audit_logs(&se...
+    |                   ^^^^^^^^^^
+...
+114 |     pub(crate) fn user_roles(&se...
+    |                   ^^^^^^^^^^
+...
+118 |     pub(crate) fn permissions(&s...
+    |                   ^^^^^^^^^^^
+
+warning: function `test_azure_path_parsing` is never used
+   --> pangolin_store/src/tests/multi_cloud.rs:129:4
+    |
+129 | fn test_azure_path_parsing() {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: fields `account_name` and `account_key` are never read
+ --> pangolin_store/src/azure_signer.rs:7:5
+  |
+6 | pub struct AzureSigner {
+  |            ----------- fields in this struct
+7 |     account_name: String,
+  |     ^^^^^^^^^^^^
+8 |     account_key: String,
+  |     ^^^^^^^^^^^
+
+warning: function `create_gcp_store` is never used
+   --> pangolin_store/src/object_store_factory.rs:114:4
+    |
+114 | fn create_gcp_store(
+    |    ^^^^^^^^^^^^^^^^
+
+warning: `pangolin_store` (lib) generated 98 warnings (run `cargo fix --lib -p pangolin_store` to apply 85 suggestions)
+    Checking pangolin_api v0.2.0 (/home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_api)
+error[E0407]: method `delete_file` is not a member of trait `CatalogStore`
+   --> pangolin_api/src/cached_store.rs:157:5
+    |
+157 |     async fn delete_file(&self, path: &str) -> Result<()> { self.inner.write_file(path, vec![]).await } // Basic delete logic if trait de...
+    |     ^^^^^^^^^-----------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     |        |
+    |     |        help: there is an associated function with a similar name: `delete_role`
+    |     not a member of trait `CatalogStore`
+
+error[E0407]: method `grant_permission` is not a member of trait `CatalogStore`
+   --> pangolin_api/src/cached_store.rs:181:5
+    |
+181 |     async fn grant_permission(&self, permission: Permission) -> Result<()> { self.inner.grant_permission(permission).await }
+    |     ^^^^^^^^^----------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     |        |
+    |     |        help: there is an associated function with a similar name: `create_permission`
+    |     not a member of trait `CatalogStore`
+
+error[E0407]: method `unassign_role` is not a member of trait `CatalogStore`
+   --> pangolin_api/src/cached_store.rs:186:5
+    |
+186 |     async fn unassign_role(&self, tenant_id: Uuid, user_id: Uuid, role_id: Uuid) -> Result<()> { self.inner.unassign_role(tenant_id, user_id, role_id).await }
+    |     ^^^^^^^^^-------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     |        |
+    |     |        help: there is an associated function with a similar name: `assign_role`
+    |     not a member of trait `CatalogStore`
+
+error[E0407]: method `list_user_roles` is not a member of trait `CatalogStore`
+   --> pangolin_api/src/cached_store.rs:187:5
+    |
+187 |     async fn list_user_roles(&self, tenant_id: Uuid, user_id: Uuid) -> Result<Vec<pangolin_core::permission::UserRole>> { self.inner.list_user_roles(tenant_id, user_id).await }
+    |     ^^^^^^^^^---------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     |        |
+    |     |        help: there is an associated function with a similar name: `get_user_roles`
+    |     not a member of trait `CatalogStore`
+
+error[E0412]: cannot find type `UserUpdate` in module `pangolin_core::model`
+   --> pangolin_api/src/cached_store.rs:167:99
+    |
+167 | ...ame: String, updates: pangolin_core::model::UserUpdate) -> Result<User> { self.inner.update_user(tenant_id, username, updates).await }
+    |                                                ^^^^^^^^^^ not found in `pangolin_core::model`
+
+warning: unused import: `pangolin_store::memory::MemoryStore`
+ --> pangolin_api/src/lib.rs:4:5
+  |
+4 | use pangolin_store::memory::MemoryStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `HeaderValue`
+ --> pangolin_api/src/lib.rs:7:18
+  |
+7 | use axum::http::{HeaderValue, Method};
+  |                  ^^^^^^^^^^^
+
+warning: unused import: `body::Body`
+ --> pangolin_api/src/iceberg/mod.rs:2:5
+  |
+2 |     body::Body,
+  |     ^^^^^^^^^^
+
+warning: unused import: `http::StatusCode`
+ --> pangolin_api/src/iceberg/oauth.rs:4:5
+  |
+4 |     http::StatusCode,
+  |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `serde_json::json`
+ --> pangolin_api/src/iceberg/oauth.rs:7:5
+  |
+7 | use serde_json::json;
+  |     ^^^^^^^^^^^^^^^^
+
+warning: unused imports: `UserRole`, `UserSession`, and `User`
+  --> pangolin_api/src/iceberg/oauth.rs:10:27
+   |
+10 | use pangolin_core::user::{User, UserRole, UserSession, ServiceUser};
+   |                           ^^^^  ^^^^^^^^  ^^^^^^^^^^^
+
+warning: unused import: `anyhow::Context`
+  --> pangolin_api/src/iceberg/oauth.rs:12:5
+   |
+12 | use anyhow::Context;
+   |     ^^^^^^^^^^^^^^^
+
+warning: unused import: `Snapshot`
+ --> pangolin_api/src/iceberg/types.rs:4:54
+  |
+4 | use pangolin_core::iceberg_metadata::{TableMetadata, Snapshot};
+  |                                                      ^^^^^^^^
+
+warning: unused import: `UserRole`
+ --> pangolin_api/src/cached_store.rs:7:45
+  |
+7 | use pangolin_core::permission::{Permission, UserRole}; // Correct import for UserRole struct if it exists, or just use the model/user one.
+  |                                             ^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/tenant_handlers.rs:9:5
+  |
+9 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `crate::auth::TenantId`
+  --> pangolin_api/src/tenant_handlers.rs:14:5
+   |
+14 | use crate::auth::TenantId;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/warehouse_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_core::user::UserRole`
+  --> pangolin_api/src/warehouse_handlers.rs:14:5
+   |
+14 | use pangolin_core::user::UserRole;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/asset_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `HeaderMap`
+ --> pangolin_api/src/auth.rs:3:24
+  |
+3 |     http::{StatusCode, HeaderMap},
+  |                        ^^^^^^^^^
+
+warning: unused imports: `Algorithm`, `DecodingKey`, `Validation`, and `decode`
+ --> pangolin_api/src/auth.rs:8:20
+  |
+8 | use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+  |                    ^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/signing_handlers.rs:8:5
+  |
+8 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `anyhow`
+ --> pangolin_api/src/credential_signers/mod.rs:4:22
+  |
+4 | use anyhow::{Result, anyhow};
+  |                      ^^^^^^
+
+warning: unused import: `DateTime`
+ --> pangolin_api/src/credential_signers/azure_signer.rs:3:14
+  |
+3 | use chrono::{DateTime, Utc, Duration};
+  |              ^^^^^^^^
+
+warning: unused import: `DateTime`
+ --> pangolin_api/src/credential_signers/gcp_signer.rs:3:14
+  |
+3 | use chrono::{DateTime, Utc, Duration};
+  |              ^^^^^^^^
+
+warning: unused import: `anyhow`
+ --> pangolin_api/src/credential_signers/gcp_signer.rs:5:22
+  |
+5 | use anyhow::{Result, anyhow};
+  |                      ^^^^^^
+
+warning: unused imports: `DateTime` and `Utc`
+ --> pangolin_api/src/credential_signers/s3_signer.rs:3:14
+  |
+3 | use chrono::{DateTime, Utc, Duration};
+  |              ^^^^^^^^  ^^^
+
+warning: unused import: `DateTime`
+ --> pangolin_api/src/credential_signers/mock_signer.rs:3:14
+  |
+3 | use chrono::{DateTime, Utc, Duration};
+  |              ^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/credential_vending.rs:9:5
+  |
+9 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `Json`
+ --> pangolin_api/src/oauth_handlers.rs:5:5
+  |
+5 |     Json,
+  |     ^^^^
+
+warning: unused import: `Serialize`
+ --> pangolin_api/src/oauth_handlers.rs:7:26
+  |
+7 | use serde::{Deserialize, Serialize};
+  |                          ^^^^^^^^^
+
+warning: unused imports: `HeaderMap` and `body::Body`
+ --> pangolin_api/src/auth_middleware.rs:2:5
+  |
+2 |     body::Body,
+  |     ^^^^^^^^^^
+3 |     extract::{Request, State},
+4 |     http::{header, HeaderMap, StatusCode},
+  |                    ^^^^^^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> pangolin_api/src/auth_middleware.rs:12:13
+   |
+12 | use serde::{Deserialize, Serialize};
+   |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `DateTime`
+  --> pangolin_api/src/auth_middleware.rs:14:14
+   |
+14 | use chrono::{DateTime, Duration, Utc};
+   |              ^^^^^^^^
+
+warning: unused import: `User`
+  --> pangolin_api/src/auth_middleware.rs:15:27
+   |
+15 | use pangolin_core::user::{User, UserRole, UserSession};
+   |                           ^^^^
+
+warning: unused import: `uuid::Uuid`
+   --> pangolin_api/src/authz.rs:120:9
+    |
+120 |     use uuid::Uuid;
+    |         ^^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/business_metadata_handlers.rs:9:5
+  |
+9 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused imports: `MergeConflict` and `MergeOperation`
+ --> pangolin_api/src/merge_handlers.rs:7:48
+  |
+7 | use pangolin_core::model::{ConflictResolution, MergeConflict, MergeOperation, ResolutionStrategy};
+  |                                                ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_core::model::SyncStats`
+  --> pangolin_api/src/federated_catalog_handlers.rs:16:5
+   |
+16 | use pangolin_core::model::SyncStats;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `AuditLogEntry`
+ --> pangolin_api/src/audit_handlers.rs:7:28
+  |
+7 | use pangolin_core::audit::{AuditLogEntry, AuditLogFilter};
+  |                            ^^^^^^^^^^^^^
+
+warning: unused import: `Serialize`
+ --> pangolin_api/src/permission_handlers.rs:7:26
+  |
+7 | use serde::{Deserialize, Serialize};
+  |                          ^^^^^^^^^
+
+warning: unused import: `std::sync::Arc`
+ --> pangolin_api/src/system_config_handlers.rs:7:5
+  |
+7 | use std::sync::Arc;
+  |     ^^^^^^^^^^^^^^
+
+warning: unused import: `Serialize`
+  --> pangolin_api/src/service_user_handlers.rs:10:26
+   |
+10 | use serde::{Deserialize, Serialize};
+   |                          ^^^^^^^^^
+
+warning: unused import: `Deserialize`
+ --> pangolin_api/src/dashboard_handlers.rs:7:13
+  |
+7 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^
+
+warning: unused import: `PaginationParams`
+ --> pangolin_api/src/optimization_handlers.rs:8:36
+  |
+8 | use pangolin_store::{CatalogStore, PaginationParams};
+  |                                    ^^^^^^^^^^^^^^^^
+
+error[E0050]: method `get_user` has 3 parameters but the declaration in trait `pangolin_store::CatalogStore::get_user` has 2
+   --> pangolin_api/src/cached_store.rs:166:23
+    |
+166 |     async fn get_user(&self, tenant_id: Uuid, username: String) -> Result<Option<User>> { self.inner.get_user(tenant_id, username).await }
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 3
+    |
+    = note: `get_user` from trait: `fn(&'life0 Self, uuid::Uuid) -> Pin<Box<(dyn std::future::Future<Output = Result<std::option::Option<pangolin_core::user::User>, anyhow::Error>> + Send + 'async_trait)>>`
+
+error[E0050]: method `update_user` has 4 parameters but the declaration in trait `pangolin_store::CatalogStore::update_user` has 2
+   --> pangolin_api/src/cached_store.rs:167:26
+    |
+167 | ...date_user(&self, tenant_id: Uuid, username: String, updates: pangolin_core::model::UserUpdate) -> Result<User> { self.inner.update_use...
+    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 4
+    |
+    = note: `update_user` from trait: `fn(&'life0 Self, pangolin_core::user::User) -> Pin<Box<(dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'async_trait)>>`
+
+error[E0053]: method `list_users` has an incompatible type for trait
+   --> pangolin_api/src/cached_store.rs:173:43
+    |
+173 |     async fn list_users(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<User>> { self.inner.list_users(tenant...
+    |                                           ^^^^ expected `std::option::Option<uuid::Uuid>`, found `uuid::Uuid`
+    |
+    = note: expected signature `fn(&'life0 CachedCatalogStore, std::option::Option<uuid::Uuid>, std::option::Option<_>) -> Pin<_>`
+               found signature `fn(&'life0 CachedCatalogStore, uuid::Uuid, std::option::Option<_>) -> Pin<_>`
+help: change the parameter type to match the trait
+    |
+173 -     async fn list_users(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<User>> { self.inner.list_users(tenant_id, pagination).await }
+173 +     async fn list_users(&self, tenant_id: std::option::Option<uuid::Uuid>, pagination: Option<PaginationParams>) -> Result<Vec<User>> { self.inner.list_users(tenant_id, pagination).await }
+    |
+
+error[E0050]: method `delete_user` has 3 parameters but the declaration in trait `pangolin_store::CatalogStore::delete_user` has 2
+   --> pangolin_api/src/cached_store.rs:174:26
+    |
+174 |     async fn delete_user(&self, tenant_id: Uuid, username: String) -> Result<()> { self.inner.delete_user(tenant_id, username).await }
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 3
+    |
+    = note: `delete_user` from trait: `fn(&'life0 Self, uuid::Uuid) -> Pin<Box<(dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'async_trait)>>`
+
+error[E0050]: method `get_role` has 3 parameters but the declaration in trait `pangolin_store::CatalogStore::get_role` has 2
+   --> pangolin_api/src/cached_store.rs:177:23
+    |
+177 |     async fn get_role(&self, tenant_id: Uuid, name: String) -> Result<Option<pangolin_core::permission::Role>> { self.inner.get_role(tena...
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 3
+    |
+    = note: `get_role` from trait: `fn(&'life0 Self, uuid::Uuid) -> Pin<Box<(dyn std::future::Future<Output = Result<std::option::Option<pangolin_core::permission::Role>, anyhow::Error>> + Send + 'async_trait)>>`
+
+error[E0050]: method `delete_role` has 3 parameters but the declaration in trait `pangolin_store::CatalogStore::delete_role` has 2
+   --> pangolin_api/src/cached_store.rs:179:26
+    |
+179 |     async fn delete_role(&self, tenant_id: Uuid, name: String) -> Result<()> { self.inner.delete_role(tenant_id, name).await }
+    |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 2 parameters, found 3
+    |
+    = note: `delete_role` from trait: `fn(&'life0 Self, uuid::Uuid) -> Pin<Box<(dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'async_trait)>>`
+
+error[E0050]: method `list_permissions` has 5 parameters but the declaration in trait `pangolin_store::CatalogStore::list_permissions` has 3
+   --> pangolin_api/src/cached_store.rs:183:31
+    |
+183 | ...missions(&self, tenant_id: Uuid, principal: Option<String>, resource: Option<String>, pagination: Option<PaginationParams>) -> Result<...
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected 3 parameters, found 5
+    |
+    = note: `list_permissions` from trait: `fn(&'life0 Self, uuid::Uuid, std::option::Option<pangolin_store::PaginationParams>) -> Pin<Box<(dyn std::future::Future<Output = Result<Vec<pangolin_core::permission::Permission>, anyhow::Error>> + Send + 'async_trait)>>`
+
+error[E0046]: not all trait items implemented, missing: `create_tag`, `get_tag`, `list_tags`, `delete_tag`, `log_audit_event`, `list_audit_events`, `get_audit_event`, `count_audit_events`
+  --> pangolin_api/src/cached_store.rs:35:1
+   |
+35 | impl CatalogStore for CachedCatalogStore {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `create_tag`, `get_tag`, `list_tags`, `delete_tag`, `log_audit_event`, `list_audit_events`, `get_audit_event`, `count_audit_events` in implementation
+   |
+   = help: implement the missing item: `fn create_tag<'life0: 'async_trait, 'life1: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: &'life1 str, _: pangolin_core::model::Tag) -> Pin<Box<(dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+   = help: implement the missing item: `fn get_tag<'life0: 'async_trait, 'life1: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: &'life1 str, _: std::string::String) -> Pin<Box<(dyn std::future::Future<Output = Result<std::option::Option<pangolin_core::model::Tag>, anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+   = help: implement the missing item: `fn list_tags<'life0: 'async_trait, 'life1: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: &'life1 str, _: std::option::Option<pangolin_store::PaginationParams>) -> Pin<Box<(dyn std::future::Future<Output = Result<Vec<pangolin_core::model::Tag>, anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+   = help: implement the missing item: `fn delete_tag<'life0: 'async_trait, 'life1: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: &'life1 str, _: std::string::String) -> Pin<Box<(dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+   = help: implement the missing item: `fn log_audit_event<'life0: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: AuditLogEntry) -> Pin<Box<(dyn std::future::Future<Output = Result<(), anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+   = help: implement the missing item: `fn list_audit_events<'life0: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: std::option::Option<AuditLogFilter>) -> Pin<Box<(dyn std::future::Future<Output = Result<Vec<AuditLogEntry>, anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+   = help: implement the missing item: `fn get_audit_event<'life0: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: uuid::Uuid) -> Pin<Box<(dyn std::future::Future<Output = Result<std::option::Option<AuditLogEntry>, anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+   = help: implement the missing item: `fn count_audit_events<'life0: 'async_trait, 'async_trait>(&'life0 self, _: uuid::Uuid, _: std::option::Option<AuditLogFilter>) -> Pin<Box<(dyn std::future::Future<Output = Result<usize, anyhow::Error>> + Send + 'async_trait)>> { todo!() }`
+
+error[E0277]: the trait bound `CachedCatalogStore: Signer` is not satisfied
+  --> pangolin_api/src/cached_store.rs:35:23
+   |
+35 | impl CatalogStore for CachedCatalogStore {
+   |                       ^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Signer` is not implemented for `CachedCatalogStore`
+  --> pangolin_api/src/cached_store.rs:16:1
+   |
+16 | pub struct CachedCatalogStore {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: the following other types implement trait `Signer`:
+             MemoryStore
+             MongoStore
+             PostgresStore
+             SignerImpl
+             SqliteStore
+note: required by a bound in `CatalogStore`
+  --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:37:39
+   |
+37 | pub trait CatalogStore: Send + Sync + Signer {
+   |                                       ^^^^^^ required by this bound in `CatalogStore`
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/iceberg/namespaces.rs:137:91
+    |
+137 |             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                           ^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/iceberg/namespaces.rs:204:91
+    |
+204 |             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                           ^^^^^^^^^^
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/iceberg/tables.rs:846:92
+    |
+846 |              let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                            ^^^^^^^^^^
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/pangolin_handlers.rs:201:83
+    |
+201 |     let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                   ^^^^^^^^^^
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/pangolin_handlers.rs:347:91
+    |
+347 |             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                           ^^^^^^^^^^
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/pangolin_handlers.rs:735:91
+    |
+735 |             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                           ^^^^^^^^^^
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/pangolin_handlers.rs:802:91
+    |
+802 |             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                           ^^^^^^^^^^
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/user_handlers.rs:171:87
+    |
+171 |     let _ = store.log_audit_event(target_tenant, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                       ^^^^^^^^^^
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/user_handlers.rs:346:94
+    |
+346 |             let _ = store.log_audit_event(audit_tenant, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                              ^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> pangolin_api/src/oauth_handlers.rs:136:14
+    |
+136 |         Some(mut u) => {
+    |              ----^
+    |              |
+    |              help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: use of deprecated associated function `pangolin_core::audit::AuditLogEntry::legacy_new`: Use AuditLogEntry::new() or AuditLogEntry::success() instead
+   --> pangolin_api/src/merge_handlers.rs:268:90
+    |
+268 |             let _ = store.log_audit_event(tenant.0, pangolin_core::audit::AuditLogEntry::legacy_new(
+    |                                                                                          ^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> pangolin_api/src/permission_handlers.rs:152:10
+    |
+152 |     Json(mut role): Json<Role>,
+    |          ----^^^^
+    |          |
+    |          help: remove this `mut`
+
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+   --> pangolin_api/src/cached_store.rs:166:102
+    |
+166 |     async fn get_user(&self, tenant_id: Uuid, username: String) -> Result<Option<User>> { self.inner.get_user(tenant_id, username).await }
+    |                                                                                                      ^^^^^^^^            -------- unexpected argument #2 of type `std::string::String`
+    |
+note: method defined here
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:198:14
+    |
+198 |     async fn get_user(&self, _user_id: Uuid) -> Result<Option<pangolin_core::user::User>> {
+    |              ^^^^^^^^
+help: remove the extra argument
+    |
+166 -     async fn get_user(&self, tenant_id: Uuid, username: String) -> Result<Option<User>> { self.inner.get_user(tenant_id, username).await }
+166 +     async fn get_user(&self, tenant_id: Uuid, username: String) -> Result<Option<User>> { self.inner.get_user(tenant_id).await }
+    |
+
+error[E0061]: this method takes 1 argument but 3 arguments were supplied
+   --> pangolin_api/src/cached_store.rs:167:140
+    |
+167 | ...esult<User> { self.inner.update_user(tenant_id, username, updates).await }
+    |                             ^^^^^^^^^^^ ---------  --------  ------- unexpected argument #3
+    |                                         |          |
+    |                                         |          unexpected argument #2 of type `std::string::String`
+    |                                         expected `User`, found `Uuid`
+    |
+note: method defined here
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:208:14
+    |
+208 |     async fn update_user(&self, _user: pangolin_core::user::User) -> Result<()> {
+    |              ^^^^^^^^^^^
+help: remove the extra arguments
+    |
+167 -     async fn update_user(&self, tenant_id: Uuid, username: String, updates: pangolin_core::model::UserUpdate) -> Result<User> { self.inner.update_user(tenant_id, username, updates).await }
+167 +     async fn update_user(&self, tenant_id: Uuid, username: String, updates: pangolin_core::model::UserUpdate) -> Result<User> { self.inner.update_user(/* pangolin_core::user::User */).await }
+    |
+
+error[E0308]: mismatched types
+   --> pangolin_api/src/cached_store.rs:167:129
+    |
+167 | ...<User> { self.inner.update_user(tenant_id, username, updates).await }
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Result<User, Error>`, found `Result<(), Error>`
+    |
+    = note: expected enum `Result<pangolin_core::user::User, _>`
+               found enum `Result<(), _>`
+
+error[E0308]: mismatched types
+   --> pangolin_api/src/cached_store.rs:173:132
+    |
+173 | ...s>) -> Result<Vec<User>> { self.inner.list_users(tenant_id, pagination).await }
+    |                                          ---------- ^^^^^^^^^ expected `Option<Uuid>`, found `Uuid`
+    |                                          |
+    |                                          arguments to this method are incorrect
+    |
+    = note: expected enum `std::option::Option<uuid::Uuid>`
+             found struct `uuid::Uuid`
+note: method defined here
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:204:14
+    |
+204 |     async fn list_users(&self, _tenant_id: Option<Uuid>, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::user::User>> {
+    |              ^^^^^^^^^^
+help: try wrapping the expression in `Some`
+    |
+173 |     async fn list_users(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<User>> { self.inner.list_users(Some(tenant_id), pagination).await }
+    |                                                                                                                                    +++++         +
+
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+   --> pangolin_api/src/cached_store.rs:174:95
+    |
+174 |     async fn delete_user(&self, tenant_id: Uuid, username: String) -> Result<()> { self.inner.delete_user(tenant_id, username).await }
+    |                                                                                               ^^^^^^^^^^^            -------- unexpected argument #2 of type `std::string::String`
+    |
+note: method defined here
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:212:14
+    |
+212 |     async fn delete_user(&self, _user_id: Uuid) -> Result<()> {
+    |              ^^^^^^^^^^^
+help: remove the extra argument
+    |
+174 -     async fn delete_user(&self, tenant_id: Uuid, username: String) -> Result<()> { self.inner.delete_user(tenant_id, username).await }
+174 +     async fn delete_user(&self, tenant_id: Uuid, username: String) -> Result<()> { self.inner.delete_user(tenant_id).await }
+    |
+
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+   --> pangolin_api/src/cached_store.rs:177:125
+    |
+177 | ...ission::Role>> { self.inner.get_role(tenant_id, name).await }
+    |                                ^^^^^^^^            ---- unexpected argument #2 of type `std::string::String`
+    |
+note: method defined here
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:220:14
+    |
+220 |     async fn get_role(&self, _role_id: Uuid) -> Result<Option<pangolin_core::permission::Role>> {
+    |              ^^^^^^^^
+help: remove the extra argument
+    |
+177 -     async fn get_role(&self, tenant_id: Uuid, name: String) -> Result<Option<pangolin_core::permission::Role>> { self.inner.get_role(tenant_id, name).await }
+177 +     async fn get_role(&self, tenant_id: Uuid, name: String) -> Result<Option<pangolin_core::permission::Role>> { self.inner.get_role(tenant_id).await }
+    |
+
+error[E0061]: this method takes 1 argument but 2 arguments were supplied
+   --> pangolin_api/src/cached_store.rs:179:91
+    |
+179 |     async fn delete_role(&self, tenant_id: Uuid, name: String) -> Result<()> { self.inner.delete_role(tenant_id, name).await }
+    |                                                                                           ^^^^^^^^^^^            ---- unexpected argument #2 of type `std::string::String`
+    |
+note: method defined here
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:236:14
+    |
+236 |     async fn delete_role(&self, _role_id: Uuid) -> Result<()> {
+    |              ^^^^^^^^^^^
+help: remove the extra argument
+    |
+179 -     async fn delete_role(&self, tenant_id: Uuid, name: String) -> Result<()> { self.inner.delete_role(tenant_id, name).await }
+179 +     async fn delete_role(&self, tenant_id: Uuid, name: String) -> Result<()> { self.inner.delete_role(tenant_id).await }
+    |
+
+error[E0599]: no method named `grant_permission` found for struct `Arc<(dyn CatalogStore + Send + Sync + 'static)>` in the current scope
+   --> pangolin_api/src/cached_store.rs:181:89
+    |
+181 |     async fn grant_permission(&self, permission: Permission) -> Result<()> { self.inner.grant_permission(permission).await }
+    |                                                                                         ^^^^^^^^^^^^^^^^
+    |
+help: there is a method `create_permission` with a similar name
+    |
+181 -     async fn grant_permission(&self, permission: Permission) -> Result<()> { self.inner.grant_permission(permission).await }
+181 +     async fn grant_permission(&self, permission: Permission) -> Result<()> { self.inner.create_permission(permission).await }
+    |
+
+error[E0061]: this method takes 2 arguments but 4 arguments were supplied
+   --> pangolin_api/src/cached_store.rs:183:186
+    |
+183 | ...inner.list_permissions(tenant_id, principal, resource, pagination).await }
+    |          ^^^^^^^^^^^^^^^^            ---------  -------- unexpected argument #3 of type `std::option::Option<std::string::String>`
+    |                                      |
+    |                                      unexpected argument #2 of type `std::option::Option<std::string::String>`
+    |
+note: method defined here
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:253:14
+    |
+253 |     async fn list_permissions(&self, _tenant_id: Uuid, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::permission::Pe...
+    |              ^^^^^^^^^^^^^^^^
+help: remove the extra arguments
+    |
+183 -     async fn list_permissions(&self, tenant_id: Uuid, principal: Option<String>, resource: Option<String>, pagination: Option<PaginationParams>) -> Result<Vec<Permission>> { self.inner.list_permissions(tenant_id, principal, resource, pagination).await }
+183 +     async fn list_permissions(&self, tenant_id: Uuid, principal: Option<String>, resource: Option<String>, pagination: Option<PaginationParams>) -> Result<Vec<Permission>> { self.inner.list_permissions(tenant_id, pagination).await }
+    |
+
+error[E0599]: no method named `unassign_role` found for struct `Arc<(dyn CatalogStore + Send + Sync + 'static)>` in the current scope
+   --> pangolin_api/src/cached_store.rs:186:109
+    |
+186 |     async fn unassign_role(&self, tenant_id: Uuid, user_id: Uuid, role_id: Uuid) -> Result<()> { self.inner.unassign_role(tenant_id, user...
+    |                                                                                                             ^^^^^^^^^^^^^
+    |
+help: there is a method `assign_role` with a similar name, but with different arguments
+   --> /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin/pangolin_store/src/lib.rs:36:1
+    |
+ 36 | #[async_trait]
+    | ^^^^^^^^^^^^^^
+
+error[E0599]: no method named `list_user_roles` found for struct `Arc<(dyn CatalogStore + Send + Sync + 'static)>` in the current scope
+   --> pangolin_api/src/cached_store.rs:187:134
+    |
+187 | ...ult<Vec<pangolin_core::permission::UserRole>> { self.inner.list_user_roles(tenant_id, user_id).await }
+    |                                                               ^^^^^^^^^^^^^^^
+    |
+help: there is a method `list_roles` with a similar name
+    |
+187 -     async fn list_user_roles(&self, tenant_id: Uuid, user_id: Uuid) -> Result<Vec<pangolin_core::permission::UserRole>> { self.inner.list_user_roles(tenant_id, user_id).await }
+187 +     async fn list_user_roles(&self, tenant_id: Uuid, user_id: Uuid) -> Result<Vec<pangolin_core::permission::UserRole>> { self.inner.list_roles(tenant_id, user_id).await }
+    |
+
+warning: unused import: `CatalogStore`
+ --> pangolin_api/src/optimization_handlers.rs:8:22
+  |
+8 | use pangolin_store::{CatalogStore, PaginationParams};
+  |                      ^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/dashboard_handlers.rs:8:5
+  |
+8 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/iceberg/oauth.rs:8:5
+  |
+8 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `CatalogStore`
+  --> pangolin_api/src/tenant_handlers.rs:11:22
+   |
+11 | use pangolin_store::{CatalogStore, PaginationParams};
+   |                      ^^^^^^^^^^^^
+
+warning: unused import: `CatalogStore`
+ --> pangolin_api/src/warehouse_handlers.rs:9:22
+  |
+9 | use pangolin_store::{CatalogStore, PaginationParams};
+  |                      ^^^^^^^^^^^^
+
+warning: unused import: `CatalogStore`
+ --> pangolin_api/src/asset_handlers.rs:9:22
+  |
+9 | use pangolin_store::{CatalogStore, PaginationParams};
+  |                      ^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/signing_handlers.rs:9:5
+  |
+9 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `CatalogStore`
+  --> pangolin_api/src/business_metadata_handlers.rs:10:22
+   |
+10 | use pangolin_store::{CatalogStore, PaginationParams};
+   |                      ^^^^^^^^^^^^
+
+warning: unused import: `pangolin_store::CatalogStore`
+ --> pangolin_api/src/system_config_handlers.rs:8:5
+  |
+8 | use pangolin_store::CatalogStore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused variable: `session`
+   --> pangolin_api/src/iceberg/namespaces.rs:239:15
+    |
+239 |     Extension(session): Extension<UserSession>,
+    |               ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `session`
+   --> pangolin_api/src/pangolin_handlers.rs:543:15
+    |
+543 |     Extension(session): Extension<UserSession>,
+    |               ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session`
+
+warning: unused variable: `external_id`
+  --> pangolin_api/src/signing_handlers.rs:94:5
+   |
+94 |     external_id: Option<&str>,
+   |     ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_external_id`
+
+warning: unused variable: `session_name`
+  --> pangolin_api/src/signing_handlers.rs:95:5
+   |
+95 |     session_name: &str,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_session_name`
+
+warning: unused variable: `expires_at`
+  --> pangolin_api/src/credential_signers/azure_signer.rs:58:13
+   |
+58 |         let expires_at = Utc::now() + duration;
+   |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_expires_at`
+
+warning: unused variable: `permissions`
+  --> pangolin_api/src/credential_signers/gcp_signer.rs:36:9
+   |
+36 |         permissions: &[String],
+   |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_permissions`
+
+warning: unused variable: `duration`
+  --> pangolin_api/src/credential_signers/s3_signer.rs:51:9
+   |
+51 |         duration: Duration,
+   |         ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_duration`
+
+warning: unused variable: `resource_path`
+  --> pangolin_api/src/credential_signers/mock_signer.rs:38:9
+   |
+38 |         resource_path: &str,
+   |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_resource_path`
+
+warning: unused variable: `permissions`
+  --> pangolin_api/src/credential_signers/mock_signer.rs:39:9
+   |
+39 |         permissions: &[String],
+   |         ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_permissions`
+
+warning: unused variable: `service_user_id`
+   --> pangolin_api/src/service_user_handlers.rs:111:9
+    |
+111 |     let service_user_id = service_user.id;
+    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_service_user_id`
+
+Some errors have detailed explanations: E0046, E0050, E0053, E0061, E0277, E0308, E0407, E0412, E0599.
+For more information about an error, try `rustc --explain E0046`.
+warning: `pangolin_api` (lib) generated 71 warnings
+error: could not compile `pangolin_api` (lib) due to 25 previous errors; 71 warnings emitted

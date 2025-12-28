@@ -40,6 +40,9 @@ async fn main() {
         tracing::info!("Using Memory Storage");
         Arc::new(MemoryStore::new())
     };
+    
+    // Wrap with Caching Layer (P3 Optimization)
+    let store = Arc::new(pangolin_api::cached_store::CachedCatalogStore::new(store));
 
     // Create default tenant for testing/development
     // This tenant is used when no authentication is provided

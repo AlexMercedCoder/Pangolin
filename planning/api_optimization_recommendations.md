@@ -144,13 +144,13 @@ These changes are transparent to clients:
 
 | Feature | MemoryStore | SqliteStore | PostgresStore | MongoStore | CLI/UI Impact | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **P1: DB Indexes** | N/A | [ ] | [ ] | [ ] | None | **Todo** |
+| **P1: DB Indexes** | N/A | [x] | [x] | [x] | None | **Complete** |
 | **P1: Async JSON** | [x] | [x] | [x] | [x] | None | **Complete** |
 | **P1: ObjStore Cache** | N/A | N/A | [x] | N/A | None | **Complete** |
 | **P2: Bulk Copy** | [x] | [x] | [x] | [x] | None | **Complete** |
 | **P2: Recursive Ancestry**| [x] | [x] | [x] | [x] | None | **Complete** |
 | **P3: Pagination** | [x] | [x] | [x] | [x] | **Low** | **Complete** |
-| **P3: Caching** | N/A | N/A | [ ] | N/A | None | **Planning** |
+| **P3: Caching Layers (Catalog-Warehouse)** | N/A | N/A | [x] | N/A | None | **Complete** |
 
 ## 10. Implementation Status & Changelog (Dec 2025)
 
@@ -180,9 +180,9 @@ The following endpoints have been updated to accept optional `limit` (integer) a
 *   **Action Required:** None. Users can optionally use these flags to manage large result sets.
 
 #### PyPangolin SDK
-*   **Status:** Functional (Backward Compatible).
-*   **Changes:** None yet. SDK methods currently ignore `limit`/`offset` args if passed (or don't expose them).
-*   **Action Required:** Future update needed to expose `limit` and `offset` keyword arguments in `list_*` methods.
+*   **Status:** Updated.
+*   **Changes:** `list_*` methods in `TenantClient`, `UserClient`, `WarehouseClient`, `CatalogClient`, and `TokenClient` now accept `limit` and `offset` arguments.
+*   **Action Required:** None.
 
 #### Pangolin UI
 *   **Status:** Updated.
