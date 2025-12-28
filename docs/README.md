@@ -52,19 +52,31 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 *Connecting tools and using our management layers.*
 
 - **[Management UI](./ui/README.md)** - Visual guide to the administration portal.
+- **[PyPangolin SDK (Official)](../pypangolin/README.md)** - Rich Python client with Git-like operations and types.
 - **[PyIceberg Integration](./pyiceberg/README.md)** - Native Python client configuration.
-- **[CLI Reference](./cli/overview.md)** - Documentation for `pangolin-admin` and `pangolin-user`.
-- **[API Reference](./api/api_overview.md)** - Iceberg REST and Management API specs.
+- **[CLI Reference](./cli/README.md)** - Documentation for `pangolin-admin` and `pangolin-user`.
+- **[API Reference](./api/README.md)** - Iceberg REST and Management API specs.
 
 ---
 
 ## 🏗️ 6. Architecture & Internals
 *Deep-dives for developers and contributors.*
 
-- [Architecture Overview](./architecture/architecture.md) - System design and component interaction.
-- [Technical Logic Deep-Dive](./architecture/README.md) - Caching, Branching (Git-for-Data), and Trait details.
+- **[Architecture Overview](./architecture/README.md)** - System design and component interaction.
+- **[Technical Logic Deep-Dive](./architecture/README.md)** - Caching, Branching (Git-for-Data), and Trait details.
 - **[Data Models](./architecture/models.md)** - Understanding the internal schema.
 - **[CatalogStore Trait](./architecture/catalog-store-trait.md)** - Extending Pangolin storage.
+- **[Developer Utilities](./utilities/README.md)** - Tools for contributors (e.g. OpenAPI generation).
+
+---
+
+## 🎓 7. Best Practices
+*Production guides and operational wisdom.*
+
+- **[Best Practices Index](./best-practices/README.md)** - Complete guide to operating Pangolin.
+- **[Deployment & Security](./best-practices/deployment.md)** - Production checklists.
+- **[Scalability](./best-practices/scalability.md)** - Tuning for high performance.
+- **[Iceberg Tuning](./best-practices/iceberg.md)** - Optimizing table layout and compaction.
 
 ---
 
