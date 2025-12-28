@@ -20,15 +20,15 @@ The UI provides a dedicated **Roles** dashboard where you can:
 
 ### Permissions Interface
 When creating or editing a role, the UI provides a granular selector for:
-- **Action**: `Read`, `Write`, `Create`, `Delete`, `List`, `Manage`.
-- **Scope Type**: `Global`, `Catalog`, `Namespace`, `Asset`, or `Tag`.
+- **Action**: `READ`, `WRITE`, `CREATE`, `DELETE`, `LIST`, `ALL` (Full Access), `MANAGE_DISCOVERY`.
+- **Scope Type**: `System`, `Tenant`, `Catalog`, `Namespace`, `Table`, `View`.
 - **Target**: The specific resource (e.g., the `finance` namespace).
 
 ---
 
 ## 🔑 Token Management
 
-Manage your session and programmatic access via JWT tokens.
+manage your session and programmatic access via JWT tokens.
 
 ### Personal Tokens
 From the **Profile** menu, users can:
@@ -40,8 +40,18 @@ Tenant Admins can view and revoke tokens for **any user** within their tenant to
 
 ---
 
-## 🛡️ Identity Providers
+## 🛡️ Authentication & Identity Providers
 
 Pangolin's UI seamlessly handles multiple authentication flows:
-- **Native**: Username and Bcrypt-hashed password.
-- **OAuth**: One-click login with Google, GitHub, or Microsoft (configured in [System Settings](./administration.md)).
+
+### 1. No Auth Mode (Local Development)
+For local testing without an identity provider.
+- **Trigger**: Set `PANGOLIN_NO_AUTH=true` and `VITE_NO_AUTH=true`.
+- **Login**: Use username `root` and password `root`.
+- **Behavior**: Simulates a Root user session with full system access. Sessions persist across refreshes via local storage.
+
+### 2. Native Auth
+Username and Bcrypt-hashed password management for standard deployments.
+
+### 3. OAuth
+One-click login with Google, GitHub, or Microsoft (configured in [System Settings](./administration.md)).

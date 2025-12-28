@@ -31,3 +31,19 @@ Manage who can access what.
 - Users & Roles
 - Granular Permissions UI
 - Token Management (JWT)
+
+## ⚙️ Configuration & Development
+
+### Local Development Setup
+When running the UI locally against a backend services, ensure your `vite.config.ts` proxy matches your backend port (default: 8080).
+
+**Common Pitfall:** The backend defaults to port `8080`. If `vite.config.ts` proxies to `8085`, you may encounter 500 errors or connection refusals. Ensure the proxy target matches:
+```typescript
+server: {
+    proxy: {
+        '/api': 'http://localhost:8080', // Match backend port
+        '/v1': 'http://localhost:8080',
+        '/oauth': 'http://localhost:8080'
+    }
+}
+```

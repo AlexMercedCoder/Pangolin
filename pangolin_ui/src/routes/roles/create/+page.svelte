@@ -127,7 +127,12 @@
 
           backendPermissions.push({
               scope: backendScope,
-              actions: p.actions.map(a => a.toLowerCase())
+              actions: p.actions.map(a => {
+                  if (a === 'MANAGE_DISCOVERY') return 'manage-discovery';
+                  // MANAGE_ACCESS was removed, but if present, map to all or ignore? 
+                  // ALL maps to 'all' which is valid.
+                  return a.toLowerCase();
+              })
           });
       }
       

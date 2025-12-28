@@ -42,9 +42,9 @@
         <td class="p-2 text-xs">Catalog, Namespace, Table</td>
       </tr>
       <tr>
-        <td class="p-2 font-mono font-bold text-red-700">ADMIN</td>
-        <td class="p-2">Full administrative control (manage users, roles, settings).</td>
-        <td class="p-2 text-xs">System, Tenant</td>
+        <td class="p-2 font-mono font-bold text-red-700">ALL</td>
+        <td class="p-2">Full access to valid actions within the scope.</td>
+        <td class="p-2 text-xs">System, Tenant, Catalog</td>
       </tr>
     </tbody>
   </table>

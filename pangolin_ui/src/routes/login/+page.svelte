@@ -44,8 +44,31 @@
 		loading = true;
 
 		try {
-            console.log('Attempting login for:', username, 'with tenant:', tenantId);
-			const tenantIdToSend = showTenantSelector && tenantId ? tenantId : null;
+            // Check for No-Auth Root Login trigger
+            if (username === 'root' && password === 'root' && !$authStore.authEnabled) {
+                console.log('Detected Root No-Auth trigger');
+                const result = authStore.loginNoAuth();
+                if (result.success) {
+                    goto('/');
+                    return;
+                }
+            }
+            
+			console.log('Attempting login for:', username, 'with tenant:', tenantId);
+            
+            // Default to Zero GUID if not specified when not using tenant selector
+            // This is primarily for the default tenant admin case (0000...)
+			let tenantIdToSend = showTenantSelector && tenantId ? tenantId : null;
+            
+            // Conditional Default Logic:
+            // - No Auth Mode (!authEnabled): Default to Zero UUID for legacy behavior
+            // - Auth Mode (authEnabled): Default to null to allow Root Env Var fallback
+            if (!showTenantSelector && !tenantIdToSend) {
+                if (!$authStore.authEnabled) {
+                     tenantIdToSend = '00000000-0000-0000-0000-000000000000';
+                }
+            }
+            
 			const result = await authStore.login(username, password, tenantIdToSend);
             console.log('Login result:', result);
 			if (result.success) {

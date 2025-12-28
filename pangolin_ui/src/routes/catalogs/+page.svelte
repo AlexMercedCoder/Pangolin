@@ -16,6 +16,17 @@
 	let showDeleteModal = false;
 	let catalogToDelete: Catalog | null = null;
 	let deleting = false;
+    
+    // Pagination & State
+    let page = 1;
+    let pageSize = 10;
+    let error: string | null = null;
+    let hasNextPage = false;
+    
+    function handlePageChange(event: CustomEvent<number>) {
+        page = event.detail;
+        loadCatalogs();
+    }
 
 	const columns = [
 		{ key: 'name', label: 'Name', sortable: true },

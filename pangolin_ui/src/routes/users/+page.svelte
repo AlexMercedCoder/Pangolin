@@ -18,6 +18,12 @@
 	let selectedUser: User | null = null;
 	let searchQuery = '';
 	let roleFilter = 'all';
+    
+    // Pagination & State
+    let page = 1;
+    let pageSize = 10;
+    let error: string | null = null;
+    let hasNextPage = false;
 
 	// Reload when tenant changes
 	$: if ($tenantStore.selectedTenantId || $tenantStore.selectedTenantId === null) {

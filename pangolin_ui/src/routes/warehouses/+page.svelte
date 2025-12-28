@@ -15,6 +15,17 @@
 	let showDeleteModal = false;
 	let warehouseToDelete: Warehouse | null = null;
 	let deleting = false;
+    
+    // Pagination & State
+    let page = 1;
+    let pageSize = 10;
+    let error: string | null = null;
+    let hasNextPage = false;
+    
+    function handlePageChange(event: CustomEvent<number>) {
+        page = event.detail;
+        loadWarehouses();
+    }
 
 	const columns = [
 		{ key: 'name', label: 'Name', sortable: true },
@@ -47,6 +58,12 @@
 		const warehouse = event.detail;
 		goto(`/warehouses/${encodeURIComponent(warehouse.name)}`);
 	}
+	function getStorageType(warehouse: any): string {
+		return warehouse.storage_config?.type || 's3';
+	}
+
+	function getBucketOrContainer(warehouse: any): string {
+		return warehouse.storage_config?.['s3.bucket']
 			|| warehouse.storage_config?.['azure.container']
 			|| warehouse.storage_config?.['gcs.bucket'] 
 			|| '-';

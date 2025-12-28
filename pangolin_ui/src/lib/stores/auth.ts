@@ -52,31 +52,44 @@ function createAuthStore() {
 			}
 			
 			if (!authEnabled) {
-				// NO_AUTH mode - auto-authenticate with mock session
-				const mockUser: User = {
-					id: 'no-auth-user',
-					username: 'no-auth',
-					role: 'root',
-					tenant_id: '00000000-0000-0000-0000-000000000000' // Default tenant
-				};
-				
-				update(state => ({
-					...state,
-					authEnabled: false,
-					isAuthenticated: true,
-					user: mockUser,
-					token: 'no-auth-mode',
-					isLoading: false,
-				}));
-				
-				// Store in localStorage for consistency
-				if (browser) {
-					localStorage.setItem('auth_token', 'no-auth-mode');
-					localStorage.setItem('auth_user', JSON.stringify(mockUser));
-				}
+				// NO_AUTH mode - set flag
+                let restored = false;
+                
+                // RESTORE SESSION IF EXISTS IN LOCALSTORAGE
+                if (browser) {
+                    const token = localStorage.getItem('auth_token');
+                    const userStr = localStorage.getItem('auth_user');
+                    
+                    if (token === 'no-auth-mode' && userStr) {
+                         try {
+                             const user = JSON.parse(userStr);
+                             update(state => ({
+                                ...state,
+                                authEnabled: false,
+                                isAuthenticated: true,
+                                user: user,
+                                token: token,
+                                isLoading: false
+                             }));
+                             restored = true;
+                         } catch (e) {
+                             console.error("Failed to restore no-auth session", e);
+                         }
+                    }
+                }
+                
+                if (!restored) {
+                    update(state => ({
+                        ...state,
+                        authEnabled: false,
+                        isLoading: false,
+                    }));
+                }
 				return;
 			}
-
+            
+            // ... (rest of initialize) ...
+            
 			// Auth is enabled - check for existing token
 			update(state => ({ ...state, authEnabled: true }));
 			
@@ -124,6 +137,33 @@ function createAuthStore() {
 	return {
 		subscribe,
 		initialize,
+        
+        // Manual trigger for No Auth Login
+        loginNoAuth() {
+            const mockUser: User = {
+                id: 'no-auth-user',
+                username: 'no-auth',
+                role: 'root',
+                tenant_id: '00000000-0000-0000-0000-000000000000'
+            };
+            
+            update(state => ({
+                ...state,
+                authEnabled: false,
+                isAuthenticated: true,
+                user: mockUser,
+                token: 'no-auth-mode',
+                isLoading: false,
+            }));
+            
+            if (browser) {
+                localStorage.setItem('auth_token', 'no-auth-mode');
+                localStorage.setItem('auth_user', JSON.stringify(mockUser));
+            }
+            
+            return { success: true };
+        },
+        
 		async handleOAuthLogin(token: string) {
 			try {
 				if (browser) {

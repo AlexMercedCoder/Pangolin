@@ -13,6 +13,18 @@
 	let showDeleteModal = false;
 	let tenantToDelete: Tenant | null = null;
 	let deleting = false;
+    
+    // Pagination & State
+    let page = 1;
+    let pageSize = 10;
+    let error: string | null = null;
+    let hasNextPage = false;
+    
+    const columns = [
+        { key: 'id', label: 'ID', sortable: false },
+        { key: 'name', label: 'Name', sortable: true },
+        { key: 'actions', label: 'Actions', sortable: false }
+    ];
 
 	onMount(() => {
 		loadTenants();

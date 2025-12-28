@@ -34,13 +34,12 @@
     
     // Auth redirect logic & State Reset
     $: if (!$authStore.isLoading) {
-        if ($authStore.authEnabled) {
-            const path = $page.url.pathname;
-            if (!$authStore.isAuthenticated && path !== '/login') {
-                goto('/login');
-            } else if ($authStore.isAuthenticated && path === '/login') {
-                goto('/');
-            }
+        // Enforce login for everyone, even in No-Auth mode (since we now require manual login)
+        const path = $page.url.pathname;
+        if (!$authStore.isAuthenticated && path !== '/login') {
+            goto('/login');
+        } else if ($authStore.isAuthenticated && path === '/login') {
+            goto('/');
         }
         
         // Reset tenants state on logout
