@@ -45,6 +45,7 @@
 			focus:ring-2 focus:border-transparent
 			disabled:opacity-50 disabled:cursor-not-allowed
 			transition-colors"
+		on:change
 	>
 		<option value="" disabled selected>{placeholder}</option>
 		{#each options as option}

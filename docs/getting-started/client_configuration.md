@@ -203,6 +203,45 @@ fs.s3a.secret-key=minioadmin
 fs.s3a.path.style.access=true
 ```
 
+## Apache Flink
+
+### SQL Client Configuration
+
+You can create an Iceberg catalog in Flink SQL using the `rest` catalog type.
+
+```sql
+CREATE CATALOG pangolin WITH (
+    'type'='iceberg',
+    'catalog-type'='rest',
+    'uri'='http://localhost:8080/v1/analytics',
+    'token'='<YOUR_JWT_TOKEN>',
+    'warehouse'='s3://warehouse-bucket/analytics'
+);
+
+USE CATALOG pangolin;
+```
+
+> [!NOTE]
+> Ensure you have the `flink-table-api-java-bridge` and `iceberg-flink-runtime` jars available in your Flink environment.
+
+## Dremio
+
+Dremio supports connecting to Iceberg REST catalogs as a source.
+
+### Configuration Steps
+
+1.  **Add Source**: Click "Add Data Source" and select **"Iceberg REST Catalog"**.
+2.  **General Settings**:
+    *   **Name**: `pangolin_analytics`
+    *   **Endpoint URL**: `http://pangolin:8080/v1/analytics/iceberg` (Ensure reachable from Dremio)
+3.  **Authentication**:
+    *   If using **No-Auth Mode**, no further auth is needed.
+    *   If using **Token Auth**, you may need to pass the token via the `header.Authorization` property in the "Advanced Options" -> "Connection Properties" if Dremio's UI doesn't explicitly ask for a Bearer token yet.
+    *   *Property*: `header.Authorization`
+    *   *Value*: `Bearer <YOUR_JWT_TOKEN>`
+4.  **Credential Vending**:
+    *   Enable **"Use vended credentials"** (supported by Pangolin) to let Dremio use the credentials provided by the catalog endpoint for S3/Azure/GCS access.
+
 ## Environment Variables
 
 For production deployments, use environment variables:

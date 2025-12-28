@@ -40,6 +40,8 @@
 			// Pre-populate form
 			warehouseName = catalog.warehouse_name || '';
 			storageLocation = catalog.storage_location || '';
+            // Mark as manually set initially to prevent auto-overwriting existing custom paths on load
+            manualLocation = true;
 		} catch (error: any) {
 			notifications.error(`Failed to load catalog: ${error.message}`);
 			goto('/catalogs');
@@ -65,6 +67,45 @@
 
 		return Object.keys(errors).length === 0;
 	}
+
+    let manualLocation = false;
+
+    // Helper to determine type from config keys
+    function getStorageType(config: Record<string, string> | undefined): 's3' | 'azure' | 'gcs' | 's3' {
+        if (!config) return 's3';
+        if (config['s3.bucket']) return 's3';
+        if (config['adls.account-name'] || config['azure.container']) return 'azure';
+        if (config['gcs.bucket']) return 'gcs';
+        return 's3';
+    }
+
+    // Reactive update for storage location
+    $: if (warehouseName && !manualLocation) {
+        const selected = warehouses.find(w => w.name === warehouseName);
+        if (selected?.storage_config) {
+            const config = selected.storage_config;
+            const bucket = config['s3.bucket'] 
+                       || config['adls.container']
+                       || config['azure.container'] 
+                       || config['gcs.bucket'];
+            
+            const type = getStorageType(config);
+            
+            // Only auto-update if we have a valid bucket to form a path
+            if (bucket) {
+                 if (type === 'azure') {
+                    const account = config['adls.account-name'];
+                    if (account) {
+                        storageLocation = `abfss://${bucket}@${account}.dfs.core.windows.net/${catalog?.name || 'catalog'}`;
+                    }
+                } else if (type === 's3') {
+                    storageLocation = `s3://${bucket}/${catalog?.name || 'catalog'}`;
+                } else if (type === 'gcs') {
+                    storageLocation = `gs://${bucket}/${catalog?.name || 'catalog'}`;
+                }
+            }
+        }
+    }
 
 	async function handleSubmit() {
 		if (!validateForm() || !catalogName) return;
@@ -137,6 +178,7 @@
 				label="Warehouse"
 				bind:value={warehouseName}
 				options={warehouseOptions}
+                on:change={() => manualLocation = false}
 				placeholder="Select a warehouse..."
 				helpText="Optional: Link this catalog to a warehouse for credential vending"
 			/>
@@ -144,6 +186,7 @@
 				<Input
 					label="Storage Location"
 					bind:value={storageLocation}
+                    on:input={() => manualLocation = true}
 					error={errors.storageLocation}
 					required
 					placeholder="s3://bucket/path or /local/path"

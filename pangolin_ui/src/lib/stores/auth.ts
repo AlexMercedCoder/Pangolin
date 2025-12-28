@@ -30,26 +30,36 @@ function createAuthStore() {
 			let authEnabled = true;
 			
 			try {
+                console.log('Initializing Auth: Fetching App Config...');
 				const config = await authApi.getAppConfig();
+                console.log('App Config Response:', config);
 				authEnabled = config.auth_enabled;
 			} catch (configError) {
+                console.warn('App Config failed:', configError);
 				// If app-config endpoint doesn't exist, try to detect NO_AUTH mode
 				// by attempting to access a protected endpoint without auth
+                console.log('Attempting No-Auth Probe (/api/v1/catalogs)...');
 				try {
 					const response = await fetch('/api/v1/catalogs', {
 						method: 'GET',
 						headers: { 'Content-Type': 'application/json' }
 					});
+                    console.log('Probe Response:', response.status, response.ok);
 					
 					// If we get a 200 without auth, we're in NO_AUTH mode
 					if (response.ok) {
+                        console.log('Probe Succeeded: No Auth Detected');
 						authEnabled = false;
-					}
-				} catch {
+					} else {
+                        console.log('Probe Failed: Status', response.status);
+                    }
+				} catch (probeError) {
+                    console.error('Probe Error:', probeError);
 					// If fetch fails, assume auth is enabled
 					authEnabled = true;
 				}
 			}
+            console.log('Determined AuthEnabled:', authEnabled);
 			
 			if (!authEnabled) {
 				// NO_AUTH mode - set flag
@@ -60,8 +70,10 @@ function createAuthStore() {
                     const token = localStorage.getItem('auth_token');
                     const userStr = localStorage.getItem('auth_user');
                     
-                    if (token === 'no-auth-mode' && userStr) {
-                         try {
+                    // Relaxed check: Allow either specific 'no-auth-mode' token OR a real JWT if one was set by a manual login
+                    if (token && userStr) {
+                        try {
+                        console.log('Restoring existing session in No-Auth mode:', token.substring(0, 10) + '...');
                              const user = JSON.parse(userStr);
                              update(state => ({
                                 ...state,

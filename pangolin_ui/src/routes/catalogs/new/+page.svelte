@@ -86,15 +86,22 @@
 		}
 	});
 
+	let manualLocation = false;
+
 	// Auto-fill storage location logic (only for Local)
-	$: if (!isFederated && warehouseName && !storageLocation) {
+	$: if (!isFederated && warehouseName && !manualLocation) {
+        console.log('Triggering auto-fill. Warehouse:', warehouseName);
 		const selected = warehouses.find(w => w.value === warehouseName);
+        console.log('Selected Warehouse Object:', selected);
 		if (selected?.full?.storage_config) {
 			const w = selected.full;
 			const bucket = w.storage_config?.['s3.bucket'] 
 			           || w.storage_config?.['adls.container']
 			           || w.storage_config?.['azure.container'] 
-			           || w.storage_config?.['gcs.bucket'];
+			           || w.storage_config?.['gcs.bucket']
+                       || w.storage_config?.['bucket']; // fallback
+            
+            console.log('Found Bucket:', bucket);
 			
 			const type = w.storage_config?.['s3.bucket'] ? 's3' 
 			           : w.storage_config?.['adls.account-name'] ? 'azure'
@@ -109,9 +116,14 @@
 				} else if (type === 'gcs') {
 					storageLocation = `gs://${bucket}/${name || 'catalog'}`;
 				}
-			}
+                console.log('Set storageLocation:', storageLocation);
+			} else {
+                console.warn('No bucket found in storage_config:', w.storage_config);
+            }
 		}
-	}
+	} else {
+        console.log('Skipping auto-fill. IsFederated:', isFederated, 'Warehouse:', warehouseName, 'Manual:', manualLocation);
+    }
 
 	async function handleSubmit() {
         if (validationResult && !validationResult.available) {
@@ -248,6 +260,7 @@
 								label="Warehouse (Optional)"
 								bind:value={warehouseName}
 								options={warehouses}
+                                on:change={() => { console.log('Resetting manualLocation'); manualLocation = false; }}
 								placeholder={loadingWarehouses ? "Loading warehouses..." : "Select a warehouse (Optional)"}
 								disabled={loading || loadingWarehouses}
 							/>
@@ -263,6 +276,7 @@
 							<Input
 								label="Storage Location (Optional)"
 								bind:value={storageLocation}
+                                on:input={() => manualLocation = true}
 								placeholder="s3://bucket/path/to/catalog"
 								disabled={loading}
 							/>
