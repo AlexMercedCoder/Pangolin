@@ -12,12 +12,18 @@ impl MemoryStore {
     pub(crate) async fn get_merge_operation_internal(&self, operation_id: Uuid) -> Result<Option<pangolin_core::model::MergeOperation>> {
             Ok(self.merge_operations.get(&operation_id).map(|r| r.value().clone()))
         }
-    pub(crate) async fn list_merge_operations_internal(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
-            Ok(self.merge_operations
+    pub(crate) async fn list_merge_operations_internal(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+            let iter = self.merge_operations
                 .iter()
                 .filter(|r| r.value().tenant_id == tenant_id && r.value().catalog_name == catalog_name)
-                .map(|r| r.value().clone())
-                .collect())
+                .map(|r| r.value().clone());
+
+            let result = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
+            Ok(result)
         }
     
     pub(crate) async fn complete_merge_operation_internal(&self, operation_id: Uuid, result_commit_id: Uuid) -> Result<()> {
@@ -43,11 +49,16 @@ impl MemoryStore {
         Ok(self.merge_conflicts.get(&conflict_id).map(|c| c.value().clone()))
     }
 
-    pub(crate) async fn list_merge_conflicts_internal(&self, operation_id: Uuid) -> Result<Vec<MergeConflict>> {
-        let conflicts = self.merge_conflicts.iter()
+    pub(crate) async fn list_merge_conflicts_internal(&self, operation_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<MergeConflict>> {
+        let iter = self.merge_conflicts.iter()
             .filter(|c| c.value().merge_operation_id == operation_id)
-            .map(|c| c.value().clone())
-            .collect();
+            .map(|c| c.value().clone());
+
+        let conflicts = if let Some(p) = pagination {
+            iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+        } else {
+            iter.collect()
+        };
         Ok(conflicts)
     }
 }

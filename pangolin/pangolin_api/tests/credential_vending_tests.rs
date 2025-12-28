@@ -1,4 +1,4 @@
-use pangolin_api::iceberg_handlers::TableResponse;
+use pangolin_api::iceberg::types::TableResponse;
 use pangolin_core::iceberg_metadata::{TableMetadata, Schema, PartitionSpec, SortOrder};
 use std::collections::HashMap;
 

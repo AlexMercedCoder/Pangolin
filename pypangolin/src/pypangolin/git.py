@@ -6,8 +6,11 @@ class BranchClient:
     def __init__(self, client):
         self.client = client
 
-    def create(self, name: str, from_branch: str = "main", catalog_name: str = None) -> Branch:
+    def create(self, name: str, from_branch: str = "main", catalog_name: str = None, catalog: str = None) -> Branch:
         """Create a new branch."""
+        if catalog is not None and catalog_name is None:
+            catalog_name = catalog
+            
         payload = {
             "name": name,
             "from_branch": from_branch,
@@ -17,8 +20,10 @@ class BranchClient:
         data = self.client.post("/api/v1/branches", json=payload)
         return Branch(**data)
 
-    def list(self, catalog_name: str = None) -> List[Branch]:
+    def list(self, catalog_name: str = None, catalog: str = None) -> List[Branch]:
         """List all branches, optionally filtered by catalog."""
+        if catalog is not None and catalog_name is None:
+            catalog_name = catalog
         params = {}
         if catalog_name:
             params["catalog"] = catalog_name
@@ -30,16 +35,20 @@ class BranchClient:
         data = self.client.get(f"/api/v1/branches/{name}")
         return Branch(**data)
 
-    def list_commits(self, branch_name: str, catalog_name: str = None) -> List[Commit]:
+    def list_commits(self, branch_name: str, catalog_name: str = None, catalog: str = None) -> List[Commit]:
         """List commits for a branch."""
+        if catalog is not None and catalog_name is None:
+            catalog_name = catalog
         params = {}
         if catalog_name:
             params["catalog"] = catalog_name
         data = self.client.get(f"/api/v1/branches/{branch_name}/commits", params=params)
         return [Commit(**c) for c in data]
 
-    def merge(self, source_branch: str, target_branch: str, catalog_name: str = None) -> MergeOperation:
+    def merge(self, source_branch: str, target_branch: str, catalog_name: str = None, catalog: str = None) -> MergeOperation:
         """Trigger a merge between two branches."""
+        if catalog is not None and catalog_name is None:
+            catalog_name = catalog
         payload = {
             "source_branch": source_branch,
             "target_branch": target_branch,
@@ -48,8 +57,10 @@ class BranchClient:
         data = self.client.post("/api/v1/branches/merge", json=payload)
         return MergeOperation(**data)
 
-    def rebase(self, branch_name: str, base_branch: str, catalog_name: str = None) -> Branch:
+    def rebase(self, branch_name: str, base_branch: str, catalog_name: str = None, catalog: str = None) -> Branch:
         """Rebase a branch onto another base branch."""
+        if catalog is not None and catalog_name is None:
+            catalog_name = catalog
         payload = {
             "base_branch": base_branch,
             "catalog": catalog_name

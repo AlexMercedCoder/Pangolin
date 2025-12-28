@@ -103,6 +103,10 @@ class BusinessMetadataClient:
         data = self.client.post(f"/api/v1/assets/{asset_id}/metadata", json=payload)
         return BusinessMetadata(**data["metadata"])
 
+    def update(self, asset_id: str, tags: List[str] = [], properties: Dict[str, Any] = {}, description: str = None, discoverable: bool = False) -> BusinessMetadata:
+        """Update business metadata (alias for upsert)."""
+        return self.upsert(asset_id, tags, properties, description, discoverable)
+
     def get(self, asset_id: str) -> BusinessMetadata:
         """Get metadata for an asset."""
         data = self.client.get(f"/api/v1/assets/{asset_id}/metadata")

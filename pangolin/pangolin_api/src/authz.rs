@@ -58,7 +58,7 @@ pub async fn check_permission(
     }
     
     // 4. Fetch Direct Permissions
-    let direct_perms = store.list_user_permissions(session.user_id).await?;
+    let direct_perms = store.list_user_permissions(session.user_id, None).await?;
     for perm in &direct_perms {
         if perm.scope.covers(scope) && perm.actions.iter().any(|a| a.implies(action)) {
              return Ok(true);
@@ -120,17 +120,17 @@ pub async fn get_catalog_for_asset(
     use uuid::Uuid;
     
     // Fallback: Iterate through catalogs to find the asset (O(N))
-    let catalogs = store.list_catalogs(tenant_id).await?;
+    let catalogs = store.list_catalogs(tenant_id, None).await?;
     
     for catalog in catalogs {
         // list_namespaces takes (tenant_id, catalog_name, parent: Option<String>)
-        let namespaces = store.list_namespaces(tenant_id, &catalog.name, None).await?;
+        let namespaces = store.list_namespaces(tenant_id, &catalog.name, None, None).await?;
         
         for namespace in namespaces {
             // list_assets takes (tenant_id, catalog_name, branch: Option<String>, namespace: Vec<String>)
             // key is already a Vec<String>
             let namespace_vec = namespace.name; // assuming implementation details from previous steps
-            let assets = store.list_assets(tenant_id, &catalog.name, Some("main".to_string()), namespace_vec).await?;
+            let assets = store.list_assets(tenant_id, &catalog.name, Some("main".to_string()), namespace_vec, None).await?;
             
             if assets.iter().any(|a| a.id == asset_id) {
                 return Ok(catalog.name);

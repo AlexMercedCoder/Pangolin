@@ -1,12 +1,12 @@
 use axum::{
-    extract::{Path, State, Extension},
+    extract::{Path, State, Extension, Query},
     Json,
     response::IntoResponse,
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use pangolin_core::model::{Asset, AssetType};
 use uuid::Uuid;
 use crate::auth::TenantId;
@@ -345,6 +345,7 @@ pub async fn list_assets(
     Extension(tenant): Extension<TenantId>,
     Extension(session): Extension<UserSession>,
     Path((catalog_name, namespace)): Path<(String, String)>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
@@ -364,10 +365,10 @@ pub async fn list_assets(
     // However, existing store.list_assets might depend on implementation.
     // For now, let's assume "main" branch or whatever the store defaults to.
     
-    match store.list_assets(tenant_id, &catalog_name, None, namespace_parts.clone()).await {
+    match store.list_assets(tenant_id, &catalog_name, None, namespace_parts.clone(), Some(pagination)).await {
         Ok(assets) => {
             // Get user permissions
-            let permissions = match store.list_user_permissions(session.user_id).await {
+            let permissions = match store.list_user_permissions(session.user_id, None).await {
                 Ok(p) => p,
                 Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get permissions: {}", e)).into_response(),
             };
@@ -426,9 +427,11 @@ mod tests {
     use crate::iceberg::AppState;
     use pangolin_core::user::UserSession;
     use pangolin_core::permission::{PermissionScope, Action};
-    use crate::tenant::TenantId;
+    use crate::auth::TenantId;
     use axum::Extension;
-    use pangolin_core::model::{Catalog, CatalogType, Tenant, User, UserRole, Permission};
+    use pangolin_core::model::{Catalog, CatalogType, Tenant};
+    use pangolin_core::user::{User, UserRole};
+    use pangolin_core::permission::Permission;
     use pangolin_store::memory::MemoryStore;
     use std::sync::Arc;
     use uuid::Uuid;
@@ -445,23 +448,21 @@ mod tests {
         store.create_tenant(tenant.clone()).await.unwrap();
         
         // Create admin user
-        let admin_user = User {
-            id: Uuid::new_v4(),
-            username: "admin".to_string(),
-            password_hash: "hash".to_string(),
-            role: UserRole::TenantAdmin,
-            tenant_id: Some(tenant.id),
-        };
+        let admin_user = User::new_tenant_admin(
+            "admin".to_string(),
+            "admin@example.com".to_string(),
+            "hash".to_string(),
+            tenant.id,
+        );
         store.create_user(admin_user.clone()).await.unwrap();
         
         // Create regular user
-        let regular_user = User {
-            id: Uuid::new_v4(),
-            username: "user".to_string(),
-            password_hash: "hash".to_string(),
-            role: UserRole::TenantUser,
-            tenant_id: Some(tenant.id),
-        };
+        let regular_user = User::new_tenant_user(
+            "user".to_string(),
+            "user@example.com".to_string(),
+            "hash".to_string(),
+            tenant.id,
+        );
         store.create_user(regular_user.clone()).await.unwrap();
         
         // Create catalog
@@ -479,13 +480,14 @@ mod tests {
         // Grant Create permission to regular user on namespace
         let permission = Permission {
             id: Uuid::new_v4(),
-            user_id: Some(regular_user.id),
-            role_id: None,
+            user_id: regular_user.id,
             scope: PermissionScope::Namespace {
                 catalog_id: catalog.id,
                 namespace: "test_ns".to_string(),
             },
-            action: Action::Create,
+            actions: std::collections::HashSet::from([Action::Create]),
+            granted_by: admin_user.id,
+            granted_at: chrono::Utc::now(),
         };
         store.create_permission(permission).await.unwrap();
         

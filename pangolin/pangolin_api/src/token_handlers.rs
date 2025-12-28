@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Json},
+    extract::{State, Json, Query},
     response::IntoResponse,
     http::StatusCode,
 };
@@ -10,6 +10,7 @@ use crate::auth::Claims;
 use crate::iceberg::AppState;
 use pangolin_core::user::UserRole;
 use pangolin_core::token::TokenInfo;
+use pangolin_store::PaginationParams;
 use utoipa::ToSchema;
 use chrono::{Utc, Duration};
 
@@ -313,9 +314,10 @@ pub async fn cleanup_expired_tokens(
 pub async fn list_my_tokens(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = session.tenant_id.unwrap_or_default();
-    match store.list_active_tokens(tenant_id, session.user_id).await {
+    match store.list_active_tokens(tenant_id, Some(session.user_id), Some(pagination)).await {
         Ok(tokens) => (StatusCode::OK, Json(tokens)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list tokens: {}", e)).into_response(),
     }
@@ -340,13 +342,14 @@ pub async fn list_user_tokens(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
     Path(target_user_id): Path<Uuid>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     if !matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
     
     let tenant_id = session.tenant_id.unwrap_or_default();
-    match store.list_active_tokens(tenant_id, target_user_id).await {
+    match store.list_active_tokens(tenant_id, Some(target_user_id), Some(pagination)).await {
         Ok(tokens) => (StatusCode::OK, Json(tokens)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list tokens: {}", e)).into_response(),
     }

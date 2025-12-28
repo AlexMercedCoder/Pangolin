@@ -1,4 +1,4 @@
-use crate::CatalogStore;
+use crate::{CatalogStore, PaginationParams};
 use anyhow::Result;
 use async_trait::async_trait;
 use pangolin_core::model::{
@@ -75,8 +75,8 @@ impl CatalogStore for PostgresStore {
         self.get_tenant(id).await
     }
 
-    async fn list_tenants(&self) -> Result<Vec<Tenant>> {
-        self.list_tenants().await
+    async fn list_tenants(&self, pagination: Option<PaginationParams>) -> Result<Vec<Tenant>> {
+        self.list_tenants(pagination).await
     }
 
     async fn update_tenant(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant> {
@@ -96,8 +96,8 @@ impl CatalogStore for PostgresStore {
         self.get_warehouse(tenant_id, name).await
     }
 
-    async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>> {
-        self.list_warehouses(tenant_id).await
+    async fn list_warehouses(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Warehouse>> {
+        self.list_warehouses(tenant_id, pagination).await
     }
 
     async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse> {
@@ -117,8 +117,8 @@ impl CatalogStore for PostgresStore {
         self.get_catalog(tenant_id, name).await
     }
 
-    async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
-        self.list_catalogs(tenant_id).await
+    async fn list_catalogs(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Catalog>> {
+        self.list_catalogs(tenant_id, pagination).await
     }
 
     async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog> {
@@ -139,8 +139,8 @@ impl CatalogStore for PostgresStore {
         self.get_namespace(tenant_id, catalog_name, namespace).await
     }
 
-    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>) -> Result<Vec<Namespace>> {
-        self.list_namespaces(tenant_id, catalog_name, _parent).await
+    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>, pagination: Option<PaginationParams>) -> Result<Vec<Namespace>> {
+        self.list_namespaces(tenant_id, catalog_name, _parent, pagination).await
     }
 
     async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()> {
@@ -164,8 +164,8 @@ impl CatalogStore for PostgresStore {
         self.get_asset_by_id(tenant_id, asset_id).await
     }
 
-    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
-        self.list_assets(tenant_id, catalog_name, branch, namespace).await
+    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, pagination: Option<PaginationParams>) -> Result<Vec<Asset>> {
+        self.list_assets(tenant_id, catalog_name, branch, namespace, pagination).await
     }
 
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
@@ -193,8 +193,8 @@ impl CatalogStore for PostgresStore {
         self.get_branch(tenant_id, catalog_name, name).await
     }
 
-    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>> {
-        self.list_branches(tenant_id, catalog_name).await
+    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<Branch>> {
+        self.list_branches(tenant_id, catalog_name, pagination).await
     }
 
     async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
@@ -205,23 +205,51 @@ impl CatalogStore for PostgresStore {
         self.merge_branch(tenant_id, catalog_name, target_branch, source_branch).await
     }
 
+    async fn copy_assets_bulk(
+        &self, 
+        tenant_id: Uuid, 
+        catalog_name: &str, 
+        src_branch: &str, 
+        dest_branch: &str, 
+        namespace: Option<String>
+    ) -> Result<usize> {
+        self.copy_assets_bulk(tenant_id, catalog_name, src_branch, dest_branch, namespace).await
+    }
+
     // Token Management
-    async fn list_active_tokens(&self, _tenant_id: Uuid, user_id: Uuid) -> Result<Vec<TokenInfo>> {
-        let rows = sqlx::query("SELECT token_id, user_id, token, expires_at FROM active_tokens WHERE user_id = $1")
-            .bind(user_id)
-            .fetch_all(&self.pool)
-            .await?;
+    async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Option<Uuid>, pagination: Option<PaginationParams>) -> Result<Vec<TokenInfo>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = if let Some(uid) = user_id {
+             sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = $1 AND t.user_id = $2 AND t.expires_at > $3 LIMIT $4 OFFSET $5")
+                .bind(tenant_id)
+                .bind(uid)
+                .bind(Utc::now())
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+             sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = $1 AND t.expires_at > $2 LIMIT $3 OFFSET $4")
+                .bind(tenant_id)
+                .bind(Utc::now())
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        };
 
         let mut tokens = Vec::new();
         for row in rows {
             tokens.push(TokenInfo {
                 id: row.get("token_id"),
-                tenant_id: Uuid::default(), // active_tokens table missing tenant_id column, using default
+                tenant_id,
                 user_id: row.get("user_id"),
-                username: "unknown".to_string(), // Need join for username
+                username: "unknown".to_string(),
                 token: Some(row.get("token")),
                 expires_at: row.get("expires_at"),
-                created_at: Utc::now(), // not selecting created_at
+                created_at: Utc::now(),
                 is_valid: true,
             });
         }
@@ -309,12 +337,17 @@ impl CatalogStore for PostgresStore {
         }
     }
 
-    async fn list_service_users(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+    async fn list_service_users(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active 
-             FROM service_users WHERE tenant_id = $1 ORDER BY created_at DESC"
+             FROM service_users WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3"
         )
         .bind(tenant_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -465,13 +498,18 @@ impl CatalogStore for PostgresStore {
         }
     }
 
-    async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+    async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, conflicts, initiated_by, initiated_at, completed_at, result_commit_id
-             FROM merge_operations WHERE tenant_id = $1 AND catalog_name = $2 ORDER BY initiated_at DESC"
+             FROM merge_operations WHERE tenant_id = $1 AND catalog_name = $2 ORDER BY initiated_at DESC LIMIT $3 OFFSET $4"
         )
         .bind(tenant_id)
         .bind(catalog_name)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -603,12 +641,17 @@ impl CatalogStore for PostgresStore {
         }
     }
 
-    async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+    async fn list_merge_conflicts(&self, operation_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT id, merge_operation_id, conflict_type, asset_id, description, resolution, created_at
-             FROM merge_conflicts WHERE merge_operation_id = $1 ORDER BY created_at"
+             FROM merge_conflicts WHERE merge_operation_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3"
         )
         .bind(operation_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -708,6 +751,15 @@ impl CatalogStore for PostgresStore {
         self.get_commit(tenant_id, id).await
     }
 
+    async fn get_commit_ancestry(
+        &self, 
+        tenant_id: Uuid, 
+        head_commit_id: Uuid, 
+        limit: usize
+    ) -> Result<Vec<Commit>> {
+        self.get_commit_ancestry(tenant_id, head_commit_id, limit).await
+    }
+
 
     // File Operations (Not supported in Postgres directly, use S3 or bytea)
     // For metadata files, we can store in a separate table or just return error if not supported.
@@ -769,26 +821,33 @@ impl CatalogStore for PostgresStore {
             
             tracing::info!("write_file: s3 path='{}' bucket='{}' key='{}'", path, bucket, key);
             
-            let mut builder = AmazonS3Builder::new()
-                .with_bucket_name(bucket)
-                .with_allow_http(true);
-                
-             if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
-                 builder = builder.with_endpoint(endpoint);
-             }
-             if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
-                 builder = builder.with_access_key_id(key_id);
-             }
-             if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
-                 builder = builder.with_secret_access_key(secret);
-             }
-             if let Ok(region) = std::env::var("AWS_REGION") {
-                 builder = builder.with_region(region);
-             }
+            // Use cached object store for fallback
+            let store = self.object_store_cache.try_get_or_insert::<_, anyhow::Error>("fallback_s3".to_string(), || {
+                tracing::info!("Initializing fallback S3 store for bucket '{}'", bucket);
+                let mut builder = AmazonS3Builder::new()
+                    .with_bucket_name(bucket)
+                    .with_allow_http(true);
+                    
+                 if let Ok(endpoint) = std::env::var("S3_ENDPOINT") {
+                     builder = builder.with_endpoint(endpoint);
+                 }
+                 if let Ok(key_id) = std::env::var("AWS_ACCESS_KEY_ID") {
+                     builder = builder.with_access_key_id(key_id);
+                 }
+                 if let Ok(secret) = std::env::var("AWS_SECRET_ACCESS_KEY") {
+                     builder = builder.with_secret_access_key(secret);
+                 }
+                 if let Ok(region) = std::env::var("AWS_REGION") {
+                     builder = builder.with_region(region);
+                 }
+                 
+                 let os: Box<dyn object_store::ObjectStore> = Box::new(builder.build()?);
+                 Ok(Arc::from(os))
+            })?;
+
+            store.put(&object_store::path::Path::from(key), data.into()).await?;
+            return Ok(());
              
-             let store = builder.build()?;
-             store.put(&ObjPath::from(key), data.into()).await?;
-             Ok(())
         } else {
              Err(anyhow::anyhow!("Only s3:// paths are supported in Postgres store"))
         }
@@ -803,8 +862,8 @@ impl CatalogStore for PostgresStore {
         self.get_tag(tenant_id, catalog_name, name).await
     }
 
-    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Tag>> {
-        self.list_tags(tenant_id, catalog_name).await
+    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<Tag>> {
+        self.list_tags(tenant_id, catalog_name, pagination).await
     }
 
     async fn delete_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
@@ -1063,8 +1122,8 @@ impl CatalogStore for PostgresStore {
         self.get_access_request(id).await
     }
 
-    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
-        self.list_access_requests(tenant_id).await
+    async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<AccessRequest>> {
+        self.list_access_requests(tenant_id, pagination).await
     }
 
     async fn update_access_request(&self, request: AccessRequest) -> Result<()> {
@@ -1143,8 +1202,8 @@ impl CatalogStore for PostgresStore {
         self.get_user_by_username(username).await
     }
 
-    async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
-        self.list_users(tenant_id).await
+    async fn list_users(&self, tenant_id: Option<Uuid>, pagination: Option<PaginationParams>) -> Result<Vec<User>> {
+        self.list_users(tenant_id, pagination).await
     }
 
     async fn update_user(&self, user: User) -> Result<()> {
@@ -1164,8 +1223,8 @@ impl CatalogStore for PostgresStore {
         self.get_role(role_id).await
     }
 
-    async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<Role>> {
-        self.list_roles(tenant_id).await
+    async fn list_roles(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Role>> {
+        self.list_roles(tenant_id, pagination).await
     }
 
     async fn delete_role(&self, role_id: Uuid) -> Result<()> {
@@ -1198,12 +1257,12 @@ impl CatalogStore for PostgresStore {
         self.revoke_permission(permission_id).await
     }
 
-    async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
-        self.list_user_permissions(user_id).await
+    async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Permission>> {
+        self.list_user_permissions(user_id, pagination).await
     }
 
-    async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
-        self.list_permissions(tenant_id).await
+    async fn list_permissions(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Permission>> {
+        self.list_permissions(tenant_id, pagination).await
     }
 
     // Token Revocation Operations

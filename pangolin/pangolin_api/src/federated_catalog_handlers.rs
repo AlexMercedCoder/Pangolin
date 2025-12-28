@@ -133,7 +133,7 @@ pub async fn list_federated_catalogs(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
 ) -> impl IntoResponse {
-    match store.list_catalogs(tenant.0).await {
+    match store.list_catalogs(tenant.0, None).await {
         Ok(catalogs) => {
             let federated: Vec<FederatedCatalogResponse> = catalogs
                 .into_iter()

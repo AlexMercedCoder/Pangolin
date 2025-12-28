@@ -93,7 +93,7 @@ mod postgres_merge_tests {
             store.create_merge_operation(operation).await.unwrap();
         }
 
-        let list = store.list_merge_operations(tenant_id, &catalog_name).await.unwrap();
+        let list = store.list_merge_operations(tenant_id, &catalog_name, None).await.unwrap();
         assert!(list.len() >= 3, "Should have at least 3 merge operations");
     }
 
@@ -273,7 +273,7 @@ mod postgres_merge_tests {
             store.create_merge_conflict(conflict).await.unwrap();
         }
 
-        let list = store.list_merge_conflicts(operation_id).await.unwrap();
+        let list = store.list_merge_conflicts(operation_id, None).await.unwrap();
         assert!(list.len() >= 3, "Should have at least 3 merge conflicts");
     }
 

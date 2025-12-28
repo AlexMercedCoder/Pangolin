@@ -40,11 +40,16 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
+    pub async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<AccessRequest>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
-            "SELECT * FROM access_requests WHERE tenant_id = ?"
+            "SELECT * FROM access_requests WHERE tenant_id = ? LIMIT ? OFFSET ?"
         )
         .bind(tenant_id.to_string())
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
         

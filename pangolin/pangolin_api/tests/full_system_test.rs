@@ -53,6 +53,23 @@ async fn test_full_system_flow() {
     let body_json: Value = serde_json::from_slice(&body).unwrap();
     let tenant_id_str = body_json["id"].as_str().unwrap();
     let tenant_id = Uuid::parse_str(tenant_id_str).unwrap();
+    
+    // 2.5 Create Tenant Admin User explicitly
+    let create_user_req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/users")
+        .header("Content-Type", "application/json")
+        .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
+        .body(Body::from(json!({
+            "username": admin_username,
+            "email": "admin@e2e.local",
+            "password": admin_password,
+            "tenant_id": tenant_id.to_string(),
+            "role": "tenant-admin"
+        }).to_string()))
+        .unwrap();
+    let resp = app.clone().oneshot(create_user_req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
 
     // 3. Login as Tenant Admin to get Token
     let login_req = Request::builder()
@@ -217,7 +234,7 @@ async fn test_full_system_flow() {
         .body(Body::from(json!({
             "name": "dev",
             "from_branch": "main",
-            "catalog_id": "data_catalog" // Assuming this field is used or derived from context
+            "catalog": "data_catalog" // Assuming this field is used or derived from context
         }).to_string()))
         .unwrap();
         

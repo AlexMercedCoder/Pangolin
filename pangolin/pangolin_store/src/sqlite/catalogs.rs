@@ -50,9 +50,14 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
-        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = ?")
+    pub async fn list_catalogs(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Catalog>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = ? LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 

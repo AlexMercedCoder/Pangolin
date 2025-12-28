@@ -30,15 +30,27 @@ impl MemoryStore {
             .collect();
         Ok(results)
     }
-    pub(crate) async fn list_catalogs_internal(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
-            let mut catalogs = Vec::new();
-            for entry in self.catalogs.iter() {
-                let (tid, _) = entry.key();
-                if *tid == tenant_id {
-                    catalogs.push(entry.value().clone());
+    pub(crate) async fn list_catalogs_internal(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Catalog>> {
+            let mut catalogs: Vec<Catalog> = self.catalogs.iter()
+                .filter(|entry| entry.key().0 == tenant_id)
+                .map(|entry| entry.value().clone())
+                .collect();
+                
+            catalogs.sort_by(|a, b| a.name.cmp(&b.name));
+            
+            if let Some(p) = pagination {
+                let offset = p.offset.unwrap_or(0);
+                let limit = p.limit.unwrap_or(usize::MAX);
+                
+                if offset >= catalogs.len() {
+                    return Ok(Vec::new());
                 }
+                
+                let end = std::cmp::min(offset + limit, catalogs.len());
+                Ok(catalogs[offset..end].to_vec())
+            } else {
+                Ok(catalogs)
             }
-            Ok(catalogs)
         }
     pub(crate) async fn update_catalog_internal(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog> {
             let key = (tenant_id, name.clone());

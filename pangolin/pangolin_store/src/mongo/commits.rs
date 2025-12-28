@@ -13,6 +13,10 @@ impl MongoStore {
         // Ensure ID is stored as Binary
         doc.insert("id", to_bson_uuid(commit.id));
         
+        if let Some(pid) = commit.parent_id {
+            doc.insert("parent_id", to_bson_uuid(pid));
+        }
+        
         self.db.collection::<Document>("commits").insert_one(doc).await?;
         Ok(())
     }
@@ -37,6 +41,46 @@ impl MongoStore {
         
         let cursor = self.db.collection::<Commit>("commits").find(filter).await?;
         let commits: Vec<Commit> = cursor.try_collect().await?;
+        Ok(commits)
+    }
+
+    pub async fn get_commit_ancestry(&self, tenant_id: Uuid, commit_id: Uuid, limit: usize) -> Result<Vec<Commit>> {
+        let pipeline = vec![
+            doc! {
+                "$match": {
+                    "tenant_id": to_bson_uuid(tenant_id),
+                    "id": to_bson_uuid(commit_id)
+                }
+            },
+            doc! {
+                "$graphLookup": {
+                    "from": "commits",
+                    "startWith": "$parent_id",
+                    "connectFromField": "parent_id",
+                    "connectToField": "id",
+                    "as": "ancestry",
+                    "maxDepth": (limit as i64) - 1, // Depth is 0-indexed
+                    "restrictSearchWithMatch": { "tenant_id": to_bson_uuid(tenant_id) }
+                }
+            },
+            doc! {
+                "$project": {
+                    // Include the root commit itself + flattened ancestry
+                    "commits": {
+                        "$concatArrays": [ [ "$$ROOT" ], "$ancestry" ]
+                    }
+                }
+            },
+            doc! { "$unwind": "$commits" },
+            doc! { "$replaceRoot": { "newRoot": "$commits" } },
+            doc! { "$unset": "ancestry" }, // Clean up
+            doc! { "$sort": { "timestamp": -1 } },
+            doc! { "$limit": limit as i64 }
+        ];
+
+        let cursor = self.db.collection::<Commit>("commits").aggregate(pipeline).await?;
+        let commits: Vec<Commit> = cursor.with_type::<Commit>().try_collect().await?;
+        
         Ok(commits)
     }
 }

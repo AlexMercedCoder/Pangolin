@@ -7,7 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::collections::HashMap;
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use pangolin_core::model::{Branch, BranchType, Namespace};
 use uuid::Uuid;
 use crate::auth::TenantId;
@@ -79,13 +79,14 @@ pub async fn list_branches(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Query(params): Query<ListBranchParams>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
     // Catalog is now required
     let catalog_name = &params.catalog;
     
-    match store.list_branches(tenant_id, catalog_name).await {
+    match store.list_branches(tenant_id, catalog_name, Some(pagination)).await {
         Ok(branches) => {
             let resp: Vec<BranchResponse> = branches.into_iter().map(|b| b.into()).collect();
             (StatusCode::OK, Json(resp)).into_response()
@@ -150,13 +151,22 @@ pub async fn create_branch(
     // 1. Create the branch object.
     // 2. If assets are specified, copy them from `from_branch`.
     
-    let mut branch_assets = vec![];
-    tracing::info!("create_branch called for branch: {}, from: {}", payload.name, from_branch);
-    
-    // ...
+    let branch = Branch {
+        name: payload.name.clone(),
+        head_commit_id: None,
+        branch_type: b_type.clone(),
+        assets: vec![], // Start empty, will be populated
+    };
+
+    // Create branch first
+    if let Err(e) = store.create_branch(tenant_id, catalog_name, branch).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create branch: {}", e)).into_response();
+    }
 
     if let Some(assets_to_copy) = &payload.assets {
         tracing::info!("Explicit asset list provided: {} assets", assets_to_copy.len());
+        // For explicit asset list, we still iterate for now as copy_assets_bulk doesn't take a list
+        // Optimization: We could add a filtered bulk copy in the future
         for asset_name in assets_to_copy {
             let parts: Vec<&str> = asset_name.split('.').collect();
             if parts.len() < 2 {
@@ -171,66 +181,40 @@ pub async fn create_branch(
                 let mut new_asset = asset.clone();
                 new_asset.id = uuid::Uuid::new_v4();
                 if let Ok(_) = store.create_asset(tenant_id, catalog_name, Some(payload.name.clone()), namespace_parts, new_asset).await {
-                    branch_assets.push(asset_name.clone());
+                    // branch_assets.push(asset_name.clone()); // Unnecessary as create_asset updates branch
                 }
             }
         }
     } else {
         tracing::info!("No explicit assets. Auto-propagating from {}", from_branch);
-        // ...
-        if let Ok(namespaces) = store.list_namespaces(tenant_id, catalog_name, None).await {
-            tracing::info!("Found {} namespaces", namespaces.len());
-            for ns in namespaces {
-                if let Ok(assets) = store.list_assets(tenant_id, catalog_name, Some(from_branch.to_string()), ns.name.clone()).await {
-                    tracing::info!("Found {} assets in namespace {:?} on branch {}", assets.len(), ns.name, from_branch);
-                    for asset in assets {
-                        let mut new_asset = asset.clone();
-                        new_asset.id = uuid::Uuid::new_v4();
-                        match store.create_asset(tenant_id, catalog_name, Some(payload.name.clone()), ns.name.clone(), new_asset.clone()).await {
-                            Ok(_) => {
-                                tracing::info!("Copied asset {} to branch {}", asset.name, payload.name);
-                                branch_assets.push(format!("{}.{}", ns.name.join("."), asset.name));
-                            },
-                            Err(e) => tracing::error!("Failed to copy asset {}: {}", asset.name, e),
-                        }
-                    }
-                } else {
-                    tracing::warn!("Failed to list assets in namespace {:?}", ns.name);
-                }
-            }
+        
+        // Use optimized bulk copy
+        // Note: This works because create_branch (above) initialized the branch, and copy_assets_bulk appends to it (or updates it)
+        match store.copy_assets_bulk(tenant_id, catalog_name, from_branch, &payload.name, None).await {
+            Ok(count) => tracing::info!("Bulk copied {} assets to new branch {}", count, payload.name),
+            Err(e) => tracing::error!("Failed to bulk copy assets: {}", e),
         }
     }
 
-    let branch = Branch {
-        name: payload.name.clone(),
+    // Return success response only
+    // Audit Log
+    let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
+        tenant_id,
+        session.username.clone(), // Get user from auth context
+        "create_branch".to_string(),
+        format!("{}/{}", catalog_name, payload.name),
+        None
+    )).await;
+    
+    (StatusCode::CREATED, Json(BranchResponse {
+        name: payload.name,
         head_commit_id: None,
-        branch_type: b_type.clone(),
-        assets: branch_assets,
-    };
-
-    match store.create_branch(tenant_id, catalog_name, branch).await {
-        Ok(_) => {
-            // Audit Log
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
-                tenant_id,
-                session.username.clone(), // Get user from auth context
-                "create_branch".to_string(),
-                format!("{}/{}", catalog_name, payload.name),
-                None
-            )).await;
-            
-            (StatusCode::CREATED, Json(BranchResponse {
-                name: payload.name,
-                head_commit_id: None,
-                branch_type: match b_type {
-                    BranchType::Ingest => "ingest".to_string(),
-                    BranchType::Experimental => "experimental".to_string(),
-                },
-                assets: vec![], // Assets are not returned in this simplified response
-            })).into_response()
+        branch_type: match b_type {
+            BranchType::Ingest => "ingest".to_string(),
+            BranchType::Experimental => "experimental".to_string(),
         },
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
-    }
+        assets: vec![], // Assets are not returned in this simplified response
+    })).into_response()
 }
 
 #[utoipa::path(
@@ -403,6 +387,7 @@ pub async fn list_commits(
     Extension(tenant): Extension<TenantId>,
     Path(branch_name): Path<String>,
     Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
@@ -416,19 +401,11 @@ pub async fn list_commits(
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get branch").into_response(),
     };
 
-    let mut commits = Vec::new();
-    let mut current_commit_id = branch.head_commit_id;
-
-    while let Some(commit_id) = current_commit_id {
-        match store.get_commit(tenant_id, commit_id).await {
-            Ok(Some(commit)) => {
-                current_commit_id = commit.parent_id;
-                commits.push(commit);
-            },
-            Ok(None) => break, // Should not happen if consistency is maintained
-            Err(_) => break,
-        }
-    }
+    let limit = pagination.limit.unwrap_or(100);
+    let commits = match store.get_commit_ancestry(tenant_id, branch.head_commit_id.unwrap_or(Uuid::nil()), limit).await {
+        Ok(c) => c,
+        Err(_) => Vec::new(),
+    };
 
     (StatusCode::OK, Json(commits)).into_response()
 }
@@ -469,13 +446,14 @@ pub async fn list_tags(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     
     // Catalog is now required
     let catalog_name = &params.catalog;
 
-    match store.list_tags(tenant_id, catalog_name).await {
+    match store.list_tags(tenant_id, catalog_name, Some(pagination)).await {
         Ok(tags) => {
             let resp: Vec<TagResponse> = tags.into_iter().map(|t| t.into()).collect();
             (StatusCode::OK, Json(resp)).into_response()
@@ -645,15 +623,16 @@ pub async fn list_catalogs(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Extension(session): Extension<UserSession>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     tracing::info!("list_catalogs called with tenant_id: {}", tenant_id);
 
-    match store.list_catalogs(tenant_id).await {
+    match store.list_catalogs(tenant_id, Some(pagination)).await {
         Ok(catalogs) => {
             // Use authz_utils for consistent permission filtering
             let permissions = if matches!(session.role, UserRole::TenantUser) {
-                match store.list_user_permissions(session.user_id).await {
+                match store.list_user_permissions(session.user_id, None).await {
                     Ok(p) => p,
                     Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch permissions").into_response(),
                 }

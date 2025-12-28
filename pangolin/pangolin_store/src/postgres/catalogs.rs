@@ -50,9 +50,14 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
-        let rows = sqlx::query("SELECT id, name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1")
+    pub async fn list_catalogs(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Catalog>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = sqlx::query("SELECT id, name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
             .bind(tenant_id)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 

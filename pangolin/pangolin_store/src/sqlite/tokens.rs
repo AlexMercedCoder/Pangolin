@@ -111,12 +111,28 @@ impl SqliteStore {
         Ok(rows_affected as usize)
     }
 
-    pub async fn list_active_tokens(&self, user_id: Uuid) -> Result<Vec<TokenInfo>> {
-        let rows = sqlx::query("SELECT token_id, user_id, token, expires_at FROM active_tokens WHERE user_id = ? AND expires_at > ?")
-            .bind(user_id.to_string())
-            .bind(Utc::now().timestamp())
-            .fetch_all(&self.pool)
-            .await?;
+    pub async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<TokenInfo>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = if let Some(uid) = user_id {
+            sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = ? AND t.user_id = ? AND t.expires_at > ? LIMIT ? OFFSET ?")
+                .bind(tenant_id.to_string())
+                .bind(uid.to_string())
+                .bind(Utc::now().timestamp())
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        } else {
+            sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = ? AND t.expires_at > ? LIMIT ? OFFSET ?")
+                .bind(tenant_id.to_string())
+                .bind(Utc::now().timestamp())
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?
+        };
 
         let mut tokens = Vec::new();
         for row in rows {
@@ -131,9 +147,9 @@ impl SqliteStore {
              if is_revoked == 0 {
                 tokens.push(TokenInfo {
                     id: Uuid::parse_str(&token_id_str)?,
-                    tenant_id: Uuid::default(),
+                    tenant_id, // We know the tenant from the query context
                     user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
-                    username: "unknown".to_string(),
+                    username: "unknown".to_string(), // Inefficient to join username unless needed
                     token: Some(row.get("token")),
                     expires_at: chrono::DateTime::from_timestamp(row.get("expires_at"), 0).unwrap_or_default(),
                     created_at: Utc::now(),

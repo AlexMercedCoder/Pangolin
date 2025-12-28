@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use pangolin_core::user::UserSession;
 use crate::iceberg::AppState;
 use crate::error::ApiError;
@@ -83,7 +83,7 @@ pub async fn search_assets_by_name(
 
     // Fetch user permissions for filtering (unless Root/TenantAdmin)
     let permissions = if matches!(session.role, pangolin_core::user::UserRole::TenantUser) {
-        store.list_user_permissions(session.user_id).await.map_err(ApiError::from)?
+        store.list_user_permissions(session.user_id, None).await.map_err(ApiError::from)?
     } else {
         Vec::new() // Root/TenantAdmin bypass filtering
     };
@@ -94,7 +94,7 @@ pub async fn search_assets_by_name(
         .map_err(ApiError::from)?;
     
     // Build catalog ID map for filtering
-    let catalogs = store.list_catalogs(tenant_id).await.map_err(ApiError::from)?;
+    let catalogs = store.list_catalogs(tenant_id, None).await.map_err(ApiError::from)?;
     let catalog_map: std::collections::HashMap<_, _> = catalogs.iter()
         .map(|c| (c.name.clone(), c.id))
         .collect();
@@ -376,7 +376,7 @@ pub async fn unified_search(
     
     // Fetch user permissions for filtering (unless Root/TenantAdmin)
     let permissions = if matches!(session.role, pangolin_core::user::UserRole::TenantUser) {
-        store.list_user_permissions(session.user_id).await.map_err(ApiError::from)?
+        store.list_user_permissions(session.user_id, None).await.map_err(ApiError::from)?
     } else {
         Vec::new() // Root/TenantAdmin bypass filtering
     };
@@ -400,7 +400,7 @@ pub async fn unified_search(
     let namespaces = store.search_namespaces(tenant_id, &query.q).await.map_err(ApiError::from)?;
     
     // Build catalog ID map for namespace filtering
-    let all_catalogs = store.list_catalogs(tenant_id).await.map_err(ApiError::from)?;
+    let all_catalogs = store.list_catalogs(tenant_id, None).await.map_err(ApiError::from)?;
     let catalog_id_map: std::collections::HashMap<String, uuid::Uuid> = all_catalogs
         .iter()
         .map(|c| (c.name.clone(), c.id))

@@ -1,12 +1,12 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     response::IntoResponse,
     Extension,
     Json,
 };
 use pangolin_core::user::{ServiceUser, ApiKeyResponse, UserRole};
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{Utc, Duration};
@@ -150,6 +150,7 @@ pub async fn list_service_users(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Extension(session): Extension<pangolin_core::user::UserSession>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
 
@@ -161,7 +162,7 @@ pub async fn list_service_users(
         ).into_response();
     }
 
-    match store.list_service_users(tenant_id).await {
+    match store.list_service_users(tenant_id, Some(pagination)).await {
         Ok(service_users) => (StatusCode::OK, Json(service_users)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,

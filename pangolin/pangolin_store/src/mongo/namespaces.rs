@@ -29,7 +29,7 @@ impl MongoStore {
         Ok(doc)
     }
 
-    pub async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>) -> Result<Vec<Namespace>> {
+    pub async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Namespace>> {
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name
@@ -37,7 +37,18 @@ impl MongoStore {
         
         // TODO: Implement prefix filtering for 'parent' if needed
 
-        let cursor = self.db.collection::<Namespace>("namespaces").find(filter).await?;
+        let collection = self.db.collection::<Namespace>("namespaces");
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let cursor = find.await?;
         let namespaces: Vec<Namespace> = cursor.try_collect().await?;
         Ok(namespaces)
     }

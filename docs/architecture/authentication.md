@@ -27,6 +27,13 @@ curl -u admin:your_secure_password http://localhost:8080/api/v1/tenants
 1. Client sends `Authorization: Basic <base64(username:password)>` header
 2. Middleware decodes the credentials
 3. Compares against `PANGOLIN_ROOT_USER` and `PANGOLIN_ROOT_PASSWORD` environment variables
+
+> [!IMPORTANT]
+> **Root vs Tenant Admin:**
+> - `PANGOLIN_ROOT_USER`: Required for **Global Operations** (e.g., creating new tenants). Logs in without a `tenant_id`.
+> - `PANGOLIN_ADMIN_USER`: Seeds a **Tenant Admin** for the default tenant. Can only manage resources *within* that default tenant.
+> 
+> If you need to bootstrap a new deployment (create tenants), you **MUST** set `PANGOLIN_ROOT_USER`.
 4. If match: Creates a Root session with `UserRole::Root`
 5. If no match: Falls through to Bearer token authentication
 

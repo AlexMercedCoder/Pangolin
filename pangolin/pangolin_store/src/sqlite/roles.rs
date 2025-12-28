@@ -44,9 +44,14 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<Role>> {
-        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = ?")
+    pub async fn list_roles(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Role>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = ? LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
             

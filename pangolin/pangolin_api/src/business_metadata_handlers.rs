@@ -7,7 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestStatus};
 use pangolin_core::user::{UserSession, UserRole};
 use pangolin_core::permission::{Action, PermissionScope};
@@ -64,7 +64,7 @@ pub async fn add_business_metadata(
         // Need to find catalog_id from name first? Or use name in scope if supported?
         // PermissionScope uses Catalog options.
         // Let's Resolve Catalog ID from Name
-        let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
+        let catalogs = store.list_catalogs(tenant_id, None).await.unwrap_or_default();
         let catalog_id = catalogs.iter().find(|c| c.name == catalog_name).map(|c| c.id);
 
         let has_perm = if let Some(cid) = catalog_id {
@@ -197,13 +197,13 @@ pub async fn search_assets(
             
             // Use authz_utils for consistent permission filtering
             let permissions = if matches!(session.role, UserRole::TenantUser) {
-                store.list_user_permissions(session.user_id).await.unwrap_or_default()
+                store.list_user_permissions(session.user_id, None).await.unwrap_or_default()
             } else {
                 Vec::new() // Root/TenantAdmin bypass filtering
             };
             
             // Build catalog ID map for filtering
-            let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
+            let catalogs = store.list_catalogs(tenant_id, None).await.unwrap_or_default();
             let catalog_map: std::collections::HashMap<_, _> = catalogs.iter()
                 .map(|c| (c.name.clone(), c.id))
                 .collect();
@@ -307,6 +307,7 @@ pub async fn request_access(
 pub async fn list_access_requests(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     // List requests for tenant
     // Ideally filter by user if not admin?
@@ -316,7 +317,7 @@ pub async fn list_access_requests(
     
     let tenant_id = session.tenant_id.unwrap_or_default(); // Or root tenant?
     
-    match store.list_access_requests(tenant_id).await {
+    match store.list_access_requests(tenant_id, Some(pagination)).await {
         Ok(requests) => {
             // Filter if not admin?
             let filtered = if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
@@ -373,7 +374,7 @@ pub async fn update_access_request(
                     // Grant Read Permission automatically
                     if let Ok(Some((_, catalog_name, namespace_vec))) = store.get_asset_by_id(request.tenant_id, request.asset_id).await {
                          // Resolve Catalog ID from name (needed for PermissionScope)
-                         if let Ok(catalogs) = store.list_catalogs(request.tenant_id).await {
+                         if let Ok(catalogs) = store.list_catalogs(request.tenant_id, None).await {
                              if let Some(catalog) = catalogs.iter().find(|c| c.name == catalog_name) {
                                   // Construct the Permission Scope
                                   let scope = pangolin_core::permission::PermissionScope::Asset {
@@ -484,7 +485,7 @@ pub async fn get_asset_details(
     // Permission Check
     // If not admin and not discoverable, check catalog read permission
     if !crate::authz::is_admin(&session.role) && !is_discoverable {
-        let catalogs = store.list_catalogs(tenant_id).await.unwrap_or_default();
+        let catalogs = store.list_catalogs(tenant_id, None).await.unwrap_or_default();
         let catalog_id = catalogs.iter().find(|c| c.name == catalog_name).map(|c| c.id);
         
         let has_perm = if let Some(cid) = catalog_id {

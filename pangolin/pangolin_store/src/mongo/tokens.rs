@@ -7,12 +7,26 @@ use uuid::Uuid;
 use futures::stream::TryStreamExt;
 
 impl MongoStore {
-    pub async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Uuid) -> Result<Vec<TokenInfo>> {
-        let filter = doc! { 
-            "tenant_id": to_bson_uuid(tenant_id),
-            "user_id": to_bson_uuid(user_id) 
+    pub async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<TokenInfo>> {
+
+        let mut filter = doc! {
+            "tenant_id": to_bson_uuid(tenant_id)
         };
-        let cursor = self.active_tokens().find(filter).await?;
+        if let Some(uid) = user_id {
+            filter.insert("user_id", to_bson_uuid(uid));
+        }
+
+        let collection = self.active_tokens();
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+        let cursor = find.await?;
         let docs: Vec<Document> = cursor.try_collect().await?;
         
         let mut tokens = Vec::new();

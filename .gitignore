@@ -41,3 +41,5 @@ test_output*.txt
 temp_*
 tmp_*
 debug_*
+pangolin_server_bin
+pangolin_server_bin

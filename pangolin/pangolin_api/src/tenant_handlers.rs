@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State, Extension},
+    extract::{Path, State, Extension, Query},
     Json,
     response::IntoResponse,
     http::StatusCode,
@@ -8,7 +8,7 @@ use crate::error::ApiError;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::collections::HashMap;
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use pangolin_core::model::Tenant;
 use uuid::Uuid;
 use crate::auth::TenantId;
@@ -58,6 +58,7 @@ impl From<Tenant> for TenantResponse {
 pub async fn list_tenants(
     State(store): State<AppState>,
     Extension(session): Extension<UserSession>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
         .map(|v| v.to_lowercase() == "true")
@@ -67,7 +68,7 @@ pub async fn list_tenants(
          return ApiError::forbidden("Only Root can list tenants").into_response();
     }
 
-    match store.list_tenants().await {
+    match store.list_tenants(Some(pagination)).await {
         Ok(tenants) => {
             let response: Vec<TenantResponse> = tenants.into_iter().map(|t: Tenant| TenantResponse::from(t)).collect();
             (StatusCode::OK, Json(response)).into_response()

@@ -72,7 +72,7 @@ async fn test_mongo_store_flow() {
     assert_eq!(fetched_asset.unwrap().name, "test_table");
 
     // 5. List Assets
-    let assets = store.list_assets(tenant_id, "test_catalog", None, namespace.name.clone()).await.expect("Failed to list assets");
+    let assets = store.list_assets(tenant_id, "test_catalog", None, namespace.name.clone(), None).await.expect("Failed to list assets");
     assert_eq!(assets.len(), 1);
     assert_eq!(assets[0].name, "test_table");
 

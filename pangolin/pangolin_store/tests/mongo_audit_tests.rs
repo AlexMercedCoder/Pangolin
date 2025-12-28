@@ -63,7 +63,7 @@ async fn test_mongo_audit_log_filtering() {
 
     // Log all events
     for log in &logs {
-        store.log_audit_event(tenant_id, log.clone()).await.unwrap();
+        store.log_audit_event(log.clone()).await.unwrap();
     }
 
     // Test 1: Get all logs (no filter)
@@ -161,7 +161,7 @@ async fn test_mongo_audit_log_filtering() {
 
     // Test 10: Get individual event
     let event_id = logs[0].id;
-    let event = store.get_audit_event(tenant_id, event_id).await.unwrap();
+    let event = store.get_audit_event(event_id).await.unwrap();
     assert!(event.is_some(), "Should find the event");
     assert_eq!(event.unwrap().id, event_id);
     println!("✓ Test 10 passed: Get individual event");
@@ -220,9 +220,9 @@ async fn test_mongo_audit_log_time_filtering() {
         "namespace1".to_string(),
     );
 
-    store.log_audit_event(tenant_id, log1).await.unwrap();
-    store.log_audit_event(tenant_id, log2).await.unwrap();
-    store.log_audit_event(tenant_id, log3).await.unwrap();
+    store.log_audit_event(log1).await.unwrap();
+    store.log_audit_event(log2).await.unwrap();
+    store.log_audit_event(log3).await.unwrap();
 
     // Test: Filter by start_time (last hour)
     let filter = AuditLogFilter {

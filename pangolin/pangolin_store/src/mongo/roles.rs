@@ -27,9 +27,21 @@ impl MongoStore {
         Ok(role)
     }
 
-    pub async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<Role>> {
+    pub async fn list_roles(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Role>> {
         let filter = doc! { "tenant-id": to_bson_uuid(tenant_id) };
-        let cursor = self.roles().find(filter).await?;
+        
+        let collection = self.roles();
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let cursor = find.await?;
         let roles: Vec<Role> = cursor.try_collect().await?;
         Ok(roles)
     }

@@ -25,7 +25,7 @@ mod signer;
 // Re-export the main struct
 pub use main::MemoryStore;
 
-use crate::CatalogStore;
+use crate::{CatalogStore, PaginationParams};
 use crate::signer::{Signer, Credentials};
 use async_trait::async_trait;
 use anyhow::Result;
@@ -45,8 +45,8 @@ impl CatalogStore for MemoryStore {
         self.get_tenant_internal(tenant_id).await
     }
     
-    async fn list_tenants(&self) -> Result<Vec<Tenant>> {
-        self.list_tenants_internal().await
+    async fn list_tenants(&self, pagination: Option<PaginationParams>) -> Result<Vec<Tenant>> {
+        self.list_tenants_internal(pagination).await
     }
     
     async fn update_tenant(&self, tenant_id: Uuid, updates: TenantUpdate) -> Result<Tenant> {
@@ -66,8 +66,8 @@ impl CatalogStore for MemoryStore {
         self.get_warehouse_internal(tenant_id, name).await
     }
     
-    async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>> {
-        self.list_warehouses_internal(tenant_id).await
+    async fn list_warehouses(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Warehouse>> {
+        self.list_warehouses_internal(tenant_id, pagination).await
     }
     
     async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: WarehouseUpdate) -> Result<Warehouse> {
@@ -87,8 +87,8 @@ impl CatalogStore for MemoryStore {
         self.get_catalog_internal(tenant_id, name).await
     }
     
-    async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
-        self.list_catalogs_internal(tenant_id).await
+    async fn list_catalogs(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Catalog>> {
+        self.list_catalogs_internal(tenant_id, pagination).await
     }
     
     async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: CatalogUpdate) -> Result<Catalog> {
@@ -104,8 +104,8 @@ impl CatalogStore for MemoryStore {
         self.create_namespace_internal(tenant_id, catalog_name, namespace).await
     }
     
-    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>) -> Result<Vec<Namespace>> {
-        self.list_namespaces_internal(tenant_id, catalog_name, parent).await
+    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>, pagination: Option<PaginationParams>) -> Result<Vec<Namespace>> {
+        self.list_namespaces_internal(tenant_id, catalog_name, parent, pagination).await
     }
     
     async fn get_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<Option<Namespace>> {
@@ -137,8 +137,8 @@ impl CatalogStore for MemoryStore {
         self.get_asset_by_id_internal(tenant_id, asset_id).await
     }
     
-    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
-        self.list_assets_internal(tenant_id, catalog_name, branch, namespace).await
+    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, pagination: Option<PaginationParams>) -> Result<Vec<Asset>> {
+        self.list_assets_internal(tenant_id, catalog_name, branch, namespace, pagination).await
     }
     
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
@@ -162,8 +162,8 @@ impl CatalogStore for MemoryStore {
         self.get_branch_internal(tenant_id, catalog_name, name).await
     }
     
-    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>> {
-        self.list_branches_internal(tenant_id, catalog_name).await
+    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<Branch>> {
+        self.list_branches_internal(tenant_id, catalog_name, pagination).await
     }
     
     async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
@@ -183,8 +183,8 @@ impl CatalogStore for MemoryStore {
         self.get_tag_internal(tenant_id, catalog_name, name).await
     }
     
-    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Tag>> {
-        self.list_tags_internal(tenant_id, catalog_name).await
+    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<Tag>> {
+        self.list_tags_internal(tenant_id, catalog_name, pagination).await
     }
     
     async fn delete_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
@@ -198,6 +198,26 @@ impl CatalogStore for MemoryStore {
     
     async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>> {
         self.get_commit_internal(tenant_id, commit_id).await
+    }
+
+    async fn copy_assets_bulk(
+        &self, 
+        tenant_id: Uuid, 
+        catalog_name: &str, 
+        src_branch: &str, 
+        dest_branch: &str, 
+        namespace: Option<String>
+    ) -> Result<usize> {
+        self.copy_assets_bulk_internal(tenant_id, catalog_name, src_branch, dest_branch, namespace).await
+    }
+
+    async fn get_commit_ancestry(
+        &self, 
+        tenant_id: Uuid, 
+        head_commit_id: Uuid, 
+        limit: usize
+    ) -> Result<Vec<Commit>> {
+        self.get_commit_ancestry_internal(tenant_id, head_commit_id, limit).await
     }
     
     // File I/O operations
@@ -255,8 +275,8 @@ impl CatalogStore for MemoryStore {
         self.get_user_by_username_internal(username).await
     }
     
-    async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<pangolin_core::user::User>> {
-        self.list_users_internal(tenant_id).await
+    async fn list_users(&self, tenant_id: Option<Uuid>, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::user::User>> {
+        self.list_users_internal(tenant_id, pagination).await
     }
     
     async fn update_user(&self, user: pangolin_core::user::User) -> Result<()> {
@@ -276,8 +296,8 @@ impl CatalogStore for MemoryStore {
         self.get_service_user_internal(service_user_id).await
     }
     
-    async fn list_service_users(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
-        self.list_service_users_internal(tenant_id).await
+    async fn list_service_users(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        self.list_service_users_internal(tenant_id, pagination).await
     }
     
     async fn update_service_user(&self, id: Uuid, name: Option<String>, description: Option<String>, active: Option<bool>) -> Result<()> {
@@ -297,8 +317,8 @@ impl CatalogStore for MemoryStore {
         self.get_role_internal(role_id).await
     }
     
-    async fn list_roles(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Role>> {
-        self.list_roles_internal(tenant_id).await
+    async fn list_roles(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::permission::Role>> {
+        self.list_roles_internal(tenant_id, pagination).await
     }
     
     async fn update_role(&self, role: pangolin_core::permission::Role) -> Result<()> {
@@ -330,12 +350,12 @@ impl CatalogStore for MemoryStore {
         self.revoke_permission_internal(permission_id).await
     }
     
-    async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
-        self.list_permissions_internal(None, None).await
+    async fn list_permissions(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::permission::Permission>> {
+        self.list_permissions_internal(None, None, pagination).await // Assuming internal supports pagination
     }
 
-    async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
-        self.list_permissions_internal(Some(user_id), None).await
+    async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::permission::Permission>> {
+        self.list_permissions_internal(Some(user_id), None, pagination).await
     }
     
     // Token operations
@@ -343,12 +363,20 @@ impl CatalogStore for MemoryStore {
         self.store_token_internal(token_info).await
     }
     
-    async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Uuid) -> Result<Vec<pangolin_core::token::TokenInfo>> {
-        self.list_active_tokens_internal(tenant_id, user_id).await
+    async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Option<Uuid>, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::token::TokenInfo>> {
+        self.list_active_tokens_internal(tenant_id, user_id, pagination).await
     }
     
     async fn revoke_token(&self, _token_id: Uuid, expires_at: DateTime<Utc>, reason: Option<String>) -> Result<()> {
         self.revoke_token_internal(_token_id, expires_at, reason).await
+    }
+
+    async fn is_token_revoked(&self, token_id: Uuid) -> Result<bool> {
+        self.is_token_revoked_internal(token_id).await
+    }
+
+    async fn cleanup_expired_tokens(&self) -> Result<usize> {
+        self.cleanup_expired_tokens_internal().await
     }
     
     // Business metadata operations
@@ -389,8 +417,8 @@ impl CatalogStore for MemoryStore {
         self.get_access_request_internal(request_id).await
     }
     
-    async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
-        self.list_access_requests_internal(tenant_id).await
+    async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
+        self.list_access_requests_internal(tenant_id, pagination).await
     }
     
     // Merge operations
@@ -402,8 +430,8 @@ impl CatalogStore for MemoryStore {
         self.get_merge_operation_internal(operation_id).await
     }
     
-    async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
-        self.list_merge_operations_internal(tenant_id, catalog_name).await
+    async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+        self.list_merge_operations_internal(tenant_id, catalog_name, pagination).await
     }
     
     async fn complete_merge_operation(&self, operation_id: Uuid, result_commit_id: Uuid) -> Result<()> {
@@ -418,8 +446,8 @@ impl CatalogStore for MemoryStore {
         self.get_merge_conflict_internal(conflict_id).await
     }
 
-    async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
-        self.list_merge_conflicts_internal(operation_id).await
+    async fn list_merge_conflicts(&self, operation_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+        self.list_merge_conflicts_internal(operation_id, pagination).await
     }
     
     // Federated catalog operations

@@ -10,17 +10,23 @@ impl MemoryStore {
             self.namespaces.insert(key, namespace);
             Ok(())
         }
-    pub(crate) async fn list_namespaces_internal(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>) -> Result<Vec<Namespace>> {
+    pub(crate) async fn list_namespaces_internal(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Namespace>> {
             let parent_prefix = parent.unwrap_or_default();
             tracing::info!("DEBUG_MEM: list_namespaces tid={} cat={} parent='{}'", tenant_id, catalog_name, parent_prefix);
-            let mut namespaces = Vec::new();
-            for entry in self.namespaces.iter() {
-                let (tid, cat, ns_str) = entry.key();
-                tracing::info!("DEBUG_MEM: Checking entry tid={} cat={} ns={}", tid, cat, ns_str);
-                if *tid == tenant_id && cat == catalog_name && (parent_prefix.is_empty() || ns_str.starts_with(&parent_prefix)) {
-                    namespaces.push(entry.value().clone());
-                }
-            }
+            
+            let iter = self.namespaces.iter()
+                .filter(|entry| {
+                    let (tid, cat, ns_str) = entry.key();
+                    *tid == tenant_id && cat == catalog_name && (parent_prefix.is_empty() || ns_str.starts_with(&parent_prefix))
+                })
+                .map(|entry| entry.value().clone());
+
+            let namespaces: Vec<Namespace> = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
+
             tracing::info!("DEBUG_MEM: Found {} namespaces", namespaces.len());
             Ok(namespaces)
         }

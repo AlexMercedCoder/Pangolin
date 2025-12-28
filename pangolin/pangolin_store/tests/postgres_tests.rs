@@ -63,7 +63,7 @@ async fn test_postgres_store_flow() {
     assert_eq!(fetched_asset.unwrap().name, "test_table");
 
     // 5. List Assets
-    let assets = store.list_assets(tenant_id, "test_catalog", None, namespace.name.clone()).await.expect("Failed to list assets");
+    let assets = store.list_assets(tenant_id, "test_catalog", None, namespace.name.clone(), None).await.expect("Failed to list assets");
     assert_eq!(assets.len(), 1);
     assert_eq!(assets[0].name, "test_table");
     assert_eq!(assets[0].name, "test_table");
@@ -145,7 +145,7 @@ async fn test_postgres_access_requests() {
     assert_eq!(fetched.unwrap().status, RequestStatus::Pending);
 
     // 3. List
-    let list = store.list_access_requests(tenant_id).await.expect("List requests");
+    let list = store.list_access_requests(tenant_id, None).await.expect("List requests");
     assert!(!list.is_empty());
 
     // 4. Update

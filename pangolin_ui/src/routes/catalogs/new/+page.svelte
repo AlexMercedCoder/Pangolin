@@ -94,19 +94,21 @@
 			const bucket = w.storage_config?.['s3.bucket'] 
 			           || w.storage_config?.['adls.container']
 			           || w.storage_config?.['azure.container'] 
-			           || w.storage_config?.['gcs.bucket'] 
-			           || 'bucket';
+			           || w.storage_config?.['gcs.bucket'];
+			
 			const type = w.storage_config?.['s3.bucket'] ? 's3' 
 			           : w.storage_config?.['adls.account-name'] ? 'azure'
 			           : w.storage_config?.['gcs.bucket'] ? 'gcs'
 			           : 's3';
 			
-			if (type === 'azure') {
-				storageLocation = `abfss://${bucket}@${w.storage_config?.['adls.account-name']}.dfs.core.windows.net/${name || 'catalog'}`;
-			} else if (type === 's3') {
-				storageLocation = `s3://${bucket}/${name || 'catalog'}`;
-			} else if (type === 'gcs') {
-				storageLocation = `gs://${bucket}/${name || 'catalog'}`;
+			if (bucket) {
+				if (type === 'azure') {
+					storageLocation = `abfss://${bucket}@${w.storage_config?.['adls.account-name']}.dfs.core.windows.net/${name || 'catalog'}`;
+				} else if (type === 's3') {
+					storageLocation = `s3://${bucket}/${name || 'catalog'}`;
+				} else if (type === 'gcs') {
+					storageLocation = `gs://${bucket}/${name || 'catalog'}`;
+				}
 			}
 		}
 	}

@@ -126,7 +126,7 @@ pub async fn oauth_callback(
     // Or better, let's just stick to email for now if unique.
     
     // Let's implement a rudimentary lookup
-    let all_users = store.list_users(None).await.unwrap_or_default();
+    let all_users = store.list_users(None, None).await.unwrap_or_default();
     let existing_user = all_users.into_iter().find(|u| 
         (u.oauth_provider == Some(provider_enum.clone()) && u.oauth_subject == Some(user_info.sub.clone())) ||
         u.email == user_info.email
@@ -149,7 +149,7 @@ pub async fn oauth_callback(
             // or just stand-alone if we support users without tenants (Root users).
             
             // Checking if any users exist to decide if Root
-            let user_count = store.list_users(None).await.unwrap_or_default().len();
+            let user_count = store.list_users(None, None).await.unwrap_or_default().len();
             let role = if user_count == 0 { UserRole::Root } else { UserRole::TenantUser };
             
             // We need a tenant if not root.
@@ -157,7 +157,7 @@ pub async fn oauth_callback(
                 None
             } else {
                 // Try to find a default tenant "default"
-                let tenants = store.list_tenants().await.unwrap_or_default();
+                let tenants = store.list_tenants(None).await.unwrap_or_default();
                  if let Some(t) = tenants.into_iter().find(|t| t.name == "default") {
                      Some(t.id)
                  } else {

@@ -126,9 +126,9 @@ pub async fn auth_middleware(
             // In production, consider caching or indexing strategies
             
             // Get all tenants and check their service users
-            if let Ok(tenants) = store.list_tenants().await {
+            if let Ok(tenants) = store.list_tenants(None).await {
                 for tenant in tenants {
-                    if let Ok(service_users) = store.list_service_users(tenant.id).await {
+                    if let Ok(service_users) = store.list_service_users(tenant.id, None).await {
                         for service_user in service_users {
                             // Verify the API key against the stored hash
                             if let Ok(true) = verify(api_key, &service_user.api_key_hash) {

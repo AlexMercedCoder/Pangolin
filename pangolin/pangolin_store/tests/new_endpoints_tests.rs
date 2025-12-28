@@ -38,7 +38,7 @@ mod sqlite_new_endpoints_tests {
         store.store_token(token.clone()).await?;
 
         // Test listing tokens
-        let tokens = store.list_active_tokens(tenant_id, user_id).await?;
+        let tokens = store.list_active_tokens(tenant_id, None, None).await?;
         assert_eq!(tokens.len(), 1);
         assert_eq!(tokens[0].user_id, user_id);
 
@@ -46,7 +46,7 @@ mod sqlite_new_endpoints_tests {
         let token2 = create_test_token(user_id);
         store.store_token(token2).await?;
 
-        let tokens = store.list_active_tokens(tenant_id, user_id).await?;
+        let tokens = store.list_active_tokens(tenant_id, None, None).await?;
         assert_eq!(tokens.len(), 2);
 
         Ok(())
@@ -182,7 +182,7 @@ mod postgres_new_endpoints_tests {
         let token = create_test_token(user_id);
         store.store_token(token.clone()).await?;
 
-        let tokens = store.list_active_tokens(tenant_id, user_id).await?;
+        let tokens = store.list_active_tokens(tenant_id, Some(user_id), None).await?;
         assert!(!tokens.is_empty());
 
         Ok(())
@@ -234,7 +234,7 @@ mod mongo_new_endpoints_tests {
         let token = create_test_token(user_id);
         store.store_token(token.clone()).await?;
 
-        let tokens = store.list_active_tokens(tenant_id, user_id).await?;
+        let tokens = store.list_active_tokens(tenant_id, Some(user_id), None).await?;
         assert!(!tokens.is_empty());
 
         Ok(())

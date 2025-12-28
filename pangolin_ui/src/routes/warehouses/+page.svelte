@@ -20,9 +20,8 @@
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'storage_config.type', label: 'Type', sortable: true, width: '120px' },
 		{ key: 'storage_config.bucket', label: 'Bucket/Container', sortable: false },
-		{ key: 'storage_config.region', label: 'Region', sortable: false, width: '150px' },
-		{ key: 'use_sts', label: 'Auth', sortable: false, width: '100px' },
-		{ key: 'actions', label: 'Actions', sortable: false },
+		{ key: 'storage_config.type', label: 'Type', sortable: true },
+		{ key: 'vending_strategy.type', label: 'Vending', sortable: true }
 	];
 
 	// Reload when tenant changes
@@ -32,11 +31,13 @@
 
 	async function loadWarehouses() {
 		loading = true;
+		error = null;
 		try {
-			warehouses = await warehousesApi.list();
-		} catch (error: any) {
-			notifications.error(`Failed to load warehouses: ${error.message}`);
-			warehouses = [];
+			warehouses = await warehousesApi.list(pageSize, (page - 1) * pageSize);
+            hasNextPage = warehouses.length === pageSize;
+		} catch (e: any) {
+			error = e.message;
+			notifications.error('Failed to load warehouses: ' + e.message);
 		} finally {
 			loading = false;
 		}
@@ -46,41 +47,6 @@
 		const warehouse = event.detail;
 		goto(`/warehouses/${encodeURIComponent(warehouse.name)}`);
 	}
-
-	function confirmDelete(warehouse: Warehouse) {
-		warehouseToDelete = warehouse;
-		showDeleteModal = true;
-	}
-
-	async function handleDelete() {
-		if (!warehouseToDelete) return;
-		
-		deleting = true;
-		try {
-			await warehousesApi.delete(warehouseToDelete.name);
-			notifications.success(`Warehouse "${warehouseToDelete.name}" deleted successfully`);
-			warehouses = warehouses.filter(w => w.name !== warehouseToDelete?.name);
-			showDeleteModal = false;
-			warehouseToDelete = null;
-		} catch (error: any) {
-			notifications.error(`Failed to delete warehouse: ${error.message}`);
-		} finally {
-			deleting = false;
-		}
-	}
-
-	function getStorageType(warehouse: any): string {
-		if (!warehouse?.storage_config) return 'unknown';
-        const keys = Object.keys(warehouse.storage_config);
-		if (keys.some(k => k.toLowerCase().includes('s3'))) return 's3';
-		if (keys.some(k => k.toLowerCase().includes('azure') || k.toLowerCase().includes('adls'))) return 'azure';
-		if (keys.some(k => k.toLowerCase().includes('gcs') || k.toLowerCase().includes('gs'))) return 'gcs';
-		return 'unknown';
-	}
-
-	function getBucketOrContainer(warehouse: any): string {
-		return warehouse.storage_config?.['s3.bucket'] 
-			|| warehouse.storage_config?.['adls.container']
 			|| warehouse.storage_config?.['azure.container']
 			|| warehouse.storage_config?.['gcs.bucket'] 
 			|| '-';

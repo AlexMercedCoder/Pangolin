@@ -7,6 +7,11 @@
 		sortable?: boolean;
 		width?: string;
 	}> = [];
+	// Props for server-side pagination
+	export let serverSide = false;
+	export let page = 1;
+	export let pageSize = 10;
+	export let hasNextPage = false;
 	export let data: any[] = [];
 	export let loading = false;
 	export let emptyMessage = 'No data available';
@@ -19,7 +24,8 @@
 	let sortKey = '';
 	let sortDirection: 'asc' | 'desc' = 'asc';
 
-	$: filteredData = searchQuery
+	// Client-side filtering/sorting (only used if !serverSide)
+	$: filteredData = !serverSide && searchQuery
 		? data.filter((row) =>
 				columns.some((col) => {
 					const value = row[col.key];
@@ -28,7 +34,7 @@
 		  )
 		: data;
 
-	$: sortedData = sortKey
+	$: sortedData = !serverSide && sortKey
 		? [...filteredData].sort((a, b) => {
 				const aVal = a[sortKey];
 				const bVal = b[sortKey];
@@ -39,8 +45,12 @@
 				return 0;
 		  })
 		: filteredData;
+	
+	// Server-side data uses 'data' directly (assumed to be the page slice)
+	$: displayData = serverSide ? data : sortedData;
 
 	function handleSort(key: string) {
+		if (serverSide) return; // Disable client-side sort for server-side data for now (or implement server sort later)
 		if (sortKey === key) {
 			sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
 		} else {
@@ -52,10 +62,14 @@
 	function handleRowClick(row: any) {
 		dispatch('rowClick', row);
 	}
+
+	function handlePageChange(newPage: number) {
+		dispatch('pageChange', newPage);
+	}
 </script>
 
 <div class="space-y-4">
-	{#if searchable}
+	{#if searchable && !serverSide}
 		<div class="flex items-center gap-4">
 			<div class="flex-1">
 				<input
@@ -78,7 +92,7 @@
 							class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
 							style={column.width ? `width: ${column.width}` : ''}
 						>
-							{#if column.sortable}
+							{#if column.sortable && !serverSide}
 								<button
 									on:click={() => handleSort(column.key)}
 									class="flex items-center gap-2 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
@@ -109,7 +123,7 @@
 							</div>
 						</td>
 					</tr>
-				{:else if sortedData.length === 0}
+				{:else if displayData.length === 0}
 					<tr>
 						<td colspan={columns.length} class="px-6 py-12 text-center">
 							<div class="text-gray-500 dark:text-gray-400">
@@ -119,7 +133,7 @@
 						</td>
 					</tr>
 				{:else}
-					{#each sortedData as row}
+					{#each displayData as row}
 						<tr
 							on:click={() => handleRowClick(row)}
 							class="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
@@ -138,9 +152,33 @@
 		</table>
 	</div>
 
-	{#if !loading && sortedData.length > 0}
-		<div class="text-sm text-gray-600 dark:text-gray-400">
-			Showing {sortedData.length} of {data.length} items
+	{#if !loading && (serverSide || displayData.length > 0)}
+        <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
+            {#if serverSide}
+                <div>
+                    Page {page}
+                </div>
+                <div class="flex gap-2">
+                    <button
+                        class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
+                        disabled={page === 1}
+                        on:click={() => handlePageChange(page - 1)}
+                    >
+                        Previous
+                    </button>
+                    <button
+                        class="px-3 py-1 border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50"
+                        disabled={!hasNextPage}
+                        on:click={() => handlePageChange(page + 1)}
+                    >
+                        Next
+                    </button>
+                </div>
+            {:else}
+                <div>
+                    Showing {displayData.length} of {data.length} items
+                </div>
+            {/if}
 		</div>
 	{/if}
 </div>

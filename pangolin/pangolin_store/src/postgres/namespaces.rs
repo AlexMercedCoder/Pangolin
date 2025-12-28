@@ -36,10 +36,15 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>) -> Result<Vec<Namespace>> {
-        let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2")
+    pub async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Namespace>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 LIMIT $3 OFFSET $4")
             .bind(tenant_id)
             .bind(catalog_name)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 

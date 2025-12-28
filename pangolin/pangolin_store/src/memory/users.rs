@@ -25,16 +25,21 @@ impl MemoryStore {
             }
             Ok(None)
         }
-    pub(crate) async fn list_users_internal(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
-            let users = self.users.iter()
+    pub(crate) async fn list_users_internal(&self, tenant_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<User>> {
+            let iter = self.users.iter()
                 .filter(|entry| {
                     match tenant_id {
                         Some(tid) => entry.value().tenant_id == Some(tid),
                         None => true // Root listing or all users
                     }
                 })
-                .map(|entry| entry.value().clone())
-                .collect();
+                .map(|entry| entry.value().clone());
+
+            let users = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
             Ok(users)
         }
     pub(crate) async fn update_user_internal(&self, user: User) -> Result<()> {

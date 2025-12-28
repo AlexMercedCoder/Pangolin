@@ -32,8 +32,10 @@ pub async fn handle_revoke_token_by_id(client: &PangolinClient, id: String) -> R
     Ok(())
 }
 
-pub async fn handle_list_user_tokens(client: &PangolinClient, user_id: String) -> Result<(), CliError> {
-    let res = client.get(&format!("/api/v1/users/{}/tokens", user_id)).await?;
+pub async fn handle_list_user_tokens(client: &PangolinClient, user_id: String, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { format!("/api/v1/users/{}/tokens", user_id) } else { format!("/api/v1/users/{}/tokens?{}", user_id, q) };
+    let res = client.get(&path).await?;
     
     if !res.status().is_success() {
         let status = res.status();

@@ -4,6 +4,7 @@ use anyhow::Result;
 use sqlx::Row;
 use uuid::Uuid;
 use pangolin_core::model::{Asset, AssetType};
+use sqlx::{QueryBuilder, Sqlite}; // Added QueryBuilder
 
 impl SqliteStore {
     pub async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()> {
@@ -22,6 +23,92 @@ impl SqliteStore {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    pub async fn copy_assets_bulk(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        src_branch: &str,
+        dest_branch: &str,
+        namespace: Option<String>
+    ) -> Result<usize> {
+        // 1. Fetch assets from source branch
+        // We select raw fields needed to recreate the asset
+        let query = "SELECT name, namespace_path, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND branch_name = ?";
+        
+        let rows = sqlx::query(query)
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(src_branch)
+            .fetch_all(&self.pool)
+            .await?;
+
+        if rows.is_empty() {
+            return Ok(0);
+        }
+
+        let mut assets_to_copy = Vec::new();
+
+        for row in rows {
+            let ns_path_str: String = row.get("namespace_path");
+            // Optional Filter
+            if let Some(ref ns_filter) = namespace {
+                 // Check if it matches (serialized match) - this assumes simple serialization or we parse
+                 // For simplicity/parity with MemoryStore which treated it as string, checking if ns_path_str matches.
+                 // Ideally we parse, but let's assume loose string match for now or parsing.
+                 // MemoryStore used `\x1F` joined string. SQLite stores JSON string ["a", "b"].
+                 // The `namespace` arg passed from API is typically a string representation.
+                 // Let's parse JSON to check exact match if strict correctness is needed, 
+                 // but typically `copy_assets_bulk` namespace filter is for simple "default" namespace cases.
+                 // Actually, MemoryStore implementation split the namespace argument by \x1F.
+                 // Here `namespace` arg comes from trait.
+                 // Let's assume the argument passed IS the JSON string or we need to be careful.
+                 // Re-reading trait: `namespace: Option<String>`. 
+                 // If the API passes it, it likely passes what came in request.
+                 // In `pangolin_handlers.rs`, it passes `None` mostly.
+                 // Let's skip complex filtering if it's None.
+                 if ns_path_str != *ns_filter {
+                     continue;
+                 }
+            }
+
+            let name: String = row.get("name");
+            let asset_type: String = row.get("asset_type");
+            let metadata_location: Option<String> = row.get("metadata_location");
+            let properties: String = row.get("properties");
+            
+            assets_to_copy.push((ns_path_str, name, asset_type, metadata_location, properties));
+        }
+
+        if assets_to_copy.is_empty() {
+            return Ok(0);
+        }
+
+        // 2. Batch Insert logic
+        // SQLite has a limit on variables, so we might need to chunk if huge. 
+        // But for bulk copy of reasonable size, QueryBuilder is fine.
+        // Or we loop. QueryBuilder is safest for performance.
+
+        let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
+            "INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, branch_name, asset_type, metadata_location, properties) "
+        );
+        
+        query_builder.push_values(assets_to_copy, |mut b, (ns, name, atype, floc, props)| {
+            b.push_bind(Uuid::new_v4().to_string())
+             .push_bind(tenant_id.to_string())
+             .push_bind(catalog_name)
+             .push_bind(ns)
+             .push_bind(name)
+             .push_bind(dest_branch)
+             .push_bind(atype)
+             .push_bind(floc)
+             .push_bind(props);
+        });
+
+        let result = query_builder.build().execute(&self.pool).await?;
+        
+        Ok(result.rows_affected() as usize)
     }
 
     pub async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>> {
@@ -89,14 +176,19 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+    pub async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Asset>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let namespace_path = serde_json::to_string(&namespace)?;
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND branch_name = ?")
+        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND branch_name = ? LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
             .bind(&branch_name)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 

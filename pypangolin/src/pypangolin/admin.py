@@ -70,8 +70,11 @@ class TokenClient:
     def __init__(self, client):
         self.client = client
 
-    def list_my_tokens(self) -> List[Dict[str, Any]]:
-        return self.client.get("/api/v1/users/me/tokens")
+    def list_my_tokens(self, limit: int = None, offset: int = None) -> List[Dict[str, Any]]:
+        params = {}
+        if limit is not None: params['limit'] = limit
+        if offset is not None: params['offset'] = offset
+        return self.client.get("/api/v1/users/me/tokens", params=params)
 
     def generate(self, name: str, user_id: str = None, tenant_id: str = None, expires_in_days: int = 30) -> str:
         payload = {

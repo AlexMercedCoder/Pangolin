@@ -42,7 +42,7 @@ async fn test_catalog_crud() {
     assert_eq!(retrieved.unwrap().name, "test-catalog");
     
     // Test List
-    let catalogs = store.list_catalogs(tenant_id).await.unwrap();
+    let catalogs = store.list_catalogs(tenant_id, None).await.unwrap();
     assert_eq!(catalogs.len(), 1);
     assert_eq!(catalogs[0].name, "test-catalog");
     
@@ -53,7 +53,7 @@ async fn test_catalog_crud() {
     let deleted = store.get_catalog(tenant_id, "test-catalog".to_string()).await.unwrap();
     assert!(deleted.is_none());
     
-    let catalogs_after = store.list_catalogs(tenant_id).await.unwrap();
+    let catalogs_after = store.list_catalogs(tenant_id, None).await.unwrap();
     assert_eq!(catalogs_after.len(), 0);
 }
 
@@ -86,7 +86,7 @@ async fn test_warehouse_crud() {
     assert_eq!(retrieved_warehouse.use_sts, true);
     
     // Test List
-    let warehouses = store.list_warehouses(tenant_id).await.unwrap();
+    let warehouses = store.list_warehouses(tenant_id, None).await.unwrap();
     assert_eq!(warehouses.len(), 1);
     assert_eq!(warehouses[0].name, "test_wh_sts");
     
@@ -97,7 +97,7 @@ async fn test_warehouse_crud() {
     let deleted = store.get_warehouse(tenant_id, "test_wh_sts".to_string()).await.unwrap();
     assert!(deleted.is_none());
     
-    let warehouses_after = store.list_warehouses(tenant_id).await.unwrap();
+    let warehouses_after = store.list_warehouses(tenant_id, None).await.unwrap();
     assert_eq!(warehouses_after.len(), 0);
 }
 
@@ -152,10 +152,10 @@ async fn test_multiple_tenants_isolation() {
     store.create_catalog(tenant1, catalog1).await.unwrap();
     
     // Verify tenant2 cannot see tenant1's data
-    let tenant2_catalogs = store.list_catalogs(tenant2).await.unwrap();
+    let tenant2_catalogs = store.list_catalogs(tenant2, None).await.unwrap();
     assert_eq!(tenant2_catalogs.len(), 0);
     
-    let tenant2_warehouses = store.list_warehouses(tenant2).await.unwrap();
+    let tenant2_warehouses = store.list_warehouses(tenant2, None).await.unwrap();
     assert_eq!(tenant2_warehouses.len(), 0);
     
     // Verify tenant2 cannot delete tenant1's warehouse
@@ -163,7 +163,7 @@ async fn test_multiple_tenants_isolation() {
     assert!(delete_result.is_err());
     
     // Verify tenant1's warehouse still exists
-    let tenant1_warehouses = store.list_warehouses(tenant1).await.unwrap();
+    let tenant1_warehouses = store.list_warehouses(tenant1, None).await.unwrap();
     assert_eq!(tenant1_warehouses.len(), 1);
 }
 
@@ -206,7 +206,7 @@ async fn test_warehouse_delete_prevents_orphaned_catalogs() {
     assert!(delete_result.is_ok(), "Current implementation allows deletion");
     
     // The catalog still exists but references a non-existent warehouse
-    let catalogs = store.list_catalogs(tenant_id).await.unwrap();
+    let catalogs = store.list_catalogs(tenant_id, None).await.unwrap();
     assert_eq!(catalogs.len(), 1);
     assert_eq!(catalogs[0].warehouse_name, Some("warehouse-with-catalog".to_string()));
 }

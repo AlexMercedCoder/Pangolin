@@ -118,7 +118,7 @@ pub async fn list_audit_events(
     // Root users can see events from all tenants
     let events_result = if session.role == UserRole::Root {
         // Fetch events from all tenants and aggregate
-        match store.list_tenants().await {
+        match store.list_tenants(None).await {
             Ok(tenants) => {
                 let mut all_events = Vec::new();
                 for tenant in tenants {
@@ -188,7 +188,7 @@ pub async fn get_audit_event(
     // Root users can access events from any tenant
     let event_result = if session.role == UserRole::Root {
         // Try to find the event in any tenant
-        match store.list_tenants().await {
+        match store.list_tenants(None).await {
             Ok(tenants) => {
                 let mut found_event = None;
                 for tenant in tenants {
@@ -291,7 +291,7 @@ pub async fn count_audit_events(
     // Root users can count events from all tenants
     let count_result = if session.role == UserRole::Root {
         // Count events from all tenants and sum
-        match store.list_tenants().await {
+        match store.list_tenants(None).await {
             Ok(tenants) => {
                 let mut total_count = 0;
                 for tenant in tenants {

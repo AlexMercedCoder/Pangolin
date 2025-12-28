@@ -35,7 +35,7 @@ async fn test_sqlite_tenant_crud() {
     assert_eq!(retrieved.unwrap().name, "test_tenant");
     
     // List tenants
-    let tenants = store.list_tenants().await.expect("Failed to list tenants");
+    let tenants = store.list_tenants(None).await.expect("Failed to list tenants");
     assert_eq!(tenants.len(), 1);
 }
 
@@ -72,12 +72,12 @@ async fn test_sqlite_warehouse_crud() {
     assert_eq!(retrieved.unwrap().name, "test_warehouse");
     
     // List warehouses
-    let warehouses = store.list_warehouses(tenant.id).await.expect("Failed to list warehouses");
+    let warehouses = store.list_warehouses(tenant.id, None).await.expect("Failed to list warehouses");
     assert_eq!(warehouses.len(), 1);
     
     // Delete warehouse
     store.delete_warehouse(tenant.id, "test_warehouse".to_string()).await.expect("Failed to delete warehouse");
-    let warehouses = store.list_warehouses(tenant.id).await.expect("Failed to list warehouses after delete");
+    let warehouses = store.list_warehouses(tenant.id, None).await.expect("Failed to list warehouses after delete");
     assert_eq!(warehouses.len(), 0);
 }
 
@@ -114,12 +114,12 @@ async fn test_sqlite_catalog_crud() {
     assert_eq!(retrieved_catalog.id, catalog.id);
     
     // List catalogs
-    let catalogs = store.list_catalogs(tenant.id).await.expect("Failed to list catalogs");
+    let catalogs = store.list_catalogs(tenant.id, None).await.expect("Failed to list catalogs");
     assert_eq!(catalogs.len(), 1);
     
     // Delete catalog
     store.delete_catalog(tenant.id, "test_catalog".to_string()).await.expect("Failed to delete catalog");
-    let catalogs = store.list_catalogs(tenant.id).await.expect("Failed to list catalogs after delete");
+    let catalogs = store.list_catalogs(tenant.id, None).await.expect("Failed to list catalogs after delete");
     assert_eq!(catalogs.len(), 0);
 }
 
@@ -160,7 +160,7 @@ async fn test_sqlite_namespace_operations() {
     assert_eq!(retrieved.unwrap().name, vec!["db1", "schema1"]);
     
     // List namespaces
-    let namespaces = store.list_namespaces(tenant.id, "test_catalog", None).await.expect("Failed to list namespaces");
+    let namespaces = store.list_namespaces(tenant.id, "test_catalog", None, None).await.expect("Failed to list namespaces");
     assert_eq!(namespaces.len(), 1);
     
     // Update namespace properties
@@ -174,7 +174,7 @@ async fn test_sqlite_namespace_operations() {
     
     // Delete namespace
     store.delete_namespace(tenant.id, "test_catalog", vec!["db1".to_string(), "schema1".to_string()]).await.expect("Failed to delete namespace");
-    let namespaces = store.list_namespaces(tenant.id, "test_catalog", None).await.expect("Failed to list namespaces after delete");
+    let namespaces = store.list_namespaces(tenant.id, "test_catalog", None, None).await.expect("Failed to list namespaces after delete");
     assert_eq!(namespaces.len(), 0);
 }
 
@@ -224,12 +224,12 @@ async fn test_sqlite_asset_operations() {
     assert_eq!(retrieved.unwrap().name, "test_table");
     
     // List assets
-    let assets = store.list_assets(tenant.id, "test_catalog", None, vec!["db1".to_string()]).await.expect("Failed to list assets");
+    let assets = store.list_assets(tenant.id, "test_catalog", None, vec!["db1".to_string()], None).await.expect("Failed to list assets");
     assert_eq!(assets.len(), 1);
     
     // Delete asset
     store.delete_asset(tenant.id, "test_catalog", None, vec!["db1".to_string()], "test_table".to_string()).await.expect("Failed to delete asset");
-    let assets = store.list_assets(tenant.id, "test_catalog", None, vec!["db1".to_string()]).await.expect("Failed to list assets after delete");
+    let assets = store.list_assets(tenant.id, "test_catalog", None, vec!["db1".to_string()], None).await.expect("Failed to list assets after delete");
     assert_eq!(assets.len(), 0);
 }
 
@@ -265,11 +265,11 @@ async fn test_sqlite_multi_tenant_isolation() {
     store.create_catalog(tenant1.id, catalog1.clone()).await.expect("Failed to create catalog for tenant1");
     
     // Verify tenant2 cannot see tenant1's catalog
-    let tenant2_catalogs = store.list_catalogs(tenant2.id).await.expect("Failed to list catalogs for tenant2");
+    let tenant2_catalogs = store.list_catalogs(tenant2.id, None).await.expect("Failed to list catalogs for tenant2");
     assert_eq!(tenant2_catalogs.len(), 0);
     
     // Verify tenant1 can see their catalog
-    let tenant1_catalogs = store.list_catalogs(tenant1.id).await.expect("Failed to list catalogs for tenant1");
+    let tenant1_catalogs = store.list_catalogs(tenant1.id, None).await.expect("Failed to list catalogs for tenant1");
     assert_eq!(tenant1_catalogs.len(), 1);
 }
 
@@ -310,8 +310,8 @@ async fn test_sqlite_catalog_delete_cascade() {
     store.create_asset(tenant.id, "test_catalog", None, vec!["db".to_string()], asset.clone()).await.expect("Failed");
 
     // Verify existence
-    assert_eq!(store.list_namespaces(tenant.id, "test_catalog", None).await.unwrap().len(), 1);
-    assert_eq!(store.list_assets(tenant.id, "test_catalog", None, vec!["db".to_string()]).await.unwrap().len(), 1);
+    assert_eq!(store.list_namespaces(tenant.id, "test_catalog", None, None).await.unwrap().len(), 1);
+    assert_eq!(store.list_assets(tenant.id, "test_catalog", None, vec!["db".to_string()], None).await.unwrap().len(), 1);
 
     // Delete Catalog
     store.delete_catalog(tenant.id, "test_catalog".to_string()).await.expect("Failed to delete catalog");
@@ -331,10 +331,10 @@ async fn test_sqlite_catalog_delete_cascade() {
     // So they should definitely be gone.
     
     // We can't list assets for a non-existent catalog easily via API usually, but `list_assets` just queries by catalog_name string.
-    let assets = store.list_assets(tenant.id, "test_catalog", None, vec!["db".to_string()]).await.unwrap();
+    let assets = store.list_assets(tenant.id, "test_catalog", None, vec!["db".to_string()], None).await.unwrap();
     assert_eq!(assets.len(), 0);
     
-    let namespaces = store.list_namespaces(tenant.id, "test_catalog", None).await.unwrap();
+    let namespaces = store.list_namespaces(tenant.id, "test_catalog", None, None).await.unwrap();
     assert_eq!(namespaces.len(), 0);
 }
 
@@ -485,7 +485,7 @@ async fn test_sqlite_access_requests() {
     assert_eq!(fetched.unwrap().status, RequestStatus::Pending);
 
     // 3. List Requests
-    let list = store.list_access_requests(tenant.id).await.expect("List requests");
+    let list = store.list_access_requests(tenant.id, None).await.expect("List requests");
     assert_eq!(list.len(), 1);
     assert_eq!(list[0].id, request.id);
 
@@ -553,7 +553,7 @@ async fn test_sqlite_list_user_permissions_aggregation() {
     store.create_permission(direct_perm.clone()).await.unwrap();
 
     // 4. List user permissions and verify aggregation
-    let aggregated_perms = store.list_user_permissions(user_id).await.unwrap();
+    let aggregated_perms = store.list_user_permissions(user_id, None).await.unwrap();
     
     assert_eq!(aggregated_perms.len(), 2, "Should have 2 permissions (1 direct, 1 from role)");
     

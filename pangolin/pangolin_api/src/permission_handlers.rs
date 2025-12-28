@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::collections::HashSet;
 use pangolin_core::permission::{Role, Permission, PermissionScope, Action, UserRole};
 use pangolin_core::user::{UserSession, UserRole as AuthRole};
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use utoipa::ToSchema;
 
 /// Request to create a new role
@@ -89,11 +89,12 @@ pub async fn create_role(
 pub async fn list_roles(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
+    Query(pagination): Query<PaginationParams>,
 ) -> Response {
     let tenant_id = session.tenant_id.unwrap_or_default(); 
     
     // For now list for session tenant
-    let roles = match store.list_roles(tenant_id).await {
+    let roles = match store.list_roles(tenant_id, Some(pagination)).await {
         Ok(roles) => roles,
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list roles: {}", e)).into_response(),
     };
@@ -382,6 +383,7 @@ pub async fn list_permissions(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>, // Use UserSession
     Query(params): Query<ListPermissionsParams>,
+    Query(pagination): Query<PaginationParams>,
 ) -> Response {
     // Check if user is authorized to list permissions (e.g. admin or listing own?)
     // For now assume TenantAdmin or Root
@@ -391,7 +393,7 @@ pub async fn list_permissions(
     
     // For MVP, if listing specific user:
     if let Some(target_user_id) = params.user {
-         match store.list_user_permissions(target_user_id).await {
+         match store.list_user_permissions(target_user_id, Some(pagination)).await {
             Ok(perms) => (StatusCode::OK, Json(perms)).into_response(),
             Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list user permissions: {}", e)).into_response(),
         }
@@ -402,7 +404,7 @@ pub async fn list_permissions(
             None => return (StatusCode::BAD_REQUEST, "User must belong to a tenant").into_response(),
         };
 
-        match store.list_permissions(tenant_id).await {
+        match store.list_permissions(tenant_id, Some(pagination)).await {
             Ok(perms) => (StatusCode::OK, Json(perms)).into_response(),
             Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list permissions: {}", e)).into_response(),
         }

@@ -33,8 +33,13 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_tenants(&self) -> Result<Vec<Tenant>> {
-        let rows = sqlx::query("SELECT id, name, properties FROM tenants")
+    pub async fn list_tenants(&self, pagination: Option<crate::PaginationParams>) -> Result<Vec<Tenant>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = sqlx::query("SELECT id, name, properties FROM tenants LIMIT ? OFFSET ?")
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 

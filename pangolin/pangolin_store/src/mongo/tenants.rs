@@ -27,8 +27,19 @@ impl MongoStore {
         Ok(tenant)
     }
 
-    pub async fn list_tenants(&self) -> Result<Vec<Tenant>> {
-        let cursor = self.tenants().find(doc! {}).await?;
+    pub async fn list_tenants(&self, pagination: Option<crate::PaginationParams>) -> Result<Vec<Tenant>> {
+        let collection = self.tenants();
+        let mut find = collection.find(doc! {});
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let cursor = find.await?;
         let tenants: Vec<Tenant> = cursor.try_collect().await?;
         Ok(tenants)
     }

@@ -33,14 +33,19 @@ impl MemoryStore {
                 Ok(None)
             }
         }
-    pub(crate) async fn list_branches_internal(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>> {
-            let mut branches = Vec::new();
-            for entry in self.branches.iter() {
-                let (tid, cat, _) = entry.key();
-                if *tid == tenant_id && cat == catalog_name {
-                    branches.push(entry.value().clone());
-                }
-            }
+    pub(crate) async fn list_branches_internal(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<Branch>> {
+            let iter = self.branches.iter()
+                .filter(|entry| {
+                    let (tid, cat, _) = entry.key();
+                    *tid == tenant_id && cat == catalog_name
+                })
+                .map(|entry| entry.value().clone());
+
+            let branches: Vec<Branch> = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
             Ok(branches)
         }
     pub(crate) async fn delete_branch_internal(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {

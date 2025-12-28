@@ -144,9 +144,51 @@ These changes are transparent to clients:
 
 | Feature | MemoryStore | SqliteStore | PostgresStore | MongoStore | CLI/UI Impact | Status |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **P1: DB Indexes** | N/A | [ ] | [ ] | [ ] | None | Not Started |
-| **P1: Async JSON** | [ ] | [ ] | [ ] | [ ] | None | Not Started |
-| **P1: ObjStore Cache** | N/A | N/A | [ ] | N/A | None | Not Started |
-| **P2: Bulk Copy** | [ ] | [ ] | [ ] | [ ] | None | Not Started |
-| **P2: Recursive Ancestry**| [ ] | [ ] | [ ] | [ ] | None | Not Started |
-| **P3: Pagination** | [ ] | [ ] | [ ] | [ ] | **Low** | Not Started |
+| **P1: DB Indexes** | N/A | [ ] | [ ] | [ ] | None | **Todo** |
+| **P1: Async JSON** | [x] | [x] | [x] | [x] | None | **Complete** |
+| **P1: ObjStore Cache** | N/A | N/A | [x] | N/A | None | **Complete** |
+| **P2: Bulk Copy** | [x] | [x] | [x] | [x] | None | **Complete** |
+| **P2: Recursive Ancestry**| [x] | [x] | [x] | [x] | None | **Complete** |
+| **P3: Pagination** | [x] | [x] | [x] | [x] | **Low** | **Complete** |
+| **P3: Caching** | N/A | N/A | [ ] | N/A | None | **Planning** |
+
+## 10. Implementation Status & Changelog (Dec 2025)
+
+### 10.1 Changed Endpoints
+The following endpoints have been updated to accept optional `limit` (integer) and `offset` (integer) query parameters.
+
+#### Management APIs (Pangolin Extension)
+*   `GET /api/v1/tenants`
+*   `GET /api/v1/users`
+*   `GET /api/v1/warehouses`
+*   `GET /api/v1/catalogs`
+*   `GET /api/v1/permissions`
+*   `GET /api/v1/active-tokens`
+*   `GET /api/v1/access-requests`
+*   `GET /api/v1/branches/{name}/commits` (also accepts standard Iceberg `limit`)
+*   `GET /api/v1/tags`
+
+#### Iceberg REST APIs
+*   `GET /v1/{prefix}/namespaces`
+*   `GET /v1/{prefix}/namespaces/{namespace}/tables`
+
+### 10.2 Impact Analysis
+
+#### CLI (pangolin-admin)
+*   **Status:** Updated.
+*   **Changes:** Added `--limit` and `--offset` flags to all list commands.
+*   **Action Required:** None. Users can optionally use these flags to manage large result sets.
+
+#### PyPangolin SDK
+*   **Status:** Functional (Backward Compatible).
+*   **Changes:** None yet. SDK methods currently ignore `limit`/`offset` args if passed (or don't expose them).
+*   **Action Required:** Future update needed to expose `limit` and `offset` keyword arguments in `list_*` methods.
+
+#### Pangolin UI
+*   **Status:** Updated.
+*   **Changes:** Implemented server-side pagination with "Previous/Next" controls in `DataTable`. Updated list views (`Tenants`, `Users`, `Warehouses`, `Catalogs`) to request data using `limit` and `offset`.
+*   **Action Required:** None.
+
+#### Iceberg Protocol Adherence
+*   **Status:** Compliant (with Extensions).
+*   **Detail:** The `limit` parameter is standard in the Iceberg REST Spec. `offset` is a Pangolin-specific extension. The standard Iceberg `page-token` is not yet implemented (Pangolin uses `offset` for stateless simple pagination). Standard Iceberg clients (Java/Python) will continue to work as they typically do not send `offset`, receiving the default first page (or all items if configured with high limit).

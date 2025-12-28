@@ -92,6 +92,7 @@ async fn test_merge_branch_flow() {
         .body(Body::from(json!({
             "name": "dev",
             "from_branch": "main",
+            "catalog": "default",
             "assets": ["default.table1"]
         }).to_string()))
         .unwrap();
@@ -134,7 +135,8 @@ async fn test_merge_branch_flow() {
         .header("Content-Type", "application/json")
         .body(Body::from(json!({
             "source_branch": "dev",
-            "target_branch": "main"
+            "target_branch": "main",
+            "catalog": "default"
         }).to_string()))
         .unwrap();
     let resp = app.clone().oneshot(merge_req).await.unwrap();

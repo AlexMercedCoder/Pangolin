@@ -4,8 +4,10 @@ use pangolin_cli_common::utils::print_table;
 use serde_json::Value;
 use pangolin_cli_common::optimization_types::CatalogSummary;
 
-pub async fn handle_list_catalogs(client: &PangolinClient) -> Result<(), CliError> {
-     let res = client.get("/api/v1/catalogs").await?;
+pub async fn handle_list_catalogs(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { "/api/v1/catalogs".to_string() } else { format!("/api/v1/catalogs?{}", q) };
+     let res = client.get(&path).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
     let rows = items.iter().map(|i| vec![

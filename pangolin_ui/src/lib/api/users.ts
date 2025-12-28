@@ -26,8 +26,12 @@ export interface UpdateUserRequest {
 }
 
 export const usersApi = {
-	async list(): Promise<User[]> {
-		const response = await apiClient.get<User[]>('/api/v1/users');
+	async list(limit?: number, offset?: number): Promise<User[]> {
+		const params = new URLSearchParams();
+		if (limit) params.append('limit', limit.toString());
+		if (offset) params.append('offset', offset.toString());
+
+		const response = await apiClient.get<User[]>(`/api/v1/users?${params.toString()}`);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

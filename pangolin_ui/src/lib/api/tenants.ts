@@ -21,8 +21,12 @@ export interface UpdateTenantRequest {
 }
 
 export const tenantsApi = {
-	async list(): Promise<Tenant[]> {
-		const response = await apiClient.get<Tenant[]>('/api/v1/tenants');
+	async list(limit?: number, offset?: number): Promise<Tenant[]> {
+		const params = new URLSearchParams();
+		if (limit) params.append('limit', limit.toString());
+		if (offset) params.append('offset', offset.toString());
+		
+		const response = await apiClient.get<Tenant[]>(`/api/v1/tenants?${params.toString()}`);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

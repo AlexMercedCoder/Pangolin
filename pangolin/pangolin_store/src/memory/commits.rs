@@ -18,4 +18,24 @@ impl MemoryStore {
                 Ok(None)
             }
         }
+
+    pub(crate) async fn get_commit_ancestry_internal(&self, tenant_id: Uuid, head_commit_id: Uuid, limit: usize) -> Result<Vec<Commit>> {
+        let mut ancestry = Vec::new();
+        let mut current_id = Some(head_commit_id);
+        
+        while let Some(id) = current_id {
+            if ancestry.len() >= limit {
+                break;
+            }
+            
+            if let Some(commit) = self.get_commit_internal(tenant_id, id).await? {
+                current_id = commit.parent_id;
+                ancestry.push(commit);
+            } else {
+                break;
+            }
+        }
+        
+        Ok(ancestry)
+    }
 }

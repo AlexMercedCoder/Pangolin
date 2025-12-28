@@ -12,11 +12,17 @@ impl MemoryStore {
     pub(crate) async fn get_role_internal(&self, role_id: Uuid) -> Result<Option<pangolin_core::permission::Role>> {
              Ok(self.roles.get(&role_id).map(|r| r.value().clone()))
         }
-    pub(crate) async fn list_roles_internal(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Role>> {
-            Ok(self.roles.iter()
+    pub(crate) async fn list_roles_internal(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<pangolin_core::permission::Role>> {
+            let iter = self.roles.iter()
                 .filter(|r| r.value().tenant_id == tenant_id)
-                .map(|r| r.value().clone())
-                .collect())
+                .map(|r| r.value().clone());
+
+            let roles = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
+            Ok(roles)
         }
     pub(crate) async fn update_role_internal(&self, role: Role) -> Result<()> {
             // Just overwrite

@@ -26,41 +26,42 @@ impl MongoStore {
         Ok(doc)
     }
 
-    pub async fn count_audit_events(&self, tenant_id: Uuid, filter: AuditLogFilter) -> Result<usize> {
+    pub async fn count_audit_events(&self, tenant_id: Uuid, filter: Option<AuditLogFilter>) -> Result<usize> {
         let mongo_filter = self.build_audit_filter(tenant_id, filter)?;
         let count = self.db.collection::<Document>("audit_logs").count_documents(mongo_filter).await?;
         Ok(count as usize)
     }
 
-    pub async fn list_audit_events(&self, tenant_id: Uuid, filter: AuditLogFilter) -> Result<Vec<AuditLogEntry>> {
+    pub async fn list_audit_events(&self, tenant_id: Uuid, filter: Option<AuditLogFilter>) -> Result<Vec<AuditLogEntry>> {
         let mongo_filter = self.build_audit_filter(tenant_id, filter)?;
         let cursor = self.db.collection::<AuditLogEntry>("audit_logs").find(mongo_filter).await?;
         let entries: Vec<AuditLogEntry> = cursor.try_collect().await?;
         Ok(entries)
     }
 
-    fn build_audit_filter(&self, tenant_id: Uuid, filter: AuditLogFilter) -> Result<Document> {
+    fn build_audit_filter(&self, tenant_id: Uuid, filter: Option<AuditLogFilter>) -> Result<Document> {
         let mut mongo_filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
-        
-        if let Some(rt) = filter.resource_type {
-            mongo_filter.insert("resource_type", format!("{:?}", rt));
-        }
-        if let Some(ra) = filter.action {
-            mongo_filter.insert("action", format!("{:?}", ra));
-        }
-        if let Some(uid) = filter.user_id {
-            mongo_filter.insert("user_id", to_bson_uuid(uid));
-        }
-        if let Some(from) = filter.start_time {
-            mongo_filter.insert("timestamp", doc! { "$gte": Bson::DateTime(from.into()) });
-        }
-        if let Some(to) = filter.end_time {
-            if let Some(ts_filter) = mongo_filter.get_mut("timestamp") {
-                if let Some(ts_doc) = ts_filter.as_document_mut() {
-                    ts_doc.insert("$lte", Bson::DateTime(to.into()));
+        if let Some(f) = filter {
+            if let Some(rt) = f.resource_type {
+                mongo_filter.insert("resource_type", format!("{:?}", rt));
+            }
+            if let Some(ra) = f.action {
+                mongo_filter.insert("action", format!("{:?}", ra));
+            }
+            if let Some(uid) = f.user_id {
+                mongo_filter.insert("user_id", to_bson_uuid(uid));
+            }
+            if let Some(from) = f.start_time {
+                mongo_filter.insert("timestamp", doc! { "$gte": Bson::DateTime(from.into()) });
+            }
+            if let Some(to) = f.end_time {
+                if let Some(ts_filter) = mongo_filter.get_mut("timestamp") {
+                    if let Some(ts_doc) = ts_filter.as_document_mut() {
+                        ts_doc.insert("$lte", Bson::DateTime(to.into()));
+                    }
+                } else {
+                    mongo_filter.insert("timestamp", doc! { "$lte": Bson::DateTime(to.into()) });
                 }
-            } else {
-                mongo_filter.insert("timestamp", doc! { "$lte": Bson::DateTime(to.into()) });
             }
         }
         

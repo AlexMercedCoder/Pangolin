@@ -18,11 +18,16 @@ impl MemoryStore {
                 Ok(None)
             }
         }
-    pub(crate) async fn list_warehouses_internal(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>> {
-            let warehouses = self.warehouses.iter()
+    pub(crate) async fn list_warehouses_internal(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Warehouse>> {
+            let iter = self.warehouses.iter()
                 .filter(|r| r.key().0 == tenant_id)
-                .map(|r| r.value().clone())
-                .collect();
+                .map(|r| r.value().clone());
+                
+            let warehouses: Vec<Warehouse> = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
             Ok(warehouses)
         }
     pub(crate) async fn update_warehouse_internal(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse> {

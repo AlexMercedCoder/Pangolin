@@ -62,17 +62,29 @@
 		actions_data: user
 	}));
 
+	onMount(() => {
+		loadUsers();
+	});
+
 	async function loadUsers() {
 		loading = true;
+		error = null;
 		try {
-			users = await usersApi.list();
-		} catch (error: any) {
-			notifications.error('Failed to load users: ' + error.message);
+			users = await usersApi.list(pageSize, (page - 1) * pageSize);
+            hasNextPage = users.length === pageSize;
+		} catch (e: any) {
+			error = e.message;
+			notifications.error('Failed to load users: ' + e.message);
 		} finally {
 			loading = false;
 		}
 	}
-
+    
+    function handlePageChange(event: CustomEvent<number>) {
+        page = event.detail;
+        loadUsers();
+    }
+    
 	function handleView(user: User) {
 		goto(`/users/${user.id}`);
 	}

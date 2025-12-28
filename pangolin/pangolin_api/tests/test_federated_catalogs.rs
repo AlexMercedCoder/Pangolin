@@ -68,12 +68,12 @@ async fn test_cross_tenant_federation() {
         .unwrap();
 
     // Verify catalogs were created
-    let tenant_a_catalogs = store.list_catalogs(tenant_a.id).await.unwrap();
+    let tenant_a_catalogs = store.list_catalogs(tenant_a.id, None).await.unwrap();
     assert_eq!(tenant_a_catalogs.len(), 1);
     assert_eq!(tenant_a_catalogs[0].name, "partner_production");
     assert_eq!(tenant_a_catalogs[0].catalog_type, CatalogType::Federated);
 
-    let tenant_b_catalogs = store.list_catalogs(tenant_b.id).await.unwrap();
+    let tenant_b_catalogs = store.list_catalogs(tenant_b.id, None).await.unwrap();
     assert_eq!(tenant_b_catalogs.len(), 1);
     assert_eq!(tenant_b_catalogs[0].name, "production");
     assert_eq!(tenant_b_catalogs[0].catalog_type, CatalogType::Local);
@@ -143,7 +143,7 @@ async fn test_federated_catalog_crud() {
     assert_eq!(retrieved.catalog_type, CatalogType::Federated);
 
     // List
-    let catalogs = store.list_catalogs(tenant_id).await.unwrap();
+    let catalogs = store.list_catalogs(tenant_id, None).await.unwrap();
     assert_eq!(catalogs.len(), 1);
     assert_eq!(catalogs[0].catalog_type, CatalogType::Federated);
 

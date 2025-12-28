@@ -52,7 +52,7 @@ impl ConflictDetector {
         branch_name: &str,
     ) -> Result<Vec<Asset>> {
         // Get all namespaces in the catalog
-        let namespaces = self.store.list_namespaces(tenant_id, catalog_name, None).await?;
+        let namespaces = self.store.list_namespaces(tenant_id, catalog_name, None, None).await?;
         
         let mut all_assets = Vec::new();
         for namespace in namespaces {
@@ -61,6 +61,7 @@ impl ConflictDetector {
                 catalog_name,
                 Some(branch_name.to_string()),
                 namespace.name.clone(),
+                None,
             ).await?;
             all_assets.extend(assets);
         }

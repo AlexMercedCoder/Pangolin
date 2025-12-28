@@ -18,14 +18,19 @@ impl MemoryStore {
                 Ok(None)
             }
         }
-    pub(crate) async fn list_tags_internal(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Tag>> {
-            let mut tags = Vec::new();
-            for r in self.tags.iter() {
-                let (tid, cname, _) = r.key();
-                if *tid == tenant_id && cname == catalog_name {
-                    tags.push(r.value().clone());
-                }
-            }
+    pub(crate) async fn list_tags_internal(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<Tag>> {
+            let iter = self.tags.iter()
+                .filter(|r| {
+                    let (tid, cname, _) = r.key();
+                    *tid == tenant_id && cname == catalog_name
+                })
+                .map(|r| r.value().clone());
+
+            let tags = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
             Ok(tags)
         }
     pub(crate) async fn delete_tag_internal(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {

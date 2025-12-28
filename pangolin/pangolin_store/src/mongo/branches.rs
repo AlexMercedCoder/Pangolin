@@ -47,12 +47,24 @@ impl MongoStore {
         }
     }
 
-    pub async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>> {
+    pub async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<Branch>> {
         let filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name
         };
-        let cursor = self.db.collection::<Document>("branches").find(filter).await?;
+
+        let collection = self.db.collection::<Document>("branches");
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let cursor = find.await?;
         let docs: Vec<Document> = cursor.try_collect().await?;
         
         let mut branches = Vec::new();
@@ -117,9 +129,9 @@ impl MongoStore {
 
         // Sync assets from source to target (Simulating Fast-Forward Merge)
         // Iterate known namespaces to find assets
-        let namespaces = self.list_namespaces(tenant_id, catalog_name, None).await?;
+        let namespaces = self.list_namespaces(tenant_id, catalog_name, None, None).await?;
         for ns in namespaces {
-             let assets = self.list_assets(tenant_id, catalog_name, Some(source_branch.clone()), ns.name.clone()).await?;
+             let assets = self.list_assets(tenant_id, catalog_name, Some(source_branch.clone()), ns.name.clone(), None).await?;
              for asset in assets {
                  // Upsert asset into target branch
                  self.create_asset(tenant_id, catalog_name, Some(target_branch.clone()), ns.name.clone(), asset).await?;

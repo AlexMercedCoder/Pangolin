@@ -56,7 +56,7 @@ pub async fn get_dashboard_stats(
     match session.role {
         UserRole::Root => {
             // Aggregate statistics across ALL tenants
-            let tenants = store.list_tenants().await
+            let tenants = store.list_tenants(None).await
                 .map_err(ApiError::from)?;
             let tenants_count = tenants.len();
             
@@ -64,9 +64,9 @@ pub async fn get_dashboard_stats(
             let mut warehouses_count = 0;
             
             for tenant in &tenants {
-                catalogs_count += store.list_catalogs(tenant.id).await
+                catalogs_count += store.list_catalogs(tenant.id, None).await
                     .map_err(ApiError::from)?.len();
-                warehouses_count += store.list_warehouses(tenant.id).await
+                warehouses_count += store.list_warehouses(tenant.id, None).await
                     .map_err(ApiError::from)?.len();
             }
             
@@ -87,9 +87,9 @@ pub async fn get_dashboard_stats(
         UserRole::TenantAdmin => {
             let tenant_id = session.tenant_id.unwrap_or_default();
             
-            let catalogs = store.list_catalogs(tenant_id).await
+            let catalogs = store.list_catalogs(tenant_id, None).await
                 .map_err(ApiError::from)?;
-            let warehouses = store.list_warehouses(tenant_id).await
+            let warehouses = store.list_warehouses(tenant_id, None).await
                 .map_err(ApiError::from)?;
             
             // Use efficient count methods
@@ -113,11 +113,11 @@ pub async fn get_dashboard_stats(
             let tenant_id = session.tenant_id.unwrap_or_default();
             
             // Fetch user permissions for filtering
-            let permissions = store.list_user_permissions(session.user_id).await
+            let permissions = store.list_user_permissions(session.user_id, None).await
                 .map_err(ApiError::from)?;
             
             // Get all catalogs and filter by permissions
-            let all_catalogs = store.list_catalogs(tenant_id).await
+            let all_catalogs = store.list_catalogs(tenant_id, None).await
                 .map_err(ApiError::from)?;
             let accessible_catalogs = crate::authz_utils::filter_catalogs(
                 all_catalogs,
@@ -128,7 +128,7 @@ pub async fn get_dashboard_stats(
             // Get all warehouses and filter by permissions
             // Note: Warehouses don't have direct permission scopes, so we show warehouses
             // associated with accessible catalogs
-            let all_warehouses = store.list_warehouses(tenant_id).await
+            let all_warehouses = store.list_warehouses(tenant_id, None).await
                 .map_err(ApiError::from)?;
             let accessible_warehouse_names: std::collections::HashSet<_> = accessible_catalogs
                 .iter()
@@ -148,7 +148,7 @@ pub async fn get_dashboard_stats(
             
             let mut accessible_namespaces_count = 0;
             for catalog in &accessible_catalogs {
-                if let Ok(namespaces) = store.list_namespaces(tenant_id, &catalog.name, None).await {
+                if let Ok(namespaces) = store.list_namespaces(tenant_id, &catalog.name, None, None).await {
                     let namespace_tuples: Vec<_> = namespaces
                         .into_iter()
                         .map(|ns| (ns, catalog.name.clone()))
@@ -219,10 +219,10 @@ pub async fn get_catalog_summary(
         .map_err(ApiError::from)?
         .ok_or_else(|| ApiError::not_found("Catalog not found"))?;
     
-    let branches = store.list_branches(tenant_id, &name).await
+    let branches = store.list_branches(tenant_id, &name, None).await
         .map_err(ApiError::from)?;
     
-    let namespaces = store.list_namespaces(tenant_id, &name, None).await
+    let namespaces = store.list_namespaces(tenant_id, &name, None, None).await
         .map_err(ApiError::from)?;
     
     let summary = CatalogSummary {

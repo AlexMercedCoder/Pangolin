@@ -44,14 +44,21 @@ impl SqliteStore {
         self.row_to_user(row)
     }
 
-    pub async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
+    pub async fn list_users(&self, tenant_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<User>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = if let Some(tid) = tenant_id {
-            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE tenant_id = ?")
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE tenant_id = ? LIMIT ? OFFSET ?")
                 .bind(tid.to_string())
+                .bind(limit)
+                .bind(offset)
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users")
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users LIMIT ? OFFSET ?")
+                .bind(limit)
+                .bind(offset)
                 .fetch_all(&self.pool)
                 .await?
         };

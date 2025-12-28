@@ -29,7 +29,7 @@ async fn test_postgres_tenant_crud() {
     assert_eq!(retrieved.unwrap().name, tenant.name);
     
     // List tenants
-    let tenants = store.list_tenants().await.expect("Failed to list tenants");
+    let tenants = store.list_tenants(None).await.expect("Failed to list tenants");
     assert!(tenants.iter().any(|t| t.id == tenant_id));
 }
 
@@ -66,7 +66,7 @@ async fn test_postgres_warehouse_crud() {
     assert_eq!(retrieved.as_ref().unwrap().use_sts, false);
     
     // List warehouses
-    let warehouses = store.list_warehouses(tenant_id).await.expect("Failed to list warehouses");
+    let warehouses = store.list_warehouses(tenant_id, None).await.expect("Failed to list warehouses");
     assert!(warehouses.iter().any(|w| w.name == warehouse_name));
     
     // Delete warehouse
@@ -110,7 +110,7 @@ async fn test_postgres_catalog_crud() {
     assert_eq!(retrieved.as_ref().unwrap().name, catalog_name);
     
     // List catalogs
-    let catalogs = store.list_catalogs(tenant_id).await.expect("Failed to list catalogs");
+    let catalogs = store.list_catalogs(tenant_id, None).await.expect("Failed to list catalogs");
     assert!(catalogs.iter().any(|c| c.name == catalog_name));
     
     // Delete catalog
@@ -160,7 +160,7 @@ async fn test_postgres_namespace_operations() {
     assert_eq!(retrieved.as_ref().unwrap().name, namespace.name);
     
     // List namespaces
-    let namespaces = store.list_namespaces(tenant_id, &catalog_name, None).await.expect("Failed to list namespaces");
+    let namespaces = store.list_namespaces(tenant_id, &catalog_name, None, None).await.expect("Failed to list namespaces");
     assert!(namespaces.iter().any(|n| n.name == namespace.name));
     
     // Update properties
@@ -223,7 +223,7 @@ async fn test_postgres_asset_operations() {
     assert_eq!(retrieved.as_ref().unwrap().name, "test_table");
     
     // List assets
-    let assets = store.list_assets(tenant_id, &catalog_name, None, namespace.name.clone()).await.expect("Failed to list assets");
+    let assets = store.list_assets(tenant_id, &catalog_name, None, namespace.name.clone(), None).await.expect("Failed to list assets");
     assert_eq!(assets.len(), 1);
     assert_eq!(assets[0].name, "test_table");
     
@@ -268,7 +268,7 @@ async fn test_postgres_multi_tenant_isolation() {
     store.create_warehouse(tenant1_id, warehouse).await.unwrap();
     
     // Tenant2 should not see tenant1's warehouse
-    let tenant2_warehouses = store.list_warehouses(tenant2_id).await.unwrap();
+    let tenant2_warehouses = store.list_warehouses(tenant2_id, None).await.unwrap();
     assert_eq!(tenant2_warehouses.len(), 0);
     
     // Tenant2 cannot delete tenant1's warehouse
@@ -276,7 +276,7 @@ async fn test_postgres_multi_tenant_isolation() {
     assert!(delete_result.is_err());
     
     // Tenant1's warehouse still exists
-    let tenant1_warehouses = store.list_warehouses(tenant1_id).await.unwrap();
+    let tenant1_warehouses = store.list_warehouses(tenant1_id, None).await.unwrap();
     assert_eq!(tenant1_warehouses.len(), 1);
 }
 
@@ -319,17 +319,17 @@ async fn test_postgres_catalog_delete_cascade() {
     store.create_asset(tenant_id, &catalog_name, None, vec!["db".to_string()], asset.clone()).await.expect("Failed");
 
     // Verify existence
-    assert_eq!(store.list_namespaces(tenant_id, &catalog_name, None).await.unwrap().len(), 1);
-    assert_eq!(store.list_assets(tenant_id, &catalog_name, None, vec!["db".to_string()]).await.unwrap().len(), 1);
+    assert_eq!(store.list_namespaces(tenant_id, &catalog_name, None, None).await.unwrap().len(), 1);
+    assert_eq!(store.list_assets(tenant_id, &catalog_name, None, vec!["db".to_string()], None).await.unwrap().len(), 1);
 
     // Delete Catalog
     store.delete_catalog(tenant_id, catalog_name.clone()).await.expect("Failed to delete catalog");
 
     // Verify Cascading Delete
-    let assets = store.list_assets(tenant_id, &catalog_name, None, vec!["db".to_string()]).await.unwrap();
+    let assets = store.list_assets(tenant_id, &catalog_name, None, vec!["db".to_string()], None).await.unwrap();
     assert_eq!(assets.len(), 0);
     
-    let namespaces = store.list_namespaces(tenant_id, &catalog_name, None).await.unwrap();
+    let namespaces = store.list_namespaces(tenant_id, &catalog_name, None, None).await.unwrap();
     assert_eq!(namespaces.len(), 0);
 }
 
@@ -461,7 +461,7 @@ async fn test_postgres_list_user_permissions_aggregation() {
     store.create_permission(direct_perm.clone()).await.unwrap();
 
     // 4. List user permissions and verify aggregation
-    let aggregated_perms = store.list_user_permissions(user_id).await.unwrap();
+    let aggregated_perms = store.list_user_permissions(user_id, None).await.unwrap();
     
     assert_eq!(aggregated_perms.len(), 2, "Should have 2 permissions (1 direct, 1 from role)");
     

@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use pangolin_core::user::{User, UserRole, OAuthProvider, UserSession};
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use std::sync::Arc;
 use utoipa::ToSchema;
 
@@ -197,12 +197,13 @@ pub async fn list_users(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(tenant): Extension<TenantId>,
     Extension(_session): Extension<UserSession>,
+    Query(pagination): Query<PaginationParams>,
 ) -> Response {
     // Determine tenant_id to list for
     // Extension(TenantId) provides the effective tenant (from token or header fallback)
     let tenant_id = tenant.0;
 
-    match store.list_users(Some(tenant_id)).await {
+    match store.list_users(Some(tenant_id), Some(pagination)).await {
         Ok(users) => {
              let infos: Vec<UserInfo> = users.into_iter().map(UserInfo::from).collect();
              (StatusCode::OK, Json(infos)).into_response()
@@ -377,7 +378,7 @@ pub async fn login(
     if req.tenant_id.is_none() {
         let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_else(|_| "admin".to_string());
         let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
-
+        
         if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
             // Create a temporary User object for the root user session
             let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap(); 
@@ -426,7 +427,7 @@ pub async fn login(
     let user_opt = if let Some(tenant_id) = req.tenant_id {
         // Tenant-scoped login: get users from this tenant only, then find by username
         // This ensures we only look at users within the specified tenant
-        match store.list_users(Some(tenant_id)).await {
+        match store.list_users(Some(tenant_id), None).await {
             Ok(users) => {
                 // Find user by username within this tenant's users
                 users.into_iter().find(|u| u.username == req.username)

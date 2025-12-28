@@ -7,7 +7,7 @@ use sqlx::Row;
 impl PostgresStore {
     // Branch Operations
     pub async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> {
-        sqlx::query("INSERT INTO branches (tenant_id, catalog_name, name, head_commit_id, branch_type, assets) VALUES ($1, $2, $3, $4, $5, $6)")
+        sqlx::query("INSERT INTO branches (tenant_id, catalog_name, name, head_commit_id, branch_type, assets) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (tenant_id, catalog_name, name) DO UPDATE SET head_commit_id = EXCLUDED.head_commit_id, branch_type = EXCLUDED.branch_type, assets = EXCLUDED.assets")
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(branch.name)
@@ -46,10 +46,15 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>> {
-        let rows = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = $1 AND catalog_name = $2")
+    pub async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<Branch>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
+        let rows = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = $1 AND catalog_name = $2 LIMIT $3 OFFSET $4")
             .bind(tenant_id)
             .bind(catalog_name)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 

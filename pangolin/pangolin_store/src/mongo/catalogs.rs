@@ -37,9 +37,21 @@ impl MongoStore {
         Ok(doc)
     }
 
-    pub async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>> {
+    pub async fn list_catalogs(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Catalog>> {
         let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
-        let cursor = self.db.collection::<Catalog>("catalogs").find(filter).await?;
+        
+        let collection = self.db.collection::<Catalog>("catalogs");
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let cursor = find.await?;
         let catalogs: Vec<Catalog> = cursor.try_collect().await?;
         Ok(catalogs)
     }

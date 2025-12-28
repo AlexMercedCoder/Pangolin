@@ -46,4 +46,44 @@ impl SqliteStore {
             Ok(None)
         }
     }
+
+    pub async fn get_commit_ancestry(&self, tenant_id: Uuid, commit_id: Uuid, limit: usize) -> Result<Vec<Commit>> {
+        // Recursive CTE to fetch ancestry
+        // Note: We use LIMIT in the final select to restrict depth
+        let query = "
+        WITH RECURSIVE ancestry AS (
+            SELECT id, tenant_id, parent_id, timestamp, author, message, operations
+            FROM commits
+            WHERE tenant_id = ? AND id = ?
+            
+            UNION ALL
+            
+            SELECT c.id, c.tenant_id, c.parent_id, c.timestamp, c.author, c.message, c.operations
+            FROM commits c
+            INNER JOIN ancestry a ON c.id = a.parent_id
+        )
+        SELECT * FROM ancestry LIMIT ?;
+        ";
+
+        let rows = sqlx::query(query)
+            .bind(tenant_id.to_string())
+            .bind(commit_id.to_string())
+            .bind(limit as i64)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut commits = Vec::new();
+        for row in rows {
+            commits.push(Commit {
+                id: Uuid::parse_str(&row.get::<String, _>("id"))?,
+                parent_id: row.get::<Option<String>, _>("parent_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                timestamp: row.get("timestamp"),
+                author: row.get("author"),
+                message: row.get("message"),
+                operations: serde_json::from_str(&row.get::<String, _>("operations")).unwrap_or_default(),
+            });
+        }
+        
+        Ok(commits)
+    }
 }

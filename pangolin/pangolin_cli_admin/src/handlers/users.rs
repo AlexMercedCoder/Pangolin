@@ -15,8 +15,10 @@ pub async fn handle_delete_user(client: &PangolinClient, username: String) -> Re
     Ok(())
 }
 
-pub async fn handle_list_users(client: &PangolinClient) -> Result<(), CliError> {
-    let res = client.get("/api/v1/users").await?;
+pub async fn handle_list_users(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { "/api/v1/users".to_string() } else { format!("/api/v1/users?{}", q) };
+    let res = client.get(&path).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
     let rows = items.iter().map(|i| vec![

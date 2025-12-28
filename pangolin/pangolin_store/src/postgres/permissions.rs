@@ -29,7 +29,7 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+    pub async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
         // 1. Fetch direct permissions
         let rows = sqlx::query("SELECT id, user_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = $1")
             .bind(user_id)
@@ -75,17 +75,33 @@ impl PostgresStore {
             }
         }
 
-        Ok(perms)
+        // In-memory pagination
+        if let Some(p) = pagination {
+             let limit = p.limit.unwrap_or(usize::MAX);
+             let offset = p.offset.unwrap_or(0);
+             if offset >= perms.len() {
+                 return Ok(Vec::new());
+             }
+             let end = std::cmp::min(offset + limit, perms.len());
+             Ok(perms[offset..end].to_vec())
+        } else {
+             Ok(perms)
+        }
     }
 
-    pub async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
+    pub async fn list_permissions(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT p.id, p.user_id, p.scope, p.actions, p.granted_by, p.granted_at 
              FROM permissions p
              JOIN users u ON p.user_id = u.id
-             WHERE u.tenant_id = $1"
+             WHERE u.tenant_id = $1 LIMIT $2 OFFSET $3"
         )
             .bind(tenant_id)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 

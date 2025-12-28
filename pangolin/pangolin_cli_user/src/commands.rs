@@ -16,9 +16,16 @@ pub enum UserCommand {
         username: Option<String>,
         #[arg(short, long)]
         password: Option<String>,
+        #[arg(long)]
+        tenant_id: Option<String>,
     },
     /// List available catalogs
-    ListCatalogs,
+    ListCatalogs {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     /// Search for tables and views
     Search {
         /// Search query
@@ -37,6 +44,10 @@ pub enum UserCommand {
     ListBranches {
         #[arg(short, long)]
         catalog: String,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
     },
     CreateBranch {
         #[arg(short, long)]
@@ -61,6 +72,10 @@ pub enum UserCommand {
     ListTags {
         #[arg(short, long)]
         catalog: String,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
     },
     CreateTag {
         #[arg(short, long)]
@@ -70,7 +85,12 @@ pub enum UserCommand {
         commit_id: String,
     },
     // --- Access Requests ---
-    ListRequests,
+    ListRequests {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     RequestAccess {
         #[arg(short, long)]
         resource: String,

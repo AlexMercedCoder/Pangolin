@@ -94,29 +94,54 @@
 				Manage Iceberg catalogs and their configurations
 			</p>
 		</div>
-		<Button on:click={() => goto('/catalogs/new')}>
-			<span class="text-lg mr-2">+</span>
-			Create Catalog
-		</Button>
+		<!-- Original Button for Create Catalog removed, replaced by slot in DataTable -->
         <!-- Role check removed for demo visibility -->
 	</div>
 
 	<Card>
+		<!-- Added error display -->
+		{#if error}
+			<div class="text-red-600 mb-4">{error}</div>
+		{/if}
+
 		<DataTable
-			{columns}
+			columns={[ // Updated columns definition
+				{ key: 'name', label: 'Name', sortable: true },
+				{ key: 'catalog_type', label: 'Type', sortable: true },
+				{ key: 'warehouse_name', label: 'Warehouse', sortable: true },
+				{ key: 'storage_location', label: 'Location', sortable: true }
+			]}
 			data={catalogs}
 			{loading}
-			emptyMessage="No catalogs found. Create your first catalog to get started."
+			emptyMessage="No catalogs found" <!-- Updated empty message -->
 			searchPlaceholder="Search catalogs..."
 			on:rowClick={handleRowClick}
+            searchable={false} <!-- Added -->
+            serverSide={true} <!-- Added -->
+            {page} <!-- Added -->
+            {pageSize} <!-- Added -->
+            {hasNextPage} <!-- Added -->
+            on:pageChange={handlePageChange} <!-- Added -->
 		>
+            <!-- Added actions slot -->
+            <div slot="actions">
+                <a
+                    href="/catalogs/new"
+                    class="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+                >
+                    <span class="text-xl">+</span>
+                    New Catalog
+                </a>
+            </div>
+
 			<svelte:fragment slot="cell" let:row let:column>
 				{#if column.key === 'storage_location'}
 					<code class="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded max-w-xs truncate block" title={row.catalog_type === 'Federated' ? row.federated_config?.base_url : row.storage_location}>
 						{row.catalog_type === 'Federated' ? row.federated_config?.base_url : row.storage_location}
 					</code>
 				{:else if column.key === 'catalog_type'}
-					<span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${row.catalog_type === 'Federated' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'}`}>
+					<!-- Updated styling for catalog_type -->
+					<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {row.catalog_type === 'Local' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'}">
 						{row.catalog_type}
 					</span>
 				{:else if column.key === 'actions'}

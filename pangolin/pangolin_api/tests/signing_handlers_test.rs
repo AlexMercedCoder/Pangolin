@@ -1,6 +1,6 @@
 
 use pangolin_api::signing_handlers::{StorageCredential, LoadCredentialsResponse};
-use pangolin_api::iceberg_handlers::TableResponse;
+use pangolin_api::iceberg::types::TableResponse;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde_json::json;
@@ -212,7 +212,7 @@ fn test_credentials_response_serialization() {
 #[test]
 fn test_table_response_includes_credentials() {
     // Test that TableResponse includes credentials in config
-    use pangolin_api::iceberg_handlers::TableResponse;
+    use pangolin_api::iceberg::types::TableResponse;
     use pangolin_core::iceberg_metadata::TableMetadata;
     
     let metadata = TableMetadata {
@@ -258,7 +258,7 @@ fn test_table_response_includes_credentials() {
 #[test]
 fn test_table_response_without_credentials() {
     // Test that TableResponse works without credentials (client-provided scenario)
-    use pangolin_api::iceberg_handlers::TableResponse;
+    use pangolin_api::iceberg::types::TableResponse;
     use pangolin_core::iceberg_metadata::TableMetadata;
     
     let metadata = TableMetadata {

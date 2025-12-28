@@ -56,16 +56,22 @@ impl MemoryStore {
             }
             Ok(None)
         }
-    pub(crate) async fn list_assets_internal(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+    pub(crate) async fn list_assets_internal(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Asset>> {
             let branch_name = branch.unwrap_or_else(|| "main".to_string());
             let ns_str = namespace.join("\x1F");
-            let mut assets = Vec::new();
-            for entry in self.assets.iter() {
-                let (tid, cat, b_name, ns, _) = entry.key();
-                if *tid == tenant_id && cat == catalog_name && *b_name == branch_name && *ns == ns_str {
-                    assets.push(entry.value().clone());
-                }
-            }
+            
+            let iter = self.assets.iter()
+                .filter(|entry| {
+                    let (tid, cat, b_name, ns, _) = entry.key();
+                    *tid == tenant_id && cat == catalog_name && *b_name == branch_name && *ns == ns_str
+                })
+                .map(|entry| entry.value().clone());
+
+            let assets: Vec<Asset> = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
             Ok(assets)
         }
     pub(crate) async fn delete_asset_internal(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()> {
@@ -142,5 +148,73 @@ impl MemoryStore {
             }
         }
         Ok(results)
+    }
+
+    pub(crate) async fn copy_assets_bulk_internal(
+        &self, 
+        tenant_id: Uuid, 
+        catalog_name: &str, 
+        src_branch: &str, 
+        dest_branch: &str, 
+        namespace: Option<String>
+    ) -> Result<usize> {
+        let mut assets_to_copy: Vec<(Vec<String>, Asset)> = Vec::new();
+        
+        // 1. Collect assets to copy
+        // We collect first to avoid deadlock or concurrent modification issues if we tried to write while iterating
+        for entry in self.assets.iter() {
+            let (tid, cat, b_name, ns_str, _) = entry.key();
+            
+            if *tid == tenant_id && cat == catalog_name && b_name == src_branch {
+                // If namespace filter is provided, check it
+                if let Some(ref ns_filter) = namespace {
+                     if ns_str != ns_filter {
+                         continue;
+                     }
+                }
+
+                let ns: Vec<String> = ns_str.split('\x1F').map(|s| s.to_string()).collect();
+                assets_to_copy.push((ns, entry.value().clone()));
+            }
+        }
+
+        let count = assets_to_copy.len();
+        let mut dest_assets_names = Vec::new();
+
+        // 2. Insert new assets
+        for (ns, mut asset) in assets_to_copy {
+            // Generate new ID for the copy
+            asset.id = Uuid::new_v4();
+            
+            let asset_full_name = format!("{}.{}", ns.join("."), asset.name);
+            let key = (tenant_id, catalog_name.to_string(), dest_branch.to_string(), ns.join("\x1F"), asset.name.clone());
+            
+            self.assets.insert(key, asset.clone());
+            
+            // Update lookup index
+            self.assets_by_id.insert(asset.id, (catalog_name.to_string(), ns.clone(), Some(dest_branch.to_string()), asset.name.clone()));
+            
+            dest_assets_names.push(asset_full_name);
+        }
+
+        // 3. Update destination branch asset list
+         let mut branch_obj = self.get_branch_internal(tenant_id, catalog_name, dest_branch.to_string()).await?
+            .unwrap_or_else(|| {
+                Branch {
+                    name: dest_branch.to_string(),
+                    head_commit_id: None,
+                    branch_type: BranchType::Experimental,
+                    assets: vec![],
+                }
+            });
+
+        for name in dest_assets_names {
+            if !branch_obj.assets.contains(&name) {
+                branch_obj.assets.push(name);
+            }
+        }
+        self.create_branch_internal(tenant_id, catalog_name, branch_obj).await?;
+
+        Ok(count)
     }
 }

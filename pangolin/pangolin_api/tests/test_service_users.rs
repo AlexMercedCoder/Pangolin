@@ -59,7 +59,7 @@ async fn test_list_service_users() {
         store.create_service_user(service_user).await.unwrap();
     }
     
-    let service_users = store.list_service_users(tenant_id).await.unwrap();
+    let service_users = store.list_service_users(tenant_id, None).await.unwrap();
     assert_eq!(service_users.len(), 3);
 }
 

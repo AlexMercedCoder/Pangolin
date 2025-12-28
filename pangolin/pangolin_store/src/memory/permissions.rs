@@ -9,18 +9,22 @@ impl MemoryStore {
             self.permissions.remove(&permission_id);
             Ok(())
         }
-    pub(crate) async fn list_permissions_internal(&self, user_id: Option<Uuid>, _resource_id: Option<Uuid>) -> Result<Vec<Permission>> {
-        let mut permissions = Vec::new();
-        for entry in self.permissions.iter() {
-            let p = entry.value();
-            if let Some(uid) = user_id {
-                if p.user_id == uid {
-                    permissions.push(p.clone());
+    pub(crate) async fn list_permissions_internal(&self, user_id: Option<Uuid>, _resource_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
+        let iter = self.permissions.iter()
+            .filter(|entry| {
+                let p = entry.value();
+                match user_id {
+                    Some(uid) => p.user_id == uid,
+                    None => true
                 }
-            } else {
-                permissions.push(p.clone());
-            }
-        }
+            })
+            .map(|entry| entry.value().clone());
+
+        let permissions = if let Some(p) = pagination {
+            iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+        } else {
+            iter.collect()
+        };
         Ok(permissions)
     }
 

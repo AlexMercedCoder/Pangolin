@@ -9,7 +9,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::highlighting::{ThemeSet, Style};
 use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 
-pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<String>, password_opt: Option<String>) -> Result<(), CliError> {
+pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<String>, password_opt: Option<String>, tenant_id: Option<String>) -> Result<(), CliError> {
     let username = match username_opt {
         Some(u) => u,
         None => Input::new().with_prompt("Username").interact_text()
@@ -22,13 +22,15 @@ pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<Stri
             .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
     };
 
-    client.login(&username, &password).await?;
+    client.login_with_tenant(&username, &password, tenant_id.as_deref()).await?;
     println!("✅ Logged in successfully as {}", username);
     Ok(())
 }
 
-pub async fn handle_list_catalogs(client: &PangolinClient) -> Result<(), CliError> {
-    let res = client.get("/api/v1/catalogs").await?;
+pub async fn handle_list_catalogs(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { "/api/v1/catalogs".to_string() } else { format!("/api/v1/catalogs?{}", q) };
+    let res = client.get(&path).await?;
     
     if !res.status().is_success() {
         return Err(CliError::ApiError(format!("Failed to list catalogs: {}", res.status())));
@@ -124,10 +126,12 @@ SELECT * FROM {}.{}.{} LIMIT 10;
 }
 
 // --- Branches ---
-pub async fn handle_list_branches(client: &PangolinClient, catalog: String) -> Result<(), CliError> {
+pub async fn handle_list_branches(client: &PangolinClient, catalog: String, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
      // Expected API: GET /api/v1/catalogs/{name}/branches OR /api/v1/branches?catalog={name}
      // Based on previous exploration: /api/v1/branches?catalog={name} via list_branches handler
-    let res = client.get(&format!("/api/v1/branches?catalog={}", catalog)).await?;
+    let mut q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    if !q.is_empty() { q = format!("&{}", q); }
+    let res = client.get(&format!("/api/v1/branches?catalog={}{}", catalog, q)).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
     let rows = items.iter().map(|i| vec![
@@ -203,8 +207,10 @@ pub async fn handle_merge_branch(client: &PangolinClient, catalog: String, sourc
 }
 
 // --- Tags ---
-pub async fn handle_list_tags(client: &PangolinClient, catalog: String) -> Result<(), CliError> {
-    let res = client.get(&format!("/api/v1/tags?catalog={}", catalog)).await?; // Assumption on endpoint
+pub async fn handle_list_tags(client: &PangolinClient, catalog: String, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let mut q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    if !q.is_empty() { q = format!("&{}", q); }
+    let res = client.get(&format!("/api/v1/tags?catalog={}{}", catalog, q)).await?; // Assumption on endpoint
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
      let rows = items.iter().map(|i| vec![
@@ -232,8 +238,10 @@ pub async fn handle_create_tag(client: &PangolinClient, catalog: String, name: S
 }
 
 // --- Access Requests ---
-pub async fn handle_list_requests(client: &PangolinClient) -> Result<(), CliError> {
-    let res = client.get("/api/v1/access-requests").await?;
+pub async fn handle_list_requests(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { "/api/v1/access-requests".to_string() } else { format!("/api/v1/access-requests?{}", q) };
+    let res = client.get(&path).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
     let rows = items.iter().map(|i| vec![

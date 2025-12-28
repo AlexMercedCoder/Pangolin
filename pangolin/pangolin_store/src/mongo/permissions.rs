@@ -24,7 +24,7 @@ impl MongoStore {
         Ok(())
     }
 
-    pub async fn list_user_permissions(&self, user_id: Uuid) -> Result<Vec<Permission>> {
+    pub async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
         // 1. Fetch direct permissions
         let filter = doc! { "user_id": to_bson_uuid(user_id) };
         let cursor = self.db.collection::<Permission>("permissions").find(filter).await?;
@@ -46,11 +46,25 @@ impl MongoStore {
                 }
             }
         }
-
-        Ok(perms)
+        
+        // 3. In-memory Pagination
+        if let Some(p) = pagination {
+            let limit = p.limit.unwrap_or(usize::MAX) as usize;
+            let offset = p.offset.unwrap_or(0) as usize;
+            
+            if offset >= perms.len() {
+                return Ok(vec![]);
+            }
+            
+            let end = std::cmp::min(offset + limit, perms.len());
+            Ok(perms[offset..end].to_vec())
+        } else {
+            Ok(perms)
+        }
     }
 
-    pub async fn list_permissions(&self, tenant_id: Uuid) -> Result<Vec<Permission>> {
+
+    pub async fn list_permissions(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
         // 1. Get all user IDs for the tenant
         let user_filter = doc! { "tenant-id": to_bson_uuid(tenant_id) };
         let user_cursor = self.users().find(user_filter).await?;
@@ -63,7 +77,19 @@ impl MongoStore {
 
         // 2. Get permissions for those users
         let perm_filter = doc! { "user_id": { "$in": user_ids } };
-        let perm_cursor = self.db.collection::<Permission>("permissions").find(perm_filter).await?;
+        
+        let collection = self.db.collection::<Permission>("permissions");
+        let mut find = collection.find(perm_filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+        
+        let perm_cursor = find.await?;
         let perms: Vec<Permission> = perm_cursor.try_collect().await?;
         Ok(perms)
     }

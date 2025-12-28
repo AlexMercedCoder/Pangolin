@@ -25,7 +25,12 @@ pub enum AdminCommand {
         name: String
     },
     /// List all tenants (Root Only)
-    ListTenants,
+    ListTenants {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     /// Create a new tenant (Root Only)
     CreateTenant {
         /// Name of the tenant
@@ -48,7 +53,12 @@ pub enum AdminCommand {
         name: Option<String>,
     },
     // --- Users ---
-    ListUsers,
+    ListUsers {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     CreateUser {
         username: String,
         #[arg(long)]
@@ -75,7 +85,12 @@ pub enum AdminCommand {
         active: Option<bool>,
     },
     // --- Warehouses ---
-    ListWarehouses,
+    ListWarehouses {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     CreateWarehouse {
         name: String,
         #[arg(long, default_value = "s3")]
@@ -104,7 +119,12 @@ pub enum AdminCommand {
         name: Option<String>,
     },
     // --- Catalogs ---
-    ListCatalogs,
+    ListCatalogs {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     CreateCatalog {
         name: String,
         #[arg(long)]
@@ -133,7 +153,12 @@ pub enum AdminCommand {
         properties: Vec<String>,
     },
     /// List all federated catalogs
-    ListFederatedCatalogs,
+    ListFederatedCatalogs {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     /// Delete a federated catalog
     DeleteFederatedCatalog {
         name: String,
@@ -148,6 +173,10 @@ pub enum AdminCommand {
         role: Option<String>,
         #[arg(long)]
         user: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
     },
     GrantPermission {
         username: String,
@@ -187,7 +216,12 @@ pub enum AdminCommand {
         expires_in_days: Option<i64>,
     },
     /// List all service users
-    ListServiceUsers,
+    ListServiceUsers {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     /// Get service user details
     GetServiceUser {
         #[arg(long)]
@@ -226,6 +260,10 @@ pub enum AdminCommand {
     ListUserTokens {
         #[arg(long)]
         user_id: String,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
     },
     /// Delete a specific token (admin only)
     DeleteToken {
@@ -260,7 +298,12 @@ pub enum AdminCommand {
     },
     // --- Merge Operations ---
     /// List merge operations
-    ListMergeOperations,
+    ListMergeOperations {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     /// Get merge operation details
     GetMergeOperation {
         #[arg(long)]
@@ -270,6 +313,10 @@ pub enum AdminCommand {
     ListConflicts {
         #[arg(long)]
         merge_id: String,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
     },
     /// Resolve a merge conflict
     ResolveConflict {
@@ -304,7 +351,12 @@ pub enum AdminCommand {
         reason: String,
     },
     /// List all access requests
-    ListAccessRequests,
+    ListAccessRequests {
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        offset: Option<usize>,
+    },
     /// Update an access request status
     UpdateAccessRequest {
         #[arg(long)]

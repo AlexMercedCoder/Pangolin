@@ -75,7 +75,7 @@ services:
       demo:
 
   datanotebook:
-    image: alexmerced/datanotebook:latest
+    image: alexmerced/slim-datanotebook:latest
     ports:
       - "8888:8888"
     environment:

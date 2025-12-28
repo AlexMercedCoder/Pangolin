@@ -39,13 +39,25 @@ impl MongoStore {
         Ok(user)
     }
 
-    pub async fn list_users(&self, tenant_id: Option<Uuid>) -> Result<Vec<User>> {
+    pub async fn list_users(&self, tenant_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<User>> {
         let filter = if let Some(tid) = tenant_id {
             doc! { "tenant-id": to_bson_uuid(tid) }
         } else {
             doc! {}
         };
-        let cursor = self.users().find(filter).await?;
+        
+        let collection = self.users();
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let cursor = find.await?;
         let users: Vec<User> = cursor.try_collect().await?;
         Ok(users)
     }

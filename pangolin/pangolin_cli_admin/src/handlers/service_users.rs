@@ -48,8 +48,10 @@ pub async fn handle_create_service_user(
     Ok(())
 }
 
-pub async fn handle_list_service_users(client: &PangolinClient) -> Result<(), CliError> {
-    let res = client.get("/api/v1/service-users").await?;
+pub async fn handle_list_service_users(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { "/api/v1/service-users".to_string() } else { format!("/api/v1/service-users?{}", q) };
+    let res = client.get(&path).await?;
     
     if !res.status().is_success() {
         return Err(CliError::ApiError(format!("Failed to list service users: {}", res.status())));

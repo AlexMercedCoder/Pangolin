@@ -1,11 +1,11 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Query},
     http::StatusCode,
     response::IntoResponse,
     Extension, Json,
 };
 use pangolin_core::model::{ConflictResolution, MergeConflict, MergeOperation, ResolutionStrategy};
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -51,8 +51,9 @@ pub async fn list_merge_operations(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
     Path(catalog_name): Path<String>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
-    match store.list_merge_operations(tenant.0, &catalog_name).await {
+    match store.list_merge_operations(tenant.0, &catalog_name, Some(pagination)).await {
         Ok(operations) => {
             let responses: Vec<MergeOperationResponse> = operations
                 .iter()
@@ -127,8 +128,9 @@ pub async fn get_merge_operation(
 pub async fn list_merge_conflicts(
     State(store): State<AppState>,
     Path(operation_id): Path<Uuid>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
-    match store.list_merge_conflicts(operation_id).await {
+    match store.list_merge_conflicts(operation_id, Some(pagination)).await {
         Ok(conflicts) => (StatusCode::OK, Json(conflicts)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -171,7 +173,7 @@ pub async fn resolve_conflict(
         Ok(_) => {
             // Check if all conflicts for the operation are resolved
             if let Ok(Some(conflict)) = store.get_merge_conflict(conflict_id).await {
-                if let Ok(all_conflicts) = store.list_merge_conflicts(conflict.merge_operation_id).await {
+                if let Ok(all_conflicts) = store.list_merge_conflicts(conflict.merge_operation_id, None).await {
                     let all_resolved = all_conflicts.iter().all(|c| c.is_resolved());
                     
                     if all_resolved {

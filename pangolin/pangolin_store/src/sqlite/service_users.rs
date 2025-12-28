@@ -106,12 +106,17 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_service_users(&self, tenant_id: Uuid) -> Result<Vec<ServiceUser>> {
+    pub async fn list_service_users(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<ServiceUser>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active
-             FROM service_users WHERE tenant_id = ?"
+             FROM service_users WHERE tenant_id = ? LIMIT ? OFFSET ?"
         )
         .bind(tenant_id.to_string())
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 

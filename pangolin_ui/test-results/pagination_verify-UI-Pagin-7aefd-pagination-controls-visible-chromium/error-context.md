@@ -1,0 +1,101 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e8]:
+          - generic [ref=e9]: P
+          - generic [ref=e10]: Pangolin
+        - navigation [ref=e11]:
+          - link "🌐 Root Dashboard" [ref=e12] [cursor=pointer]:
+            - /url: /root-dashboard
+            - generic [ref=e13]: 🌐
+            - generic [ref=e14]: Root Dashboard
+          - link "🏛️ Tenants" [ref=e15] [cursor=pointer]:
+            - /url: /tenants
+            - generic [ref=e16]: 🏛️
+            - generic [ref=e17]: Tenants
+          - link "⚙️ System Config" [ref=e18] [cursor=pointer]:
+            - /url: /admin/settings
+            - generic [ref=e19]: ⚙️
+            - generic [ref=e20]: System Config
+          - link "🔑 Tokens" [ref=e21] [cursor=pointer]:
+            - /url: /admin/tokens
+            - generic [ref=e22]: 🔑
+            - generic [ref=e23]: Tokens
+          - link "📋 Audit Logs" [ref=e24] [cursor=pointer]:
+            - /url: /admin/audit
+            - generic [ref=e25]: 📋
+            - generic [ref=e26]: Audit Logs
+        - button "◀" [ref=e28] [cursor=pointer]:
+          - generic [ref=e29]: ◀
+    - generic [ref=e30]:
+      - banner [ref=e31]:
+        - generic [ref=e32]:
+          - heading "users" [level=2] [ref=e34]
+          - generic [ref=e37]:
+            - generic:
+              - generic: 🔍
+            - textbox "Search assets..." [ref=e38]
+          - generic [ref=e39]:
+            - button "💻" [ref=e40] [cursor=pointer]
+            - button "N no-auth ▼" [ref=e42] [cursor=pointer]:
+              - generic [ref=e43]: "N"
+              - generic [ref=e44]: no-auth
+              - generic [ref=e45]: ▼
+      - main [ref=e46]:
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]:
+              - heading "Users" [level=1] [ref=e50]
+              - paragraph [ref=e51]: Manage user accounts and permissions. Click on a user to assign roles.
+            - button "Create User" [ref=e52] [cursor=pointer]:
+              - img [ref=e53]
+              - text: Create User
+          - generic [ref=e56]:
+            - generic [ref=e57]:
+              - generic [ref=e58]: Search
+              - textbox "Search by username or email..." [ref=e59]
+            - generic [ref=e60]:
+              - generic [ref=e61]: Filter by Role
+              - combobox [ref=e62]:
+                - option "All Roles" [selected]
+                - option "Root"
+                - option "Tenant Admin"
+                - option "Tenant User"
+          - generic [ref=e63]:
+            - textbox "Search..." [ref=e66]
+            - table [ref=e68]:
+              - rowgroup [ref=e69]:
+                - row "Username Email Role Tenant Created Actions" [ref=e70]:
+                  - columnheader "Username" [ref=e71]:
+                    - button "Username" [ref=e72] [cursor=pointer]
+                  - columnheader "Email" [ref=e73]:
+                    - button "Email" [ref=e74] [cursor=pointer]
+                  - columnheader "Role" [ref=e75]:
+                    - button "Role" [ref=e76] [cursor=pointer]
+                  - columnheader "Tenant" [ref=e77]:
+                    - button "Tenant" [ref=e78] [cursor=pointer]
+                  - columnheader "Created" [ref=e79]:
+                    - button "Created" [ref=e80] [cursor=pointer]
+                  - columnheader "Actions" [ref=e81]
+              - rowgroup [ref=e82]:
+                - row "Loading..." [ref=e83]:
+                  - cell "Loading..." [ref=e84]:
+                    - generic [ref=e87]: Loading...
+  - generic [ref=e91]:
+    - generic [ref=e92]: "[plugin:vite-plugin-svelte:compile] /home/alexmerced/development/personal/Personal/2026/pangolin/pangolin_ui/src/routes/warehouses/+page.svelte:50:3 Unexpected token https://svelte.dev/e/js_parse_error"
+    - generic [ref=e93]: +page.svelte:50:3
+    - generic [ref=e94]: "48 | goto(`/warehouses/${encodeURIComponent(warehouse.name)}`); 49 | } 50 | || warehouse.storage_config?.['azure.container'] ^ 51 | || warehouse.storage_config?.['gcs.bucket'] 52 | || '-';"
+    - generic [ref=e95]:
+      - text: Click outside, press Esc key, or fix the code to dismiss.
+      - text: You can also disable this overlay by setting
+      - code [ref=e96]: server.hmr.overlay
+      - text: to
+      - code [ref=e97]: "false"
+      - text: in
+      - code [ref=e98]: vite.config.ts
+      - text: .
+```

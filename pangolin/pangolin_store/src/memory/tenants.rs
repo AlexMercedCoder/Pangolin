@@ -16,9 +16,23 @@ impl MemoryStore {
                 Ok(None)
             }
         }
-    pub(crate) async fn list_tenants_internal(&self) -> Result<Vec<Tenant>> {
-            let tenants = self.tenants.iter().map(|t| t.value().clone()).collect();
-            Ok(tenants)
+    pub(crate) async fn list_tenants_internal(&self, pagination: Option<crate::PaginationParams>) -> Result<Vec<Tenant>> {
+            let mut tenants: Vec<Tenant> = self.tenants.iter().map(|t| t.value().clone()).collect();
+            tenants.sort_by(|a, b| a.name.cmp(&b.name));
+            
+            if let Some(p) = pagination {
+                let offset = p.offset.unwrap_or(0);
+                let limit = p.limit.unwrap_or(usize::MAX);
+                
+                if offset >= tenants.len() {
+                    return Ok(Vec::new());
+                }
+                
+                let end = std::cmp::min(offset + limit, tenants.len());
+                Ok(tenants[offset..end].to_vec())
+            } else {
+                Ok(tenants)
+            }
         }
     pub(crate) async fn update_tenant_internal(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant> {
             if let Some(mut tenant) = self.tenants.get_mut(&tenant_id) {

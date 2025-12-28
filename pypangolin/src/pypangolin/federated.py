@@ -18,9 +18,12 @@ class FederatedCatalogClient:
         data = self.client.post("/api/v1/federated-catalogs", json=payload)
         return FederatedCatalog(**data)
 
-    def list(self) -> List[FederatedCatalog]:
+    def list(self, limit: int = None, offset: int = None) -> List[FederatedCatalog]:
         """List all federated catalogs."""
-        data = self.client.get("/api/v1/federated-catalogs")
+        params = {}
+        if limit is not None: params['limit'] = limit
+        if offset is not None: params['offset'] = offset
+        data = self.client.get("/api/v1/federated-catalogs", params=params)
         return [FederatedCatalog(**c) for c in data]
 
     def get(self, name: str) -> FederatedCatalog:

@@ -22,12 +22,24 @@ impl MongoStore {
         }
     }
 
-    pub async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<MergeOperation>> {
+    pub async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<MergeOperation>> {
         let filter = doc! {
             "tenant_id": tenant_id.to_string(),
             "catalog_name": catalog_name
         };
-        let mut cursor = self.merge_operations().find(filter).await?;
+        
+        let collection = self.merge_operations();
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let mut cursor = find.await?;
         let mut operations = Vec::new();
         while cursor.advance().await? {
             operations.push(mongodb::bson::from_document(cursor.deserialize_current()?)?);
@@ -97,9 +109,21 @@ impl MongoStore {
         }
     }
 
-    pub async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<MergeConflict>> {
+    pub async fn list_merge_conflicts(&self, operation_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<MergeConflict>> {
         let filter = doc! { "merge_operation_id": operation_id.to_string() };
-        let mut cursor = self.merge_conflicts().find(filter).await?;
+        
+        let collection = self.merge_conflicts();
+        let mut find = collection.find(filter);
+        if let Some(p) = pagination {
+            if let Some(l) = p.limit {
+                find = find.limit(l as i64);
+            }
+            if let Some(o) = p.offset {
+                find = find.skip(o as u64);
+            }
+        }
+
+        let mut cursor = find.await?;
         let mut conflicts = Vec::new();
         while cursor.advance().await? {
             conflicts.push(mongodb::bson::from_document(cursor.deserialize_current()?)?);

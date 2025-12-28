@@ -156,8 +156,11 @@ class TenantClient:
     def __init__(self, client: PangolinClient):
         self.client = client
     
-    def list(self) -> List[Tenant]:
-        data = self.client.get("/api/v1/tenants")
+    def list(self, limit: int = None, offset: int = None) -> List[Tenant]:
+        params = {}
+        if limit is not None: params['limit'] = limit
+        if offset is not None: params['offset'] = offset
+        data = self.client.get("/api/v1/tenants", params=params)
         return [Tenant(**t) for t in data]
         
     def create(self, name: str) -> Tenant:
@@ -195,8 +198,11 @@ class WarehouseClient:
     def __init__(self, client: PangolinClient):
         self.client = client
         
-    def list(self) -> List[Warehouse]:
-        data = self.client.get("/api/v1/warehouses")
+    def list(self, limit: int = None, offset: int = None) -> List[Warehouse]:
+        params = {}
+        if limit is not None: params['limit'] = limit
+        if offset is not None: params['offset'] = offset
+        data = self.client.get("/api/v1/warehouses", params=params)
         return [Warehouse(**w) for w in data]
         
     def create_s3(self, name: str, bucket: str, region: str = "us-east-1", 
@@ -269,8 +275,11 @@ class UserClient:
         data = self.client.post("/api/v1/users", json=payload)
         return User(**data)
     
-    def list(self) -> List[User]:
-        data = self.client.get("/api/v1/users")
+    def list(self, limit: int = None, offset: int = None) -> List[User]:
+        params = {}
+        if limit is not None: params['limit'] = limit
+        if offset is not None: params['offset'] = offset
+        data = self.client.get("/api/v1/users", params=params)
         return [User(**u) for u in data]
 
 
@@ -278,8 +287,11 @@ class CatalogClient:
     def __init__(self, client: PangolinClient):
         self.client = client
         
-    def list(self) -> List[Catalog]:
-        data = self.client.get("/api/v1/catalogs")
+    def list(self, limit: int = None, offset: int = None) -> List[Catalog]:
+        params = {}
+        if limit is not None: params['limit'] = limit
+        if offset is not None: params['offset'] = offset
+        data = self.client.get("/api/v1/catalogs", params=params)
         return [Catalog(**c) for c in data]
     
     def get(self, name: str) -> Catalog:

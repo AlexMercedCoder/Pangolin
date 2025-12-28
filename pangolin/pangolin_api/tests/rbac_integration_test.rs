@@ -12,7 +12,7 @@ use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use pangolin_api::user_handlers::login;
 use pangolin_api::auth_middleware::hash_password;
-use pangolin_api::iceberg_handlers;
+use pangolin_api::iceberg::{namespaces, types};
 use pangolin_api::tests_common::EnvGuard;
 use uuid::Uuid;
 use chrono::Utc;
@@ -73,7 +73,7 @@ async fn test_tenant_user_create_namespace_denied() {
         // Auth Route for Login
         .route("/api/v1/users/login", post(login))
         // Target Route (Protected)
-        .route("/v1/:prefix/namespaces", post(iceberg_handlers::create_namespace))
+        .route("/v1/:prefix/namespaces", post(namespaces::create_namespace))
         .layer(axum::middleware::from_fn(pangolin_api::auth_middleware::auth_middleware_wrapper))
         .with_state(store.clone());
 
@@ -105,7 +105,7 @@ async fn test_tenant_user_create_namespace_denied() {
     let token = login_res["token"].as_str().unwrap();
 
     // 4. Attempt Create Namespace (Should Fail)
-    let create_req = pangolin_api::iceberg_handlers::CreateNamespaceRequest {
+    let create_req = types::CreateNamespaceRequest {
         namespace: vec!["db1".to_string()],
         properties: None,
     };

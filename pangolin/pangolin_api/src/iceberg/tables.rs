@@ -13,6 +13,7 @@ use crate::auth::TenantId;
 use crate::authz::check_permission;
 use super::{check_and_forward_if_federated, AppState};
 use super::types::*;
+use pangolin_store::PaginationParams;
 use std::collections::HashMap;
 use chrono::Utc;
 use uuid::Uuid;
@@ -40,6 +41,7 @@ pub async fn list_tables(
     Extension(tenant): Extension<TenantId>,
     Extension(session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix.clone();
@@ -76,7 +78,7 @@ pub async fn list_tables(
     
     let ns_vec = vec![ns_name];
 
-    match store.list_assets(tenant_id, &catalog_name, branch, ns_vec.clone()).await {
+    match store.list_assets(tenant_id, &catalog_name, branch, ns_vec.clone(), Some(pagination)).await {
         Ok(assets) => {
             let identifiers: Vec<TableIdentifier> = assets.into_iter()
                 .filter(|a| a.kind == AssetType::IcebergTable)
@@ -463,9 +465,14 @@ pub async fn load_table(
             Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read metadata file").into_response(),
         };
         
-        let metadata: TableMetadata = match serde_json::from_slice(&metadata_bytes) {
-            Ok(m) => m,
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
+        // Parse metadata in blocking task
+        let metadata_vec = metadata_bytes.to_vec();
+        let metadata: TableMetadata = match tokio::task::spawn_blocking(move || {
+            serde_json::from_slice(&metadata_vec)
+        }).await {
+            Ok(Ok(m)) => m,
+            Ok(Err(_)) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response(),
         };
 
         // Credential vending logic...
@@ -592,9 +599,15 @@ pub async fn update_table(
              return (StatusCode::INTERNAL_SERVER_ERROR, "Table corrupted (no metadata)").into_response()
         };
         
-        let mut metadata: TableMetadata = match serde_json::from_slice(&metadata_bytes) {
-            Ok(m) => m,
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response()
+        // Parse metadata in blocking task to avoid stalling the executor
+        // Parse metadata in blocking task to avoid stalling the executor
+        let metadata_vec = metadata_bytes.to_vec();
+        let mut metadata: TableMetadata = match tokio::task::spawn_blocking(move || {
+            serde_json::from_slice(&metadata_vec)
+        }).await {
+            Ok(Ok(m)) => m,
+            Ok(Err(_)) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response(),
         };
 
         // Requirements check

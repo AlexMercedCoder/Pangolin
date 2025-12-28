@@ -5,7 +5,7 @@ use serde_json::Value;
 
 // ==================== Permissions ====================
 
-pub async fn handle_list_permissions(client: &PangolinClient, role: Option<String>, user: Option<String>) -> Result<(), CliError> {
+pub async fn handle_list_permissions(client: &PangolinClient, role: Option<String>, user: Option<String>, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
     let mut query = String::new();
     
     if let Some(r_name) = role { 
@@ -17,8 +17,19 @@ pub async fn handle_list_permissions(client: &PangolinClient, role: Option<Strin
         let user_id = resolve_user_id(client, &u_name).await?;
         query.push_str(&format!("user={}&", user_id)); 
     }
+
+    let pag = pangolin_cli_common::utils::pagination_query(limit, offset);
+    if !pag.is_empty() {
+        query.push_str(&pag);
+    }
     
-    let res = client.get(&format!("/api/v1/permissions?{}", query)).await?;
+    // Ensure we don't end with & if query string is built messily, but get call handles ?...
+    // Actually standard URL parsers handle trailing & fine usually, but let's be cleaner.
+    // pangolin_cli_common::client::get accepts path. 
+    // Format: /api/v1/permissions?query
+    
+    let url = if query.is_empty() { "/api/v1/permissions".to_string() } else { format!("/api/v1/permissions?{}", query) };
+    let res = client.get(&url).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
@@ -264,8 +275,10 @@ pub async fn handle_request_access(
     Ok(())
 }
 
-pub async fn handle_list_access_requests(client: &PangolinClient) -> Result<(), CliError> {
-    let res = client.get("/api/v1/access-requests").await?;
+pub async fn handle_list_access_requests(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { "/api/v1/access-requests".to_string() } else { format!("/api/v1/access-requests?{}", q) };
+    let res = client.get(&path).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;

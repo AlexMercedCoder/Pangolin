@@ -18,8 +18,8 @@ impl MongoStore {
         Ok(req)
     }
 
-    pub async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
-        let pipeline = vec![
+    pub async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<AccessRequest>> {
+        let mut pipeline = vec![
             doc! {
                 "$lookup": {
                     "from": "users",
@@ -36,6 +36,15 @@ impl MongoStore {
                 }
             }
         ];
+
+        if let Some(p) = pagination {
+            if let Some(o) = p.offset {
+                pipeline.push(doc! { "$skip": o as i64 });
+            }
+            if let Some(l) = p.limit {
+                pipeline.push(doc! { "$limit": l as i64 });
+            }
+        }
 
         let cursor = self.access_requests().aggregate(pipeline).await?;
         let docs: Vec<Document> = cursor.try_collect().await?;

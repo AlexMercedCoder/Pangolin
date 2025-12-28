@@ -86,13 +86,18 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>> {
+    pub async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Asset>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4")
+
+        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4 LIMIT $5 OFFSET $6")
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(&branch_name)
             .bind(&namespace)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
 
@@ -151,5 +156,69 @@ impl PostgresStore {
             .fetch_one(&self.pool)
             .await?;
         Ok(count as usize)
+    }
+
+    pub async fn copy_assets_bulk(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        src_branch: &str,
+        dest_branch: &str,
+        namespace_filter: Option<String>,
+    ) -> Result<usize> {
+        // 1. Select the assets to copy
+        // Postgres: namespace_path is TEXT[], so we map to Vec<String>.
+        // Filters handled in memory for simplicity unless performance dictates otherwise.
+        
+        let rows = sqlx::query("SELECT namespace_path, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3")
+            .bind(tenant_id)
+            .bind(catalog_name)
+            .bind(src_branch)
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut assets_to_copy = Vec::new();
+        for row in rows {
+            let ns_path: Vec<String> = row.get("namespace_path"); 
+            let name: String = row.get("name");
+            
+            // Filter
+            if let Some(ref filter_ns) = namespace_filter {
+                // If filter_ns is expected to be JSON string of array, parse it.
+                // Assuming strict equality for now based on MemoryStore behavior.
+                let ns_json = serde_json::to_string(&ns_path).unwrap_or_default();
+                if ns_json != *filter_ns { continue; }
+            }
+
+            let atype: String = row.get("asset_type");
+            let floc: Option<String> = row.get("metadata_location");
+            let props: serde_json::Value = row.get("properties"); 
+            
+            assets_to_copy.push((ns_path, name, atype, floc, props));
+        }
+
+        if assets_to_copy.is_empty() {
+             return Ok(0);
+        }
+
+        // 2. Bulk Insert
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, branch_name, asset_type, metadata_location, properties) "
+        );
+
+        query_builder.push_values(assets_to_copy, |mut b, (ns, name, atype, floc, props)| {
+            b.push_bind(Uuid::new_v4())
+             .push_bind(tenant_id)
+             .push_bind(catalog_name)
+             .push_bind(ns)
+             .push_bind(name)
+             .push_bind(dest_branch)
+             .push_bind(atype)
+             .push_bind(floc)
+             .push_bind(props);
+        });
+
+        let result = query_builder.build().execute(&self.pool).await?;
+        Ok(result.rows_affected() as usize)
     }
 }

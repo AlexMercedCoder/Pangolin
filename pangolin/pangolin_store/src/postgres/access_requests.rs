@@ -45,12 +45,17 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_access_requests(&self, tenant_id: Uuid) -> Result<Vec<AccessRequest>> {
+    pub async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<AccessRequest>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT ar.id, ar.tenant_id, ar.user_id, ar.asset_id, ar.reason, ar.requested_at, ar.status, ar.reviewed_by, ar.reviewed_at, ar.review_comment FROM access_requests ar
-             WHERE ar.tenant_id = $1 ORDER BY ar.requested_at DESC"
+             WHERE ar.tenant_id = $1 ORDER BY ar.requested_at DESC LIMIT $2 OFFSET $3"
         )
         .bind(tenant_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 

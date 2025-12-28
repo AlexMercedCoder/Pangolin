@@ -71,13 +71,18 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<MergeOperation>> {
+    pub async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<MergeOperation>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, initiated_by, initiated_at, result_commit_id, completed_at
-             FROM merge_operations WHERE tenant_id = ? AND catalog_name = ?"
+             FROM merge_operations WHERE tenant_id = ? AND catalog_name = ? LIMIT ? OFFSET ?"
         )
         .bind(tenant_id.to_string())
         .bind(catalog_name)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 
@@ -195,12 +200,17 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_merge_conflicts(&self, operation_id: Uuid) -> Result<Vec<MergeConflict>> {
+    pub async fn list_merge_conflicts(&self, operation_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<MergeConflict>> {
+        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
+        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+
         let rows = sqlx::query(
             "SELECT id, operation_id, conflict_type, asset_id, description, resolution, created_at
-             FROM merge_conflicts WHERE operation_id = ?"
+             FROM merge_conflicts WHERE operation_id = ? LIMIT ? OFFSET ?"
         )
         .bind(operation_id.to_string())
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&self.pool)
         .await?;
 

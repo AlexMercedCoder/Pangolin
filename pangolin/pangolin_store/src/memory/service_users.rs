@@ -12,12 +12,18 @@ impl MemoryStore {
     pub(crate) async fn get_service_user_internal(&self, id: Uuid) -> Result<Option<pangolin_core::user::ServiceUser>> {
             Ok(self.service_users.get(&id).map(|r| r.value().clone()))
         }
-    pub(crate) async fn list_service_users_internal(&self, tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
-            Ok(self.service_users
+    pub(crate) async fn list_service_users_internal(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+            let iter = self.service_users
                 .iter()
                 .filter(|entry| entry.value().tenant_id == tenant_id)
-                .map(|entry| entry.value().clone())
-                .collect())
+                .map(|entry| entry.value().clone());
+
+            let result = if let Some(p) = pagination {
+                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
+            } else {
+                iter.collect()
+            };
+            Ok(result)
         }
     pub(crate) async fn update_service_user_internal(
             &self,

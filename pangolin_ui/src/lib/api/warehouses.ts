@@ -51,8 +51,12 @@ export interface UpdateWarehouseRequest {
 }
 
 export const warehousesApi = {
-	async list(): Promise<Warehouse[]> {
-		const response = await apiClient.get<Warehouse[]>('/api/v1/warehouses');
+	async list(limit?: number, offset?: number): Promise<Warehouse[]> {
+		const params = new URLSearchParams();
+		if (limit) params.append('limit', limit.toString());
+		if (offset) params.append('offset', offset.toString());
+
+		const response = await apiClient.get<Warehouse[]>(`/api/v1/warehouses?${params.toString()}`);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

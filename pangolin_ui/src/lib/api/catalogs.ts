@@ -36,8 +36,12 @@ export interface UpdateCatalogRequest {
 }
 
 export const catalogsApi = {
-	async list(): Promise<Catalog[]> {
-		const response = await apiClient.get<Catalog[]>('/api/v1/catalogs');
+	async list(limit?: number, offset?: number): Promise<Catalog[]> {
+		const params = new URLSearchParams();
+		if (limit) params.append('limit', limit.toString());
+		if (offset) params.append('offset', offset.toString());
+
+		const response = await apiClient.get<Catalog[]>(`/api/v1/catalogs?${params.toString()}`);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

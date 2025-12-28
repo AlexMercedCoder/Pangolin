@@ -4,9 +4,13 @@ use pangolin_cli_common::utils::print_table;
 use dialoguer::Editor;
 use serde_json::Value;
 
-pub async fn handle_list_merge_operations(client: &PangolinClient, catalog: String) -> Result<(), CliError> {
+pub async fn handle_list_merge_operations(client: &PangolinClient, catalog: String, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
     if let Some(tid) = &client.config.tenant_id {
-        let res = client.get(&format!("/api/v1/merges?tenant_id={}&catalog={}", tid, catalog)).await?;
+        let mut query = format!("tenant_id={}&catalog={}", tid, catalog);
+        let pag = pangolin_cli_common::utils::pagination_query(limit, offset);
+        if !pag.is_empty() { query.push('&'); query.push_str(&pag); }
+        
+        let res = client.get(&format!("/api/v1/merges?{}", query)).await?;
         if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
         
         let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
@@ -49,8 +53,10 @@ pub async fn handle_get_merge_operation(client: &PangolinClient, id: String) -> 
     Ok(())
 }
 
-pub async fn handle_list_merge_conflicts(client: &PangolinClient, id: String) -> Result<(), CliError> {
-    let res = client.get(&format!("/api/v1/merges/{}/conflicts", id)).await?;
+pub async fn handle_list_merge_conflicts(client: &PangolinClient, id: String, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    let path = if q.is_empty() { format!("/api/v1/merges/{}/conflicts", id) } else { format!("/api/v1/merges/{}/conflicts?{}", id, q) };
+    let res = client.get(&path).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     
     let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;

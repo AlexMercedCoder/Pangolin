@@ -19,17 +19,23 @@
     }
 
     // Helper for Authenticated Requests
-    async fn get_auth_token(app: &Router, username: &str, password: &str) -> String {
+    async fn get_auth_token(app: &Router, username: &str, password: &str, tenant_id: Option<Uuid>) -> String {
+        let mut body_json = json!({
+            "username": username,
+            "password": password
+        });
+        
+        if let Some(tid) = tenant_id {
+            body_json.as_object_mut().unwrap().insert("tenant-id".to_string(), json!(tid));
+        }
+
         let response = app.clone()
             .oneshot(
                 Request::builder()
                     .method("POST")
                     .uri("/api/v1/users/login")
                     .header("Content-Type", "application/json")
-                    .body(Body::from(json!({
-                        "username": username,
-                        "password": password
-                    }).to_string()))
+                    .body(Body::from(body_json.to_string()))
                     .unwrap(),
             )
             .await
@@ -99,7 +105,7 @@
         let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
         let app = app();
-        let token = get_auth_token(&app, "admin", "password").await;
+        let token = get_auth_token(&app, "admin", "password", None).await;
 
         // Try to create warehouse as Root
         let response = app
@@ -134,7 +140,7 @@
         let _guard_user = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
         let app = app();
-        let root_token = get_auth_token(&app, "admin", "password").await;
+        let root_token = get_auth_token(&app, "admin", "password", None).await;
 
         // A. Create Tenant (+ Tenant Admin) automatically? No, create User with Tenant.
         // First, create a Tenant
@@ -172,7 +178,8 @@
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // C. Login as Tenant Admin
-        let ta_token = get_auth_token(&app, "tenant_admin", "Password123").await;
+        let t_uuid = Uuid::parse_str(tenant_id).unwrap();
+        let ta_token = get_auth_token(&app, "tenant_admin", "Password123", Some(t_uuid)).await;
 
         // D. Create Warehouse (Success)
         let response = app.clone().oneshot(
@@ -231,7 +238,7 @@
         let _guard_pass = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
         let app = app();
         
-        let root_token = get_auth_token(&app, "admin", "password").await;
+        let root_token = get_auth_token(&app, "admin", "password", None).await;
         
         // Tenant
         let t_res = app.clone().oneshot(Request::builder().method("POST").uri("/api/v1/tenants").header("Authorization", format!("Bearer {}", root_token)).header("Content-Type", "application/json").body(Body::from(json!({"name":"t1", "organization":"o1"}).to_string())).unwrap()).await.unwrap();
@@ -241,7 +248,8 @@
         // User
          let u_res = app.clone().oneshot(Request::builder().method("POST").uri("/api/v1/users").header("Authorization", format!("Bearer {}", root_token)).header("Content-Type", "application/json").body(Body::from(json!({"username":"ta","email":"t@a.com","password":"pw","role":"tenant-admin","tenant_id":t_id}).to_string())).unwrap()).await.unwrap();
          assert_eq!(u_res.status(), StatusCode::CREATED);
-        let ta_token = get_auth_token(&app, "ta", "pw").await;
+        let ta_uuid = Uuid::parse_str(&t_id).unwrap();
+        let ta_token = get_auth_token(&app, "ta", "pw", Some(ta_uuid)).await;
 
         // Warehouse
         let w_res = app.clone().oneshot(Request::builder().method("POST").uri("/api/v1/warehouses").header("Authorization", format!("Bearer {}", ta_token)).header("Content-Type", "application/json").body(Body::from(json!({"name":"wh","use_sts":false,"storage_config":{"type":"s3","bucket":"bh"}}).to_string())).unwrap()).await.unwrap();

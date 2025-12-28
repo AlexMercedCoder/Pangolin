@@ -12,6 +12,7 @@ use crate::auth::TenantId;
 use crate::authz::check_permission;
 use super::{check_and_forward_if_federated, AppState};
 use super::types::*;
+use pangolin_store::PaginationParams;
 
 /// List namespaces in a catalog
 #[utoipa::path(
@@ -36,6 +37,7 @@ pub async fn list_namespaces(
     Extension(session): Extension<UserSession>,
     Path(prefix): Path<String>,
     Query(params): Query<ListNamespaceParams>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix.clone();
@@ -71,7 +73,7 @@ pub async fn list_namespaces(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
     
-    match store.list_namespaces(tenant_id, &catalog_name, params.parent).await {
+    match store.list_namespaces(tenant_id, &catalog_name, params.parent, Some(pagination)).await {
         Ok(namespaces) => {
             let ns_list: Vec<Vec<String>> = namespaces.into_iter().map(|n| n.name).collect();
             (StatusCode::OK, Json(ListNamespacesResponse { namespaces: ns_list })).into_response()
@@ -316,7 +318,7 @@ pub async fn list_namespaces_tree(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
     }
 
-    match store.list_namespaces(tenant_id, &catalog_name, None).await {
+    match store.list_namespaces(tenant_id, &catalog_name, None, None).await {
         Ok(namespaces) => {
             let mut root_nodes: Vec<NamespaceNode> = Vec::new();
             

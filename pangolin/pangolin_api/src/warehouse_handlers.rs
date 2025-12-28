@@ -1,12 +1,12 @@
 use axum::{
-    extract::{Path, State, Extension},
+    extract::{Path, State, Extension, Query},
     Json,
     response::IntoResponse,
     http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use pangolin_store::CatalogStore;
+use pangolin_store::{CatalogStore, PaginationParams};
 use pangolin_core::model::{Warehouse, VendingStrategy};
 use uuid::Uuid;
 use crate::auth::TenantId;
@@ -66,8 +66,9 @@ impl From<Warehouse> for WarehouseResponse {
 pub async fn list_warehouses(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
-    match store.list_warehouses(tenant.0).await {
+    match store.list_warehouses(tenant.0, Some(pagination)).await {
         Ok(warehouses) => {
             let response: Vec<WarehouseResponse> = warehouses.into_iter().map(|w: Warehouse| WarehouseResponse::from(w)).collect();
             (StatusCode::OK, Json(response)).into_response()

@@ -56,8 +56,11 @@ pub async fn handle_create_federated_catalog(
     Ok(())
 }
 
-pub async fn handle_list_federated_catalogs(client: &PangolinClient) -> Result<(), CliError> {
-     let res = client.get("/api/v1/catalogs?type=federated").await?;
+pub async fn handle_list_federated_catalogs(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+    let q = pangolin_cli_common::utils::pagination_query(limit, offset);
+    // Base query expects type=federated
+    let query_str = if q.is_empty() { "type=federated".to_string() } else { format!("type=federated&{}", q) };
+    let res = client.get(&format!("/api/v1/catalogs?{}", query_str)).await?;
     if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
     let items: Vec<serde_json::Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
     

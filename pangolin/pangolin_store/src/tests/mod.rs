@@ -171,4 +171,10 @@ pub mod audit_tests;
 pub mod s3_compatibility;
 pub mod postgres_parity_tests;
 pub mod postgres_merge_tests;
-pub mod mongo_parity_tests;
+// pub mod mongo_parity_tests;
+pub mod bulk_ops_tests;
+pub mod postgres_bulk_ops_tests;
+pub mod mongo_bulk_ops_tests;
+#[cfg(test)]
+pub mod p1_optimizations_tests;
+

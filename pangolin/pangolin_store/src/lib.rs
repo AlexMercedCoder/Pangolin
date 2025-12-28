@@ -23,6 +23,13 @@ use pangolin_core::model::{Asset, Branch, Commit, Namespace, Tag, Tenant, Catalo
 use uuid::Uuid;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct PaginationParams {
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
 
 use crate::signer::Signer;
 
@@ -31,14 +38,14 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Tenant Operations
     async fn create_tenant(&self, tenant: Tenant) -> Result<()>;
     async fn get_tenant(&self, tenant_id: Uuid) -> Result<Option<Tenant>>;
-    async fn list_tenants(&self) -> Result<Vec<Tenant>>;
+    async fn list_tenants(&self, pagination: Option<PaginationParams>) -> Result<Vec<Tenant>>;
     async fn update_tenant(&self, tenant_id: Uuid, updates: pangolin_core::model::TenantUpdate) -> Result<Tenant>;
     async fn delete_tenant(&self, tenant_id: Uuid) -> Result<()>;
 
     // Warehouse Operations
     async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()>;
     async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>>;
-    async fn list_warehouses(&self, tenant_id: Uuid) -> Result<Vec<Warehouse>>;
+    async fn list_warehouses(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Warehouse>>;
     async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse>;
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()>;
 
@@ -47,11 +54,11 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn get_catalog(&self, tenant_id: Uuid, name: String) -> Result<Option<Catalog>>;
     async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::CatalogUpdate) -> Result<Catalog>;
     async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()>;
-    async fn list_catalogs(&self, tenant_id: Uuid) -> Result<Vec<Catalog>>;
+    async fn list_catalogs(&self, tenant_id: Uuid, pagination: Option<PaginationParams>) -> Result<Vec<Catalog>>;
 
     // Namespace Operations
     async fn create_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Namespace) -> Result<()>;
-    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>) -> Result<Vec<Namespace>>;
+    async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, parent: Option<String>, pagination: Option<PaginationParams>) -> Result<Vec<Namespace>>;
     async fn get_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<Option<Namespace>>;
     async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()>;
     async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()>;
@@ -60,7 +67,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn create_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, asset: Asset) -> Result<()>;
     async fn get_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<Option<Asset>>;
     async fn get_asset_by_id(&self, tenant_id: Uuid, asset_id: Uuid) -> Result<Option<(Asset, String, Vec<String>)>>;
-    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>) -> Result<Vec<Asset>>;
+    async fn list_assets(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, pagination: Option<PaginationParams>) -> Result<Vec<Asset>>;
     async fn delete_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, name: String) -> Result<()>;
 
     async fn rename_asset(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, source_namespace: Vec<String>, source_name: String, dest_namespace: Vec<String>, dest_name: String) -> Result<()>;
@@ -70,7 +77,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Branch Operations
     async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()>;
     async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>>;
-    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Branch>>;
+    async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<Branch>>;
     async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()>;
     async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, source_branch: String, target_branch: String) -> Result<()>;
     
@@ -113,7 +120,7 @@ pub trait CatalogStore: Send + Sync + Signer {
         branch: &str,
     ) -> Result<Vec<(Asset, Vec<String>)>> {
         // Default implementation: iterate through namespaces
-        let namespaces = self.list_namespaces(tenant_id, catalog_name, None).await?;
+        let namespaces = self.list_namespaces(tenant_id, catalog_name, None, None).await?;
         let mut all_assets = Vec::new();
         
         for ns in namespaces {
@@ -121,7 +128,8 @@ pub trait CatalogStore: Send + Sync + Signer {
                 tenant_id,
                 catalog_name,
                 Some(branch.to_string()),
-                ns.name.clone()
+                ns.name.clone(),
+                None
             ).await?;
             for asset in assets {
                 all_assets.push((asset, ns.name.clone()));
@@ -134,12 +142,36 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Tag Operations
     async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()>;
     async fn get_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Tag>>;
-    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str) -> Result<Vec<Tag>>;
+    async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<PaginationParams>) -> Result<Vec<Tag>>;
     async fn delete_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()>;
 
     // Commit Operations
     async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()>;
     async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>>;
+    
+    /// Bulk copy assets from one branch to another
+    /// Returns the number of assets copied
+    async fn copy_assets_bulk(
+        &self, 
+        _tenant_id: Uuid, 
+        _catalog_name: &str, 
+        _src_branch: &str, 
+        _dest_branch: &str, 
+        _namespace: Option<String>
+    ) -> Result<usize> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
+    /// Optimized traversal of commit history
+    /// Returns ordered ancestry list starting from head_commit_id
+    async fn get_commit_ancestry(
+        &self, 
+        _tenant_id: Uuid, 
+        _head_commit_id: Uuid, 
+        _limit: usize
+    ) -> Result<Vec<Commit>> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
 
     // Metadata IO
     async fn get_metadata_location(&self, tenant_id: Uuid, catalog_name: &str, branch: Option<String>, namespace: Vec<String>, table: String) -> Result<Option<String>>;
@@ -169,7 +201,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn get_user_by_username(&self, _username: &str) -> Result<Option<pangolin_core::user::User>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
-    async fn list_users(&self, _tenant_id: Option<Uuid>) -> Result<Vec<pangolin_core::user::User>> {
+    async fn list_users(&self, _tenant_id: Option<Uuid>, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::user::User>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
 
@@ -188,7 +220,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn get_role(&self, _role_id: Uuid) -> Result<Option<pangolin_core::permission::Role>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
-    async fn list_roles(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Role>> {
+    async fn list_roles(&self, _tenant_id: Uuid, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::permission::Role>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     async fn assign_role(&self, _user_role: pangolin_core::permission::UserRole) -> Result<()> {
@@ -215,10 +247,10 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn revoke_permission(&self, _permission_id: Uuid) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
-    async fn list_user_permissions(&self, _user_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
+    async fn list_user_permissions(&self, _user_id: Uuid, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::permission::Permission>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
-    async fn list_permissions(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::permission::Permission>> {
+    async fn list_permissions(&self, _tenant_id: Uuid, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::permission::Permission>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
 
@@ -255,7 +287,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn get_access_request(&self, _id: Uuid) -> Result<Option<pangolin_core::business_metadata::AccessRequest>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
-    async fn list_access_requests(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
+    async fn list_access_requests(&self, _tenant_id: Uuid, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     async fn update_access_request(&self, _request: pangolin_core::business_metadata::AccessRequest) -> Result<()> {
@@ -272,7 +304,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn get_service_user_by_api_key_hash(&self, _api_key_hash: &str) -> Result<Option<pangolin_core::user::ServiceUser>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
-    async fn list_service_users(&self, _tenant_id: Uuid) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+    async fn list_service_users(&self, _tenant_id: Uuid, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::user::ServiceUser>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     async fn update_service_user(
@@ -300,7 +332,7 @@ pub trait CatalogStore: Send + Sync + Signer {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     
-    async fn list_merge_operations(&self, _tenant_id: Uuid, _catalog_name: &str) -> Result<Vec<pangolin_core::model::MergeOperation>> {
+    async fn list_merge_operations(&self, _tenant_id: Uuid, _catalog_name: &str, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::model::MergeOperation>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     
@@ -325,7 +357,7 @@ pub trait CatalogStore: Send + Sync + Signer {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     
-    async fn list_merge_conflicts(&self, _operation_id: Uuid) -> Result<Vec<pangolin_core::model::MergeConflict>> {
+    async fn list_merge_conflicts(&self, _operation_id: Uuid, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::model::MergeConflict>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     
@@ -354,7 +386,7 @@ pub trait CatalogStore: Send + Sync + Signer {
     }
 
     /// List active tokens for a user (not revoked)
-    async fn list_active_tokens(&self, _tenant_id: Uuid, _user_id: Uuid) -> Result<Vec<pangolin_core::token::TokenInfo>> {
+    async fn list_active_tokens(&self, _tenant_id: Uuid, _user_id: Option<Uuid>, _pagination: Option<PaginationParams>) -> Result<Vec<pangolin_core::token::TokenInfo>> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
     

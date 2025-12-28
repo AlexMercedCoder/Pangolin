@@ -14,27 +14,29 @@
 	let tenantToDelete: Tenant | null = null;
 	let deleting = false;
 
-	const columns = [
-		{ key: 'name', label: 'Name', sortable: true },
-		{ key: 'id', label: 'ID', sortable: true, width: '300px' },
-		{ key: 'actions', label: 'Actions', sortable: false },
-	];
-
-	onMount(async () => {
-		await loadTenants();
+	onMount(() => {
+		loadTenants();
 	});
 
 	async function loadTenants() {
 		loading = true;
+		error = null;
 		try {
-			tenants = await tenantsApi.list();
-		} catch (error: any) {
-			notifications.error(`Failed to load tenants: ${error.message}`);
-			tenants = [];
+			tenants = await tenantsApi.list(pageSize, (page - 1) * pageSize);
+            // If we got a full page, assume there might be more
+            hasNextPage = tenants.length === pageSize;
+		} catch (e: any) {
+			error = e.message;
+			notifications.error('Failed to load tenants: ' + e.message);
 		} finally {
 			loading = false;
 		}
 	}
+
+    function handlePageChange(event: CustomEvent<number>) {
+        page = event.detail;
+        loadTenants();
+    }
 
 	function handleRowClick(event: CustomEvent) {
 		const tenant = event.detail;
