@@ -57,6 +57,6 @@ Optimizing and maintaining your data lake.
 | Audit Logging | Security | ✅ Implemented |
 | Business Catalog | Discovery | ✅ Implemented |
 | Credential Vending (Static) | Security | ✅ Implemented |
-| Credential Vending (STS) | Security | 🚧 Beta |
+| Credential Vending (STS) | Security | ✅ Implemented |
 | Federated Catalogs | Integration | ✅ Implemented |
 | View Management | Data | ✅ Implemented |

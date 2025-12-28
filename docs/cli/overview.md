@@ -46,6 +46,19 @@ Both tools share the same configuration layer.
 - **macOS**: `~/Library/Application Support/com.pangolin.cli/config.json`
 - **Windows**: `C:\Users\<User>\AppData\Roaming\pangolin\cli\config.json`
 
+### Pagination
+Most list commands support standard pagination flags to handle large datasets effectively:
+- `--limit <N>`: Restrict the number of results (default: 100).
+- `--offset <N>`: Skip the first N results.
+
+```bash
+# Get the first 50 tables
+pangolin-user search --query "sales" --limit 50
+
+# Get the next 50
+pangolin-user search --query "sales" --limit 50 --offset 50
+```
+
 ---
 
 ## 🚀 Quick Tip

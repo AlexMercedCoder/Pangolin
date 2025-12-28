@@ -29,6 +29,8 @@ Pangolin is 100% compliant with the [Apache Iceberg REST Specification](https://
 | `{prefix}/namespaces` | GET/POST | Manage catalog namespaces. |
 | `{prefix}/namespaces/{ns}/tables` | GET/POST | Manage tables (Standard Iceberg). |
 | `{prefix}/namespaces/{ns}/tables/{table}` | GET/POST | Table metadata and schema evolution. |
+| `{prefix}/namespaces/{ns}/tables/{table}/credentials` | GET | **Credential Vending**: Get temporary S3/Azure/GCS tokens. |
+| `{prefix}/namespaces/{ns}/tables/{table}/presign` | GET | **Presigning**: Get pre-signed URL for table data/metadata. |
 
 > [!TIP]
 > **Branching**: Use the `@` suffix in the table name (e.g., `my_table@dev`) to redirect Iceberg operations to a specific Pangolin branch.
@@ -60,7 +62,15 @@ Pangolin is 100% compliant with the [Apache Iceberg REST Specification](https://
 | `merge-operations` | GET | Track progress of active or past merges. |
 | `conflicts/{id}/resolve`| POST | Apply conflict resolution strategies (Source Wins/Target Wins). |
 
-### 4. Search & Optimization
+### 4. Federated Catalogs
+| Endpoint | Method | Use Case |
+| :--- | :--- | :--- |
+| `federated-catalogs` | GET/POST | Register external Iceberg REST catalogs. |
+| `federated-catalogs/{name}/test` | POST | Test connection connectivity. |
+| `federated-catalogs/{name}/sync` | POST | Manually sync external catalog metadata. |
+| `federated-catalogs/{name}/stats` | GET | View cache and connection statistics. |
+
+### 5. Search & Optimization
 | Endpoint | Method | Use Case |
 | :--- | :--- | :--- |
 | `search` | GET | Unified search across Catalogs, Namespaces, Tables, and Branches. |
