@@ -48,9 +48,11 @@ The Management UI adapts its login form based on the detected mode.
 
 ### No-Auth Mode UI
 *   **Auto-Detection**: The UI detects `NO_AUTH` state on load.
-*   **Simplified Form**: Password validation is skipped on the backend.
-*   **"Easy Login"**: You can often just type a username (e.g., `admin`) and hit Enter to simulate logging in as that user for testing RBAC visibility.
-*   **Root Access**: Root login works with *any* password, provided the username matches `PANGOLIN_ROOT_USER`.
+*   **Root Access (Bypass)**: To view the Root Dashboard (System Admin view), use these specific credentials:
+    *   **Username**: `root`
+    *   **Password**: `root`
+    *   *Note: This is a client-side convenience bypass that gives you full UI access without needing a server token.*
+*   **Tenant Admin Access**: The UI may auto-login as the default admin, or you can use the credentials below.
 
 ---
 
@@ -58,17 +60,21 @@ The Management UI adapts its login form based on the detected mode.
 
 The Root User's primary job is **System bootstrapping**. They generally do **not** query data.
 
-### Workflow A: Logging In as Root
+### Workflow A: Bootstrapping in No-Auth Mode
+When Pangolin starts in No-Auth Mode (`PANGOLIN_NO_AUTH=true`), it automatically:
+1.  Creates a default Tenant (`00000000-0000-0000-0000-000000000000`).
+2.  Creates a default **Tenant Admin** with:
+    *   **Username**: `tenant_admin`
+    *   **Password**: `password123`
+3.  Allows **Anonymous API Access**: Requests with *no* Authorization header are automatically treated as this `tenant_admin`.
+
+### Workflow B: Logging In as Root (Auth Mode)
 
 **Via API (cURL)**:
 ```bash
 # Auth Mode: Must provide correct password & null tenant-id
 curl -X POST http://localhost:8080/api/v1/users/login \
   -d '{"username":"super_admin", "password":"...", "tenant-id":null}'
-
-# No-Auth Mode: Password can be anything
-curl -X POST http://localhost:8080/api/v1/users/login \
-  -d '{"username":"any", "password":"any", "tenant-id":null}'
 ```
 
 ### Workflow B: Creating a Tenant & Admin (Bootstrapping)
