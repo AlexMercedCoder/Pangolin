@@ -136,8 +136,8 @@ catalog = load_catalog(
     "my_catalog",
     **{
         "type": "rest",
-        "uri": "http://localhost:8080",
-        "prefix": "my_catalog",
+        "type": "rest",
+        "uri": "http://localhost:8080/api/v1/catalogs/my_catalog",
         "token": "your_jwt_token",
         "header.X-Pangolin-Tenant": "tenant_id",
         # Client-side credentials (if not using vending)

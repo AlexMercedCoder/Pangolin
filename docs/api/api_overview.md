@@ -1,6 +1,6 @@
 # API Reference Overview
 
-Pangolin exposes a multi-tenant REST API split into three core functional areas: The Standard Iceberg REST API, the Pangolin Management API, and the Identity/Security API.
+Pangolin exposes a multi-tenant REST API split into three core functional areas. All list endpoints support standard pagination via `?limit=N&pageToken=...` (or `offset` for management APIs).
 
 ---
 

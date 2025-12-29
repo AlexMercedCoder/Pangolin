@@ -1,94 +1,72 @@
-# Repository Organization
+# Project Organization
 
-The Pangolin repository has been organized for better maintainability and clarity.
+The Pangolin repository follows a monorepo structure separating the core Rust implementation, Management UI, Python SDK, and documentation.
 
 ## Directory Structure
 
 ```
-pangolin/
-├── README.md                    # Project overview
-├── architecture.md              # System architecture
-├── LICENSE                      # License file
-├── example.env                  # Environment variables template
-├── test_setup.sh               # Test environment setup script
+pangolin-monorepo/
+├── docs/                        # Comprehensive Documentation
+│   ├── api/                     # API Reference and Swagger info
+│   ├── cli/                     # CLI Command Reference
+│   ├── features/                # Feature Guides (RBAC, Federation, etc.)
+│   ├── getting-started/         # Installation and Architecture guides
+│   ├── known-issues/            # Registry of quirks and temporary traps
+│   └── ui/                      # UI User Guide
 │
-├── docs/                        # Main documentation
-│   ├── getting_started.md
-│   ├── api_overview.md
-│   ├── authentication.md
-│   ├── pyiceberg_testing.md
-│   ├── security_vending.md
-│   └── research/               # Research & planning docs
-│       ├── README.md
-│       ├── PYICEBERG_INTEGRATION_SUMMARY.md
-│       ├── requirements.md
-│       ├── AUDIT_AND_TEST_PLAN.md
-│       ├── SQLITE_BACKEND_PLAN.md
-│       ├── ui_requirements.md
-│       └── rest-catalog-open-api.yaml
+├── pangolin/                    # Core Rust Implementation (Workspace)
+│   ├── pangolin_api/           # REST API Server (Axum)
+│   ├── pangolin_core/          # Domain Models, Traits, and Logic
+│   ├── pangolin_store/         # Storage Backends (Memory, SQLite, Postgres, Mongo)
+│   ├── pangolin_cli_admin/     # Admin CLI Tool
+│   ├── pangolin_cli_user/      # User CLI Tool
+│   └── pangolin_cli_common/    # Shared CLI Logic
 │
-├── tests/                       # Test suites
-│   └── pyiceberg/              # PyIceberg integration tests
-│       ├── README.md
-│       ├── test_client_credentials.py
-│       ├── test_warehouse_credentials.py
-│       ├── test_read_fix.py
-│       ├── test_pyiceberg.py
-│       ├── test_pyiceberg_full.py
-│       ├── test_no_auth.py
-│       ├── test_token_auth.py
-│       ├── test_headers.py
-│       ├── test_minio_integration.py
-│       ├── check_session.py
-│       ├── debug_requests.py
-│       └── verify_pyiceberg.py
+├── pangolin_ui/                 # Management UI (SvelteKit)
+│   ├── src/routes/             # Application Routes
+│   └── src/lib/                # Shared Components and Stores
 │
-├── pangolin/                    # Rust implementation
-│   ├── Cargo.toml
-│   ├── pangolin_api/           # REST API server
-│   ├── pangolin_core/          # Core domain models
-│   └── pangolin_store/         # Storage backends
+├── pypangolin/                  # Python SDK
+│   ├── pypangolin/             # Source Code
+│   └── docs/                   # SDK-specific Documentation
 │
-└── pangolin_ui/                 # Management UI
-    └── (UI files)
+├── scripts/                     # Automation & Verification
+│   ├── verify_pypangolin_*.py  # SDK Verification Scripts
+│   ├── test_release_*.py       # End-to-End Release Tests
+│   └── docker-build.sh         # Build helpers
+│
+├── tests/                       # Integration Test Suites
+│   └── pyiceberg/              # PyIceberg compatibility tests
+│
+├── planning/                    # Project Planning & Release Notes
+│
+├── website/                     # Landing Page (pangolincatalog.com)
+└── deployment_assets/           # Kubernetes manifests & Helm charts
 ```
 
-## What Changed
+## Core Components
 
-### Moved to `tests/pyiceberg/`
-All Python integration tests:
-- `test_*.py` files
-- Utility scripts (`check_session.py`, `debug_requests.py`, `verify_pyiceberg.py`)
+### 1. Backend (`pangolin/`)
+The heart of the system, written in Rust. It utilizes a workspace architecture to separate the core logic (`pangolin_core`) from the API server (`pangolin_api`) and multiple storage backends (`pangolin_store`).
 
-### Moved to `docs/research/`
-Research and planning documentation:
-- `PYICEBERG_INTEGRATION_SUMMARY.md`
-- `requirements.md`
-- `AUDIT_AND_TEST_PLAN.md`
-- `SQLITE_BACKEND_PLAN.md`
-- `ui_requirements.md`
-- `rest-catalog-open-api.yaml`
+### 2. User Interface (`pangolin_ui/`)
+A generic, multi-tenant SvelteKit application providing a visual interface for managing catalogs, namespaces, tables, and access control. It usually runs on port `3000`.
 
-### Kept in Root
-Essential files only:
-- `README.md` - Project overview
-- `architecture.md` - System architecture
-- `LICENSE` - License
-- `example.env` - Configuration template
-- `test_setup.sh` - Setup script
+### 3. Python SDK (`pypangolin/`)
+A Pydantic-based client library for automating Pangolin operations, including Service User management request automation and credential handling.
 
-## Benefits
+### 4. Admin & User CLIs (`pangolin/pangolin_cli_*`)
+Rust-based command-line interfaces for both system administrators (Catalog/User management) and end-users (Branching/Tagging).
 
-1. **Cleaner Root Directory** - Only essential files visible
-2. **Organized Tests** - All PyIceberg tests in one place with documentation
-3. **Separated Concerns** - Research docs separate from user-facing docs
-4. **Better Navigation** - Clear structure with READMEs in each directory
-5. **Easier Maintenance** - Related files grouped together
+## Documentation Strategy
 
-## Quick Links
+Documentation is centralized in `docs/` but specific component implementation details may reside closer to the code (`pypangolin/README.md`).
 
-- [Main Documentation](./docs/)
-- [PyIceberg Tests](./tests/pyiceberg/)
-- [Research Notes](./docs/research/)
-- [Getting Started](./docs/getting_started.md)
-- [PyIceberg Integration](./docs/pyiceberg_testing.md)
+- **User Guides**: `docs/getting-started/`
+- **Architecture**: `docs/architecture/`
+- **API Specs**: `docs/api/`
+
+## Key Configuration Files
+- `Cargo.toml` (Root workspace config)
+- `.env` (Environment variables for local dev)
+- `docker-compose.yml` (Full stack orchestration)

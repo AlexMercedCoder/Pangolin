@@ -136,7 +136,7 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "role_id": "role-uuid"
+  "role-id": "role-uuid"
 }
 ```
 
@@ -148,8 +148,8 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "user_id": "optional-user-uuid",
-  "role_id": "optional-role-uuid",
+  "user-id": "optional-user-uuid",
+  "role-id": "optional-role-uuid",
   "scope": "Catalog",
   "resource": "analytics",
   "action": "Read"
@@ -245,7 +245,7 @@ POST /api/v1/users
 # Grant catalog-level write access
 POST /api/v1/permissions
 {
-  "user_id": "uuid",
+  "user-id": "uuid",
   "scope": "Catalog",
   "resource": "analytics",
   "action": "Write"
@@ -265,7 +265,7 @@ POST /api/v1/users
 # Grant namespace-level read access
 POST /api/v1/permissions
 {
-  "user_id": "uuid",
+  "user-id": "uuid",
   "scope": "Namespace",
   "resource": "analytics/sales",
   "action": "Read"
@@ -286,7 +286,7 @@ POST /api/v1/service-users
 # Grant write access to staging catalog
 POST /api/v1/permissions
 {
-  "user_id": "service_user_uuid",
+  "user-id": "service_user_uuid",
   "scope": "Catalog",
   "resource": "staging",
   "action": "Write"

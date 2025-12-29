@@ -62,7 +62,7 @@ pangolin-admin create-warehouse --name "prod-s3" --type "s3"
 | Strategy | Status | Notes |
 | :--- | :--- | :--- |
 | **AwsStatic** | ✅ Implemented | Full support for S3/MinIO |
-| **AwsSts** | 📝 Planned | STS integration in progress |
+| **AwsSts** | ✅ Implemented | Full support for temporary credential vending |
 | **AzureSas** | 📝 Planned | Awaiting Azure SDK integration |
 | **GcpDownscoped** | 📝 Planned | Awaiting GCP SDK integration |
 

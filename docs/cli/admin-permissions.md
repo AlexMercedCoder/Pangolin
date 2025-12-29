@@ -74,6 +74,10 @@ pangolin-admin revoke-permission <role_name> <action> <resource>
 ```
 
 **Examples**:
+```bash
+# Revoke 'write' access to 'sales' catalog from 'analyst' role
+pangolin-admin revoke-permission analyst write catalog:sales
+```
 
 ### Assign Role
 Assign a Role to a User (or Service User).

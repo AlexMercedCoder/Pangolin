@@ -9,8 +9,12 @@ View all catalogs.
 
 **Syntax**:
 ```bash
-pangolin-admin list-catalogs
+pangolin-admin list-catalogs [--limit <N>] [--offset <N>]
 ```
+
+**Options**:
+- `--limit`: Maximum number of items to return (default: 100)
+- `--offset`: Number of items to skip (default: 0)
 
 ### Create Catalog
 Create a new catalog backed by an existing warehouse.
