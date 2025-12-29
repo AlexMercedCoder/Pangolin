@@ -34,11 +34,13 @@ class PermissionClient:
     def __init__(self, client):
         self.client = client
 
-    def grant(self, role_id: str, action: str, scope_type: str, scope_id: str = None) -> Permission:
-        """Grant a permission to a role."""
+    def grant(self, user_id: str, action: str, scope_type: str, scope_id: str = None) -> Permission:
+        """Grant a permission to a user."""
         payload = {
-            "role_id": role_id,
-            "action": action,
+            "user-id": user_id,
+            "actions": [action], # Backend expects Set<Action>, passing list usually works if deserializer allows, or single string? 
+            # Backend: pub actions: HashSet<Action>
+            # Action is enum. 
             "scope": {
                 "type": scope_type,
                 "id": scope_id
@@ -53,7 +55,7 @@ class PermissionClient:
 
     def assign_role(self, user_id: str, role_id: str):
         """Assign a role to a user."""
-        self.client.post(f"/api/v1/users/{user_id}/roles", json={"role_id": role_id})
+        self.client.post(f"/api/v1/users/{user_id}/roles", json={"role-id": role_id})
 
     def revoke_role(self, user_id: str, role_id: str):
         """Revoke a role from a user."""
@@ -74,10 +76,29 @@ class ServiceUserClient:
         data = self.client.post("/api/v1/service-users", json=payload)
         return ServiceUser(**data)
 
-    def list(self) -> List[ServiceUser]:
+    def list(self, limit: int = None, offset: int = None) -> List[ServiceUser]:
         """List service users."""
-        data = self.client.get("/api/v1/service-users")
+        params = {}
+        if limit is not None: params['limit'] = limit
+        if offset is not None: params['offset'] = offset
+        data = self.client.get("/api/v1/service-users", params=params)
         return [ServiceUser(**u) for u in data]
+
+    def get(self, service_user_id: str) -> ServiceUser:
+        """Get service user details."""
+        data = self.client.get(f"/api/v1/service-users/{service_user_id}")
+        return ServiceUser(**data)
+
+    def update(self, service_user_id: str, name: str = None, description: str = None, active: bool = None) -> ServiceUser:
+        """Update service user."""
+        payload = {}
+        if name: payload["name"] = name
+        if description: payload["description"] = description
+        if active is not None: payload["active"] = active
+        
+        self.client.put(f"/api/v1/service-users/{service_user_id}", json=payload)
+        # Re-fetch to return object (PUT returns 200 OK usually, but pattern varies. Assuming standard)
+        return self.get(service_user_id)
 
     def rotate_key(self, service_user_id: str) -> ServiceUser:
         """Rotate API key for a service user."""

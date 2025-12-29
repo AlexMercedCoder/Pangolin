@@ -188,6 +188,20 @@ pub enum AdminCommand {
          action: String,
          resource: String,
     },
+    /// Assign a role to a user
+    AssignRole {
+        #[arg(long)]
+        user_id: String,
+        #[arg(long)]
+        role_id: String,
+    },
+    /// Revoke a role from a user
+    RevokeUserRole {
+        #[arg(long)]
+        user_id: String,
+        #[arg(long)]
+        role_id: String,
+    },
     // --- Governance: Metadata ---
     GetMetadata {
         #[arg(short, long)]

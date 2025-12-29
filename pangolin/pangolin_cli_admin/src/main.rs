@@ -279,6 +279,12 @@ async fn main() -> anyhow::Result<()> {
                                     AdminCommand::RevokePermission { role, action, resource } => {
                                         if let Err(e) = handlers::governance::handle_revoke_permission(&client, role, action, resource).await { eprintln!("Error: {}", e); }
                                     },
+                                    AdminCommand::AssignRole { user_id, role_id } => {
+                                        if let Err(e) = handlers::governance::handle_assign_role(&client, user_id, role_id).await { eprintln!("Error: {}", e); }
+                                    },
+                                    AdminCommand::RevokeUserRole { user_id, role_id } => {
+                                        if let Err(e) = handlers::governance::handle_revoke_user_role(&client, user_id, role_id).await { eprintln!("Error: {}", e); }
+                                    },
                                     AdminCommand::GetMetadata { entity_type, entity_id } => {
                                         if let Err(e) = handlers::governance::handle_get_metadata(&client, entity_type, entity_id).await { eprintln!("Error: {}", e); }
                                     },

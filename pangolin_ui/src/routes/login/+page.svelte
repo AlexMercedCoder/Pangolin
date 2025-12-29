@@ -31,6 +31,14 @@
                 error = result.error || 'OAuth login failed';
             }
             loading = false;
+            loading = false;
+        }
+
+        // Check for tenant_id to auto-populate
+        const paramTenant = $page.url.searchParams.get('tenant_id') || $page.url.searchParams.get('tenant');
+        if (paramTenant) {
+            tenantId = paramTenant;
+            showTenantSelector = true;
         }
 
 		// If already authenticated, redirect to dashboard

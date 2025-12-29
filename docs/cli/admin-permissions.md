@@ -74,7 +74,30 @@ pangolin-admin revoke-permission <role_name> <action> <resource>
 ```
 
 **Examples**:
+
+### Assign Role
+Assign a Role to a User (or Service User).
+
+**Syntax**:
 ```bash
-# Remove write access for 'analyst' on the sales catalog
-pangolin-admin revoke-permission analyst write catalog:sales
+pangolin-admin assign-role --user-id <user_id> --role-id <role_id>
 ```
+
+**Example**:
+```bash
+pangolin-admin assign-role --user-id 550e8400... --role-id 770e8400...
+```
+
+### Revoke User Role
+Revoke a Role from a User.
+
+**Syntax**:
+```bash
+pangolin-admin revoke-user-role --user-id <user_id> --role-id <role_id>
+```
+
+**Example**:
+```bash
+pangolin-admin revoke-user-role --user-id 550e8400... --role-id 770e8400...
+```
+

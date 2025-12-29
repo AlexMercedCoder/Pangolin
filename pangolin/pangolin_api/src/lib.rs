@@ -68,6 +68,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
             axum::http::header::AUTHORIZATION,
             axum::http::header::ACCEPT,
             "x-pangolin-tenant".parse::<axum::http::HeaderName>().unwrap(),
+            "x-api-key".parse::<axum::http::HeaderName>().unwrap(),
         ]);
         //.allow_credentials(true);
 
@@ -207,7 +208,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/bulk/assets/delete", post(optimization_handlers::bulk_delete_assets))
         // Validation
         .route("/api/v1/validate/names", post(optimization_handlers::validate_names))
-        .layer(axum::middleware::from_fn(auth_middleware::auth_middleware_wrapper))
+        .layer(axum::middleware::from_fn_with_state({ let s: Arc<dyn CatalogStore + Send + Sync> = store.clone(); s }, auth_middleware::auth_middleware))
         .layer(cors)
         .with_state(store)
 }

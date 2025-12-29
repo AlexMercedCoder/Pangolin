@@ -81,7 +81,7 @@ fn apply_root_tenant_override(req: &mut Request, default_tenant: Uuid) {
 
 /// Axum middleware to extract and verify JWT token
 pub async fn auth_middleware(
-    State(store): State<Arc<dyn CatalogStore>>,
+    State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     mut req: Request,
     next: Next,
 ) -> Response {

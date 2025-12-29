@@ -104,6 +104,10 @@ pub async fn create_warehouse(
     if session.role == pangolin_core::user::UserRole::Root {
         return (StatusCode::FORBIDDEN, "Root user cannot create warehouses. Please login as Tenant Admin.").into_response();
     }
+    
+    if session.role == pangolin_core::user::UserRole::TenantUser {
+        return (StatusCode::FORBIDDEN, "Tenant users cannot create warehouses.").into_response();
+    }
 
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
@@ -166,8 +170,12 @@ pub async fn get_warehouse(
 pub async fn delete_warehouse(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<pangolin_core::user::UserSession>,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
+    if session.role != pangolin_core::user::UserRole::TenantAdmin {
+        return (StatusCode::FORBIDDEN, "Only Tenant Admins can delete warehouses.").into_response();
+    }
     match store.delete_warehouse(tenant.0, name.clone()).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => {
@@ -198,9 +206,13 @@ pub async fn delete_warehouse(
 pub async fn update_warehouse(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<pangolin_core::user::UserSession>,
     Path(name): Path<String>,
     Json(payload): Json<UpdateWarehouseRequest>,
 ) -> impl IntoResponse {
+    if session.role != pangolin_core::user::UserRole::TenantAdmin {
+        return (StatusCode::FORBIDDEN, "Only Tenant Admins can update warehouses.").into_response();
+    }
     let updates = pangolin_core::model::WarehouseUpdate {
         name: payload.name,
         use_sts: payload.use_sts,

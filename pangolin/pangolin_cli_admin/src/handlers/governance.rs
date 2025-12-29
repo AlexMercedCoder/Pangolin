@@ -184,6 +184,29 @@ pub async fn handle_revoke_permission(client: &PangolinClient, role: String, act
     Ok(())
 }
 
+pub async fn handle_assign_role(client: &PangolinClient, user_id: String, role_id: String) -> Result<(), CliError> {
+    let payload = serde_json::json!({
+        "role-id": role_id
+    });
+    let res = client.post(&format!("/api/v1/users/{}/roles", user_id), &payload).await?;
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("Failed to assign role: {} - {}", status, text)));
+    }
+    println!("✅ Role assigned successfully.");
+    Ok(())
+}
+
+pub async fn handle_revoke_user_role(client: &PangolinClient, user_id: String, role_id: String) -> Result<(), CliError> {
+    let res = client.delete(&format!("/api/v1/users/{}/roles/{}", user_id, role_id)).await?;
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Failed to revoke role: {}", res.status())));
+    }
+    println!("✅ Role revoked successfully.");
+    Ok(())
+}
+
 // ==================== Metadata ====================
 
 pub async fn handle_get_metadata(client: &PangolinClient, _entity_type: String, entity_id: String) -> Result<(), CliError> {

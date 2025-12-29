@@ -75,11 +75,19 @@ class Conflict(BaseModel):
     details: Dict[str, Any]
 
 # Phase 5: Governance Models
+class PermissionScope(BaseModel):
+    type: str
+    catalog_id: Optional[str] = Field(None, alias="catalog-id")
+    namespace: Optional[str] = None
+    asset_id: Optional[str] = Field(None, alias="asset-id")
+    tag_name: Optional[str] = Field(None, alias="tag-name")
+
 class Permission(BaseModel):
     id: Optional[str] = None
-    action: str
-    scope_type: str # "global", "catalog", "warehouse", "namespace", "table"
-    scope_id: Optional[str] = None
+    user_id: str = Field(alias="user-id")
+    actions: List[str]
+    scope: PermissionScope
+    granted_by: Optional[str] = Field(None, alias="granted-by")
 
 class Role(BaseModel):
     id: Optional[str] = None
@@ -90,6 +98,9 @@ class ServiceUser(BaseModel):
     id: Optional[str] = Field(default=None, alias="service_user_id")
     name: str
     api_key: Optional[str] = None
+    description: Optional[str] = None
+    role: Optional[str] = None
+    active: bool = True
     expires_at: Optional[int] = None
     permissions: List[Permission] = Field(default_factory=list)
 

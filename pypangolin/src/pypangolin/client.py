@@ -12,12 +12,13 @@ from .exceptions import (
 )
 
 class PangolinClient:
-    def __init__(self, uri: str, username: str = None, password: str = None, token: str = None, tenant_id: str = None):
+    def __init__(self, uri: str, username: str = None, password: str = None, token: str = None, tenant_id: str = None, api_key: str = None):
         self.uri = uri.rstrip("/")
         self._token = token
+        self._api_key = api_key
         self._current_tenant_id: Optional[str] = tenant_id
         
-        if not self._token and username and password:
+        if not self._token and not self._api_key and username and password:
             self._token = login(self.uri, username, password, tenant_id=tenant_id)
             
     def login(self, username: str, password: str, tenant_id: str = None):
@@ -104,6 +105,8 @@ class PangolinClient:
         
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
+        elif self._api_key:
+            headers["X-API-Key"] = self._api_key
             
         if self._current_tenant_id:
             headers["X-Pangolin-Tenant"] = self._current_tenant_id
@@ -231,7 +234,13 @@ class WarehouseClient:
                 }
             }
         elif isinstance(vending_strategy, str):
-             pass 
+            # Convert known string variants to empty structs
+            if vending_strategy == "AwsStatic":
+                vending_strategy = {"AwsStatic": {}}
+            elif vending_strategy == "AzureStatic":
+                vending_strategy = {"AzureStatic": {}}
+            elif vending_strategy == "GcpStatic":
+                vending_strategy = {"GcpStatic": {}} 
 
         payload = {
             "name": name,

@@ -37,7 +37,8 @@ pub async fn handle_create_service_user(
     println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("⚠️  IMPORTANT: Save this API key - it will not be shown again!");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("Service User ID: {}", result["service_user_id"].as_str().unwrap_or("-"));
+    let id = result["id"].as_str().or_else(|| result["service_user_id"].as_str()).unwrap_or("-");
+    println!("Service User ID: {}", id);
     println!("Name: {}", result["name"].as_str().unwrap_or("-"));
     println!("API Key: {}", result["api_key"].as_str().unwrap_or("-"));
     if let Some(expires) = result["expires_at"].as_str() {
@@ -173,7 +174,8 @@ pub async fn handle_rotate_service_user_key(client: &PangolinClient, id: String)
     println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("⚠️  IMPORTANT: Save this new API key - it will not be shown again!");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    println!("Service User ID: {}", result["service_user_id"].as_str().unwrap_or("-"));
+    let id = result["id"].as_str().or_else(|| result["service_user_id"].as_str()).unwrap_or("-");
+    println!("Service User ID: {}", id);
     println!("Name: {}", result["name"].as_str().unwrap_or("-"));
     println!("New API Key: {}", result["api_key"].as_str().unwrap_or("-"));
     if let Some(expires) = result["expires_at"].as_str() {

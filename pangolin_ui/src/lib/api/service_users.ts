@@ -35,10 +35,11 @@ export interface ApiKeyResponse {
 }
 
 export const serviceUsersApi = {
-	async list(): Promise<ServiceUser[]> {
-		const response = await apiClient.get<ServiceUser[]>('/api/v1/service-users');
+	async list(limit = 100, offset = 0): Promise<ServiceUser[]> {
+		const response = await apiClient.get<ServiceUser[]>(`/api/v1/service-users?limit=${limit}&offset=${offset}`);
 		if (response.error) throw new Error(response.error.message);
-		return response.data || [];
+        // Backend returns an array directly, not a paginated wrapper yet
+		return Array.isArray(response.data) ? response.data : [];
 	},
 
 	async get(id: string): Promise<ServiceUser> {
