@@ -23,6 +23,7 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 - **[Metadata Backends](./backend_storage/README.md)** - Memory, Postgres, MongoDB, and SQLite.
 - **[Asset Management](./features/asset_management.md)** - Tables, Views, and CRUD operations.
 - **[Federated Catalogs](./features/federated_catalogs.md)** - Proxying external REST catalogs.
+- **[Known Issues](./known-issues/README.md)** - Documented limitations and active bugs (e.g., SQL backend quirks).
 
 ---
 

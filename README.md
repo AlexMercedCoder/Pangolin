@@ -70,6 +70,7 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[Metadata Backends](docs/backend_storage/README.md)** - Memory, Postgres, MongoDB, and SQLite.
 - **[Asset Management](docs/features/asset_management.md)** - Tables, Views, and CRUD operations.
 - **[Federated Catalogs](docs/features/federated_catalogs.md)** - Proxying external REST catalogs.
+- **[Known Issues](docs/known-issues/README.md)** - Documented limitations and active bugs (e.g., SQL backend quirks).
 
 ### ⚖️ 3. Governance & Security
 *Multi-tenancy, RBAC, and auditing.*
