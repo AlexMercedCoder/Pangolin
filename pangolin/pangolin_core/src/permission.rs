@@ -85,6 +85,8 @@ impl Action {
 pub struct Permission {
     pub id: Uuid,
     pub user_id: Uuid,
+    #[serde(default)]
+    pub tenant_id: Uuid,
     pub scope: PermissionScope,
     pub actions: HashSet<Action>,
     pub granted_by: Uuid,
@@ -92,10 +94,11 @@ pub struct Permission {
 }
 
 impl Permission {
-    pub fn new(user_id: Uuid, scope: PermissionScope, actions: HashSet<Action>, granted_by: Uuid) -> Self {
+    pub fn new(user_id: Uuid, tenant_id: Uuid, scope: PermissionScope, actions: HashSet<Action>, granted_by: Uuid) -> Self {
         Self {
             id: Uuid::new_v4(),
             user_id,
+            tenant_id,
             scope,
             actions,
             granted_by,

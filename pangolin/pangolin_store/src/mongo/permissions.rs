@@ -12,6 +12,7 @@ impl MongoStore {
         let mut doc = mongodb::bson::to_document(&permission)?;
         doc.insert("id", to_bson_uuid(permission.id));
         doc.insert("user_id", to_bson_uuid(permission.user_id));
+        doc.insert("tenant_id", to_bson_uuid(permission.tenant_id));
         doc.insert("granted_by", to_bson_uuid(permission.granted_by));
         
         self.db.collection::<Document>("permissions").insert_one(doc).await?;
@@ -34,10 +35,14 @@ impl MongoStore {
         let user_roles = self.get_user_roles(user_id).await?;
         for ur in user_roles {
             if let Some(role) = self.get_role(ur.role_id).await? {
+                // Determine tenant_id from role
+                let role_tenant_id = role.tenant_id;
+                
                 for grant in role.permissions {
                     perms.push(Permission {
                         id: Uuid::new_v4(), // Synthesized ID
                         user_id,
+                        tenant_id: role_tenant_id,
                         scope: grant.scope,
                         actions: grant.actions,
                         granted_by: role.created_by,

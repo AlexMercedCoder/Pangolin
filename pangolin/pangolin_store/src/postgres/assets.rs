@@ -91,7 +91,7 @@ impl PostgresStore {
         let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
 
-        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4 LIMIT $5 OFFSET $6")
+        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 AND namespace_path = $4 ORDER BY name LIMIT $5 OFFSET $6")
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(&branch_name)

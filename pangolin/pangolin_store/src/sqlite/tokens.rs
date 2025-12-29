@@ -8,9 +8,10 @@ use pangolin_core::token::TokenInfo;
 
 impl SqliteStore {
     pub async fn store_token(&self, token_info: TokenInfo) -> Result<()> {
-        sqlx::query("INSERT INTO active_tokens (token_id, user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO active_tokens (token_id, user_id, tenant_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(&token_info.id.to_string())
             .bind(token_info.user_id.to_string())
+            .bind(token_info.tenant_id.to_string())
             .bind(token_info.token.unwrap_or_default())
             .bind(token_info.expires_at.timestamp())
             .bind(Utc::now().timestamp())
@@ -21,7 +22,7 @@ impl SqliteStore {
 
     pub async fn validate_token(&self, token: &str) -> Result<Option<TokenInfo>> {
         // 1. Check if it's in active_tokens and not expired
-        let row = sqlx::query("SELECT token_id, user_id, token, expires_at FROM active_tokens WHERE token = ? AND expires_at > ?")
+        let row = sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE token = ? AND expires_at > ?")
             .bind(token)
             .bind(Utc::now().timestamp())
             .fetch_optional(&self.pool)
@@ -41,9 +42,12 @@ impl SqliteStore {
                  return Ok(None);
              }
 
+            let tenant_id_str: String = row.get("tenant_id");
+            let tenant_id = Uuid::parse_str(&tenant_id_str).unwrap_or_default();
+
             Ok(Some(TokenInfo {
                 id: token_id,
-                tenant_id: Uuid::default(),
+                tenant_id, 
                 user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
                 username: "unknown".to_string(),
                 token: Some(row.get("token")),
@@ -56,67 +60,12 @@ impl SqliteStore {
         }
     }
 
-    pub async fn revoke_token(&self, token_id: Uuid, expires_at: chrono::DateTime<chrono::Utc>, reason: Option<String>) -> Result<()> {
-        let token_id_str = token_id.to_string();
-        let expires_at_ms = expires_at.timestamp_millis();
-        
-        sqlx::query(
-            "INSERT INTO revoked_tokens (token_id, expires_at, reason) VALUES (?, ?, ?)"
-        )
-        .bind(&token_id_str)
-        .bind(expires_at_ms)
-        .bind(reason)
-        .execute(&self.pool)
-        .await?;
-        
-        // Also remove from active_tokens to keep things clean
-        sqlx::query("DELETE FROM active_tokens WHERE token_id = ?")
-            .bind(&token_id_str)
-            .execute(&self.pool)
-            .await?;
-            
-        Ok(())
-    }
-
-    pub async fn is_token_revoked(&self, token_id: Uuid) -> Result<bool> {
-        let token_id_str = token_id.to_string();
-        let exists: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM revoked_tokens WHERE token_id = ?"
-        )
-        .bind(&token_id_str)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(exists > 0)
-    }
-
-    pub async fn cleanup_expired_tokens(&self) -> Result<usize> {
-        let now_ms = chrono::Utc::now().timestamp_millis();
-        // Cleanup revoked tokens
-        let rows_affected = sqlx::query(
-            "DELETE FROM revoked_tokens WHERE expires_at < ?"
-        )
-        .bind(now_ms)
-        .execute(&self.pool)
-        .await?
-        .rows_affected();
-        
-        // Cleanup active tokens
-         let _ = sqlx::query(
-            "DELETE FROM active_tokens WHERE expires_at < ?"
-        )
-        .bind(chrono::Utc::now().timestamp())
-        .execute(&self.pool)
-        .await?;
-
-        Ok(rows_affected as usize)
-    }
-
     pub async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<TokenInfo>> {
         let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
         let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
 
         let rows = if let Some(uid) = user_id {
-            sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = ? AND t.user_id = ? AND t.expires_at > ? LIMIT ? OFFSET ?")
+            sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = ? AND user_id = ? AND expires_at > ? LIMIT ? OFFSET ?")
                 .bind(tenant_id.to_string())
                 .bind(uid.to_string())
                 .bind(Utc::now().timestamp())
@@ -125,7 +74,7 @@ impl SqliteStore {
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = ? AND t.expires_at > ? LIMIT ? OFFSET ?")
+            sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = ? AND expires_at > ? LIMIT ? OFFSET ?")
                 .bind(tenant_id.to_string())
                 .bind(Utc::now().timestamp())
                 .bind(limit)
@@ -145,9 +94,12 @@ impl SqliteStore {
                 .await?;
                 
              if is_revoked == 0 {
+                let tenant_id_str: String = row.get("tenant_id");
+                let t_id = Uuid::parse_str(&tenant_id_str).unwrap_or_default();
+                
                 tokens.push(TokenInfo {
                     id: Uuid::parse_str(&token_id_str)?,
-                    tenant_id, // We know the tenant from the query context
+                    tenant_id: t_id,
                     user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
                     username: "unknown".to_string(), // Inefficient to join username unless needed
                     token: Some(row.get("token")),

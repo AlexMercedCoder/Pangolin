@@ -222,7 +222,7 @@ impl CatalogStore for PostgresStore {
         let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
 
         let rows = if let Some(uid) = user_id {
-             sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = $1 AND t.user_id = $2 AND t.expires_at > $3 LIMIT $4 OFFSET $5")
+             sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = $1 AND user_id = $2 AND expires_at > $3 LIMIT $4 OFFSET $5")
                 .bind(tenant_id)
                 .bind(uid)
                 .bind(Utc::now())
@@ -231,7 +231,7 @@ impl CatalogStore for PostgresStore {
                 .fetch_all(&self.pool)
                 .await?
         } else {
-             sqlx::query("SELECT t.token_id, t.user_id, t.token, t.expires_at FROM active_tokens t JOIN users u ON t.user_id = u.id WHERE u.tenant_id = $1 AND t.expires_at > $2 LIMIT $3 OFFSET $4")
+             sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = $1 AND expires_at > $2 LIMIT $3 OFFSET $4")
                 .bind(tenant_id)
                 .bind(Utc::now())
                 .bind(limit)
@@ -244,7 +244,7 @@ impl CatalogStore for PostgresStore {
         for row in rows {
             tokens.push(TokenInfo {
                 id: row.get("token_id"),
-                tenant_id,
+                tenant_id: row.get("tenant_id"),
                 user_id: row.get("user_id"),
                 username: "unknown".to_string(),
                 token: Some(row.get("token")),
@@ -257,9 +257,10 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn store_token(&self, token_info: TokenInfo) -> Result<()> {
-        sqlx::query("INSERT INTO active_tokens (token_id, user_id, token, expires_at) VALUES ($1, $2, $3, $4)")
+        sqlx::query("INSERT INTO active_tokens (token_id, user_id, tenant_id, token, expires_at) VALUES ($1, $2, $3, $4, $5)")
             .bind(token_info.id)
             .bind(token_info.user_id)
+            .bind(token_info.tenant_id)
             .bind(token_info.token.unwrap_or_default())
             .bind(token_info.expires_at)
             .execute(&self.pool)

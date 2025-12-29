@@ -9,9 +9,10 @@ use std::collections::HashSet;
 impl PostgresStore {
     // Direct Permission Operations
     pub async fn create_permission(&self, permission: Permission) -> Result<()> {
-        sqlx::query("INSERT INTO permissions (id, user_id, scope, actions, granted_by, granted_at) VALUES ($1, $2, $3, $4, $5, $6)")
+        sqlx::query("INSERT INTO permissions (id, user_id, tenant_id, scope, actions, granted_by, granted_at) VALUES ($1, $2, $3, $4, $5, $6, $7)")
             .bind(permission.id)
             .bind(permission.user_id)
+            .bind(permission.tenant_id)
             .bind(serde_json::to_value(&permission.scope)?)
             .bind(serde_json::to_value(&permission.actions)?)
             .bind(permission.granted_by)
@@ -31,7 +32,7 @@ impl PostgresStore {
 
     pub async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
         // 1. Fetch direct permissions
-        let rows = sqlx::query("SELECT id, user_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = $1")
+        let rows = sqlx::query("SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = $1")
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
@@ -41,6 +42,7 @@ impl PostgresStore {
             perms.push(Permission {
                 id: row.get("id"),
                 user_id: row.get("user_id"),
+                tenant_id: row.get("tenant_id"),
                 scope: serde_json::from_value::<PermissionScope>(row.get("scope"))?,
                 actions: serde_json::from_value::<HashSet<Action>>(row.get("actions"))?,
                 granted_by: row.get("granted_by"),
@@ -50,7 +52,7 @@ impl PostgresStore {
 
         // 2. Fetch role-based permissions
         let role_rows = sqlx::query(
-            "SELECT r.permissions, r.created_by, r.created_at FROM roles r \
+            "SELECT r.permissions, r.created_by, r.created_at, r.tenant_id FROM roles r \
              JOIN user_roles ur ON r.id = ur.role_id \
              WHERE ur.user_id = $1"
         )
@@ -62,11 +64,13 @@ impl PostgresStore {
             let grants: Vec<PermissionGrant> = serde_json::from_value(row.get("permissions"))?;
             let created_by: Uuid = row.get("created_by");
             let created_at: DateTime<Utc> = row.get("created_at");
+            let tenant_id: Uuid = row.get("tenant_id");
 
             for grant in grants {
                 perms.push(Permission {
                     id: Uuid::new_v4(), // Synthesized ID
                     user_id,
+                    tenant_id,
                     scope: grant.scope,
                     actions: grant.actions,
                     granted_by: created_by,
@@ -94,10 +98,10 @@ impl PostgresStore {
         let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
 
         let rows = sqlx::query(
-            "SELECT p.id, p.user_id, p.scope, p.actions, p.granted_by, p.granted_at 
-             FROM permissions p
-             JOIN users u ON p.user_id = u.id
-             WHERE u.tenant_id = $1 LIMIT $2 OFFSET $3"
+            "SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at 
+             FROM permissions 
+             WHERE tenant_id = $1
+             LIMIT $2 OFFSET $3"
         )
             .bind(tenant_id)
             .bind(limit)
@@ -110,6 +114,7 @@ impl PostgresStore {
             perms.push(Permission {
                 id: row.get("id"),
                 user_id: row.get("user_id"),
+                tenant_id: row.get("tenant_id"),
                 scope: serde_json::from_value::<PermissionScope>(row.get("scope"))?,
                 actions: serde_json::from_value::<HashSet<Action>>(row.get("actions"))?,
                 granted_by: row.get("granted_by"),

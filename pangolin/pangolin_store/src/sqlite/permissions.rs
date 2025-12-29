@@ -8,9 +8,10 @@ use pangolin_core::permission::{Permission, PermissionGrant};
 
 impl SqliteStore {
     pub async fn create_permission(&self, permission: Permission) -> Result<()> {
-        sqlx::query("INSERT INTO permissions (id, user_id, scope, actions, granted_by, granted_at) VALUES (?, ?, ?, ?, ?, ?)")
+        sqlx::query("INSERT INTO permissions (id, user_id, tenant_id, scope, actions, granted_by, granted_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
             .bind(permission.id.to_string())
             .bind(permission.user_id.to_string())
+            .bind(permission.tenant_id.to_string())
             .bind(serde_json::to_string(&permission.scope)?)
             .bind(serde_json::to_string(&permission.actions)?)
             .bind(permission.granted_by.to_string())
@@ -27,7 +28,7 @@ impl SqliteStore {
 
     pub async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
         // 1. Fetch direct permissions
-        let rows = sqlx::query("SELECT id, user_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = ?")
+        let rows = sqlx::query("SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = ?")
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -37,6 +38,7 @@ impl SqliteStore {
             perms.push(Permission {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                 user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
+                tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
                 scope: serde_json::from_str(&row.get::<String, _>("scope"))?,
                 actions: serde_json::from_str(&row.get::<String, _>("actions"))?,
                 granted_by: Uuid::parse_str(&row.get::<String, _>("granted_by"))?,
@@ -46,7 +48,7 @@ impl SqliteStore {
 
         // 2. Fetch role-based permissions
         let role_rows = sqlx::query(
-            "SELECT r.permissions, r.created_by, r.created_at FROM roles r \
+            "SELECT r.permissions, r.created_by, r.created_at, r.tenant_id FROM roles r \
              JOIN user_roles ur ON r.id = ur.role_id \
              WHERE ur.user_id = ?"
         )
@@ -59,11 +61,13 @@ impl SqliteStore {
             let grants: Vec<PermissionGrant> = serde_json::from_str(&grants_json)?;
             let created_by = Uuid::parse_str(&row.get::<String, _>("created_by"))?;
             let created_at = chrono::DateTime::from_timestamp_millis(row.get("created_at")).unwrap_or_default();
+            let tenant_id = Uuid::parse_str(&row.get::<String, _>("tenant_id"))?;
 
             for grant in grants {
                 perms.push(Permission {
                     id: Uuid::new_v4(), // Synthesized ID
                     user_id,
+                    tenant_id,
                     scope: grant.scope,
                     actions: grant.actions,
                     granted_by: created_by,
@@ -91,10 +95,9 @@ impl SqliteStore {
         let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
 
         let rows = sqlx::query(
-            "SELECT p.id, p.user_id, p.scope, p.actions, p.granted_by, p.granted_at 
-             FROM permissions p
-             JOIN users u ON p.user_id = u.id
-             WHERE u.tenant_id = ?
+            "SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at 
+             FROM permissions 
+             WHERE tenant_id = ?
              LIMIT ? OFFSET ?"
         )
         .bind(tenant_id.to_string())
@@ -108,6 +111,7 @@ impl SqliteStore {
             perms.push(Permission {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                 user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
+                tenant_id: Uuid::parse_str(&row.get::<String, _>("tenant_id"))?,
                 scope: serde_json::from_str(&row.get::<String, _>("scope"))?,
                 actions: serde_json::from_str(&row.get::<String, _>("actions"))?,
                 granted_by: Uuid::parse_str(&row.get::<String, _>("granted_by"))?,

@@ -157,3 +157,59 @@ async fn test_postgres_access_requests() {
     let updated = store.get_access_request(request.id).await.expect("Get updated");
     assert_eq!(updated.unwrap().status, RequestStatus::Approved);
 }
+
+#[tokio::test]
+async fn test_service_user_rbac() {
+    let connection_string = match env::var("DATABASE_URL") {
+        Ok(url) => url,
+        Err(_) => {
+            println!("Skipping test_service_user_rbac: DATABASE_URL not set");
+            return;
+        }
+    };
+
+    let store = PostgresStore::new(&connection_string).await.expect("Failed to create PostgresStore");
+
+    // 1. Create Tenant
+    let tenant_id = Uuid::new_v4();
+    let tenant = Tenant {
+        id: tenant_id,
+        name: format!("rbac_tenant_{}", Uuid::new_v4().simple()),
+        properties: HashMap::new(),
+    };
+    store.create_tenant(tenant.clone()).await.expect("Create tenant");
+
+    // 2. Create Service User
+    let service_user = pangolin_core::user::ServiceUser {
+        id: Uuid::new_v4(),
+        name: "test_bot".to_string(),
+        description: None,
+        tenant_id,
+        api_key_hash: "hash".to_string(),
+        role: UserRole::TenantUser,
+        created_by: Uuid::new_v4(),
+        created_at: chrono::Utc::now(),
+        expires_at: None,
+        active: true,
+    };
+    store.create_service_user(service_user.clone()).await.expect("Create service user");
+
+    // 3. Create Role
+    let role = pangolin_core::permission::Role {
+        id: Uuid::new_v4(),
+        name: "BotRole".to_string(),
+        description: None,
+        tenant_id,
+        permissions: vec![],
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+    store.create_role(role.clone()).await.expect("Create role");
+
+    // 4. Assign Role to Service User (Testing FK Relaxation on user_roles.user_id)
+    store.assign_role(service_user.id, role.id).await.expect("Assign role to service user");
+
+    let user_roles = store.get_user_roles(service_user.id).await.expect("Get user roles");
+    assert_eq!(user_roles.len(), 1);
+    assert_eq!(user_roles[0].id, role.id);
+}

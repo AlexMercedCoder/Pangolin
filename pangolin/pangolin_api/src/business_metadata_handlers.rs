@@ -390,6 +390,7 @@ pub async fn update_access_request(
                                   // Create the Permission Object
                                   let permission = pangolin_core::permission::Permission::new(
                                       request.user_id,
+                                      request.tenant_id, 
                                       scope,
                                       actions,
                                       session.user_id // Granted by the approving admin

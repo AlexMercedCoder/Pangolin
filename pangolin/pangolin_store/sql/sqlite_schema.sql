@@ -162,7 +162,6 @@ CREATE TABLE IF NOT EXISTS user_roles (
     assigned_by TEXT NOT NULL,
     assigned_at INTEGER NOT NULL,
     PRIMARY KEY (user_id, role_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
 );
 
@@ -170,12 +169,14 @@ CREATE TABLE IF NOT EXISTS user_roles (
 CREATE TABLE IF NOT EXISTS permissions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
     scope TEXT NOT NULL, -- JSON
     actions TEXT NOT NULL, -- JSON
     granted_by TEXT NOT NULL,
     granted_at INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_permissions_tenant ON permissions(tenant_id);
 
 -- Business Metadata
 CREATE TABLE IF NOT EXISTS business_metadata (
@@ -196,12 +197,14 @@ CREATE TABLE IF NOT EXISTS business_metadata (
 CREATE TABLE IF NOT EXISTS active_tokens (
     token_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    tenant_id TEXT,
     token TEXT NOT NULL,
     expires_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_active_tokens_user ON active_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_active_tokens_tenant ON active_tokens(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_active_tokens_expiry ON active_tokens(expires_at);
 
 -- System Settings
@@ -269,3 +272,6 @@ CREATE TABLE IF NOT EXISTS merge_conflicts (
     FOREIGN KEY (operation_id) REFERENCES merge_operations(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_merge_conflicts_operation ON merge_conflicts(operation_id);
+
+-- Performance Indexes (Phase 3)
+CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions(user_id);

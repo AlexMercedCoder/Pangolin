@@ -222,6 +222,26 @@ pub async fn assign_role(
         return (StatusCode::FORBIDDEN, "Only admins can assign roles").into_response();
     }
 
+    // Validate principal exists (User or Service User)
+    // We relaxed FKs so we must check manually.
+    let user_exists = match store.get_user(target_user_id).await {
+         Ok(opt) => opt.is_some(),
+         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
+    };
+
+    let principal_valid = if user_exists {
+        true
+    } else {
+         match store.get_service_user(target_user_id).await {
+             Ok(opt) => opt.is_some(),
+             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
+         }
+    };
+
+    if !principal_valid {
+         return (StatusCode::NOT_FOUND, "User or Service User not found").into_response();
+    }
+
     let user_role = UserRole::new(
         target_user_id,
         req.role_id,
@@ -324,8 +344,33 @@ pub async fn grant_permission(
         return (StatusCode::FORBIDDEN, "Root user cannot grant granular permissions. Please login as Tenant Admin.").into_response();
     }
 
+    let tenant_id = match session.tenant_id {
+        Some(id) => id,
+        None => return (StatusCode::BAD_REQUEST, "User must be scoped to a tenant").into_response(),
+    };
+
+    // Validate principal exists (User or Service User)
+    let user_exists = match store.get_user(req.user_id).await {
+         Ok(opt) => opt.is_some(),
+         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
+    };
+
+    let principal_valid = if user_exists {
+        true
+    } else {
+          match store.get_service_user(req.user_id).await {
+             Ok(opt) => opt.is_some(),
+             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
+         }
+    };
+
+    if !principal_valid {
+         return (StatusCode::NOT_FOUND, "User or Service User not found").into_response();
+    }
+
     let permission = Permission::new(
         req.user_id,
+        tenant_id,
         req.scope,
         req.actions,
         session.user_id,
