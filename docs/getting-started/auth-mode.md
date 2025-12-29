@@ -42,8 +42,13 @@ export PANGOLIN_NO_AUTH="true"
 The Management UI adapts its login form based on the detected mode.
 
 ### Auth Mode UI
-*   **Standard Login**: Requires **Username**, **Password**, and **Tenant ID**.
-*   **Root Login**: Users must toggle the **"Login as System Root"** switch (or use the dedicated link). This restricts the form to just **Username** and **Password** (as Root has no tenant).
+*   **Standard Login (Root)**: By default, the **"Tenant-specific login"** checkbox is **unchecked**.
+    *   Entering just a Username/Password sends a `null` Tenant ID.
+    *   This triggers the **Root Authentication** flow (checking `PANGOLIN_ROOT_USER`).
+*   **Tenant User Login**: Accessing a specific tenant requires:
+    1.  **Checking** the "Tenant-specific login" box.
+    2.  Entering the **Tenant ID** (UUID).
+    3.  Entering Username/Password.
 *   **Behavior**: Invalid credentials return a 401 error. Session expires when the JWT expires.
 
 ### No-Auth Mode UI
