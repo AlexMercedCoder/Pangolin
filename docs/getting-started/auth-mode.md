@@ -1,132 +1,160 @@
+# Authentication Modes & Guide
 
-# Pangolin Authentication Guide
+Pangolin supports two distinct operational modes: **Auth Mode** (Production) and **No-Auth Mode** (Development). This guide details how to configure, access, and manage identity in both scenarios.
 
-This guide details how authentication works in Pangolin when the system is running in standard production mode (Auth Mode).
+---
 
-## 1. The Root User
+## 1. Auth Mode vs. No-Auth Mode
 
-The **Root User** is the super-administrator of the entire Pangolin system. This user exists outside of any specific tenant.
+| Feature | **Auth Mode** (Default) | **No-Auth Mode** |
+| :--- | :--- | :--- |
+| **Use Case** | Production, Multi-Tenancy, Public Internet | Local Dev, CI/CD, Rapid Prototyping |
+| **Security** | Enforced via JWT Tokens | Disabled (Open Access) |
+| **Identity** | Users must log in; Identity is verified | Requests default to `admin`; Password checks bypassed |
+| **Setup** | Requires `PANGOLIN_JWT_SECRET` | Requires `PANGOLIN_NO_AUTH=true` |
+| **Tenant Context** | Strict isolation; Users belong to 1 Tenant | Default Tenant used automatically if unspecified |
 
-- **Scope**: System-wide. No specific `tenant_id`.
-- **Capabilities**:
-  - Create and delete Tenants.
-  - Create the initial Tenant Admin for a Tenant.
-  - View global system statistics (e.g., total tenants, total tables).
-- **Limitations**:
-  - Cannot query data within a Tenant's catalogs unless explicitly granted permission (conceptually separate).
-  - Cannot be assigned to a specific Tenant.
+---
 
-**Configuration**:
-You can define the initial credentials for the Root User using environment variables. This is critical for securing your production deployment.
+## 2. Configuration (Environment Variables)
 
+### Root User Credentials
+The **Root User** is the system superadmin. These credentials are used to bootstrap the system (create the first tenant).
+
+**Auth Mode**:
 ```bash
-# Default values if not specified: admin / password
+# Secure credentials for production
 export PANGOLIN_ROOT_USER="super_admin"
-export PANGOLIN_ROOT_PASSWORD="complex_secure_password"
+export PANGOLIN_ROOT_PASSWORD="Start123!ComplexPassword"
+export PANGOLIN_JWT_SECRET="<random-32-char-string>"
 ```
 
-**Login Behavior**:
-- **API**: Login with `username` and `password`, leaving `tenant_id` null.
-- **UI**: Use the dedicated Root Login toggle or route (e.g., `/login` with "Root" checked).
-
-## 2. Authentication Flows
-
-### Generating Tokens (API/CLI)
-
-Authentication tokens (JWTs) act as your digital keys.
-
-**For Tenant Admins & Users**:
-You must provide the `tenant_id` along with credentials.
-
+**No-Auth Mode**:
 ```bash
-# Example Request
-POST /api/v1/users/login
+# Credentials are ignored, but variables can still be set
+export PANGOLIN_NO_AUTH="true"
+```
+
+---
+
+## 3. UI Login Nuances
+
+The Management UI adapts its login form based on the detected mode.
+
+### Auth Mode UI
+*   **Standard Login**: Requires **Username**, **Password**, and **Tenant ID**.
+*   **Root Login**: Users must toggle the **"Login as System Root"** switch (or use the dedicated link). This restricts the form to just **Username** and **Password** (as Root has no tenant).
+*   **Behavior**: Invalid credentials return a 401 error. Session expires when the JWT expires.
+
+### No-Auth Mode UI
+*   **Auto-Detection**: The UI detects `NO_AUTH` state on load.
+*   **Simplified Form**: Password validation is skipped on the backend.
+*   **"Easy Login"**: You can often just type a username (e.g., `admin`) and hit Enter to simulate logging in as that user for testing RBAC visibility.
+*   **Root Access**: Root login works with *any* password, provided the username matches `PANGOLIN_ROOT_USER`.
+
+---
+
+## 4. Root User Workflows
+
+The Root User's primary job is **System bootstrapping**. They generally do **not** query data.
+
+### Workflow A: Logging In as Root
+
+**Via API (cURL)**:
+```bash
+# Auth Mode: Must provide correct password & null tenant-id
+curl -X POST http://localhost:8080/api/v1/users/login \
+  -d '{"username":"super_admin", "password":"...", "tenant-id":null}'
+
+# No-Auth Mode: Password can be anything
+curl -X POST http://localhost:8080/api/v1/users/login \
+  -d '{"username":"any", "password":"any", "tenant-id":null}'
+```
+
+### Workflow B: Creating a Tenant & Admin (Bootstrapping)
+
+Only the Root user can create tenants.
+
+**1. Create Tenant**:
+```bash
+# Requires Root Token
+POST /api/v1/tenants
 {
-  "username": "data_analyst",
+  "name": "acme-corp"
+}
+# Response: Returns { "id": "uuid-for-acme", ... }
+```
+
+**2. Create Tenant Admin**:
+```bash
+# Requires Root Token
+# Note: You are creating a user *inside* the new tenant
+POST /api/v1/users
+{
+  "username": "acme_admin",
+  "password": "temporary_password",
+  "tenant_id": "uuid-for-acme",  # Critical: Links user to tenant
+  "role": "TenantAdmin"
+}
+```
+
+---
+
+## 5. Token Generation Guide
+
+Authentication tokens (JWTs) act as your API keys for all operations.
+
+### Generating a Token (Generic)
+
+**Endpoint**: `POST /api/v1/tokens` (Requires Admin privileges) or `POST /api/v1/users/login` (Self-service).
+
+**Payload**:
+```json
+{
+  "username": "data_engineer",
   "password": "secure_password",
-  "tenant_id": "123e4567-e89b-12d3..."
+  "tenant_id": "uuid-for-acme"
 }
+```
 
-# Response
+**Response**:
+```json
 {
-  "token": "eyJhbGciOiJIUz...",
-  "expires_in": 86400
+  "token": "eyJhbGciOiJIUzI1Ni...",
+  "expires_in": 86400,
+  "tenant_id": "uuid-for-acme"
 }
 ```
 
-**For Root**:
-Omit the `tenant_id`.
-
-### Logging into the UI
-
-The UI login page adapts based on the user type:
-
-1.  **Tenant Login**:
-    - **Username**: Your username.
-    - **Password**: Your password.
-    - **Tenant ID**: The UUID of your organization/tenant.
-2.  **Root Login**:
-    - Click "Login as System Root".
-    - Enter only Username and Password.
-
-## 3. Testing with PyIceberg
-
-When running in Auth Mode, PyIceberg requires a valid token and the tenant context.
-
-```python
-from pyiceberg.catalog import load_catalog
-
-# 1. Obtain a token (e.g., via script or manually from UI)
-token = "YOUR_GENERATED_JWT_TOKEN"
-tenant_id = "YOUR_TENANT_UUID"
-
-# 2. Configure PyIceberg
-catalog = load_catalog(
-    "production",
-    **{
-        "type": "rest",
-        "uri": "http://localhost:8080/api/v1/catalogs/sales/iceberg",
-        "token": token,
-        # Required for Multi-tenancy routing
-        "header.X-Pangolin-Tenant": tenant_id
-    }
-)
+### Using the Token
+Pass it in the HTTP Header:
+```http
+Authorization: Bearer eyJhbGciOiJIUzI1Ni...
 ```
 
-## 4. Permissions Matrix
+---
 
-Pangolin uses a hierarchical RBAC system.
+## 6. Permissions Matrix: Who can touch what?
 
-### Roles
+Pangolin employs a strict hierarchy. Here is what each user type can access.
 
-| Role | Scope | Description |
-| :--- | :--- | :--- |
-| **Root** | System | Manages Tenants. Cannot manage data inside a tenant directly without assuming a tenant context (if allowed). |
-| **Tenant Admin** | Tenant | Full control over a specific Tenant's resources (Users, Catalogs, Roles). |
-| **Tenant User** | Tenant | Zero access by default. Must be granted specific permissions. |
+| Resource | **Root User** | **Tenant Admin** | **Tenant User** |
+| :--- | :--- | :--- | :--- |
+| **Manage Tenants** | ✅ **Create/Delete** | ❌ No Access | ❌ No Access |
+| **Manage Users** | ✅ (Global) | ✅ (Own Tenant Only) | ❌ No Access |
+| **Create Warehouses** | ❌ (Out of Scope) | ✅ **Full Control** | ❌ No Access |
+| **Create Catalogs** | ❌ (Out of Scope) | ✅ **Full Control** | ❌ No Access |
+| **Manage Roles** | ❌ (Out of Scope) | ✅ **Full Control** | ❌ No Access |
+| **Query Data** | ❌ **No Access*** | ✅ **Full Access** | ⚠️ **By Permission Only** |
+| **View Audit Logs** | ✅ (System Wide) | ✅ (Own Tenant Only) | ❌ No Access |
 
-### Permissions Granting
+> ***Note on Root Data Access**: By design, the Root user cannot query data (tables/views) directly. They must authenticate as a Tenant Admin or specific User to modify actual data. This enforcement ensures "System Administrators" cannot casually browse sensitive data "Business Data".
 
-Permissions are additive. A user can be granted specific Actions on specific Scopes.
+### Tenant User Permissions (RBAC)
+A standard **Tenant User** starts with **ZERO** permissions. They cannot see Catalogs or query Tables until granted a Role:
 
-| Scope | Description | Implied Children |
-| :--- | :--- | :--- |
-| **Tenant** | Entire Tenant | All Catalogs, Namespaces, Tables |
-| **Catalog** | Specific Catalog | All Namespaces, Tables within |
-| **Namespace** | Specific Namespace | All Tables within |
-| **Table/Asset** | Specific Table | None |
+*   **Reader Role**: Can `SELECT` from tables.
+*   **Writer Role**: Can `INSERT`/`UPDATE`/`DELETE`.
+*   **Discovery Role**: Can search for assets but not query contents.
 
-| Action | Description |
-| :--- | :--- |
-| **Read** | Read metadata and data. |
-| **Write** | Insert, update, delete data. |
-| **Create** | Create new resources (Tables, Namespaces). |
-| **Delete** | Drop resources. |
-| **List** | See that the resource exists (Discovery). |
-| **ManageDiscovery** | Mark assets as strictly discoverable (metadata visible, data locked). |
-
-### Common Scenarios
-
-- **Data Analyst**: Grant `Read` on specific `Namespace`.
-- **Data Engineer**: Grant `Read`, `Write`, `Create` on specific `Catalog`.
-- **Auditor**: Grant `List` (Discovery) on `Tenant` + `Read` on `audit_logs` (conceptually).
+See [Permissions Management](../best-practices/permissions.md) for how to assign these granular rights.
