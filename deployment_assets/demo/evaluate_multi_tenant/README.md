@@ -14,33 +14,62 @@ This scenario demonstrates Pangolin's multi-tenant capabilities with authenticat
 ```bash
 docker compose up -d
 ```
+[View Docker Compose File](./docker-compose.yml)
 *Note: If you encounter "table warehouses has no column named vending_strategy", run `docker compose down -v` to clear stale volumes.*
 
 ### 2. Configure Resources (UI)
 You must create a Tenant and a specific Tenant Admin user to manage resources.
 
-#### Part A: Create Tenant & Admin
+#### Part A: Create Tenant & Admin (Via UI)
 1. Open **Pangolin UI**: http://localhost:3000
 2. Login as **Root**:
    - Username: `admin`
    - Password: `password`
 3. Go to **Tenants** → **Create Tenant**
    - **Name**: `Acme`
-   - Click **Create**
-4. Go to **Users** (Click "Users" in sidebar or go to http://localhost:3000/users)
-   - Click **Create User**
-   - **Username**: `acme_admin`
-   - **Email**: `admin@acme.com`
-   - **Password**: `Password123`
-   - **Role**: `TenantAdmin` (or `tenant-admin`)
-   - **Tenant**: Select `Acme` (Important!)
-   - Click **Create**
+   - **Check** "Create initial admin user"
+   - **Admin Username**: `acme_admin`
+   - **Admin Password**: `Password123`
+   - Click **Create Tenant**
+4. **Copy the Tenant ID** from the list (you will need this to login).
 5. **Logout** (User Icon -> Logout)
+
+> [!TIP]
+> **Alternative: Create Via API**
+> If you prefer using the terminal, you can perform these steps with `curl`:
+>
+> ```bash
+> # 1. Login as Root & Store Token
+> TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/users/login \
+>   -H "Content-Type: application/json" \
+>   -d '{"username":"admin", "password":"password", "tenant_id":null}' | jq -r .token)
+>
+> # 2. Create Tenant & Store ID
+> TENANT_ID=$(curl -s -X POST http://localhost:8080/api/v1/tenants \
+>   -H "Authorization: Bearer $TOKEN" \
+>   -H "Content-Type: application/json" \
+>   -d '{"name": "Acme"}' | jq -r .id)
+>
+> # 3. Create Tenant Admin
+> curl -X POST http://localhost:8080/api/v1/users \
+>   -H "Authorization: Bearer $TOKEN" \
+>   -H "Content-Type: application/json" \
+>   -d "{
+>     \"username\": \"acme_admin\",
+>     \"email\": \"admin@acme.com\",
+>     \"password\": \"Password123\",
+>     \"role\": \"TenantAdmin\",
+>     \"tenant_id\": \"$TENANT_ID\"
+>   }"
+> echo "Tenant ID: $TENANT_ID"
+> ```
 
 #### Part B: Create Warehouse & Catalog
 1. Login as **Tenant Admin**:
-   - Username: `acme_admin`
-   - Password: `Password123`
+   - **Check** "Tenant-specific login"
+   - **Tenant ID**: Paste the ID you copied in Part A.
+   - **Username**: `acme_admin`
+   - **Password**: `Password123`
 2. Go to **Warehouses** → **Create Warehouse**
    - **Name**: `acme_wh`
    - **Provider**: `AWS S3`
@@ -73,6 +102,7 @@ You must create a Tenant and a specific Tenant Admin user to manage resources.
 from pyiceberg.catalog import load_catalog
 from pyiceberg.schema import Schema
 from pyiceberg.types import NestedField, StringType, IntegerType
+import pyarrow as pa
 
 # REPLACE THIS WITH YOUR COPIED TOKEN
 TOKEN = "<YOUR_TOKEN>"
@@ -105,6 +135,20 @@ schema = Schema(
 print("Creating table 'acme_ns.test_table'...")
 table = catalog.create_table("acme_ns.test_table", schema=schema)
 print(f"Created table: {table}")
+
+# 3. Write Data
+print("Writing data to MinIO...")
+df = pa.Table.from_pylist(
+    [{"id": 1, "data": "Hello"}, {"id": 2, "data": "World"}],
+    schema=schema.as_arrow()
+)
+table.append(df)
+print("Data written!")
+
+# 4. Read Data
+print("Reading data back...")
+read_df = table.scan().to_arrow()
+print(read_df.to_pydict())
 ```
 
 ## Service URLs

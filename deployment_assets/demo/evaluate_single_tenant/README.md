@@ -14,6 +14,7 @@ This scenario is designed for quick evaluation without authentication complexity
 ```bash
 docker compose up -d
 ```
+[View Docker Compose File](./docker-compose.yml)
 
 ### 2. Configure Resources
 
@@ -126,6 +127,11 @@ df = pa.Table.from_pylist(
 )
 table.append(df)
 print("Data written to MinIO!")
+
+# 4. Read Data
+print("Reading data back...")
+read_df = table.scan().to_arrow()
+print(read_df.to_pydict())
 ```
 
 ## Service URLs
