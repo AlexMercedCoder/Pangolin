@@ -31,7 +31,8 @@ Connect warehouses to your namespace hierarchies.
 
 ### 3. Service Users
 For machine-to-machine integrations (CI/CD, internal tools).
-- **API Keys**: Generate and rotate long-lived API keys for non-human users.
+- **API Keys**: Generate long-lived API keys for non-human users. Keys are displayed **once** upon creation or rotation.
+- **Key Rotation**: Securely rotate keys to invalidate old credentials without deleting the user.
 - **Scoped Identity**: Service users inherit specific roles just like regular users.
 
 ---

@@ -26,9 +26,10 @@ pangolin-admin rotate-service-user-key --id <service-user-uuid>
 
 ### 2. Via Management UI
 1. Navigate to **Identity -> Service Users**.
-2. Click **Create Service User**.
-3. **Important**: Copy your API key immediately. For security, it will never be displayed again.
-4. To deactivate a key, simply toggle the **Active** switch in the user list.
+2. Click **Create Service User**, enter a name and expiration date.
+3. **Important**: The API key will be displayed in a modal. **Copy it immediately**, as it will never be shown again.
+4. **Key Rotation**: To rotate a key, click the **Rotate Key** icon. A new key will be generated and displayed once; the old key is immediately invalidated.
+5. To deactivate a user, use the delete action or manage their active status (roadmap feature).
 
 ---
 

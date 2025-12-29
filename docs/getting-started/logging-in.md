@@ -60,6 +60,11 @@ a1b2-c3d4-e5f6-g7h8                   Acme Corp     Primary Tenant
 curl -H "Authorization: Bearer <root-token>" http://localhost:8080/api/v1/tenants
 ```
 
+#### 4. Convenience URL (If provided by Administrator)
+If your administrator has provided a link like `http://<pangolin-ui>/login/<your-tenant-uuid>`, navigating to it will automatically:
+1.  Pre-fill your **Tenant UUID**.
+2.  Expand the **Tenant-specific login** section.
+
 ---
 
 ## 🖥️ Logging In via UI
