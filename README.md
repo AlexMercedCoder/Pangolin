@@ -6,6 +6,8 @@
 
 Pangolin is a high-performance catalog designed for modern lakehouse architectures. It supports Git-style branching, multi-tenancy, federated catalogs, and tracks any lakehouse asset type.
 
+![Pangolin Features](./pangolin-summary.jpg)
+
 ## Why Pangolin?
 
 A pangolin is a strong metaphor for a data lakehouse catalog because its defining traits align closely with the core responsibilities of a catalog.
