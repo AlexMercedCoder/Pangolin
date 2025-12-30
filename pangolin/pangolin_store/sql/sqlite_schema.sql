@@ -200,7 +200,6 @@ CREATE TABLE IF NOT EXISTS active_tokens (
     tenant_id TEXT,
     token TEXT NOT NULL,
     expires_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_active_tokens_user ON active_tokens(user_id);
