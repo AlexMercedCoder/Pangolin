@@ -779,6 +779,7 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 - **[Metadata Backends](./backend_storage/README.md)** - Memory, Postgres, MongoDB, and SQLite.
 - **[Asset Management](./features/asset_management.md)** - Tables, Views, and CRUD operations.
 - **[Federated Catalogs](./features/federated_catalogs.md)** - Proxying external REST catalogs.
+- **[Known Issues](./known-issues/README.md)** - Documented limitations and active bugs (e.g., SQL backend quirks).
 
 ---
 
@@ -998,7 +999,7 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
 
 # API Reference Overview
 
-Pangolin exposes a multi-tenant REST API split into three core functional areas: The Standard Iceberg REST API, the Pangolin Management API, and the Identity/Security API.
+Pangolin exposes a multi-tenant REST API split into three core functional areas. All list endpoints support standard pagination via `?limit=N&pageToken=...` (or `offset` for management APIs).
 
 ---
 
@@ -1151,6 +1152,9 @@ Pangolin supports the following roles:
 -   **Root**: Full system access. Can manage tenants, users, and system configuration.
 -   **TenantAdmin**: Tenant-level administration. Can manage warehouses, catalogs, and users within a tenant.
 -   **TenantUser**: Standard access. Can read/write data based on catalog permissions.
+
+> [!NOTE]
+> When using the API directly (e.g., creating users), these roles must be specified in kebab-case: `root`, `tenant-admin`, `tenant-user`.
 
 ## API Key Authentication (Service Users)
 
@@ -10321,8 +10325,12 @@ View all catalogs.
 
 **Syntax**:
 ```bash
-pangolin-admin list-catalogs
+pangolin-admin list-catalogs [--limit <N>] [--offset <N>]
 ```
+
+**Options**:
+- `--limit`: Maximum number of items to return (default: 100)
+- `--offset`: Number of items to skip (default: 0)
 
 ### Create Catalog
 Create a new catalog backed by an existing warehouse.
@@ -11415,9 +11423,36 @@ pangolin-admin revoke-permission <role_name> <action> <resource>
 
 **Examples**:
 ```bash
-# Remove write access for 'analyst' on the sales catalog
+# Revoke 'write' access to 'sales' catalog from 'analyst' role
 pangolin-admin revoke-permission analyst write catalog:sales
 ```
+
+### Assign Role
+Assign a Role to a User (or Service User).
+
+**Syntax**:
+```bash
+pangolin-admin assign-role --user-id <user_id> --role-id <role_id>
+```
+
+**Example**:
+```bash
+pangolin-admin assign-role --user-id 550e8400... --role-id 770e8400...
+```
+
+### Revoke User Role
+Revoke a Role from a User.
+
+**Syntax**:
+```bash
+pangolin-admin revoke-user-role --user-id <user_id> --role-id <role_id>
+```
+
+**Example**:
+```bash
+pangolin-admin revoke-user-role --user-id 550e8400... --role-id 770e8400...
+```
+
 
 
 ---
@@ -11695,9 +11730,9 @@ Use descriptive names that indicate:
 
 **Cause**: Role format is incorrect or case-sensitive.
 
-**Solution**: Use the exact case expected by the API (e.g., `TenantUser`, `TenantAdmin`, `Root`).
-- ✅ `--role "TenantUser"`
-- ❌ `--role "tenant-user"`
+**Solution**: Use the exact case expected by the API (e.g., `tenant-user`, `tenant-admin`, `root`).
+- ✅ `--role "tenant-user"`
+- ❌ `--role "TenantUser"`
 
 ---
 
@@ -12371,13 +12406,13 @@ pangolin-admin create-user <username> --email <email> --role <role> [--password 
 ```
 
 **Options**:
-- `--role`: Assign a role (`Root`, `TenantAdmin`, `TenantUser`).
+- `--role`: Assign a role (`root`, `tenant-admin`, `tenant-user`).
 - `--password`: Provide password directly (omitting will trigger a secure prompt).
 - `--tenant-id`: Target a specific tenant (Root only).
 
 **Example**:
 ```bash
-pangolin-admin create-user alice --email alice@acme.com --role TenantUser
+pangolin-admin create-user alice --email alice@acme.com --role tenant-user
 ```
 
 ### Update User
@@ -14979,7 +15014,7 @@ pangolin-admin create-warehouse --name "prod-s3" --type "s3"
 | Strategy | Status | Notes |
 | :--- | :--- | :--- |
 | **AwsStatic** | ✅ Implemented | Full support for S3/MinIO |
-| **AwsSts** | 📝 Planned | STS integration in progress |
+| **AwsSts** | ✅ Implemented | Full support for temporary credential vending |
 | **AzureSas** | 📝 Planned | Awaiting Azure SDK integration |
 | **GcpDownscoped** | 📝 Planned | Awaiting GCP SDK integration |
 
@@ -15876,7 +15911,7 @@ Content-Type: application/json
   "username": "data_engineer",
   "email": "engineer@example.com",
   "password": "secure-password",
-  "role": "TenantUser"
+  "role": "tenant-user"
 }
 ```
 
@@ -15888,7 +15923,7 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "role_id": "role-uuid"
+  "role-id": "role-uuid"
 }
 ```
 
@@ -15900,8 +15935,8 @@ Authorization: Bearer <admin-token>
 Content-Type: application/json
 
 {
-  "user_id": "optional-user-uuid",
-  "role_id": "optional-role-uuid",
+  "user-id": "optional-user-uuid",
+  "role-id": "optional-role-uuid",
   "scope": "Catalog",
   "resource": "analytics",
   "action": "Read"
@@ -15991,13 +16026,13 @@ Root
 POST /api/v1/users
 {
   "username": "data_engineer",
-  "role": "TenantUser"
+  "role": "tenant-user"
 }
 
 # Grant catalog-level write access
 POST /api/v1/permissions
 {
-  "user_id": "uuid",
+  "user-id": "uuid",
   "scope": "Catalog",
   "resource": "analytics",
   "action": "Write"
@@ -16011,13 +16046,13 @@ POST /api/v1/permissions
 POST /api/v1/users
 {
   "username": "analyst",
-  "role": "TenantUser"
+  "role": "tenant-user"
 }
 
 # Grant namespace-level read access
 POST /api/v1/permissions
 {
-  "user_id": "uuid",
+  "user-id": "uuid",
   "scope": "Namespace",
   "resource": "analytics/sales",
   "action": "Read"
@@ -16031,14 +16066,14 @@ POST /api/v1/permissions
 POST /api/v1/service-users
 {
   "name": "ci_pipeline",
-  "role": "TenantUser",
+  "role": "tenant-user",
   "expires_in_days": 90
 }
 
 # Grant write access to staging catalog
 POST /api/v1/permissions
 {
-  "user_id": "service_user_uuid",
+  "user-id": "service_user_uuid",
   "scope": "Catalog",
   "resource": "staging",
   "action": "Write"
@@ -16593,9 +16628,10 @@ pangolin-admin rotate-service-user-key --id <service-user-uuid>
 
 ### 2. Via Management UI
 1. Navigate to **Identity -> Service Users**.
-2. Click **Create Service User**.
-3. **Important**: Copy your API key immediately. For security, it will never be displayed again.
-4. To deactivate a key, simply toggle the **Active** switch in the user list.
+2. Click **Create Service User**, enter a name and expiration date.
+3. **Important**: The API key will be displayed in a modal. **Copy it immediately**, as it will never be shown again.
+4. **Key Rotation**: To rotate a key, click the **Rotate Key** icon. A new key will be generated and displayed once; the old key is immediately invalidated.
+5. To deactivate a user, use the delete action or manage their active status (roadmap feature).
 
 ---
 
@@ -17354,138 +17390,177 @@ Visit the [Quick Start Guide](./getting_started.md) to perform your first data o
 
 <!-- Source: docs/getting-started/auth-mode.md -->
 
+# Authentication Modes & Guide
 
-# Pangolin Authentication Guide
+Pangolin supports two distinct operational modes: **Auth Mode** (Production) and **No-Auth Mode** (Development). This guide details how to configure, access, and manage identity in both scenarios.
 
-This guide details how authentication works in Pangolin when the system is running in standard production mode (Auth Mode).
+---
 
-## 1. The Root User
+## 1. Auth Mode vs. No-Auth Mode
 
-The **Root User** is the super-administrator of the entire Pangolin system. This user exists outside of any specific tenant.
+| Feature | **Auth Mode** (Default) | **No-Auth Mode** |
+| :--- | :--- | :--- |
+| **Use Case** | Production, Multi-Tenancy, Public Internet | Local Dev, CI/CD, Rapid Prototyping |
+| **Security** | Enforced via JWT Tokens | Disabled (Open Access) |
+| **Identity** | Users must log in; Identity is verified | Requests default to `admin`; Password checks bypassed |
+| **Setup** | Requires `PANGOLIN_JWT_SECRET` | Requires `PANGOLIN_NO_AUTH=true` |
+| **Tenant Context** | Strict isolation; Users belong to 1 Tenant | Default Tenant used automatically if unspecified |
 
-- **Scope**: System-wide. No specific `tenant_id`.
-- **Capabilities**:
-  - Create and delete Tenants.
-  - Create the initial Tenant Admin for a Tenant.
-  - View global system statistics (e.g., total tenants, total tables).
-- **Limitations**:
-  - Cannot query data within a Tenant's catalogs unless explicitly granted permission (conceptually separate).
-  - Cannot be assigned to a specific Tenant.
+---
 
-**Configuration**:
-You can define the initial credentials for the Root User using environment variables. This is critical for securing your production deployment.
+## 2. Configuration (Environment Variables)
 
+### Root User Credentials
+The **Root User** is the system superadmin. These credentials are used to bootstrap the system (create the first tenant).
+
+**Auth Mode**:
 ```bash
-# Default values if not specified: admin / password
+# Secure credentials for production
 export PANGOLIN_ROOT_USER="super_admin"
-export PANGOLIN_ROOT_PASSWORD="complex_secure_password"
+export PANGOLIN_ROOT_PASSWORD="Start123!ComplexPassword"
+export PANGOLIN_JWT_SECRET="<random-32-char-string>"
 ```
 
-**Login Behavior**:
-- **API**: Login with `username` and `password`, leaving `tenant_id` null.
-- **UI**: Use the dedicated Root Login toggle or route (e.g., `/login` with "Root" checked).
-
-## 2. Authentication Flows
-
-### Generating Tokens (API/CLI)
-
-Authentication tokens (JWTs) act as your digital keys.
-
-**For Tenant Admins & Users**:
-You must provide the `tenant_id` along with credentials.
-
+**No-Auth Mode**:
 ```bash
-# Example Request
-POST /api/v1/users/login
+# Credentials are ignored, but variables can still be set
+export PANGOLIN_NO_AUTH="true"
+```
+
+---
+
+## 3. UI Login Nuances
+
+The Management UI adapts its login form based on the detected mode.
+
+### Auth Mode UI
+*   **Standard Login (Root)**: By default, the **"Tenant-specific login"** checkbox is **unchecked**.
+    *   Entering just a Username/Password sends a `null` Tenant ID.
+    *   This triggers the **Root Authentication** flow (checking `PANGOLIN_ROOT_USER`).
+*   **Tenant User Login**: Accessing a specific tenant requires:
+    1.  **Checking** the "Tenant-specific login" box.
+    2.  Entering the **Tenant ID** (UUID).
+    3.  Entering Username/Password.
+*   **Behavior**: Invalid credentials return a 401 error. Session expires when the JWT expires.
+
+### No-Auth Mode UI
+*   **Auto-Detection**: The UI detects `NO_AUTH` state on load.
+*   **Root Access (Bypass)**: To view the Root Dashboard (System Admin view), use these specific credentials:
+    *   **Username**: `root`
+    *   **Password**: `root`
+    *   *Note: This is a client-side convenience bypass that gives you full UI access without needing a server token.*
+*   **Tenant Admin Access**: The UI may auto-login as the default admin, or you can use the credentials below.
+
+---
+
+## 4. Root User Workflows
+
+The Root User's primary job is **System bootstrapping**. They generally do **not** query data.
+
+### Workflow A: Bootstrapping in No-Auth Mode
+When Pangolin starts in No-Auth Mode (`PANGOLIN_NO_AUTH=true`), it automatically:
+1.  Creates a default Tenant (`00000000-0000-0000-0000-000000000000`).
+2.  Creates a default **Tenant Admin** with:
+    *   **Username**: `tenant_admin`
+    *   **Password**: `password123`
+3.  Allows **Anonymous API Access**: Requests with *no* Authorization header are automatically treated as this `tenant_admin`.
+
+### Workflow B: Logging In as Root (Auth Mode)
+
+**Via API (cURL)**:
+```bash
+# Auth Mode: Must provide correct password & null tenant-id
+curl -X POST http://localhost:8080/api/v1/users/login \
+  -d '{"username":"super_admin", "password":"...", "tenant-id":null}'
+```
+
+### Workflow B: Creating a Tenant & Admin (Bootstrapping)
+
+Only the Root user can create tenants.
+
+**1. Create Tenant**:
+```bash
+# Requires Root Token
+POST /api/v1/tenants
 {
-  "username": "data_analyst",
+  "name": "acme-corp"
+}
+# Response: Returns { "id": "uuid-for-acme", ... }
+```
+
+**2. Create Tenant Admin**:
+```bash
+# Requires Root Token
+# Note: You are creating a user *inside* the new tenant
+POST /api/v1/users
+{
+  "username": "acme_admin",
+  "password": "temporary_password",
+  "tenant_id": "uuid-for-acme",  # Critical: Links user to tenant
+  "role": "TenantAdmin"
+}
+```
+
+---
+
+## 5. Token Generation Guide
+
+Authentication tokens (JWTs) act as your API keys for all operations.
+
+### Generating a Token (Generic)
+
+**Endpoint**: `POST /api/v1/tokens` (Requires Admin privileges) or `POST /api/v1/users/login` (Self-service).
+
+**Payload**:
+```json
+{
+  "username": "data_engineer",
   "password": "secure_password",
-  "tenant_id": "123e4567-e89b-12d3..."
+  "tenant_id": "uuid-for-acme"
 }
+```
 
-# Response
+**Response**:
+```json
 {
-  "token": "eyJhbGciOiJIUz...",
-  "expires_in": 86400
+  "token": "eyJhbGciOiJIUzI1Ni...",
+  "expires_in": 86400,
+  "tenant_id": "uuid-for-acme"
 }
 ```
 
-**For Root**:
-Omit the `tenant_id`.
-
-### Logging into the UI
-
-The UI login page adapts based on the user type:
-
-1.  **Tenant Login**:
-    - **Username**: Your username.
-    - **Password**: Your password.
-    - **Tenant ID**: The UUID of your organization/tenant.
-2.  **Root Login**:
-    - Click "Login as System Root".
-    - Enter only Username and Password.
-
-## 3. Testing with PyIceberg
-
-When running in Auth Mode, PyIceberg requires a valid token and the tenant context.
-
-```python
-from pyiceberg.catalog import load_catalog
-
-# 1. Obtain a token (e.g., via script or manually from UI)
-token = "YOUR_GENERATED_JWT_TOKEN"
-tenant_id = "YOUR_TENANT_UUID"
-
-# 2. Configure PyIceberg
-catalog = load_catalog(
-    "production",
-    **{
-        "type": "rest",
-        "uri": "http://localhost:8080/api/v1/catalogs/sales/iceberg",
-        "token": token,
-        # Required for Multi-tenancy routing
-        "header.X-Pangolin-Tenant": tenant_id
-    }
-)
+### Using the Token
+Pass it in the HTTP Header:
+```http
+Authorization: Bearer eyJhbGciOiJIUzI1Ni...
 ```
 
-## 4. Permissions Matrix
+---
 
-Pangolin uses a hierarchical RBAC system.
+## 6. Permissions Matrix: Who can touch what?
 
-### Roles
+Pangolin employs a strict hierarchy. Here is what each user type can access.
 
-| Role | Scope | Description |
-| :--- | :--- | :--- |
-| **Root** | System | Manages Tenants. Cannot manage data inside a tenant directly without assuming a tenant context (if allowed). |
-| **Tenant Admin** | Tenant | Full control over a specific Tenant's resources (Users, Catalogs, Roles). |
-| **Tenant User** | Tenant | Zero access by default. Must be granted specific permissions. |
+| Resource | **Root User** | **Tenant Admin** | **Tenant User** |
+| :--- | :--- | :--- | :--- |
+| **Manage Tenants** | ✅ **Create/Delete** | ❌ No Access | ❌ No Access |
+| **Manage Users** | ✅ (Global) | ✅ (Own Tenant Only) | ❌ No Access |
+| **Create Warehouses** | ❌ (Out of Scope) | ✅ **Full Control** | ❌ No Access |
+| **Create Catalogs** | ❌ (Out of Scope) | ✅ **Full Control** | ❌ No Access |
+| **Manage Roles** | ❌ (Out of Scope) | ✅ **Full Control** | ❌ No Access |
+| **Query Data** | ❌ **No Access*** | ✅ **Full Access** | ⚠️ **By Permission Only** |
+| **View Audit Logs** | ✅ (System Wide) | ✅ (Own Tenant Only) | ❌ No Access |
 
-### Permissions Granting
+> ***Note on Root Data Access**: By design, the Root user cannot query data (tables/views) directly. They must authenticate as a Tenant Admin or specific User to modify actual data. This enforcement ensures "System Administrators" cannot casually browse sensitive data "Business Data".
 
-Permissions are additive. A user can be granted specific Actions on specific Scopes.
+### Tenant User Permissions (RBAC)
+A standard **Tenant User** starts with **ZERO** permissions. They cannot see Catalogs or query Tables until granted a Role:
 
-| Scope | Description | Implied Children |
-| :--- | :--- | :--- |
-| **Tenant** | Entire Tenant | All Catalogs, Namespaces, Tables |
-| **Catalog** | Specific Catalog | All Namespaces, Tables within |
-| **Namespace** | Specific Namespace | All Tables within |
-| **Table/Asset** | Specific Table | None |
+*   **Reader Role**: Can `SELECT` from tables.
+*   **Writer Role**: Can `INSERT`/`UPDATE`/`DELETE`.
+*   **Discovery Role**: Can search for assets but not query contents.
 
-| Action | Description |
-| :--- | :--- |
-| **Read** | Read metadata and data. |
-| **Write** | Insert, update, delete data. |
-| **Create** | Create new resources (Tables, Namespaces). |
-| **Delete** | Drop resources. |
-| **List** | See that the resource exists (Discovery). |
-| **ManageDiscovery** | Mark assets as strictly discoverable (metadata visible, data locked). |
-
-### Common Scenarios
-
-- **Data Analyst**: Grant `Read` on specific `Namespace`.
-- **Data Engineer**: Grant `Read`, `Write`, `Create` on specific `Catalog`.
-- **Auditor**: Grant `List` (Discovery) on `Tenant` + `Read` on `audit_logs` (conceptually).
+See [Permissions Management](../best-practices/permissions.md) for how to assign these granular rights.
 
 
 ---
@@ -18622,6 +18697,11 @@ a1b2-c3d4-e5f6-g7h8                   Acme Corp     Primary Tenant
 curl -H "Authorization: Bearer <root-token>" http://localhost:8080/api/v1/tenants
 ```
 
+#### 4. Convenience URL (If provided by Administrator)
+If your administrator has provided a link like `http://<pangolin-ui>/login/<your-tenant-uuid>`, navigating to it will automatically:
+1.  Pre-fill your **Tenant UUID**.
+2.  Expand the **Tenant-specific login** section.
+
 ---
 
 ## 🖥️ Logging In via UI
@@ -19066,8 +19146,8 @@ catalog = load_catalog(
     "my_catalog",
     **{
         "type": "rest",
-        "uri": "http://localhost:8080",
-        "prefix": "my_catalog",
+        "type": "rest",
+        "uri": "http://localhost:8080/api/v1/catalogs/my_catalog",
         "token": "your_jwt_token",
         "header.X-Pangolin-Tenant": "tenant_id",
         # Client-side credentials (if not using vending)
@@ -19109,6 +19189,76 @@ catalog = load_catalog(
 4. **Match bucket names** between warehouse config and catalog storage_location
 5. **Use standard ports** for MinIO (9000) to avoid PyIceberg issues
 6. **Enable path-style access** for MinIO and S3-compatible services
+
+
+---
+
+<!-- Source: docs/known-issues/README.md -->
+
+
+# Known Issues
+
+This section documents verified issues, limitations, and architectural quirks present in the current release.
+
+## v0.4.0
+
+*   [SQL Backend Token Listing (SQLite/Postgres)](./token_listing_sqlite_join.md)
+    *   **Description**: Active token lists may be empty for Root users or ephemeral accounts when using SQL backends due to a strict `JOIN` dependency.
+    *   **Status**: Identified. Fix proposed for v0.5.x.
+
+
+---
+
+<!-- Source: docs/known-issues/token_listing_sqlite_join.md -->
+
+
+# Known Issue: SQL Backend Token Listing for Root/Ephemeral Users
+
+**Affected Versions**: v0.4.0 and prior  
+**Affected Backends**: SQLite, PostgreSQL  
+**Unaffected Backends**: Memory, MongoDB  
+
+## Summary
+When listing active tokens via `/api/v1/users/me/tokens` or `/api/v1/users/{id}/tokens`, SQL-based backends (SQLite, PostgreSQL) fail to return results for users who do not exist in the `users` database table (e.g., Ephemeral Root Users) or if there is a data mismatch in the `JOIN` operation. This results in empty token lists even when valid tokens exist.
+
+## Technical Detail
+The `list_active_tokens` implementation in SQL backends relies on a `JOIN` between the `active_tokens` table and the `users` table to filter tokens by `tenant_id`:
+
+```sql
+SELECT t.token_id, t.user_id, t.token, t.expires_at 
+FROM active_tokens t 
+JOIN users u ON t.user_id = u.id 
+WHERE u.tenant_id = ? ...
+```
+
+### The Problem
+1.  **Ephemeral Root Users**: The default "System Root" (`admin`/`password` or env vars) is often ephemeral and does not have a persisted row in the `users` table.
+    *   **Result**: The `JOIN` fails (Inner Join finds no matching `user_id`), so the query returns 0 rows.
+2.  **Schema Sensitivity**: Any mismatch between the token's stored `user_id` and the `users` table record causes specific tokens to disappear from lists.
+
+### Comparison with Other Backends
+*   **Memory Store & MongoDB**: These backends store the `tenant_id` directly on the token record/document (`TokenInfo`). The list operation performs a direct filter on the tokens collection without needing to look up the user. This makes them robust for all user types.
+
+## Workaround
+*   **Use Memory Store** for robust local development involving Root user token management.
+*   **Persist the User**: If using SQLite/Postgres, ensure the user (even Root) is explicitly created in the `users` table with the correct Tenant ID.
+    *   *Note*: Root users are typically tenant-less, which makes the `WHERE u.tenant_id = ?` clause problematic even if the user exists, unless the query logic handles `NULL` tenants (which it currently doesn't for tenant-scoped inputs).
+
+## Future Fix
+The intended fix for v0.5.x is to denormalize the `tenant_id` column into the `active_tokens` table for SQL backends, mirroring the NoSQL/Memory architecture.
+
+**Proposed Schema Change**:
+```sql
+ALTER TABLE active_tokens ADD COLUMN tenant_id TEXT;
+CREATE INDEX idx_tokens_tenant ON active_tokens(tenant_id);
+-- Migration logic to populate from users or defaults
+```
+
+**Proposed Query Change**:
+```sql
+SELECT * FROM active_tokens WHERE tenant_id = ? AND expires_at > ?
+-- No JOIN required
+```
 
 
 ---
@@ -19590,6 +19740,1199 @@ catalog = load_catalog(
 
 ---
 
+<!-- Source: docs/reference/README.md -->
+
+# Pangolin Reference Documentation
+
+This section contains detailed reference guides for all major Pangolin concepts and operations, covering API, CLI, Python SDK, and UI usage.
+
+## Core Concepts
+*   [**Tenants**](./tenants.md): Managing isolation units and context switching.
+*   [**Users**](./users.md): Identity management for humans.
+*   [**Access Control**](./access_control.md): RBAC (Roles) and ABAC/TBAC (Tags).
+*   [**Service Users**](./service_users.md): Programmatic access keys for automation.
+*   [**Tokens**](./tokens.md): Session management and authentication.
+*   [**Auditing**](./auditing.md): Governance logs and monitoring.
+
+## Storage & Catalogs
+*   [**Warehouses**](./warehouses.md): Configuring object storage (S3, Azure, GCS).
+*   [**Catalogs**](./catalogs.md): Managing local and federated Iceberg catalogs.
+
+## Data Management
+*   [**Assets**](./assets.md): Managing tables, views, and generic files.
+*   [**Business Metadata**](./metadata.md): Tagging and custom properties.
+*   [**Version Control**](./version_control.md): Branching, merging, and conflict resolution.
+
+
+---
+
+<!-- Source: docs/reference/access_control.md -->
+
+# Access Control Reference (RBAC & TBAC/ABAC)
+
+Pangolin uses a multi-layered security model:
+1.  **Tenant Isolation**: Strict separation of resources between tenants.
+2.  **Role-Based Access Control (RBAC)**: Permissions assigned to users via roles.
+3.  **Tag-Based Access Control (TBAC/ABAC)**: Permissions granted on assets based on their tags (business metadata).
+
+## 1. Concepts
+
+*   **Tenant Isolation**: Users are confined to their tenant. Cross-tenant access is impossible except for the Root user.
+*   **Roles**:
+    *   `root`: Global superuser.
+    *   `tenant-admin`: Admin for a specific tenant.
+    *   `tenant-user`: Regular user, requires explicit permissions.
+*   **Permissions**: 
+    *   **Scopes**: `Catalog`, `Namespace`, `Asset`, `Tag`.
+    *   **Actions**: `Read`, `Write`, `Delete`, `Admin`.
+
+## 2. API
+
+**Base Endpoint**: `/api/v1/permissions`
+
+### Grant Permission (Standard RBAC)
+*   **Method**: `POST`
+*   **Body**:
+    ```json
+    {
+      "user_id": "uuid-of-user",
+      "scope": "Catalog",
+      "resource": "analytics",
+      "action": "Read"
+    }
+    ```
+
+### Grant Permission (Tag-Based / ABAC)
+Grant access to *any* asset that checks the "PII" tag.
+*   **Body**:
+    ```json
+    {
+      "user_id": "uuid-of-compliance-officer",
+      "scope": "Tag",
+      "resource": "PII", 
+      "action": "Read"
+    }
+    ```
+    *Note: For Tag scope, the `resource` field is the Tag Name.*
+
+### Revoke Permission
+*   **Method**: `DELETE`
+*   **Path**: `/api/v1/permissions/{permission_id}`
+
+### List Permissions
+*   **Method**: `GET`
+*   **Path**: `/api/v1/permissions`
+*   **Params**: `user={uuid}`, `role={role_name}`
+
+---
+
+## 3. CLI
+
+### Grant Permission
+```bash
+# Grant Read on 'analytics' catalog (RBAC)
+pangolin-admin grant-permission \
+  --username alice \
+  --action Read \
+  --resource analytics
+
+# Grant Read on all assets tagged 'Public' (TBAC)
+pangolin-admin grant-permission \
+  --username alice \
+  --action Read \
+  --scope Tag \
+  --resource Public
+```
+
+### Revoke Permission
+```bash
+pangolin-admin revoke-permission --id <permission-uuid>
+```
+
+### List Permissions
+```bash
+# List all permissions
+pangolin-admin list-permissions
+
+# Filter by user
+pangolin-admin list-permissions --user alice
+```
+
+---
+
+## 4. Python SDK (`pypangolin`)
+
+### Grant
+```python
+# RBAC
+client.permissions.grant(
+    user_id="uuid...",
+    scope="Catalog",
+    resource="analytics", 
+    action="Read"
+)
+
+# TBAC (Tag-Based)
+client.permissions.grant(
+    user_id="uuid...",
+    scope="Tag",
+    resource="Confidential", 
+    action="Read"
+)
+```
+
+### List
+```python
+perms = client.permissions.list(user_id="uuid...")
+for p in perms:
+    print(f"{p.scope}: {p.resource} -> {p.action}")
+```
+
+### Revoke
+```python
+client.permissions.revoke(permission_id="uuid...")
+```
+
+---
+
+## 5. UI
+
+1.  **Log in** as a **Tenant Admin**.
+2.  Navigate to **Permissions**.
+3.  **Grant**: Click **"Grant Permission"**.
+    *   Select **User** or **Role**.
+    *   Select **Scope**: Choose **Tag** for ABAC/TBAC strategies.
+    *   Enter **Resource**: The name of the tag (e.g., `PII`, `Financial`).
+    *   Select **Action**.
+    *   Click **Grant**.
+
+
+---
+
+<!-- Source: docs/reference/assets.md -->
+
+# Assets Reference
+
+Assets represent data entities (Tables, Views) or generic files managed in catalogs.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/assets` or via Catalog structure.
+
+### Get Asset by ID
+*   **Method**: `GET`
+*   **Path**: `/api/v1/assets/{asset_id}`
+
+### Search Assets
+*   **Method**: `GET`
+*   **Path**: `/api/v1/search/assets`
+*   **Params**: `q={query}`
+
+### Register Generic Asset
+*   **Method**: `POST`
+*   **Path**: `/api/v1/catalogs/{catalog}/namespaces/{ns}/assets`
+*   **Body**:
+    ```json
+    {
+      "name": "raw-csv",
+      "kind": "file",
+      "location": "s3://bucket/path/file.csv",
+      "properties": {}
+    }
+    ```
+
+---
+
+## 2. CLI
+
+### Search
+```bash
+pangolin-admin search "sales"
+```
+
+### Get Details
+```bash
+pangolin-admin get-asset-details --id <uuid>
+```
+
+### View Catalog Tree
+```bash
+pangolin-admin explorer tree --catalog analytics
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### Search
+```python
+results = client.search.search(query="sales", limit=5)
+for r in results:
+    print(r.name, r.catalog, r.namespace)
+```
+
+### Get Asset
+```python
+# By ID
+asset = client.search.get_asset("uuid")
+
+# By Path
+asset = client.catalogs.get("analytics").namespaces("sales").tables("transactions").get()
+```
+
+### Register Generic Asset
+```python
+client.catalogs.namespaces("analytics").register_asset(
+    namespace="raw",
+    name="data-file",
+    kind="csv",
+    location="s3://bucket/data.csv"
+)
+```
+
+---
+
+## 4. UI
+
+1.  **Log in**.
+2.  Navigate to **Explorer** (or **Catalogs > [Select Catalog]**).
+3.  **Browse**: Use the sidebar tree to navigate namespaces.
+4.  **Search**: Use the global search bar at the top.
+5.  **Details**: Click an asset to view Schema, History, and Metadata.
+
+
+---
+
+<!-- Source: docs/reference/auditing.md -->
+
+# Auditing Reference
+
+Pangolin provides comprehensive audit logs for governance.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/audit`
+
+### List Audit Events
+*   **Method**: `GET`
+*   **Path**: `/api/v1/audit`
+*   **Parameters**:
+    *   `user_id`: Filter by actor.
+    *   `action`: Filter by action (e.g., `create_table`).
+    *   `resource_type`: Filter by type (e.g., `Catalog`).
+    *   `result`: `Success` or `Failure`.
+    *   `limit`, `offset`: Pagination.
+
+```bash
+curl "http://localhost:8080/api/v1/audit?action=create_table&limit=10" \
+  -H "Authorization: Bearer <token>"
+```
+
+### Get Event Details
+*   **Method**: `GET`
+*   **Path**: `/api/v1/audit/{event_id}`
+
+---
+
+## 2. CLI
+
+### List Events
+```bash
+# List recent
+pangolin-admin list-audit-events --limit 20
+
+# Filter by user
+pangolin-admin list-audit-events --user-id <uuid>
+
+# Filter by failure
+pangolin-admin list-audit-events --result Failure
+```
+
+### Get Event
+```bash
+pangolin-admin get-audit-event --id <uuid>
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### List Events
+```python
+events = client.audit.list(
+    limit=50,
+    action="delete_table",
+    result="Success"
+)
+for e in events:
+    print(e.timestamp, e.username, e.action, e.resource_name)
+```
+
+### Get Event
+```python
+event = client.audit.get("event-uuid")
+print(event.metadata)
+```
+
+---
+
+## 4. UI
+
+1.  **Log in** as **Tenant Admin**.
+2.  Navigate to **Audit Logs** (usually in the **Governance** or **Admin** section).
+3.  **Browse**: View the chronological list of events.
+4.  **Filter**: Use the filter bar to search by Actor, Action, or Status.
+5.  **Details**: Click on an event row to see full JSON metadata (IP address, User Agent, request details).
+
+
+---
+
+<!-- Source: docs/reference/catalogs.md -->
+
+# Catalogs Reference
+
+Catalogs are Iceberg REST catalogs. Pangolin supports two types:
+*   **Local**: Managed purely by Pangolin, stored in a Warehouse.
+*   **Federated**: Proxies to another Iceberg catalog (e.g., Dremio, Snowflake, Unity, Glue).
+
+## 1. API
+
+### Local Catalogs
+*   **Endpoint**: `/api/v1/catalogs`
+*   **Method**: `POST`
+*   **Body**:
+    ```json
+    {
+      "name": "analytics",
+      "warehouse_name": "s3-prod",
+      "catalog_type": "Local"
+    }
+    ```
+
+### Federated Catalogs
+*   **Endpoint**: `/api/v1/federated-catalogs`
+*   **Method**: `POST`
+*   **Body**:
+    ```json
+    {
+      "name": "snowflake-mirror",
+      "config": {
+        "uri": "https://...",
+        "warehouse": "optional-warehouse-ref",
+        "credential": "optional-credential",
+        "properties": {}
+      }
+    }
+    ```
+
+---
+
+## 2. CLI
+
+### Create Local Catalog
+```bash
+pangolin-admin create-catalog analytics --warehouse s3-prod
+```
+
+### Create Federated Catalog
+```bash
+pangolin-admin create-federated-catalog snowflake-mirror \
+  --storage-location "s3://bucket/prefix" \
+  -P uri="https://snowflake..." \
+  -P token="sess:..."
+```
+
+### Sync Federated Catalog
+Triggers a metadata discovery from the remote catalog.
+```bash
+pangolin-admin sync-federated-catalog snowflake-mirror
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### Create Local Catalog
+```python
+cat = client.catalogs.create(
+    name="analytics",
+    warehouse="s3-prod",
+    type="Local"
+)
+```
+
+### Create Federated Catalog
+```python
+fed_cat = client.federated_catalogs.create(
+    name="snowflake-mirror",
+    uri="https://...",
+    properties={"warehouse": "my-wh"}
+)
+```
+
+### Sync
+```python
+client.federated_catalogs.sync("snowflake-mirror")
+```
+
+---
+
+## 4. UI
+
+1.  **Log in** as a **Tenant Admin**.
+2.  Navigate to **Catalogs** in the sidebar.
+3.  **Create**: Click **"Create Catalog"**.
+    *   **Name**: Identifier.
+    *   **Type**: Choose **Local** (Standard) or **Federated**.
+    *   **Details**:
+        *   Local: Select a **Warehouse**.
+        *   Federated: Enter URI and credentials.
+    *   Click **Save**.
+4.  **Browse**: Click on a catalog name to open the **Data Explorer**.
+
+
+---
+
+<!-- Source: docs/reference/metadata.md -->
+
+# Business Metadata Reference
+
+Metadata allows attaching custom key-value pairs to assets for governance and discovery.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/metadata`
+
+### Set Metadata
+*   **Method**: `PUT`
+*   **Path**: `/api/v1/metadata`
+*   **Body**:
+    ```json
+    {
+      "entity_type": "Asset",
+      "entity_id": "uuid...",
+      "key": "owner",
+      "value": "data-team"
+    }
+    ```
+
+### Get Metadata
+*   **Method**: `GET`
+*   **Path**: `/api/v1/metadata/{entity_type}/{entity_id}`
+
+### Delete Metadata
+*   **Method**: `DELETE`
+*   **Path**: `/api/v1/metadata/{entity_type}/{entity_id}/{key}`
+
+---
+
+## 2. CLI
+
+### Set Metadata
+```bash
+pangolin-admin set-metadata \
+  --entity-type Asset \
+  --entity-id <uuid> \
+  --key owner \
+  --value data-team
+```
+
+### Get Metadata
+```bash
+pangolin-admin get-metadata \
+  --entity-type Asset \
+  --entity-id <uuid>
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### Set
+```python
+client.metadata.set(
+    entity_type="Asset",
+    entity_id="uuid...",
+    properties={"owner": "data-team", "sla": "24h"}
+)
+```
+
+### Get
+```python
+meta = client.metadata.get("Asset", "uuid...")
+print(meta)
+```
+
+---
+
+## 4. UI
+
+1.  Navigate to an **Asset** in the **Explorer**.
+2.  Select the **Metadata** tab.
+3.  **Add**: Click "Add Property", enter key/value, Save.
+4.  **Edit/Delete**: Use the icons next to existing properties.
+
+
+---
+
+<!-- Source: docs/reference/service_users.md -->
+
+# Service Users Reference
+
+Service Users are headless accounts for machine-to-machine interaction (CI/CD, ETL, etc.). They authenticate via **API Keys**.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/service-users`
+
+### Create Service User
+*   **Method**: `POST`
+*   **Body**:
+    ```json
+    {
+      "name": "ci-bot",
+      "role": "tenant-user",
+      "expires_in_days": 90
+    }
+    ```
+*   **Response**: Returns the **API Key** (only once).
+
+### Rotate Key
+*   **Method**: `POST`
+*   **Path**: `/api/v1/service-users/{id}/rotate`
+
+---
+
+## 2. CLI
+
+### Create
+```bash
+pangolin-admin create-service-user \
+  --name "ci-bot" \
+  --role "tenant-user" \
+  --expires-in-days 365
+```
+**Output**:
+```
+API Key: pgl_AbCd...
+(Save this key!)
+```
+
+### List
+```bash
+pangolin-admin list-service-users
+```
+
+### Rotate Key
+```bash
+pangolin-admin rotate-service-user-key --id <uuid>
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### Create
+```python
+su = client.service_users.create(
+    name="airflow-bot",
+    role="tenant-user",
+    expires_in_days=30
+)
+print(f"ID: {su.id}")
+print(f"Key: {su.api_key}") # Only available here
+```
+
+### Rotate
+```python
+new_creds = client.service_users.rotate_key("uuid...")
+print(f"New Key: {new_creds.api_key}")
+```
+
+---
+
+## 4. UI
+
+1.  **Log in** as a **Tenant Admin**.
+2.  Navigate to **Service Users** (often a tab within **Users** or a separate sidebar item).
+3.  **Create**: Click **"Create Service User"**.
+    *   Enter Name and Role.
+    *   Set Expiration.
+    *   **COPY THE KEY**: A modal will show the key. Copy it immediately.
+4.  **Rotate**: Select a service user -> **Rotate Key**. A new key is generated and shown.
+
+
+---
+
+<!-- Source: docs/reference/tenants.md -->
+
+# Tenants Reference
+
+Tenants are the top-level isolation unit in Pangolin. Each tenant has its own set of users, catalogs, and resources.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/tenants`
+
+### List Tenants
+*   **Method**: `GET`
+*   **Path**: `/api/v1/tenants`
+*   **Auth**: Root Access Token
+*   **Parameters**:
+    *   `limit` (query, optional): Max results
+    *   `offset` (query, optional): Pagination offset
+
+```bash
+curl -X GET http://localhost:8080/api/v1/tenants \
+  -H "Authorization: Bearer <root-token>"
+```
+
+### Create Tenant
+*   **Method**: `POST`
+*   **Path**: `/api/v1/tenants`
+*   **Auth**: Root Access Token
+*   **Body**:
+    ```json
+    {
+      "name": "acme-corp"
+    }
+    ```
+
+```bash
+curl -X POST http://localhost:8080/api/v1/tenants \
+  -H "Authorization: Bearer <root-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "acme-corp"}'
+```
+
+### Initial Administrator
+When a tenant is created, you usually create a `tenant-admin` user immediately after, or use the CLI which can do both.
+
+---
+
+## 2. CLI
+
+The `pangolin-admin` CLI provides convenient commands for tenant management.
+
+### List Tenants
+```bash
+pangolin-admin list-tenants
+```
+
+### Create Tenant
+You can create a tenant and an optional admin user in one go.
+
+```bash
+# Create tenant only
+pangolin-admin create-tenant --name "acme-corp"
+
+# Create tenant AND admin user
+pangolin-admin create-tenant \
+  --name "acme-corp" \
+  --admin-username "admin" \
+  --admin-password "securePass123"
+```
+
+### Switch Context
+To perform operations on a specific tenant using the CLI:
+
+```bash
+pangolin-admin use "acme-corp"
+```
+This sets the context for subsequent commands (like creating users or warehouses).
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### List Tenants
+```python
+from pypangolin import PangolinClient
+
+client = PangolinClient(uri="http://localhost:8080", username="root", password="root_password")
+
+tenants = client.tenants.list()
+for t in tenants:
+    print(t.name, t.id)
+```
+
+### Create Tenant
+```python
+new_tenant = client.tenants.create(name="acme-corp")
+print(f"Created tenant: {new_tenant.id}")
+```
+
+### Switch Context
+```python
+# Switch client context to specific tenant
+client.tenants.switch("acme-corp")
+
+# Subsequent calls now apply to acme-corp
+client.users.list() 
+```
+
+---
+
+## 4. UI
+
+1.  **Log in** as the **Root User**.
+2.  Navigate to **Tenants** in the sidebar.
+3.  **List**: You will see a table of all existing tenants.
+4.  **Create**: Click the **"Create Tenant"** button.
+    *   Enter the Tenant Name.
+    *   (Optional) Enter Admin Username/Password to auto-provision an admin.
+    *   Click **Save**.
+5.  **Switch Context**: Click the **"Switch"** (or log-in) icon next to a tenant to switch your active session to that tenant.
+
+
+---
+
+<!-- Source: docs/reference/tokens.md -->
+
+# Tokens Reference
+
+Pangolin uses **JSON Web Tokens (JWT)** for user authentication.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/tokens`
+
+### Create Token (Login)
+*   **Method**: `POST`
+*   **Path**: `/api/v1/users/login`
+*   **Body**:
+    ```json
+    {
+      "username": "alice",
+      "password": "...",
+      "tenant_id": "optional-uuid"
+    }
+    ```
+
+### Revoke Current Token (Logout)
+*   **Method**: `POST`
+*   **Path**: `/api/v1/tokens/revoke`
+*   **Auth**: Bearer Token
+*   **Body**: `{}`
+
+### Revoke Specific Token
+*   **Method**: `POST`
+*   **Path**: `/api/v1/tokens/revoke/{token_id}`
+*   **Auth**: Admin
+
+### List User Tokens
+*   **Method**: `GET`
+*   **Path**: `/api/v1/users/{user_id}/tokens`
+
+---
+
+## 2. CLI
+
+### List User Tokens
+```bash
+pangolin-admin list-user-tokens --user-id <uuid>
+```
+
+### Revoke Token
+```bash
+# Revoke your current session
+pangolin-admin revoke-token
+
+# Revoke a specific token by ID
+pangolin-admin revoke-token-by-id --id <token-uuid>
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### List Tokens
+```python
+tokens = client.tokens.list_user_tokens("user-uuid")
+for t in tokens:
+    print(t.token_id, t.is_valid)
+```
+
+### Revoke Token
+```python
+client.tokens.revoke_by_id("token-uuid")
+```
+
+---
+
+## 4. UI
+
+1.  **Log in** as **Tenant Admin**.
+2.  Navigate to **Users**.
+3.  Select a specific user (click name or "Edit").
+4.  Navigate to the **Sessions/Tokens** tab.
+5.  **List**: You will see active sessions.
+6.  **Revoke**: Click **Revoke** next to a session to invalidate it immediately.
+
+
+---
+
+<!-- Source: docs/reference/users.md -->
+
+# Users Reference
+
+Users are identities that can log in and interact with Pangolin resources. Users (except Root) are scoped to a specific Tenant.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/users`
+
+### List Users
+*   **Method**: `GET`
+*   **Path**: `/api/v1/users`
+*   **Auth**: Tenant Admin Token (or Root with Tenant Context)
+*   **Headers**: `X-Pangolin-Tenant: <tenant-uuid>` (if using Root token)
+
+```bash
+curl -X GET http://localhost:8080/api/v1/users \
+  -H "Authorization: Bearer <token>"
+```
+
+### Create User
+*   **Method**: `POST`
+*   **Path**: `/api/v1/users`
+*   **Body**:
+    ```json
+    {
+      "username": "alice",
+      "email": "alice@example.com",
+      "password": "password123",
+      "role": "tenant-user",
+      "tenant_id": "<optional-uuid>" 
+    }
+    ```
+    > **Note**: `role` must be `tenant-user`, `tenant-admin`, or `root`.
+
+```bash
+curl -X POST http://localhost:8080/api/v1/users \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "email": "alice@ex.com", "password": "pw", "role": "tenant-user"}'
+```
+
+---
+
+## 2. CLI
+
+Ensure you have selected a tenant first using `pangolin-admin use <tenant>`.
+
+### List Users
+```bash
+pangolin-admin list-users
+```
+
+### Create User
+```bash
+# Create a standard user
+pangolin-admin create-user alice \
+  --email alice@example.com \
+  --role tenant-user \
+  --password "securePass123"
+
+# Create a tenant admin
+pangolin-admin create-user bob-admin \
+  --email bob@example.com \
+  --role tenant-admin
+```
+
+### Delete User
+```bash
+pangolin-admin delete-user alice
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### List Users
+```python
+users = client.users.list()
+for u in users:
+    print(u.username, u.role)
+```
+
+### Create User
+```python
+# Create standard user
+user = client.users.create(
+    username="alice",
+    email="alice@example.com",
+    role="tenant-user", # Case-sensitive: tenant-user or tenant-admin
+    password="password123"
+)
+print(f"Created user {user.id}")
+```
+
+---
+
+## 4. UI
+
+1.  **Log in** as a **Tenant Admin** (or Root switched to a tenant).
+2.  Navigate to **Users** in the sidebar.
+3.  **List**: You will see a table of users in the current tenant.
+4.  **Create**: Click **"Create User"**.
+    *   Fill in Username, Email, Password.
+    *   Select Role: **Tenant User** or **Tenant Admin**.
+    *   Click **Create**.
+5.  **Manage**: Click the "Edit" icon to update details or "Trash" icon to delete.
+
+
+---
+
+<!-- Source: docs/reference/version_control.md -->
+
+# Version Control Reference
+
+Pangolin operates like Git for data. You can Branch, Tag, and Merge data across namespaces.
+
+## 1. API
+
+### Create Branch
+*   **Method**: `POST`
+*   **Path**: `/api/v1/branches`
+*   **Body**:
+    ```json
+    {
+      "catalog": "analytics",
+      "name": "feature-branch",
+      "source_ref": "main"
+    }
+    ```
+
+### Create Merge Operation
+*   **Method**: `POST`
+*   **Path**: `/api/v1/merges`
+*   **Body**:
+    ```json
+    {
+      "catalog": "analytics",
+      "source": "feature-branch",
+      "target": "main"
+    }
+    ```
+
+### List Conflicts
+*   **Method**: `GET`
+*   **Path**: `/api/v1/merges/{merge_id}/conflicts`
+
+### Resolve Conflict
+*   **Method**: `POST`
+*   **Path**: `/api/v1/merges/conflicts/{conflict_id}/resolve`
+*   **Body**: `{"strategy": "KeepSource"}` (or `KeepTarget`)
+
+### Complete Merge
+*   **Method**: `POST`
+*   **Path**: `/api/v1/merges/{merge_id}/complete`
+
+---
+
+## 2. CLI
+
+### Branching
+```bash
+pangolin-admin create-branch \
+  --catalog analytics \
+  --name dev \
+  --from main
+
+pangolin-admin list-branches --catalog analytics
+```
+
+### Merging
+```bash
+# Start Merge
+pangolin-admin create-merge \
+  --catalog analytics \
+  --source dev \
+  --target main
+
+# Check Conflicts
+pangolin-admin list-merge-conflicts --id <merge-id>
+
+# Resolve
+pangolin-admin resolve-merge-conflict \
+  --conflict-id <uuid> \
+  --strategy KeepSource
+
+# Complete
+pangolin-admin complete-merge --id <merge-id>
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### Branching
+```python
+client.branches.create(
+    catalog="analytics",
+    name="experiment",
+    source="main"
+)
+```
+
+### Merging
+```python
+# 1. Start
+merge_op = client.merge_operations.create(
+    catalog="analytics",
+    source="experiment",
+    target="main"
+)
+
+# 2. Check Conflicts
+if merge_op.conflicts:
+    conflicts = client.merge_operations.list_conflicts(merge_op.id)
+    for c in conflicts:
+        client.merge_operations.resolve_conflict(c.id, "KeepSource")
+
+# 3. Complete
+client.merge_operations.complete(merge_op.id)
+```
+
+---
+
+## 4. UI
+
+1.  **Branches**:
+    *   Navigate to **Catalogs**.
+    *   Select a catalog.
+    *   Go to **Branches** tab.
+    *   Click **"New Branch"**.
+2.  **Merging**:
+    *   Go to **Merge Requests** (or similar tab in Catalog).
+    *   Click **"New Merge"**.
+    *   Select Source/Target.
+    *   **Review**: UI shows diffs/conflicts.
+    *   **Resolve**: Use UI buttons ("Keep Source" / "Keep Target") for each conflict.
+    *   **Complete**: Click **Merge**.
+
+
+---
+
+<!-- Source: docs/reference/warehouses.md -->
+
+# Warehouses Reference
+
+Warehouses define the underlying object storage (S3, GCS, Azure, etc.) where catalogs store data.
+
+## 1. API
+
+**Base Endpoint**: `/api/v1/warehouses`
+
+### List Warehouses
+*   **Method**: `GET`
+*   **Path**: `/api/v1/warehouses`
+*   **Auth**: Tenant Admin Token
+
+```bash
+curl -X GET http://localhost:8080/api/v1/warehouses \
+  -H "Authorization: Bearer <token>"
+```
+
+### Create Warehouse
+*   **Method**: `POST`
+*   **Path**: `/api/v1/warehouses`
+*   **Body**:
+    ```json
+    {
+      "name": "s3-warehouse",
+      "storage_config": {
+        "s3.bucket": "my-bucket",
+        "s3.region": "us-east-1",
+        "s3.access-key-id": "AKIA...",
+        "s3.secret-access-key": "secret..."
+      },
+      "vending_strategy": {
+        "AwsStatic": {
+          "access_key_id": "AKIA...",
+          "secret_access_key": "secret..."
+        }
+      }
+    }
+    ```
+
+```bash
+curl -X POST http://localhost:8080/api/v1/warehouses \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '...'
+```
+
+### Delete Warehouse
+*   **Method**: `DELETE`
+*   **Path**: `/api/v1/warehouses/{name}`
+
+---
+
+## 2. CLI
+
+### List Warehouses
+```bash
+pangolin-admin list-warehouses
+```
+
+### Create Warehouse (S3)
+```bash
+pangolin-admin create-warehouse s3-warehouse \
+  --type s3 \
+  --bucket my-data-bucket \
+  --region us-east-1 \
+  --access-key "AKIA..." \
+  --secret-key "secret..."
+```
+
+### Delete Warehouse
+```bash
+pangolin-admin delete-warehouse s3-warehouse
+```
+
+---
+
+## 3. Python SDK (`pypangolin`)
+
+### List Warehouses
+```python
+warehouses = client.warehouses.list()
+for w in warehouses:
+    print(w.name)
+```
+
+### Create Warehouse (S3)
+```python
+wh = client.warehouses.create_s3(
+    name="s3-prod",
+    bucket="my-prod-bucket",
+    region="us-east-1",
+    access_key="AKIA...",
+    secret_key="secret...",
+    vending_strategy="AwsStatic" 
+)
+print(f"Created warehouse: {wh.name}")
+```
+
+---
+
+## 4. UI
+
+1.  **Log in** as a **Tenant Admin**.
+2.  Navigate to **Warehouses** in the sidebar.
+3.  **List**: Validates current warehouses.
+4.  **Create**: Click **"Create Warehouse"**.
+    *   **Name**: Unique identifier.
+    *   **Type**: Select S3 (MinIO provided by default config).
+    *   **Credentials**: Enter keys if not using IAM roles.
+    *   Click **Save**.
+5.  **Manage**: Edit or delete warehouses.
+
+
+---
+
 <!-- Source: docs/ui/README.md -->
 
 # Pangolin Management UI
@@ -19680,7 +21023,8 @@ Connect warehouses to your namespace hierarchies.
 
 ### 3. Service Users
 For machine-to-machine integrations (CI/CD, internal tools).
-- **API Keys**: Generate and rotate long-lived API keys for non-human users.
+- **API Keys**: Generate long-lived API keys for non-human users. Keys are displayed **once** upon creation or rotation.
+- **Key Rotation**: Securely rotate keys to invalidate old credentials without deleting the user.
 - **Scoped Identity**: Service users inherit specific roles just like regular users.
 
 ---

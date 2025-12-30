@@ -153,10 +153,19 @@ class PDFRenderer(FPDF):
                 
             elif token.type == "inline":
                 content = token.content
+                # Remove internal links [text](#anchor) to avoid FPDF errors
+                # We keep the text but remove the link wrapper for internal anchors
+                import re
+                content = re.sub(r'\[([^\]]+)\]\(#[^)]+\)', r'\1', content)
+                
                 try:
                     self.multi_cell(0, 5, content, markdown=True)
-                except Exception:
-                    self.multi_cell(0, 5, content)
+                except Exception as e:
+                    # Fallback if markdown rendering fails
+                    try:
+                        self.multi_cell(0, 5, content)
+                    except Exception:
+                        pass
                     
             elif token.type == "fence": # Code block
                 self.set_font(mono_font, size=10)
