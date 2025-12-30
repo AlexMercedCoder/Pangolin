@@ -24,13 +24,13 @@ pangolin-admin create-user <username> --email <email> --role <role> [--password 
 ```
 
 **Options**:
-- `--role`: Assign a role (`Root`, `TenantAdmin`, `TenantUser`).
+- `--role`: Assign a role (`root`, `tenant-admin`, `tenant-user`).
 - `--password`: Provide password directly (omitting will trigger a secure prompt).
 - `--tenant-id`: Target a specific tenant (Root only).
 
 **Example**:
 ```bash
-pangolin-admin create-user alice --email alice@acme.com --role TenantUser
+pangolin-admin create-user alice --email alice@acme.com --role tenant-user
 ```
 
 ### Update User

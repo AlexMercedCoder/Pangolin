@@ -47,6 +47,9 @@ Pangolin supports the following roles:
 -   **TenantAdmin**: Tenant-level administration. Can manage warehouses, catalogs, and users within a tenant.
 -   **TenantUser**: Standard access. Can read/write data based on catalog permissions.
 
+> [!NOTE]
+> When using the API directly (e.g., creating users), these roles must be specified in kebab-case: `root`, `tenant-admin`, `tenant-user`.
+
 ## API Key Authentication (Service Users)
 
 Service users are intended for machine-to-machine communication (CI/CD, automated scripts). They do not use JWT tokens; instead, they use a persistent API key.

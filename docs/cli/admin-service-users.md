@@ -269,9 +269,9 @@ Use descriptive names that indicate:
 
 **Cause**: Role format is incorrect or case-sensitive.
 
-**Solution**: Use the exact case expected by the API (e.g., `TenantUser`, `TenantAdmin`, `Root`).
-- ✅ `--role "TenantUser"`
-- ❌ `--role "tenant-user"`
+**Solution**: Use the exact case expected by the API (e.g., `tenant-user`, `tenant-admin`, `root`).
+- ✅ `--role "tenant-user"`
+- ❌ `--role "TenantUser"`
 
 ---
 

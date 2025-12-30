@@ -60,10 +60,18 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[Onboarding Index](docs/getting-started/README.md)** - **Start Here!**
 - **[Installation Guide](docs/getting-started/getting_started.md)** - Run Pangolin in 5 minutes.
 - **[Auth Modes](docs/getting-started/auth-mode.md)** - Understanding Auth vs No-Auth.
-- **[Deployment Guide](docs/getting-started/deployment.md)** - Local, Docker, and Production setup.
-- **[Environment Variables](docs/getting-started/env_vars.md)** - Complete system configuration reference.
+- [Deployment Guide](docs/getting-started/deployment.md) - Local, Docker, and Production setup.
+- [Environment Variables](docs/getting-started/env_vars.md) - Complete system configuration reference.
 
-### 🏗️ 2. Core Infrastructure
+### 📖 2. How-To Reference Guides
+*Comprehensive operations manual for API, CLI, SDK, and UI.*
+- **[Reference Index](docs/reference/README.md)** - **Everything in one place.**
+- [Tenants & Users](docs/reference/tenants.md)
+- [Access Control (RBAC/TBAC)](docs/reference/access_control.md)
+- [Warehouses & Catalogs](docs/reference/warehouses.md)
+- [Assets & Metadata](docs/reference/assets.md)
+
+### 🏗️ 3. Core Infrastructure
 *Managing the foundations: storage and metadata.*
 - **[Infrastructure Features](docs/features/README.md)** - Index of all platform capabilities.
 - **[Warehouse Management](docs/warehouse/README.md)** - Configuring S3, Azure, and GCS storage.
@@ -72,7 +80,7 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[Federated Catalogs](docs/features/federated_catalogs.md)** - Proxying external REST catalogs.
 - **[Known Issues](docs/known-issues/README.md)** - Documented limitations and active bugs (e.g., SQL backend quirks).
 
-### ⚖️ 3. Governance & Security
+### ⚖️ 4. Governance & Security
 *Multi-tenancy, RBAC, and auditing.*
 - **[Security Concepts](docs/features/security_vending.md)** - Identity and Credential Vending principles.
 - **[Credential Vending (IAM Roles)](docs/features/iam_roles.md)** - Scoped cloud access (STS, SAS, Downscoped).
@@ -80,14 +88,14 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[Service Users](docs/features/service_users.md)** - Programmatic access and API key management.
 - **[Audit Logging](docs/features/audit_logs.md)** - Global action tracking and compliance.
 
-### 🧪 4. Data Life Cycle
+### 🧪 5. Data Life Cycle
 *Git-for-Data and maintenance workflows.*
 - **[Branch Management](docs/features/branch_management.md)** - Working with isolated data environments.
 - **[Merge Operations](docs/features/merge_operations.md)** - The 3-way merge workflow.
 - **[Business Metadata & Discovery](docs/features/business_catalog.md)** - Search, tags, and access requests.
 - **[Maintenance Utilities](docs/features/maintenance.md)** - Snapshot expiration and compaction.
 
-### 🛠️ 5. Interfaces & Integration
+### 🛠️ 6. Interfaces & Integration
 *Connecting tools and using our management layers.*
 - **[Management UI](docs/ui/README.md)** - Visual guide to the administration portal.
 - **[PyPangolin SDK (Official)](pypangolin/README.md)** - Rich Python client with Git-like operations and types.
@@ -95,14 +103,14 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 - **[CLI Reference](docs/cli/README.md)** - Documentation for `pangolin-admin` and `pangolin-user`.
 - **[API Reference](docs/api/README.md)** - Iceberg REST and Management API specs.
 
-### 🏗️ 6. Architecture & Internals
+### 🏗️ 7. Architecture & Internals
 *Deep-dives for developers and contributors.*
 - **[Architecture Overview](docs/architecture/README.md)** - System design and component interaction.
 - **[Data Models](docs/architecture/models.md)** - Understanding the internal schema.
 - **[CatalogStore Trait](docs/architecture/catalog-store-trait.md)** - Extending Pangolin storage.
 - **[Developer Utilities](docs/utilities/README.md)** - Tools for contributors (e.g. OpenAPI generation).
 
-### 🎓 7. Best Practices
+### 🎓 8. Best Practices
 *Production guides and operational wisdom.*
 - **[Best Practices Index](docs/best-practices/README.md)** - Complete guide to operating Pangolin.
 - **[Deployment & Security](docs/best-practices/deployment.md)** - Production checklists.

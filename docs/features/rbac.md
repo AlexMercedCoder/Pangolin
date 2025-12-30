@@ -124,7 +124,7 @@ Content-Type: application/json
   "username": "data_engineer",
   "email": "engineer@example.com",
   "password": "secure-password",
-  "role": "TenantUser"
+  "role": "tenant-user"
 }
 ```
 
@@ -239,7 +239,7 @@ Root
 POST /api/v1/users
 {
   "username": "data_engineer",
-  "role": "TenantUser"
+  "role": "tenant-user"
 }
 
 # Grant catalog-level write access
@@ -259,7 +259,7 @@ POST /api/v1/permissions
 POST /api/v1/users
 {
   "username": "analyst",
-  "role": "TenantUser"
+  "role": "tenant-user"
 }
 
 # Grant namespace-level read access
@@ -279,7 +279,7 @@ POST /api/v1/permissions
 POST /api/v1/service-users
 {
   "name": "ci_pipeline",
-  "role": "TenantUser",
+  "role": "tenant-user",
   "expires_in_days": 90
 }
 
