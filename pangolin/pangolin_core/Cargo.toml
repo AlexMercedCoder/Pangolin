@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Core domain model for the Pangolin lakehouse catalog: assets, permissions, audit records, and Iceberg table metadata."
+readme = "../../README.md"
+keywords = ["iceberg", "lakehouse", "catalog", "data"]
+categories = ["database"]
 
 [lints]
 workspace = true

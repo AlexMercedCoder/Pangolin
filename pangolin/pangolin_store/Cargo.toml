@@ -6,12 +6,16 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Metadata storage backends for the Pangolin lakehouse catalog: in-memory, SQLite, PostgreSQL and MongoDB."
+readme = "../../README.md"
+keywords = ["iceberg", "lakehouse", "catalog", "data"]
+categories = ["database"]
 
 [lints]
 workspace = true
 
 [dependencies]
-pangolin_core = { path = "../pangolin_core", features = ["sqlx"] }
+pangolin_core = { path = "../pangolin_core", version = "0.6.0", features = ["sqlx"] }
 object_store = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }

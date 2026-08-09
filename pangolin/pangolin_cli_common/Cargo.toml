@@ -6,6 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "Shared client and configuration helpers for the Pangolin command-line tools."
+readme = "../../README.md"
+keywords = ["iceberg", "lakehouse", "catalog", "data"]
+categories = ["database"]
 
 [lints]
 workspace = true

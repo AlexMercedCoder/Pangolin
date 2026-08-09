@@ -6,13 +6,17 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "HTTP server for the Pangolin lakehouse catalog: an Iceberg REST catalog with multi-tenancy, RBAC and Git-style branching."
+readme = "../../README.md"
+keywords = ["iceberg", "lakehouse", "catalog", "data"]
+categories = ["database"]
 
 [lints]
 workspace = true
 
 [dependencies]
-pangolin_core = { path = "../pangolin_core" }
-pangolin_store = { path = "../pangolin_store" }
+pangolin_core = { path = "../pangolin_core", version = "0.6.0" }
+pangolin_store = { path = "../pangolin_store", version = "0.6.0" }
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -64,6 +68,6 @@ cloud-credentials = ["aws-sts", "azure-oauth", "gcp-oauth"]
 [dev-dependencies]
 hyper = { version = "1.0", features = ["full"] }
 pangolin_api = { path = ".", features = ["test-fixtures"] }
-pangolin_store = { path = "../pangolin_store" }
+pangolin_store = { path = "../pangolin_store", version = "0.6.0" }
 serial_test = "2.0"
 wiremock = "0.6"

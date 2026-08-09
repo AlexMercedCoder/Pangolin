@@ -6,12 +6,16 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+description = "User-facing command-line interface for the Pangolin lakehouse catalog."
+readme = "../../README.md"
+keywords = ["iceberg", "lakehouse", "catalog", "data"]
+categories = ["database"]
 
 [lints]
 workspace = true
 
 [dependencies]
-pangolin_cli_common = { path = "../pangolin_cli_common" }
+pangolin_cli_common = { path = "../pangolin_cli_common", version = "0.6.0" }
 clap = { version = "4.4", features = ["derive", "env"] }
 tokio = { version = "1.0", features = ["full"] }
 rustyline = "14.0"
