@@ -2,19 +2,17 @@ use crate::signer::{Credentials, Signer};
 use crate::{CatalogStore, PaginationParams};
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use object_store::{aws::AmazonS3Builder, path::Path as ObjPath, ObjectStore};
 use pangolin_core::audit::AuditLogEntry;
-use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use pangolin_core::business_metadata::AccessRequest;
 use pangolin_core::model::{
     Asset, Branch, Catalog, Commit, Namespace, Tag, Tenant, VendingStrategy, Warehouse,
 };
 use pangolin_core::model::{SyncStats, SystemSettings};
-use pangolin_core::permission::{
-    Permission, PermissionGrant, Role, UserRole as UserRoleAssignment,
-};
+use pangolin_core::permission::{Permission, Role, UserRole as UserRoleAssignment};
 use pangolin_core::token::TokenInfo;
-use pangolin_core::user::{OAuthProvider, User, UserRole};
+use pangolin_core::user::{User, UserRole};
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::Row;
 use std::collections::HashMap;
@@ -839,7 +837,7 @@ impl CatalogStore for PostgresStore {
         let resolution_json = conflict
             .resolution
             .as_ref()
-            .map(|r| serde_json::to_value(r))
+            .map(serde_json::to_value)
             .transpose()?;
 
         sqlx::query(
@@ -877,9 +875,7 @@ impl CatalogStore for PostgresStore {
                 serde_json::from_str(&conflict_type_str)?;
 
             let resolution_json: Option<serde_json::Value> = row.get("resolution");
-            let resolution = resolution_json
-                .map(|v| serde_json::from_value(v))
-                .transpose()?;
+            let resolution = resolution_json.map(serde_json::from_value).transpose()?;
 
             Ok(Some(pangolin_core::model::MergeConflict {
                 id: row.get("id"),
@@ -924,9 +920,7 @@ impl CatalogStore for PostgresStore {
                 serde_json::from_str(&conflict_type_str)?;
 
             let resolution_json: Option<serde_json::Value> = row.get("resolution");
-            let resolution = resolution_json
-                .map(|v| serde_json::from_value(v))
-                .transpose()?;
+            let resolution = resolution_json.map(serde_json::from_value).transpose()?;
 
             conflicts.push(pangolin_core::model::MergeConflict {
                 id: row.get("id"),
@@ -1843,7 +1837,7 @@ impl Signer for PostgresStore {
             let storage_config: HashMap<String, String> =
                 serde_json::from_value(storage_config_json)?;
 
-            let bucket_opt = storage_config.get("s3.bucket").map(|s| s.clone());
+            let bucket_opt = storage_config.get("s3.bucket").cloned();
 
             if let Some(bucket) = bucket_opt {
                 if location.contains(&bucket) {
@@ -2027,7 +2021,7 @@ impl PostgresStore {
             .or_else(|| config.get("gcp.region"))
             .map(|s| s.as_str())
             .unwrap_or("");
-        crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
+        crate::ObjectStoreCache::cache_key(endpoint, bucket, access_key, region)
     }
 
     // Helper method for reading files without cache (used by read_file with metadata cache)

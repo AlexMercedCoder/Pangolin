@@ -245,12 +245,14 @@ pub async fn create_branch(
     let _ = store
         .log_audit_event(
             tenant_id,
-            pangolin_core::audit::AuditLogEntry::legacy_new(
+            pangolin_core::audit::AuditLogEntry::success(
                 tenant_id,
-                session.username.clone(), // Get user from auth context
-                "create_branch".to_string(),
-                format!("{}/{}", catalog_name, payload.name),
+                Some(session.user_id),
+                session.username.clone(),
+                pangolin_core::audit::AuditAction::CreateBranch,
+                pangolin_core::audit::ResourceType::Branch,
                 None,
+                format!("{}/{}", catalog_name, payload.name),
             ),
         )
         .await;
@@ -432,15 +434,17 @@ pub async fn merge_branch(
             let _ = store
                 .log_audit_event(
                     tenant_id,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         tenant_id,
+                        Some(session.user_id),
                         session.username.clone(),
-                        "merge_branch".to_string(),
+                        pangolin_core::audit::AuditAction::MergeBranch,
+                        pangolin_core::audit::ResourceType::Branch,
+                        None,
                         format!(
                             "{}/{}->{}",
                             catalog_name, payload.source_branch, payload.target_branch
                         ),
-                        None,
                     ),
                 )
                 .await;
@@ -655,7 +659,7 @@ pub async fn delete_tag(
 pub async fn rebase_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
-    Extension(session): Extension<UserSession>,
+    Extension(_session): Extension<UserSession>,
     Path(branch_name): Path<String>,
     Json(payload): Json<CreateBranchRequest>, // We need catalog_name from body
 ) -> impl IntoResponse {
@@ -897,12 +901,14 @@ pub async fn create_catalog(
             let _ = store
                 .log_audit_event(
                     tenant_id,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         tenant_id,
+                        Some(session.user_id),
                         session.username.clone(),
-                        "create_catalog".to_string(),
-                        catalog.name.clone(),
+                        pangolin_core::audit::AuditAction::CreateCatalog,
+                        pangolin_core::audit::ResourceType::Catalog,
                         None,
+                        catalog.name.clone(),
                     ),
                 )
                 .await;
@@ -973,12 +979,14 @@ pub async fn delete_catalog(
             let _ = store
                 .log_audit_event(
                     tenant_id,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         tenant_id,
-                        session.username.clone(), // This extension might need to be added to arguments if not present
-                        "delete_catalog".to_string(),
-                        name,
+                        Some(session.user_id),
+                        session.username.clone(),
+                        pangolin_core::audit::AuditAction::DeleteCatalog,
+                        pangolin_core::audit::ResourceType::Catalog,
                         None,
+                        name,
                     ),
                 )
                 .await;

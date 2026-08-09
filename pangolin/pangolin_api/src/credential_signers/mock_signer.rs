@@ -1,7 +1,7 @@
 use super::{CredentialSigner, VendedCredentials};
 use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
 /// Mock credential signer for testing
@@ -35,8 +35,8 @@ impl MockSigner {
 impl CredentialSigner for MockSigner {
     async fn generate_credentials(
         &self,
-        resource_path: &str,
-        permissions: &[String],
+        _resource_path: &str,
+        _permissions: &[String],
         duration: Duration,
     ) -> Result<VendedCredentials> {
         if self.should_fail {

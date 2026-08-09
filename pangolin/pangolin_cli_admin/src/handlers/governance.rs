@@ -397,7 +397,7 @@ pub async fn handle_set_metadata(
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect()
         })
-        .unwrap_or_else(|| Vec::<String>::new());
+        .unwrap_or_else(Vec::<String>::new);
     let discoverable = current_metadata
         .get("discoverable")
         .and_then(|v| v.as_bool())

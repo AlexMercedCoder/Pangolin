@@ -1,7 +1,6 @@
 use anyhow::Result;
 use object_store::ObjectStore;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 pub fn create_object_store(
     storage_config: &HashMap<String, String>,

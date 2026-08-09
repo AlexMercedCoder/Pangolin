@@ -4,12 +4,9 @@ use axum::{
 };
 use pangolin_api::app;
 use pangolin_api::tests_common::EnvGuard;
-use pangolin_core::model::{Asset, AssetType, Catalog, Tenant};
 use pangolin_store::memory::MemoryStore;
-use pangolin_store::CatalogStore;
 use serde_json::{json, Value};
 use serial_test::serial;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tower::ServiceExt; // for `oneshot`
 use uuid::Uuid;
@@ -176,7 +173,7 @@ async fn test_full_system_flow() {
     // The previous response body should contain it, but let's list assets or search to be sure/clean.
     // Actually, `create_table` returns `LoadTableResponse`.
 
-    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+    let _body = axum::body::to_bytes(resp.into_body(), usize::MAX)
         .await
         .unwrap();
     // The response might be Iceberg JSON. Let's assume we can parse it or just list assets to find it.
@@ -253,7 +250,7 @@ async fn test_full_system_flow() {
 
     // Verify results contain "sales_data"
     let results = body_json.as_array().unwrap();
-    assert!(results.len() > 0);
+    assert!(!results.is_empty());
     let found = results.iter().any(|r| r["name"] == "sales_data");
     assert!(found, "Search should find 'sales_data'");
 

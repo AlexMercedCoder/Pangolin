@@ -1,4 +1,3 @@
-use chrono::Utc;
 use pangolin_api::audit_handlers::{AuditCountResponse, AuditListQuery};
 use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditResult, ResourceType};
 use pangolin_store::memory::MemoryStore;

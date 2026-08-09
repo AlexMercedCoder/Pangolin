@@ -7,8 +7,6 @@ use pangolin_cli_common::client::PangolinClient;
 use pangolin_cli_common::config::ConfigManager;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use shell_words;
-use std::env;
 
 #[derive(Parser, Debug)]
 #[command(name = "pangolin-admin")]
@@ -61,19 +59,15 @@ async fn main() -> anyhow::Result<()> {
                     handlers::auth::handle_login(&mut client, username, password, tenant_id).await
                 {
                     eprintln!("Error: {}", e);
-                } else {
-                    if let Err(e) = config_manager.save(&client.config) {
-                        eprintln!("Error saving config: {}", e);
-                    }
+                } else if let Err(e) = config_manager.save(&client.config) {
+                    eprintln!("Error saving config: {}", e);
                 }
             }
             AdminCommand::Use { name } => {
                 if let Err(e) = handlers::auth::handle_use(&mut client, name).await {
                     eprintln!("Error: {}", e);
-                } else {
-                    if let Err(e) = config_manager.save(&client.config) {
-                        eprintln!("Warning: Failed to save config: {}", e);
-                    }
+                } else if let Err(e) = config_manager.save(&client.config) {
+                    eprintln!("Warning: Failed to save config: {}", e);
                 }
             }
             AdminCommand::ListTenants { limit, offset } => {
@@ -314,7 +308,7 @@ async fn main() -> anyhow::Result<()> {
                     .await?
             }
             AdminCommand::ResolveConflict {
-                merge_id,
+                merge_id: _,
                 conflict_id,
                 resolution,
             } => {
@@ -514,10 +508,8 @@ async fn main() -> anyhow::Result<()> {
                                             handlers::auth::handle_use(&mut client, name).await
                                         {
                                             eprintln!("Error: {}", e);
-                                        } else {
-                                            if let Err(e) = config_manager.save(&client.config) {
-                                                eprintln!("Warning: Failed to save config: {}", e);
-                                            }
+                                        } else if let Err(e) = config_manager.save(&client.config) {
+                                            eprintln!("Warning: Failed to save config: {}", e);
                                         }
                                     }
                                     AdminCommand::ListTenants { limit, offset } => {
@@ -960,7 +952,7 @@ async fn main() -> anyhow::Result<()> {
                                         }
                                     }
                                     AdminCommand::ResolveConflict {
-                                        merge_id,
+                                        merge_id: _,
                                         conflict_id,
                                         resolution,
                                     } => {

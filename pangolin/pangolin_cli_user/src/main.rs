@@ -7,8 +7,6 @@ use pangolin_cli_common::client::PangolinClient;
 use pangolin_cli_common::config::ConfigManager;
 use rustyline::error::ReadlineError;
 use rustyline::Editor;
-use shell_words;
-use std::env;
 
 #[derive(Parser, Debug)]
 #[command(name = "pangolin-user")]
@@ -163,10 +161,8 @@ async fn main() -> anyhow::Result<()> {
                                     .await
                                     {
                                         eprintln!("Error: {}", e);
-                                    } else {
-                                        if let Err(e) = config_manager.save(&client.config) {
-                                            eprintln!("Warning: Failed to save config: {}", e);
-                                        }
+                                    } else if let Err(e) = config_manager.save(&client.config) {
+                                        eprintln!("Warning: Failed to save config: {}", e);
                                     }
                                 }
                                 UserCommand::ListCatalogs { limit, offset } => {

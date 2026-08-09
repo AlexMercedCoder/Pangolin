@@ -8,8 +8,6 @@ use axum::{
 use pangolin_core::model::SystemSettings;
 use pangolin_core::user::UserRole;
 use pangolin_core::user::UserSession;
-use pangolin_store::CatalogStore;
-use std::sync::Arc;
 
 /// Get system settings
 #[utoipa::path(

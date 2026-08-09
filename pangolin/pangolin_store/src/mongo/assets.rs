@@ -139,7 +139,7 @@ impl MongoStore {
             let id = if let Ok(i) = d
                 .get("id")
                 .ok_or(anyhow::anyhow!("Missing id"))
-                .and_then(|b| from_bson_uuid(b))
+                .and_then(from_bson_uuid)
             {
                 i
             } else {

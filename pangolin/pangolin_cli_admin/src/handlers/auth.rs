@@ -14,7 +14,7 @@ pub async fn handle_login(
         None => Input::new()
             .with_prompt("Username")
             .interact_text()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
     };
 
     let password = match password_opt {
@@ -22,7 +22,7 @@ pub async fn handle_login(
         None => Password::new()
             .with_prompt("Password")
             .interact()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
     };
 
     // Reset tenant context before login to ensure fresh state
@@ -34,7 +34,7 @@ pub async fn handle_login(
         .await?;
 
     // If tenant_id was set by login (Tenant Admin), try to fetch name
-    if let Some(_) = client.config.tenant_id {
+    if client.config.tenant_id.is_some() {
         // Try to fetch accessible tenants to resolve name
         // For Tenant Admin, /api/v1/tenants might return their own tenant
         if let Ok(res_tenants) = client.get("/api/v1/tenants").await {

@@ -1,8 +1,6 @@
 use super::MemoryStore;
 use anyhow::Result;
-use async_trait::async_trait;
 use chrono::Utc;
-use pangolin_core::token::*;
 use uuid::Uuid;
 
 impl MemoryStore {
@@ -67,7 +65,7 @@ impl MemoryStore {
         let mut expired_active = Vec::new();
         for entry in self.active_tokens.iter() {
             if entry.value().expires_at < now {
-                expired_active.push(entry.key().clone());
+                expired_active.push(*entry.key());
             }
         }
 
@@ -81,7 +79,7 @@ impl MemoryStore {
         let mut expired_revoked = Vec::new();
         for entry in self.revoked_tokens.iter() {
             if entry.value().expires_at < now {
-                expired_revoked.push(entry.key().clone());
+                expired_revoked.push(*entry.key());
             }
         }
 

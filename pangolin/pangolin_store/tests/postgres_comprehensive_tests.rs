@@ -1,12 +1,10 @@
-use chrono::{DateTime, Utc};
 use pangolin_core::model::{Asset, AssetType, Catalog, CatalogType, Namespace, Tenant, Warehouse};
 use pangolin_core::permission::{
-    Action, Permission, PermissionGrant, PermissionScope, Role, UserRole as UserRoleAssignment,
+    Action, Permission, PermissionScope, Role, UserRole as UserRoleAssignment,
 };
-use pangolin_core::user::{OAuthProvider, User, UserRole};
-use pangolin_store::{CatalogStore, PostgresStore};
+use pangolin_core::user::{User, UserRole};
+use pangolin_store::PostgresStore;
 use std::collections::{HashMap, HashSet};
-use std::env;
 use uuid::Uuid;
 
 /// Connect to the Postgres test database, or `None` when none is configured.
@@ -101,7 +99,7 @@ async fn test_postgres_warehouse_crud() {
         .expect("Failed to get warehouse");
     assert!(retrieved.is_some());
     assert_eq!(retrieved.as_ref().unwrap().name, warehouse_name);
-    assert_eq!(retrieved.as_ref().unwrap().use_sts, false);
+    assert!(!retrieved.as_ref().unwrap().use_sts);
 
     // List warehouses
     let warehouses = store

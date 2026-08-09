@@ -80,7 +80,7 @@ async fn test_federated_catalog_identification() {
 
 #[tokio::test]
 async fn test_federated_proxy_creation() {
-    let proxy = FederatedCatalogProxy::new();
+    let _proxy = FederatedCatalogProxy::new();
     // Simply verifying that we can instantiate it
     // Actual request forwarding logic requires a mock server which is complex to set up here
     // but the implementation logic is covered in other tests or review.

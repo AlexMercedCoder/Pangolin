@@ -1,7 +1,6 @@
 use axum::{
     body::Body,
     http::{Request, StatusCode},
-    middleware,
     routing::{get, post},
     Router,
 };

@@ -6,10 +6,8 @@ use axum::{
 };
 use pangolin_api::auth_middleware::hash_password;
 use pangolin_api::tests_common::EnvGuard;
-use pangolin_api::user_handlers::{
-    create_user, get_current_user, login, CreateUserRequest, LoginRequest,
-};
-use pangolin_core::user::{User, UserRole};
+use pangolin_api::user_handlers::{create_user, get_current_user, login, LoginRequest};
+use pangolin_core::user::User;
 use pangolin_store::CatalogStore;
 use pangolin_store::MemoryStore;
 use serial_test::serial;
@@ -89,9 +87,8 @@ async fn test_auth_flow() {
     // The snippet above didn't attach auth_middleware.
     // Let's create a router WITH middleware for the /me endpoint.
 
-    use axum::middleware;
     use axum::Extension;
-    use pangolin_api::auth_middleware::auth_middleware;
+
     use pangolin_core::user::UserSession;
 
     let protected_app = Router::new()

@@ -11,7 +11,7 @@ use axum::{
 use bytes::Bytes;
 use chrono::Utc;
 use pangolin_core::iceberg_metadata::{
-    NestedField, PartitionSpec, Schema, Snapshot, SortOrder, TableMetadata, Type,
+    NestedField, PartitionSpec, Schema, SortOrder, TableMetadata, Type,
 };
 use pangolin_core::model::{Asset, AssetType};
 use pangolin_core::permission::{Action, PermissionScope};
@@ -234,7 +234,7 @@ pub async fn create_table(
             .map(|(k, v)| format!("{}={}", k, v))
             .collect::<Vec<_>>()
             .join("&");
-        path.push_str("?");
+        path.push('?');
         path.push_str(&query_string);
     }
 
@@ -540,7 +540,7 @@ pub async fn load_table(
             .map(|(k, v)| format!("{}={}", k, v))
             .collect::<Vec<_>>()
             .join("&");
-        path.push_str("?");
+        path.push('?');
         path.push_str(&query_string);
     }
 
@@ -1166,12 +1166,14 @@ pub async fn delete_table(
             let _ = store
                 .log_audit_event(
                     tenant_id,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         tenant_id,
+                        Some(session.user_id),
                         session.username.clone(),
-                        "delete_table".to_string(),
-                        format!("{}/{}/{}", catalog_name, namespace, table),
+                        pangolin_core::audit::AuditAction::DropTable,
+                        pangolin_core::audit::ResourceType::Table,
                         None,
+                        format!("{}/{}/{}", catalog_name, namespace, table),
                     ),
                 )
                 .await;

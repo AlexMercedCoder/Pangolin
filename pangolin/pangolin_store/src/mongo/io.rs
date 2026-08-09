@@ -239,6 +239,6 @@ impl MongoStore {
             .or_else(|| config.get("gcp.region"))
             .map(|s| s.as_str())
             .unwrap_or("");
-        crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
+        crate::ObjectStoreCache::cache_key(endpoint, bucket, access_key, region)
     }
 }

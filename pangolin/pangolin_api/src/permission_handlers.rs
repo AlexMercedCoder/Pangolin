@@ -7,7 +7,7 @@ use axum::{
 use pangolin_core::permission::{Action, Permission, PermissionScope, Role, UserRole};
 use pangolin_core::user::{UserRole as AuthRole, UserSession};
 use pangolin_store::{CatalogStore, PaginationParams};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::HashSet;
 use std::sync::Arc;
 use utoipa::ToSchema;
@@ -158,7 +158,7 @@ pub async fn update_role(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Extension(session): Extension<UserSession>,
     Path(role_id): Path<Uuid>,
-    Json(mut role): Json<Role>,
+    Json(role): Json<Role>,
 ) -> Response {
     if session.role != AuthRole::Root && session.role != AuthRole::TenantAdmin {
         return (StatusCode::FORBIDDEN, "Only admins can update roles").into_response();

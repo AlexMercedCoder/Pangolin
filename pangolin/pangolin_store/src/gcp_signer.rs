@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 #[cfg(feature = "gcp")]
 use google_cloud_auth::credentials::CredentialsFile;
 #[cfg(feature = "gcp")]
@@ -52,7 +51,7 @@ impl GcpSigner {
 
         // Generate downscoped token
         let config = ClientConfig::default().with_credentials(creds).await?;
-        let client = Client::new(config);
+        let _client = Client::new(config);
 
         // google_cloud_storage::client::Client doesn't expose get_token directly maybe?
         // But we can just use the credentials to mint a token via auth crate if we want.

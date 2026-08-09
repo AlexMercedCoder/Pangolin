@@ -1,7 +1,6 @@
 /// Regression tests for PostgreSQL backend parity
 /// Ensures Service Users, System Settings, and Audit Logs remain fully implemented
 use crate::postgres::PostgresStore;
-use crate::CatalogStore;
 use chrono::Utc;
 use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
 use pangolin_core::model::{SystemSettings, Tenant};
@@ -215,7 +214,7 @@ mod postgres_parity_tests {
             .unwrap();
         assert_eq!(updated.name, "updated-name");
         assert_eq!(updated.description, Some("Updated description".to_string()));
-        assert_eq!(updated.active, false);
+        assert!(!updated.active);
     }
 
     #[tokio::test]

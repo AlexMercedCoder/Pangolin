@@ -175,7 +175,6 @@ pub async fn test_bulk_ops_and_ancestry<S: CatalogStore>(store: &S) {
 mod tests {
     use super::*;
     use crate::memory::MemoryStore;
-    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_memory_store_bulk_ops() {

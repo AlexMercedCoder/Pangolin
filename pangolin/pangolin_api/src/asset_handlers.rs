@@ -11,9 +11,8 @@ use axum::{
 use pangolin_core::model::{Asset, AssetType};
 use pangolin_core::permission::{Action, PermissionScope};
 use pangolin_core::user::UserSession;
-use pangolin_store::{CatalogStore, PaginationParams};
+use pangolin_store::PaginationParams;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -531,6 +530,7 @@ mod tests {
     use pangolin_core::user::UserSession;
     use pangolin_core::user::{User, UserRole};
     use pangolin_store::memory::MemoryStore;
+    use pangolin_store::CatalogStore;
     use std::sync::Arc;
     use uuid::Uuid;
 

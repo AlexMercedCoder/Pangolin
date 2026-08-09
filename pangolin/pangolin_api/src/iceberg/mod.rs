@@ -1,6 +1,5 @@
 use crate::federated_proxy::FederatedCatalogProxy;
 use axum::{
-    body::Body,
     http::{HeaderMap, Method, StatusCode},
     response::IntoResponse,
     Json,

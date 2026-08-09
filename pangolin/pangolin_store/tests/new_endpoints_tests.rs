@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::Utc;
-use pangolin_core::model::{SyncStats, SystemSettings};
+use pangolin_core::model::SystemSettings;
 use pangolin_core::token::TokenInfo;
 use pangolin_store::{CatalogStore, MongoStore, PostgresStore, SqliteStore};
 use uuid::Uuid;

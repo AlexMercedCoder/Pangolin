@@ -3,7 +3,6 @@ use super::SqliteStore;
 use anyhow::Result;
 use chrono::Utc;
 use pangolin_core::user::User;
-use sqlx::Row;
 use uuid::Uuid;
 
 impl SqliteStore {

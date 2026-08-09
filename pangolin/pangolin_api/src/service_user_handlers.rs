@@ -9,7 +9,7 @@ use bcrypt::{hash, DEFAULT_COST};
 use chrono::{Duration, Utc};
 use pangolin_core::user::{ApiKeyResponse, ServiceUser, UserRole};
 use pangolin_store::{CatalogStore, PaginationParams};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -111,7 +111,7 @@ pub async fn create_service_user(
         expires_at,
     );
 
-    let service_user_id = service_user.id;
+    let _service_user_id = service_user.id;
 
     match store.create_service_user(service_user.clone()).await {
         Ok(_) => {

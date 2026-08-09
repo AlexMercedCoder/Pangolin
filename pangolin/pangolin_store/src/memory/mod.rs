@@ -620,7 +620,7 @@ impl CatalogStore for MemoryStore {
 
     async fn list_permissions(
         &self,
-        tenant_id: Uuid,
+        _tenant_id: Uuid,
         pagination: Option<PaginationParams>,
     ) -> Result<Vec<pangolin_core::permission::Permission>> {
         self.list_permissions_internal(None, None, pagination).await // Assuming internal supports pagination

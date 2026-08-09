@@ -3,6 +3,9 @@ name = "pangolin_core"
 version = "0.2.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

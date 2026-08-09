@@ -4,10 +4,10 @@ use axum::{
 };
 use pangolin_api::app;
 use pangolin_api::tests_common::EnvGuard;
-use pangolin_core::model::{Asset, AssetType, Catalog, Tenant};
+use pangolin_core::model::Catalog;
 use pangolin_store::memory::MemoryStore;
 use pangolin_store::CatalogStore;
-use serde_json::{json, Value};
+use serde_json::json;
 use serial_test::serial;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -81,7 +81,7 @@ async fn test_merge_branch_flow() {
     // 3. Create Asset on 'main'
     let create_asset_req = Request::builder()
         .method("POST")
-        .uri(format!("/v1/default/namespaces/default/tables?branch=main"))
+        .uri("/v1/default/namespaces/default/tables?branch=main".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
@@ -120,7 +120,7 @@ async fn test_merge_branch_flow() {
     // 5. Create NEW Asset on 'dev' (Simulate feature work)
     let create_asset_2_req = Request::builder()
         .method("POST")
-        .uri(format!("/v1/default/namespaces/default/tables?branch=dev"))
+        .uri("/v1/default/namespaces/default/tables?branch=dev".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
@@ -139,9 +139,7 @@ async fn test_merge_branch_flow() {
     // 6. Verify 'main' does NOT have table2 yet
     let get_main_req = Request::builder()
         .method("GET")
-        .uri(format!(
-            "/v1/default/namespaces/default/tables/table2?branch=main"
-        ))
+        .uri("/v1/default/namespaces/default/tables/table2?branch=main".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .body(Body::empty())
@@ -171,9 +169,7 @@ async fn test_merge_branch_flow() {
     // 8. Verify 'main' now has table2
     let get_main_req_2 = Request::builder()
         .method("GET")
-        .uri(format!(
-            "/v1/default/namespaces/default/tables/table2?branch=main"
-        ))
+        .uri("/v1/default/namespaces/default/tables/table2?branch=main".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .body(Body::empty())

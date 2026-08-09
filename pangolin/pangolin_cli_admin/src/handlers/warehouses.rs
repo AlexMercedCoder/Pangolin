@@ -76,9 +76,7 @@ pub async fn handle_create_warehouse(
                 None => Input::new()
                     .with_prompt("S3 Bucket Name")
                     .interact_text()
-                    .map_err(|e| {
-                        CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?,
+                    .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
             };
             storage_config.insert("s3.bucket".to_string(), Value::String(bucket));
 
@@ -87,9 +85,7 @@ pub async fn handle_create_warehouse(
                 None => Input::new()
                     .with_prompt("Access Key ID")
                     .interact_text()
-                    .map_err(|e| {
-                        CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?,
+                    .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
             };
             storage_config.insert("s3.access-key-id".to_string(), Value::String(access_key));
 
@@ -98,9 +94,7 @@ pub async fn handle_create_warehouse(
                 None => Password::new()
                     .with_prompt("Secret Access Key")
                     .interact()
-                    .map_err(|e| {
-                        CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?,
+                    .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
             };
             storage_config.insert(
                 "s3.secret-access-key".to_string(),
@@ -113,9 +107,7 @@ pub async fn handle_create_warehouse(
                     .with_prompt("Region")
                     .default("us-east-1".to_string())
                     .interact_text()
-                    .map_err(|e| {
-                        CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?,
+                    .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
             };
             storage_config.insert("s3.region".to_string(), Value::String(region));
 
@@ -125,9 +117,7 @@ pub async fn handle_create_warehouse(
                     .with_prompt("Endpoint (Optional, for MinIO)")
                     .allow_empty(true)
                     .interact_text()
-                    .map_err(|e| {
-                        CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?,
+                    .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
             };
             if !endpoint.is_empty() {
                 storage_config.insert("s3.endpoint".to_string(), Value::String(endpoint));
@@ -137,25 +127,19 @@ pub async fn handle_create_warehouse(
             let account_name: String = Input::new()
                 .with_prompt("Azure Storage Account Name")
                 .interact_text()
-                .map_err(|e| {
-                    CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                .map_err(|e| CliError::IoError(std::io::Error::other(e)))?;
             storage_config.insert("adls.account-name".to_string(), Value::String(account_name));
 
             let account_key: String = Password::new()
                 .with_prompt("Azure Storage Account Key")
                 .interact()
-                .map_err(|e| {
-                    CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                .map_err(|e| CliError::IoError(std::io::Error::other(e)))?;
             storage_config.insert("adls.account-key".to_string(), Value::String(account_key));
 
             let container: String = Input::new()
                 .with_prompt("Azure Container Name")
                 .interact_text()
-                .map_err(|e| {
-                    CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                .map_err(|e| CliError::IoError(std::io::Error::other(e)))?;
             storage_config.insert("azure.container".to_string(), Value::String(container));
 
             // Optional SAS token
@@ -163,17 +147,13 @@ pub async fn handle_create_warehouse(
                 .with_prompt("Use SAS token instead of account key?")
                 .default(false)
                 .interact()
-                .map_err(|e| {
-                    CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                .map_err(|e| CliError::IoError(std::io::Error::other(e)))?;
 
             if use_sas {
                 let sas_token: String = Password::new()
                     .with_prompt("SAS Token")
                     .interact()
-                    .map_err(|e| {
-                        CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?;
+                    .map_err(|e| CliError::IoError(std::io::Error::other(e)))?;
                 storage_config.insert("adls.sas-token".to_string(), Value::String(sas_token));
             }
         }
@@ -181,9 +161,7 @@ pub async fn handle_create_warehouse(
             let project_id: String = Input::new()
                 .with_prompt("GCP Project ID")
                 .interact_text()
-                .map_err(|e| {
-                    CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                .map_err(|e| CliError::IoError(std::io::Error::other(e)))?;
             storage_config.insert("gcs.project-id".to_string(), Value::String(project_id));
 
             let bucket: String = match bucket_opt {
@@ -191,9 +169,7 @@ pub async fn handle_create_warehouse(
                 None => Input::new()
                     .with_prompt("GCS Bucket Name")
                     .interact_text()
-                    .map_err(|e| {
-                        CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                    })?,
+                    .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
             };
             storage_config.insert("gcs.bucket".to_string(), Value::String(bucket));
 
@@ -201,9 +177,7 @@ pub async fn handle_create_warehouse(
             let sa_file: String = Input::new()
                 .with_prompt("Service Account JSON File Path")
                 .interact_text()
-                .map_err(|e| {
-                    CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e))
-                })?;
+                .map_err(|e| CliError::IoError(std::io::Error::other(e)))?;
             storage_config.insert(
                 "gcs.service-account-file".to_string(),
                 Value::String(sa_file),

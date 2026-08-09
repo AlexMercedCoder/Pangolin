@@ -4,7 +4,6 @@ use crate::credential_signers::{
 use anyhow::{anyhow, Result};
 use chrono::Duration;
 use pangolin_core::model::Warehouse;
-use std::sync::Arc;
 
 /// Factory function to create a credential signer based on warehouse configuration
 pub fn create_signer_from_warehouse(warehouse: &Warehouse) -> Result<Box<dyn CredentialSigner>> {

@@ -1,10 +1,7 @@
 use anyhow::Result;
-/// Service Users implementation for SqliteStore
-use async_trait::async_trait;
 use chrono::Utc;
 use pangolin_core::user::{ServiceUser, UserRole};
 use sqlx::Row;
-use std::str::FromStr;
 use uuid::Uuid;
 
 use super::SqliteStore;

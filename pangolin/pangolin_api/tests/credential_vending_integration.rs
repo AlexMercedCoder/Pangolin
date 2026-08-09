@@ -226,7 +226,7 @@ async fn test_credential_expiration_times() {
     let expires1 = result1.expires_at.unwrap();
     let now = chrono::Utc::now();
     let diff = (expires1 - now).num_minutes();
-    assert!(diff >= 59 && diff <= 61); // Should be ~60 minutes
+    assert!((59..=61).contains(&diff)); // Should be ~60 minutes
 
     // Test 12 hour duration
     let result12: Result<_, anyhow::Error> = signer
@@ -237,7 +237,7 @@ async fn test_credential_expiration_times() {
     assert!(result12.expires_at.is_some());
     let expires12 = result12.expires_at.unwrap();
     let diff12 = (expires12 - now).num_hours();
-    assert!(diff12 >= 11 && diff12 <= 13); // Should be ~12 hours
+    assert!((11..=13).contains(&diff12)); // Should be ~12 hours
 }
 
 #[tokio::test]

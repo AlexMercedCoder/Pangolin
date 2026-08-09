@@ -68,8 +68,8 @@ impl MongoStore {
 
         // 3. In-memory Pagination
         if let Some(p) = pagination {
-            let limit = p.limit.unwrap_or(usize::MAX) as usize;
-            let offset = p.offset.unwrap_or(0) as usize;
+            let limit = p.limit.unwrap_or(usize::MAX);
+            let offset = p.offset.unwrap_or(0);
 
             if offset >= perms.len() {
                 return Ok(vec![]);

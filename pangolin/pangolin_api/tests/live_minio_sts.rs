@@ -62,7 +62,7 @@ async fn test_live_minio_sts_with_static_credentials() {
     println!("   Prefix: {}", creds.prefix);
     println!("   User: {}", creds.config.get("s3.access-key-id").unwrap());
     println!("   Endpoint: {}", creds.config.get("s3.endpoint").unwrap());
-    println!("");
+    println!();
     println!("   Note: This test uses IAM user credentials.");
     println!("   Full STS AssumeRole requires AWS SDK with STS feature enabled.");
 }

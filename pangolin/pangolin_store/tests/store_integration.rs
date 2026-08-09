@@ -1,6 +1,6 @@
 use pangolin_store::{
     tests::{test_asset_update_consistency, test_dashboard_stats_consistency},
-    CatalogStore, MemoryStore, MongoStore, PostgresStore, SqliteStore,
+    MemoryStore, MongoStore, PostgresStore, SqliteStore,
 };
 use std::env;
 use uuid::Uuid;

@@ -7,11 +7,8 @@ use axum::{
     Json,
 };
 use pangolin_core::model::{VendingStrategy, Warehouse};
-use pangolin_core::user::UserRole;
-use pangolin_store::signer::Credentials;
-use pangolin_store::{CatalogStore, PaginationParams};
+use pangolin_store::PaginationParams;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 

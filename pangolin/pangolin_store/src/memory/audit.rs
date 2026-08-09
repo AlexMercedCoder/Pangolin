@@ -1,8 +1,5 @@
 use super::MemoryStore;
 use anyhow::Result;
-use async_trait::async_trait;
-use chrono::Utc;
-use pangolin_core::audit::*;
 use uuid::Uuid;
 
 impl MemoryStore {
@@ -14,10 +11,7 @@ impl MemoryStore {
         // Log to tracing
         tracing::info!("AUDIT: {:?}", event);
         // Store in map
-        self.audit_events
-            .entry(tenant_id)
-            .or_insert_with(Vec::new)
-            .push(event);
+        self.audit_events.entry(tenant_id).or_default().push(event);
         Ok(())
     }
     pub(crate) async fn list_audit_events_internal(

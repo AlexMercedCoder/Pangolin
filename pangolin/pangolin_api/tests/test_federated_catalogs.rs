@@ -1,5 +1,3 @@
-use axum::http::StatusCode;
-use pangolin_api::*;
 use pangolin_core::model::{Catalog, CatalogType, FederatedCatalogConfig, Tenant};
 use pangolin_store::memory::MemoryStore;
 use pangolin_store::CatalogStore;

@@ -1,8 +1,7 @@
 use super::MongoStore;
 // use super::main::to_bson_uuid; // Not used for this file anymore
 use anyhow::Result;
-use futures::stream::TryStreamExt;
-use mongodb::bson::{doc, Document};
+use mongodb::bson::doc;
 use pangolin_core::model::{ConflictResolution, MergeConflict, MergeOperation, MergeStatus};
 use uuid::Uuid;
 

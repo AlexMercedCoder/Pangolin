@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
-    use pangolin_api::app;
-    use pangolin_api::auth::Claims;
+
     use pangolin_api::tests_common::EnvGuard;
     use pangolin_core::user::UserRole; // Use Core UserRole
     use pangolin_store::memory::MemoryStore;

@@ -7,10 +7,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use pangolin_store::CatalogStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use utoipa::{IntoParams, ToSchema};
 
 // Cloud provider SDK imports (conditional on features)
@@ -94,8 +92,8 @@ pub async fn assume_role_aws(
 #[cfg(not(feature = "aws-sts"))]
 pub async fn assume_role_aws(
     role_arn: &str,
-    external_id: Option<&str>,
-    session_name: &str,
+    _external_id: Option<&str>,
+    _session_name: &str,
 ) -> Result<(String, String, String, String), String> {
     tracing::warn!("AWS STS feature not enabled, returning placeholder credentials");
     Ok((

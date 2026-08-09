@@ -1,7 +1,7 @@
 use super::{CredentialSigner, VendedCredentials};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::Duration;
 use std::collections::HashMap;
 
 #[cfg(feature = "aws-sts")]
@@ -48,7 +48,7 @@ impl CredentialSigner for S3Signer {
         &self,
         _resource_path: &str,
         _permissions: &[String],
-        duration: Duration,
+        _duration: Duration,
     ) -> Result<VendedCredentials> {
         #[cfg(feature = "aws-sts")]
         {

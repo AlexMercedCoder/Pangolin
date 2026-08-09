@@ -53,7 +53,7 @@ impl PangolinClient {
         let headers = self.build_headers()?;
         let res = self
             .client
-            .get(&self.url(path))
+            .get(self.url(path))
             .headers(headers)
             .send()
             .await
@@ -70,7 +70,7 @@ impl PangolinClient {
         let headers = self.build_headers()?;
         let res = self
             .client
-            .post(&self.url(path))
+            .post(self.url(path))
             .headers(headers)
             .json(body)
             .send()
@@ -88,7 +88,7 @@ impl PangolinClient {
         let headers = self.build_headers()?;
         let res = self
             .client
-            .put(&self.url(path))
+            .put(self.url(path))
             .headers(headers)
             .json(body)
             .send()
@@ -102,7 +102,7 @@ impl PangolinClient {
         let headers = self.build_headers()?;
         let res = self
             .client
-            .delete(&self.url(path))
+            .delete(self.url(path))
             .headers(headers)
             .send()
             .await
@@ -135,7 +135,7 @@ impl PangolinClient {
 
         let res = self
             .client
-            .post(&self.url("/api/v1/users/login"))
+            .post(self.url("/api/v1/users/login"))
             .json(&body)
             .send()
             .await

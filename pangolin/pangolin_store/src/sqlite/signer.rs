@@ -2,7 +2,6 @@ use super::SqliteStore;
 use crate::signer::{Credentials, Signer};
 use anyhow::Result;
 use async_trait::async_trait;
-use object_store::aws::AmazonS3Builder;
 use pangolin_core::model::VendingStrategy;
 use sqlx::Row;
 use std::collections::HashMap;
@@ -149,7 +148,7 @@ impl Signer for SqliteStore {
             let storage_config: HashMap<String, String> =
                 serde_json::from_str(&storage_config_str)?;
 
-            let bucket_opt = storage_config.get("s3.bucket").map(|s| s.clone());
+            let bucket_opt = storage_config.get("s3.bucket").cloned();
 
             if let Some(bucket) = bucket_opt {
                 if location.contains(&bucket) {

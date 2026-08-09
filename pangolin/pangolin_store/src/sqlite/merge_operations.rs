@@ -189,7 +189,7 @@ impl SqliteStore {
         let resolution_json = conflict
             .resolution
             .as_ref()
-            .map(|r| serde_json::to_string(r))
+            .map(serde_json::to_string)
             .transpose()?;
 
         sqlx::query(

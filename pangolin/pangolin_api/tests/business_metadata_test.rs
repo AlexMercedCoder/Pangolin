@@ -1,11 +1,10 @@
 use axum::{
     body::Body,
     http::{Request, StatusCode},
-    routing::{delete, get, post, put},
+    routing::{get, post, put},
     Router,
 };
-use pangolin_api::auth::TenantId;
-use pangolin_api::auth_middleware::{auth_middleware, hash_password};
+use pangolin_api::auth_middleware::hash_password;
 use pangolin_api::business_metadata_handlers::{
     add_business_metadata, get_access_request, get_business_metadata, list_access_requests,
     request_access, update_access_request, AddMetadataRequest, CreateAccessRequestPayload,

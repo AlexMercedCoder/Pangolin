@@ -1,6 +1,5 @@
 use super::MemoryStore;
 use anyhow::Result;
-use async_trait::async_trait;
 use pangolin_core::user::*;
 use uuid::Uuid;
 

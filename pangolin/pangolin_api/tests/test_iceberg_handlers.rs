@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     use axum::{
         body::to_bytes,
         body::Body,
         http::{Request, StatusCode},
     };
-    use chrono::Utc;
+
     use jsonwebtoken::{encode, EncodingKey, Header};
     use pangolin_api::auth::Claims;
     use pangolin_store::memory::MemoryStore;

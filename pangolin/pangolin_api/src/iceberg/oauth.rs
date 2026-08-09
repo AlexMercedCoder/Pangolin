@@ -1,18 +1,14 @@
 use axum::{
     extract::{Form, State},
-    http::StatusCode,
     response::{IntoResponse, Json},
 };
-use pangolin_store::CatalogStore;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 // Removed Signer import as we implement signing locally
 use crate::auth::Claims;
-use anyhow::Context;
 use bcrypt::verify;
 use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
-use pangolin_core::user::{ServiceUser, User, UserRole, UserSession};
+use pangolin_core::user::ServiceUser;
 use uuid::Uuid;
 
 // Internal imports
@@ -87,7 +83,7 @@ pub async fn handle_oauth_token(
     let service_user_result: anyhow::Result<Option<ServiceUser>> =
         store_ref.get_service_user(service_user_id).await;
     let service_user = service_user_result
-        .map_err(|e| ApiError::InternalError(e))?
+        .map_err(ApiError::InternalError)?
         .ok_or_else(|| ApiError::unauthorized("Invalid client_id"))?;
 
     // 4. Verify Active Status

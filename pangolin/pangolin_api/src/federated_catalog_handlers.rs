@@ -6,7 +6,6 @@ use axum::{
     response::IntoResponse,
     Extension, Json,
 };
-use pangolin_core::model::SyncStats;
 use pangolin_core::model::{Catalog, CatalogType, FederatedCatalogConfig};
 use pangolin_core::user::{UserRole, UserSession};
 use pangolin_store::CatalogStore;

@@ -1,7 +1,4 @@
 use anyhow::Result;
-#[cfg(feature = "azure")]
-use azure_storage_blobs::prelude::*;
-use chrono::{Duration, Utc};
 
 pub struct AzureSigner {
     account_name: String,

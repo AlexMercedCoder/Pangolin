@@ -3,6 +3,9 @@ name = "pangolin_api"
 version = "0.5.1"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 pangolin_core = { path = "../pangolin_core" }
 pangolin_store = { path = "../pangolin_store" }

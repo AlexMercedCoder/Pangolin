@@ -124,8 +124,6 @@ pub async fn get_catalog_for_asset(
         Err(_) => {}   // Store might not support it (e.g., deprecated stores), fall back to scan
     }
 
-    use uuid::Uuid;
-
     // Fallback: Iterate through catalogs to find the asset (O(N))
     let catalogs = store.list_catalogs(tenant_id, None).await?;
 

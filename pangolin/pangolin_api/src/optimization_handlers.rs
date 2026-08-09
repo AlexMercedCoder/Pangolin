@@ -7,7 +7,6 @@ use axum::{
     Json,
 };
 use pangolin_core::user::UserSession;
-use pangolin_store::{CatalogStore, PaginationParams};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -125,20 +124,18 @@ pub async fn search_assets_by_name(
             pangolin_core::user::UserRole::Root | pangolin_core::user::UserRole::TenantAdmin
         ) {
             true
+        } else if let Some(&catalog_id) = catalog_map.get(&catalog_name) {
+            let namespace_str = namespace.join(".");
+            let required_actions = vec![pangolin_core::permission::Action::Read];
+            crate::authz_utils::has_asset_access(
+                catalog_id,
+                &namespace_str,
+                asset.id,
+                &permissions,
+                &required_actions,
+            )
         } else {
-            if let Some(&catalog_id) = catalog_map.get(&catalog_name) {
-                let namespace_str = namespace.join(".");
-                let required_actions = vec![pangolin_core::permission::Action::Read];
-                crate::authz_utils::has_asset_access(
-                    catalog_id,
-                    &namespace_str,
-                    asset.id,
-                    &permissions,
-                    &required_actions,
-                )
-            } else {
-                false
-            }
+            false
         };
 
         all_results.push(AssetSearchResult {

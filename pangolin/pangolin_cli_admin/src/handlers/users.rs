@@ -65,7 +65,7 @@ pub async fn handle_create_user(
         None => Password::new()
             .with_prompt("New User Password")
             .interact()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
     };
 
     let payload = serde_json::json!({

@@ -1,5 +1,4 @@
-use pangolin_api::signing_handlers::*;
-use pangolin_core::model::{Catalog, CatalogType, Tenant, VendingStrategy, Warehouse};
+use pangolin_core::model::{Tenant, VendingStrategy, Warehouse};
 use pangolin_store::memory::MemoryStore;
 use pangolin_store::CatalogStore;
 use std::collections::HashMap;
@@ -59,7 +58,7 @@ async fn test_aws_sts_vending_strategy() {
         }
         _ => panic!("Expected AwsSts strategy"),
     }
-    assert_eq!(wh.use_sts, true);
+    assert!(wh.use_sts);
 }
 
 #[tokio::test]
@@ -122,7 +121,7 @@ async fn test_aws_static_vending_strategy() {
         }
         _ => panic!("Expected AwsStatic strategy"),
     }
-    assert_eq!(wh.use_sts, false);
+    assert!(!wh.use_sts);
 }
 
 #[tokio::test]

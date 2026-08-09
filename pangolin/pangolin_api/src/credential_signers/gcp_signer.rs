@@ -1,7 +1,7 @@
 use super::{CredentialSigner, VendedCredentials};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
 #[cfg(feature = "gcp-oauth")]
@@ -33,7 +33,7 @@ impl CredentialSigner for GcpTokenSigner {
     async fn generate_credentials(
         &self,
         _resource_path: &str,
-        permissions: &[String],
+        _permissions: &[String],
         duration: Duration,
     ) -> Result<VendedCredentials> {
         #[cfg(feature = "gcp-oauth")]

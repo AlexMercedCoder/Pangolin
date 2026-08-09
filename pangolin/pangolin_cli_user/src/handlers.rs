@@ -20,7 +20,7 @@ pub async fn handle_login(
         None => Input::new()
             .with_prompt("Username")
             .interact_text()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
     };
 
     let password = match password_opt {
@@ -28,7 +28,7 @@ pub async fn handle_login(
         None => Password::new()
             .with_prompt("Password")
             .interact()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
     };
 
     client
@@ -382,10 +382,10 @@ pub async fn handle_list_requests(
 }
 
 pub async fn handle_request_access(
-    client: &PangolinClient,
-    resource: String,
-    role: String,
-    reason: String,
+    _client: &PangolinClient,
+    _resource: String,
+    _role: String,
+    _reason: String,
 ) -> Result<(), CliError> {
     Ok(())
 }

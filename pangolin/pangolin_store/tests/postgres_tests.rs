@@ -1,9 +1,8 @@
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 use pangolin_core::model::{Asset, AssetType, Catalog, Namespace, Tenant};
 use pangolin_core::user::{User, UserRole};
-use pangolin_store::{CatalogStore, PostgresStore};
+use pangolin_store::PostgresStore;
 use std::collections::HashMap;
-use std::env;
 use uuid::Uuid;
 
 #[tokio::test]

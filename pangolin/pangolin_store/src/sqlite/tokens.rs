@@ -9,7 +9,7 @@ use uuid::Uuid;
 impl SqliteStore {
     pub async fn store_token(&self, token_info: TokenInfo) -> Result<()> {
         sqlx::query("INSERT INTO active_tokens (token_id, user_id, tenant_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-            .bind(&token_info.id.to_string())
+            .bind(token_info.id.to_string())
             .bind(token_info.user_id.to_string())
             .bind(token_info.tenant_id.to_string())
             .bind(token_info.token.unwrap_or_default())

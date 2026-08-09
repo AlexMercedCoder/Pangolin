@@ -1,0 +1,198 @@
+name: CI
+
+# Every finding in AUDIT_EXECUTION_PLAN.md is a direct or indirect consequence
+# of there being no CI on push or pull request. The only workflow before this
+# one was tag-triggered release building, so nothing ever verified that a commit
+# compiled, passed tests, was formatted or was lint-clean — which is exactly how
+# the test suite rotted to the point where `cargo test --workspace` executed
+# zero tests.
+
+on:
+  push:
+    branches: [main, "hardening/**", "release/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep the debug artefacts small; CI does not need line tables.
+  CARGO_PROFILE_TEST_DEBUG: 0
+  RUSTFLAGS: -D warnings
+
+defaults:
+  run:
+    working-directory: pangolin
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pangolin
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      # Not yet `-D warnings`: the tree still carries warnings inherited from
+      # before CI existed. The gate is that the count must not grow — see
+      # `clippy-ratchet` below — and it flips to blocking once the backlog is
+      # cleared (Phase 2.2).
+      - run: cargo clippy --workspace --all-targets
+        env:
+          RUSTFLAGS: ""
+
+  clippy-ratchet:
+    name: clippy warning count
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pangolin
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - name: Count warnings and compare against the budget
+        env:
+          RUSTFLAGS: ""
+        run: |
+          # `--message-format short` emits one `path:line:col: warning: ...`
+          # line per finding, plus per-crate summary lines that start with
+          # "warning:". Count only the former.
+          count=$(cargo clippy --workspace --all-targets --message-format short 2>&1 \
+            | grep -cE "^[a-zA-Z_/].*warning:" || true)
+          budget=$(cat clippy-warning-budget.txt)
+          echo "clippy warnings: $count (budget: $budget)"
+          if [ "$count" -gt "$budget" ]; then
+            echo "::error::clippy warnings rose from $budget to $count."
+            echo "Fix the new warnings, or lower the budget if you removed some."
+            exit 1
+          fi
+          if [ "$count" -lt "$budget" ]; then
+            echo "::notice::clippy warnings fell to $count; lower clippy-warning-budget.txt."
+          fi
+
+  test:
+    name: test (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The default job proves a clean checkout is green with nothing but a
+          # Rust toolchain — the property that was missing entirely.
+          - name: no external services
+            services: false
+          - name: with PostgreSQL and MongoDB
+            services: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pangolin
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Start databases
+        if: matrix.services
+        working-directory: .
+        run: |
+          docker compose -f docker-compose.db-test.yml up -d postgres mongo
+          for _ in $(seq 1 60); do
+            if docker compose -f docker-compose.db-test.yml exec -T postgres \
+                 pg_isready -U testuser >/dev/null 2>&1; then
+              echo "postgres ready"; break
+            fi
+            sleep 2
+          done
+
+      - name: cargo test --workspace
+        env:
+          RUSTFLAGS: ""
+        run: cargo test --workspace --no-fail-fast
+
+      - name: cargo test --workspace (against live databases)
+        if: matrix.services
+        env:
+          RUSTFLAGS: ""
+          PANGOLIN_TEST_POSTGRES_URL: postgresql://testuser:testpass@localhost:5432/testdb
+          PANGOLIN_TEST_MONGO_URL: mongodb://testuser:testpass@localhost:27017
+        # MongoDB parity is still incomplete; see the Known limitations section
+        # of the README. PostgreSQL is the gate.
+        run: cargo test -p pangolin_store --no-fail-fast -- --skip mongo
+
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: pangolin
+
+  helm:
+    name: helm lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint deployment_assets/helm/pangolin
+      # `helm template` catches templates that reference values which do not
+      # exist, and values that reference templates which do not exist — the
+      # exact failure mode that shipped in the chart (A-34).
+      - run: |
+          helm template pangolin deployment_assets/helm/pangolin \
+            --set config.jwtSecret=ci-only-secret-of-adequate-length-0000 \
+            --set ingress.enabled=true \
+            --set autoscaling.enabled=true > /dev/null
+
+  docker:
+    name: docker build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: pangolin
+          file: pangolin/Dockerfile
+          push: false
+          load: true
+          tags: pangolin-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: The container must not run as root
+        run: |
+          user=$(docker inspect --format '{{.Config.User}}' pangolin-api:ci)
+          echo "image user: ${user:-<root>}"
+          if [ -z "$user" ] || [ "$user" = "root" ] || [ "$user" = "0" ]; then
+            echo "::error::the image runs as root"
+            exit 1
+          fi

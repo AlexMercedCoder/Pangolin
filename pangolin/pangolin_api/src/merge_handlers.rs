@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     Extension, Json,
 };
-use pangolin_core::model::{ConflictResolution, MergeConflict, MergeOperation, ResolutionStrategy};
+use pangolin_core::model::{ConflictResolution, ResolutionStrategy};
 use pangolin_core::user::UserSession;
 use pangolin_store::{CatalogStore, PaginationParams};
 use serde::{Deserialize, Serialize};
@@ -288,17 +288,19 @@ pub async fn complete_merge(
             let _ = store
                 .log_audit_event(
                     tenant.0,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         tenant.0,
+                        Some(session.user_id),
                         session.username.clone(),
-                        "complete_merge".to_string(),
+                        pangolin_core::audit::AuditAction::CompleteMerge,
+                        pangolin_core::audit::ResourceType::MergeOperation,
+                        None,
                         format!(
                             "{}/{}->{}",
                             operation.catalog_name,
                             operation.source_branch,
                             operation.target_branch
                         ),
-                        None,
                     ),
                 )
                 .await;

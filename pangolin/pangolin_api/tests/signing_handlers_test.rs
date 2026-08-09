@@ -1,8 +1,4 @@
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use pangolin_api::iceberg::types::TableResponse;
 use pangolin_api::signing_handlers::{LoadCredentialsResponse, StorageCredential};
-use serde_json::json;
 use std::collections::HashMap;
 
 #[test]

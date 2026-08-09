@@ -1,8 +1,8 @@
 use pangolin_core::model::{Asset, AssetType, Catalog, CatalogType, Namespace, Tenant, Warehouse};
 use pangolin_core::permission::{
-    Action, Permission, PermissionGrant, PermissionScope, Role, UserRole as UserRoleAssignment,
+    Action, Permission, PermissionScope, Role, UserRole as UserRoleAssignment,
 };
-use pangolin_core::user::{OAuthProvider, User, UserRole};
+use pangolin_core::user::{User, UserRole};
 use pangolin_store::{CatalogStore, MongoStore};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

@@ -1,13 +1,10 @@
 use super::MemoryStore;
 use crate::signer::Credentials;
 use anyhow::Result;
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
 use object_store::aws::AmazonS3Builder;
 use pangolin_core::model::VendingStrategy;
 use pangolin_core::model::Warehouse;
 use std::collections::HashMap;
-use uuid::Uuid;
 
 impl MemoryStore {
     pub(crate) async fn get_table_credentials_internal(
@@ -206,7 +203,7 @@ impl MemoryStore {
         let key = &location[prefix.len()..];
 
         // This requires the 'aws' feature on object_store crate
-        let store = builder.build()?;
+        let _store = builder.build()?;
 
         // Presign
         // object_store 0.10+ supports presign_get

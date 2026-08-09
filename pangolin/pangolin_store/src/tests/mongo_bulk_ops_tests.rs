@@ -1,6 +1,5 @@
 use super::bulk_ops_tests::test_bulk_ops_and_ancestry;
 use crate::mongo::MongoStore;
-use std::env;
 
 #[tokio::test]
 async fn test_mongo_store_bulk_ops() {

@@ -58,7 +58,7 @@ pub async fn generate_token(
     let exp = now
         .checked_add_signed(chrono::Duration::hours(expires_in as i64))
         .unwrap()
-        .timestamp() as i64;
+        .timestamp();
 
     let username = payload.username.unwrap_or_else(|| "api-user".to_string());
 
@@ -477,7 +477,7 @@ pub async fn rotate_token(
     let exp = now
         .checked_add_signed(chrono::Duration::hours(expires_in))
         .unwrap()
-        .timestamp() as i64;
+        .timestamp();
 
     let token_id = Uuid::new_v4();
     let tenant_id_str = session.tenant_id.map(|t| t.to_string()).unwrap_or_default();

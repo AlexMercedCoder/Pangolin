@@ -5,7 +5,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use pangolin_core::audit::{AuditLogEntry, AuditLogFilter};
+use pangolin_core::audit::AuditLogFilter;
 use pangolin_core::user::{UserRole, UserSession};
 use pangolin_store::CatalogStore;
 use serde::{Deserialize, Serialize};

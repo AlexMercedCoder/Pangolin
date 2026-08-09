@@ -1,4 +1,4 @@
-use pangolin_core::model::{Asset, AssetType, Catalog, CatalogType, Namespace, Tenant, Warehouse};
+use pangolin_core::model::{Asset, AssetType, Catalog, CatalogType, Namespace, Tenant};
 use pangolin_store::{CatalogStore, MemoryStore};
 use std::collections::HashMap;
 use std::env;

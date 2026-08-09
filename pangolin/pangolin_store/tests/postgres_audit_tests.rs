@@ -1,7 +1,6 @@
 use chrono::Utc;
 use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
-use pangolin_store::{CatalogStore, PostgresStore};
-use std::env;
+use pangolin_store::PostgresStore;
 use uuid::Uuid;
 
 #[tokio::test]

@@ -63,7 +63,7 @@ async fn test_warehouse_update() {
         .update_warehouse(tenant_id, "test_wh".to_string(), updates)
         .await
         .unwrap();
-    assert_eq!(updated.use_sts, true);
+    assert!(updated.use_sts);
     assert!(updated.storage_config.contains_key("role_arn"));
 }
 

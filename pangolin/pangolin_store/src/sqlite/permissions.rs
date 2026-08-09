@@ -1,7 +1,6 @@
 /// Permission operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
-use chrono::Utc;
 use pangolin_core::permission::{Permission, PermissionGrant};
 use sqlx::Row;
 use uuid::Uuid;

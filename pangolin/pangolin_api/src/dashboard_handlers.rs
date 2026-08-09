@@ -7,8 +7,7 @@ use axum::{
     Json,
 };
 use pangolin_core::user::{UserRole, UserSession};
-use pangolin_store::CatalogStore;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::ToSchema;
 
 #[derive(Serialize, ToSchema)]

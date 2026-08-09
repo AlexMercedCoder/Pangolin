@@ -264,14 +264,27 @@ pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
     assert_eq!(asset_count_final, 0, "Asset count should return to 0");
 }
 
+// The suites below are `cfg(test)`-only. The shared assertion helpers above are
+// also reachable under the `test-support` feature, which the crate's own
+// integration targets enable; the suites are not, because their bodies are
+// `#[tokio::test]` functions that vanish outside `cfg(test)` and would leave
+// their imports looking unused.
+#[cfg(test)]
 pub mod audit_tests;
+#[cfg(test)]
 pub mod multi_cloud;
+#[cfg(test)]
 pub mod postgres_merge_tests;
+#[cfg(test)]
 pub mod postgres_parity_tests;
+#[cfg(test)]
 pub mod s3_compatibility;
 // pub mod mongo_parity_tests;
+#[cfg(test)]
 pub mod bulk_ops_tests;
+#[cfg(test)]
 pub mod mongo_bulk_ops_tests;
 #[cfg(test)]
 pub mod p1_optimizations_tests;
+#[cfg(test)]
 pub mod postgres_bulk_ops_tests;

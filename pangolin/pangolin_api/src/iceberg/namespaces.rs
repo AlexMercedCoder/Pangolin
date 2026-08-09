@@ -179,12 +179,14 @@ pub async fn create_namespace(
             let _ = store
                 .log_audit_event(
                     tenant_id,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         tenant_id,
+                        Some(session.user_id),
                         session.username.clone(),
-                        "create_namespace".to_string(),
-                        format!("{}/{}", catalog_name, ns.name.join(".")),
+                        pangolin_core::audit::AuditAction::CreateNamespace,
+                        pangolin_core::audit::ResourceType::Namespace,
                         None,
+                        format!("{}/{}", catalog_name, ns.name.join(".")),
                     ),
                 )
                 .await;
@@ -266,12 +268,14 @@ pub async fn delete_namespace(
             let _ = store
                 .log_audit_event(
                     tenant_id,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         tenant_id,
+                        Some(session.user_id),
                         session.username.clone(),
-                        "delete_namespace".to_string(),
-                        format!("{}/{}", catalog_name, namespace_parts.join(".")),
+                        pangolin_core::audit::AuditAction::DeleteNamespace,
+                        pangolin_core::audit::ResourceType::Namespace,
                         None,
+                        format!("{}/{}", catalog_name, namespace_parts.join(".")),
                     ),
                 )
                 .await;
@@ -303,7 +307,7 @@ pub async fn delete_namespace(
 pub async fn update_namespace_properties(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
-    Extension(session): Extension<UserSession>,
+    Extension(_session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
     Json(payload): Json<UpdateNamespacePropertiesRequest>,
 ) -> impl IntoResponse {

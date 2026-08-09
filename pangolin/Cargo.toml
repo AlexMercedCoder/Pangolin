@@ -9,6 +9,29 @@ members = [
     "pangolin_cli_user",
 ]
 
+# Workspace-wide lint configuration.
+#
+# `unsafe_code` is forbidden to lock in a property the codebase already has:
+# there is zero `unsafe` anywhere in the workspace, and it should stay that way.
+#
+# The three allowed clippy lints are deliberate design points rather than
+# defects, and each is tracked for a structural fix in Phase 2.10 of
+# AUDIT_EXECUTION_PLAN.md:
+#   * too_many_arguments  - the CatalogStore trait threads (tenant, catalog,
+#     branch, namespace, name, pagination) through most methods on purpose, so
+#     the tenant scope is impossible to forget.
+#   * module_inception    - e.g. `postgres::postgres`; renaming is a breaking
+#     change to the public module path.
+#   * type_complexity     - the search result tuple; factoring it into a named
+#     type is part of the typed-error work.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+module_inception = "allow"
+type_complexity = "allow"
+
 [workspace.dependencies]
 axum = "0.7"
 tokio = { version = "1.0", features = ["full"] }

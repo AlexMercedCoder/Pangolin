@@ -198,12 +198,14 @@ pub async fn create_user(
     let _ = store
         .log_audit_event(
             target_tenant,
-            pangolin_core::audit::AuditLogEntry::legacy_new(
+            pangolin_core::audit::AuditLogEntry::success(
                 target_tenant,
+                Some(session.user_id),
                 session.username.clone(),
-                "create_user".to_string(),
-                user.username.clone(),
+                pangolin_core::audit::AuditAction::CreateUser,
+                pangolin_core::audit::ResourceType::User,
                 None,
+                user.username.clone(),
             ),
         )
         .await;
@@ -399,12 +401,14 @@ pub async fn delete_user(
             let _ = store
                 .log_audit_event(
                     audit_tenant,
-                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                    pangolin_core::audit::AuditLogEntry::success(
                         audit_tenant,
+                        Some(session.user_id),
                         session.username.clone(),
-                        "delete_user".to_string(),
-                        user_id.to_string(),
+                        pangolin_core::audit::AuditAction::DeleteUser,
+                        pangolin_core::audit::ResourceType::User,
                         None,
+                        user_id.to_string(),
                     ),
                 )
                 .await;

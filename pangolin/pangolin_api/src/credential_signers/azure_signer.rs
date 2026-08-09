@@ -1,7 +1,7 @@
 use super::{CredentialSigner, VendedCredentials};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
 #[cfg(feature = "azure-oauth")]
@@ -55,7 +55,7 @@ impl CredentialSigner for AzureSasSigner {
         _permissions: &[String],
         duration: Duration,
     ) -> Result<VendedCredentials> {
-        let expires_at = Utc::now() + duration;
+        let _expires_at = Utc::now() + duration;
 
         // Check for account key first (works regardless of feature flags)
         if let Some(account_key) = &self.account_key {

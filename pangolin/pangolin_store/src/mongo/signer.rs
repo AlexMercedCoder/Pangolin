@@ -1,8 +1,7 @@
-use super::main::{from_bson_uuid, to_bson_uuid};
 use super::MongoStore;
-use crate::aws_utils; // Added for new STS logic
-use crate::azure_signer; // Added for Azure signer
-use crate::gcp_signer; // Added for GCP signer
+// Added for new STS logic
+// Added for Azure signer
+// Added for GCP signer
 use crate::signer::{Credentials, Signer};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,13 +10,8 @@ use aws_credential_types; // Added for S3 presigning
 use aws_sdk_s3; // Added for S3 presigning
 use futures::stream::TryStreamExt;
 use mongodb::bson::doc;
-use object_store::aws::AmazonS3Builder;
-use object_store::path::Path as ObjPath;
-use object_store::ObjectStore;
 use pangolin_core::model::{VendingStrategy, Warehouse};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration; // Added for S3 presigning
+// Added for S3 presigning
 
 #[async_trait]
 impl Signer for MongoStore {
@@ -147,7 +141,7 @@ impl Signer for MongoStore {
         let mut target_config = None;
 
         while let Some(warehouse) = cursor.try_next().await? {
-            let bucket_opt = warehouse.storage_config.get("s3.bucket").map(|s| s.clone());
+            let bucket_opt = warehouse.storage_config.get("s3.bucket").cloned();
 
             if let Some(bucket) = bucket_opt {
                 if location.contains(&bucket) {

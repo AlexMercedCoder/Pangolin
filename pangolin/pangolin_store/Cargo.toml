@@ -3,6 +3,9 @@ name = "pangolin_store"
 version = "0.2.0"
 edition = "2021"
 
+[lints]
+workspace = true
+
 [dependencies]
 pangolin_core = { path = "../pangolin_core", features = ["sqlx"] }
 object_store = { workspace = true }

@@ -1,6 +1,6 @@
 use chrono::Utc;
 use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
-use pangolin_store::{CatalogStore, MongoStore};
+use pangolin_store::MongoStore;
 use std::env;
 use uuid::Uuid;
 

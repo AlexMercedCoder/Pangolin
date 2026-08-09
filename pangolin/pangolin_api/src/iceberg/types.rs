@@ -1,4 +1,4 @@
-use pangolin_core::iceberg_metadata::{Snapshot, TableMetadata};
+use pangolin_core::iceberg_metadata::TableMetadata;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::{IntoParams, ToSchema};

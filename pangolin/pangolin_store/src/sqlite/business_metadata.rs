@@ -1,11 +1,10 @@
 /// Business Metadata and Search operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{TimeZone, Utc};
 use pangolin_core::business_metadata::BusinessMetadata;
 use pangolin_core::model::{Asset, AssetType, Branch, BranchType, Catalog, CatalogType, Namespace};
 use sqlx::Row;
-use std::collections::HashMap;
 use uuid::Uuid;
 
 impl SqliteStore {
@@ -94,7 +93,7 @@ impl SqliteStore {
                     if i > 0 {
                         sql.push_str(", ");
                     }
-                    sql.push_str("?");
+                    sql.push('?');
                 }
                 sql.push_str("))");
             }

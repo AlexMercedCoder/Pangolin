@@ -101,7 +101,7 @@ async fn test_warehouse_crud() {
     assert!(retrieved.is_some());
     let retrieved_warehouse = retrieved.unwrap();
     assert_eq!(retrieved_warehouse.name, "test_wh_sts");
-    assert_eq!(retrieved_warehouse.use_sts, true);
+    assert!(retrieved_warehouse.use_sts);
 
     // Test List
     let warehouses = store.list_warehouses(tenant_id, None).await.unwrap();

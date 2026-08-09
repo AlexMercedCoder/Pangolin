@@ -1,4 +1,3 @@
-use crate::auth::TenantId;
 use crate::error::ApiError;
 use crate::iceberg::AppState;
 use axum::{
@@ -9,10 +8,9 @@ use axum::{
 };
 use pangolin_core::model::Tenant;
 use pangolin_core::user::{UserRole, UserSession};
-use pangolin_store::{CatalogStore, PaginationParams};
+use pangolin_store::PaginationParams;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 

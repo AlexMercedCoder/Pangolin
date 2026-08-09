@@ -8,9 +8,8 @@ use axum::{
 use pangolin_core::business_metadata::{AccessRequest, BusinessMetadata, RequestStatus};
 use pangolin_core::permission::{Action, PermissionScope};
 use pangolin_core::user::{UserRole, UserSession};
-use pangolin_store::{CatalogStore, PaginationParams};
+use pangolin_store::PaginationParams;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -259,21 +258,18 @@ pub async fn search_assets(
                     let has_access =
                         if matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
                             true
+                        } else if let Some(&catalog_id) = catalog_map.get(&catalog) {
+                            let ns_str = namespace.join(".");
+                            let required_actions = vec![pangolin_core::permission::Action::Read];
+                            crate::authz_utils::has_asset_access(
+                                catalog_id,
+                                &ns_str,
+                                asset.id,
+                                &permissions,
+                                &required_actions,
+                            )
                         } else {
-                            if let Some(&catalog_id) = catalog_map.get(&catalog) {
-                                let ns_str = namespace.join(".");
-                                let required_actions =
-                                    vec![pangolin_core::permission::Action::Read];
-                                crate::authz_utils::has_asset_access(
-                                    catalog_id,
-                                    &ns_str,
-                                    asset.id,
-                                    &permissions,
-                                    &required_actions,
-                                )
-                            } else {
-                                false
-                            }
+                            false
                         };
 
                     let is_discoverable =

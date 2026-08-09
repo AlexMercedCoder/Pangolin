@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     http::{Request, StatusCode},
-    routing::{get, post},
+    routing::post,
     Router,
 };
 use chrono::Utc;

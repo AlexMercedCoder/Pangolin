@@ -491,6 +491,17 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
     bcrypt::verify(password, hash).map_err(|e| format!("Failed to verify password: {}", e))
 }
 
+/// Compile-time guard: axum requires the middleware future to be `Send`, and
+/// the failure mode without this assertion is an opaque `Service` trait-bound
+/// error pointing at the router rather than at the offending `.await`.
+#[allow(dead_code)]
+fn _assert_middleware_future_is_send() {
+    fn require_send<T: Send>(_: T) {}
+    let _ = |s: State<Arc<dyn CatalogStore + Send + Sync>>, r: Request, n: Next| {
+        require_send(auth_middleware(s, r, n));
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -557,15 +568,4 @@ mod tests {
         let duration = session.expires_at - session.issued_at;
         assert_eq!(duration.num_seconds(), 7200);
     }
-}
-
-/// Compile-time guard: axum requires the middleware future to be `Send`, and
-/// the failure mode without this assertion is an opaque `Service` trait-bound
-/// error pointing at the router rather than at the offending `.await`.
-#[allow(dead_code)]
-fn _assert_middleware_future_is_send() {
-    fn require_send<T: Send>(_: T) {}
-    let _ = |s: State<Arc<dyn CatalogStore + Send + Sync>>, r: Request, n: Next| {
-        require_send(auth_middleware(s, r, n));
-    };
 }

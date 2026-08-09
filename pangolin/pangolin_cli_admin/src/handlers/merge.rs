@@ -163,7 +163,7 @@ pub async fn handle_resolve_merge_conflict(
             if let Some(desc) = Editor::new()
                 .extension(".json")
                 .edit("{\n  \"your_resolution\": \"here\"\n}")
-                .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+                .map_err(|e| CliError::IoError(std::io::Error::other(e)))?
             {
                 let parsed: Value = serde_json::from_str(&desc)
                     .map_err(|e| CliError::ApiError(format!("Invalid JSON: {}", e)))?;

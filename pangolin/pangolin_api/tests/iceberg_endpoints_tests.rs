@@ -8,7 +8,6 @@ mod iceberg_endpoint_tests {
     use pangolin_api::tests_common::EnvGuard;
     use pangolin_core::model::{Catalog, Tenant, Warehouse};
     use pangolin_store::memory::MemoryStore;
-    use pangolin_store::CatalogStore;
     use serial_test::serial;
     use std::collections::HashMap;
     use std::sync::Arc;

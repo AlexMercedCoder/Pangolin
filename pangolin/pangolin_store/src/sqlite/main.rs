@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use pangolin_core::audit::AuditLogEntry;
-use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use pangolin_core::business_metadata::AccessRequest;
 use pangolin_core::model::*;
 use pangolin_core::model::{SyncStats, SystemSettings};
 use pangolin_core::permission::{Permission, Role, UserRole as UserRoleAssignment};

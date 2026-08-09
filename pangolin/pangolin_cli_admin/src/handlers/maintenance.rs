@@ -20,7 +20,7 @@ pub async fn handle_bulk_delete(
         if !Confirm::new()
             .with_prompt("Continue?")
             .interact()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?
         {
             println!("Cancelled.");
             return Ok(());

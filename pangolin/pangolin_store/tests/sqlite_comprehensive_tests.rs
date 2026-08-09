@@ -1,7 +1,7 @@
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 use pangolin_core::model::*;
 use pangolin_core::user::{User, UserRole};
-use pangolin_store::{CatalogStore, SqliteStore};
+use pangolin_store::SqliteStore;
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -573,7 +573,7 @@ async fn test_sqlite_rbac_operations() {
         .await
         .expect("Failed to create tenant");
 
-    use pangolin_core::user::{OAuthProvider, User, UserRole};
+    use pangolin_core::user::{User, UserRole};
 
     // Create User
     let user = User {
@@ -612,8 +612,7 @@ async fn test_sqlite_rbac_operations() {
     assert_eq!(fetched_updated.role, UserRole::TenantUser);
 
     // Create Role
-    use pangolin_core::permission::{Action, Permission, PermissionScope, Role};
-    use std::collections::HashSet;
+    use pangolin_core::permission::Role;
 
     let role = Role {
         id: Uuid::new_v4(),

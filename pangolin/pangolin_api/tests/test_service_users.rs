@@ -46,7 +46,7 @@ async fn test_list_service_users() {
 
     // Create multiple service users
     for i in 0..3 {
-        let api_key_hash = hash(&format!("key_{}", i), DEFAULT_COST).unwrap();
+        let api_key_hash = hash(format!("key_{}", i), DEFAULT_COST).unwrap();
         let service_user = ServiceUser::new(
             format!("service-{}", i),
             None,

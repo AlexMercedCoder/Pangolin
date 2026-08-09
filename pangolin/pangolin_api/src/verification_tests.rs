@@ -9,7 +9,6 @@ use serde_json::json;
 use serial_test::serial;
 use std::sync::Arc;
 use tower::ServiceExt; // for `oneshot`
-use urlencoding::encode;
 use uuid::Uuid;
 
 // Helper to generic test app

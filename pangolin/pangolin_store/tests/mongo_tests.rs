@@ -1,10 +1,8 @@
 use pangolin_core::model::{Asset, AssetType, Branch, Catalog, Namespace, Tenant, Warehouse};
 use pangolin_store::{CatalogStore, MongoStore};
 use std::collections::HashMap;
-use std::env;
 use uuid::Uuid;
 
-use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 use pangolin_core::user::{User, UserRole};
 
 #[tokio::test]
@@ -263,7 +261,7 @@ async fn test_mongo_access_requests() {
         .expect("Create tenant");
 
     // Setup: User
-    let user = User {
+    let _user = User {
         id: Uuid::new_v4(),
         username: "req_user_mongo".to_string(),
         email: "req_mongo@example.com".to_string(),

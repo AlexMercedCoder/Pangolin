@@ -235,7 +235,7 @@ impl SqliteStore {
             .or_else(|| config.get("gcp.region"))
             .map(|s| s.as_str())
             .unwrap_or("");
-        crate::ObjectStoreCache::cache_key(endpoint, &bucket, access_key, region)
+        crate::ObjectStoreCache::cache_key(endpoint, bucket, access_key, region)
     }
 
     pub async fn get_warehouse_for_location(&self, location: &str) -> Result<Option<Warehouse>> {

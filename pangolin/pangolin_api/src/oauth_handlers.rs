@@ -5,14 +5,12 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     Json,
 };
-use base64::Engine;
 use pangolin_core::auth::OAuthConfig;
 use pangolin_core::user::{OAuthProvider, User, UserRole};
 use pangolin_store::CatalogStore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
-use uuid::Uuid;
 
 /// OAuth callback query parameters
 #[derive(Debug, Deserialize, ToSchema)]
@@ -200,7 +198,7 @@ pub async fn oauth_callback(
     });
 
     let user = match existing_user {
-        Some(mut u) => {
+        Some(u) => {
             // Update last login or details if needed
             // For now just use it
             u

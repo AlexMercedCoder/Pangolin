@@ -4,7 +4,6 @@
 #[cfg(test)]
 mod optimization_command_tests {
     use pangolin_cli_common::optimization_types::*;
-    use serde_json;
 
     #[test]
     fn test_dashboard_stats_deserialization() {
@@ -143,8 +142,8 @@ mod optimization_command_tests {
 
         let response: ValidateNamesResponse = serde_json::from_str(json).unwrap();
         assert_eq!(response.results.len(), 2);
-        assert_eq!(response.results[0].available, true);
-        assert_eq!(response.results[1].available, false);
+        assert!(response.results[0].available);
+        assert!(!response.results[1].available);
         assert_eq!(
             response.results[1].reason,
             Some("Name already exists".to_string())

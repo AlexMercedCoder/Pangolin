@@ -40,6 +40,12 @@ pub struct MemoryStore {
     pub(crate) metadata_cache: crate::MetadataCache,
 }
 
+impl Default for MemoryStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemoryStore {
     pub fn new() -> Self {
         Self {

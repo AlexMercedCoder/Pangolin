@@ -242,9 +242,8 @@ impl ConflictDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pangolin_core::model::{AssetType, MergeStatus};
+
     use pangolin_store::MemoryStore;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_detect_no_conflicts() {

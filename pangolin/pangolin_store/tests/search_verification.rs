@@ -1,8 +1,6 @@
 use chrono::Utc;
 use pangolin_core::business_metadata::BusinessMetadata;
-use pangolin_core::model::{
-    Asset, AssetType, Branch, BranchType, Catalog, Commit, Namespace, Tag, Tenant,
-};
+use pangolin_core::model::{Asset, AssetType, Branch, BranchType, Catalog, Namespace, Tenant};
 use pangolin_store::{CatalogStore, MemoryStore};
 use std::collections::HashMap;
 use uuid::Uuid;
