@@ -9,6 +9,20 @@ members = [
     "pangolin_cli_user",
 ]
 
+# One version for the whole workspace.
+#
+# Versions had drifted across five artifacts - pangolin_api 0.5.1,
+# pangolin_core/pangolin_store 0.2.0, the CLIs 0.5.0, the Python SDK 0.5.1, the
+# UI 0.5.0 and the Helm chart 0.1.0 - with no way to tell which combination was
+# ever tested together (C-23). Every crate now inherits from here.
+[workspace.package]
+version = "0.6.0"
+edition = "2021"
+rust-version = "1.92"
+license = "MIT"
+repository = "https://github.com/AlexMercedCoder/pangolin"
+authors = ["Alex Merced"]
+
 # Workspace-wide lint configuration.
 #
 # `unsafe_code` is forbidden to lock in a property the codebase already has:

@@ -13,6 +13,12 @@ const EXIT_STARTUP_FAILURE: i32 = 2;
 
 #[tokio::main]
 async fn main() {
+    // `--healthcheck` probes a running instance and exits 0/1. The runtime image
+    // ships neither curl nor wget, so the binary is its own HEALTHCHECK client.
+    if std::env::args().any(|a| a == "--healthcheck") {
+        std::process::exit(run_healthcheck().await);
+    }
+
     // Configuration is resolved and validated once, before anything else runs,
     // so a misconfiguration is a clear startup error rather than a silently
     // insecure default discovered in production.
@@ -113,6 +119,32 @@ async fn main() {
         std::process::exit(1);
     }
     tracing::info!("shutdown complete");
+}
+
+/// Probe this instance's readiness endpoint. Returns a process exit code.
+async fn run_healthcheck() -> i32 {
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8080".to_string());
+    let url = format!("http://127.0.0.1:{port}/health/ready");
+    match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+    {
+        Ok(client) => match client.get(&url).send().await {
+            Ok(response) if response.status().is_success() => 0,
+            Ok(response) => {
+                eprintln!("healthcheck: {url} returned {}", response.status());
+                1
+            }
+            Err(e) => {
+                eprintln!("healthcheck: {url} unreachable: {e}");
+                1
+            }
+        },
+        Err(e) => {
+            eprintln!("healthcheck: could not build an HTTP client: {e}");
+            1
+        }
+    }
 }
 
 fn env_flag(key: &str) -> bool {

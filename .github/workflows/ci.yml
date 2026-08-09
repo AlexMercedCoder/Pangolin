@@ -159,15 +159,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-      - run: helm lint deployment_assets/helm/pangolin
+      - run: |
+          helm lint deployment_assets/helm/pangolin \
+            --set-string secrets.PANGOLIN_JWT_SECRET=ci-only-secret-of-adequate-length-000
       # `helm template` catches templates that reference values which do not
       # exist, and values that reference templates which do not exist — the
       # exact failure mode that shipped in the chart (A-34).
       - run: |
           helm template pangolin deployment_assets/helm/pangolin \
-            --set config.jwtSecret=ci-only-secret-of-adequate-length-0000 \
+            --set-string secrets.PANGOLIN_JWT_SECRET=ci-only-secret-of-adequate-length-000 \
             --set ingress.enabled=true \
-            --set autoscaling.enabled=true > /dev/null
+            --set autoscaling.enabled=true \
+            --set replicaCount=3 > /dev/null
+      - name: The chart must refuse to render without a signing secret
+        run: |
+          if helm template pangolin deployment_assets/helm/pangolin > /dev/null 2>&1; then
+            echo "::error::the chart rendered with no PANGOLIN_JWT_SECRET"
+            exit 1
+          fi
+          echo "chart correctly refuses to render without a signing secret"
 
   docker:
     name: docker build

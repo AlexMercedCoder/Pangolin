@@ -1,0 +1,22 @@
+{{/*
+  Without a PodDisruptionBudget a node drain can take every replica down at
+  once, which for the authoritative index of a data lake means the lake becomes
+  unreadable for the duration (C-14).
+*/}}
+{{- if and .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "pangolin.fullname" . }}
+  labels:
+    {{- include "pangolin.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable | default 1 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "pangolin.selectorLabels" . | nindent 6 }}
+{{- end }}

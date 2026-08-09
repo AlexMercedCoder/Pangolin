@@ -41,8 +41,8 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 
 ## ✨ Key Features
 
-- **Multi-Tenancy**: Full tenant isolation with dedicated namespaces and warehouses.
-- **Iceberg REST Catalog**: 100% compliant with Apache Iceberg REST spec.
+- **Multi-Tenancy**: Tenant isolation with dedicated namespaces and warehouses, verified by tests against the production auth middleware.
+- **Iceberg REST Catalog**: Implements the core of the Apache Iceberg REST spec — namespace and table CRUD, commits with full requirement enforcement, and credential vending. Not yet complete: see [Iceberg REST coverage](#iceberg-rest-coverage).
 - **Git-like Branching**: Branch, tag, and merge catalogs for safe experimentation.
 - **3-Way Merging**: Intelligent conflict detection with manual and automatic resolution strategies.
 - **Federated Catalogs**: Connect to external Iceberg catalogs as a transparent proxy.
@@ -114,6 +114,9 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 
 ### 🎓 8. Best Practices
 *Production guides and operational wisdom.*
+- **[Production Runbook](docs/operations/runbook.md)** - Health, metrics, incidents, upgrades, backup.
+- **[Backend Feature Parity](docs/operations/backend-parity.md)** - Which features work on which backend.
+- **[OAuth / SSO](docs/operations/oidc.md)** - Configuration, the 0.6.0 client change, and OIDC limitations.
 - **[Best Practices Index](docs/best-practices/README.md)** - Complete guide to operating Pangolin.
 - **[Deployment & Security](docs/best-practices/deployment.md)** - Production checklists.
 - **[Scalability](docs/best-practices/scalability.md)** - Tuning for high performance.
@@ -123,17 +126,98 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 
 ## 🚦 Project Status
 
-**Current Version**: Alpha
+**Current version: 0.6.0. Status: Alpha.**
 
-**Production-Ready Features**:
-- ✅ Iceberg REST Catalog API (100% Compliant)
-- ✅ Multi-Tenancy & Tenant Isolation
-- ✅ Git-like Branching & Tagging
-- ✅ Advanced Audit Logging (UI/CLI/API)
-- ✅ Service Users & API Keys
-- ✅ PostgreSQL, MongoDB, and SQLite Backends
-- ✅ Multi-Cloud Storage (S3, Azure, GCS)
-- ✅ Management UI for Admins & Explorers
+Pangolin is pre-1.0 software under active hardening. It is a capable catalog
+with a broad feature set, and it is not yet something we would tell you to put
+in front of a production data lake without reading the rest of this section.
+
+0.6.0 is a **security release**. If you run anything earlier, upgrade: it fixes
+a remotely exploitable OAuth account-takeover path, a working default JWT
+signing secret published in this repository, an authentication bypass, an
+unauthenticated denial-of-service primitive, and an Iceberg commit path that
+could silently fork snapshot lineage under concurrent writers. See
+[SECURITY.md](SECURITY.md) for the full list and the upgrade steps.
+
+### Maturity by area
+
+| Area | Maturity | Notes |
+|---|---|---|
+| Iceberg REST — namespaces, tables, commits | **Solid** | Commit requirements including `assert-ref-snapshot-id` are enforced; unsupported operations return an error rather than a false `200 OK` |
+| Iceberg REST — full spec coverage | **Partial** | Several endpoints are missing; see below |
+| Multi-tenancy and isolation | **Solid** | Tenant scope is a required parameter throughout; isolation tests pass against the production middleware |
+| Git-style branching, tags, merge | **Good** | Merge direction and branch-asset tracking were fixed in 0.6.0 |
+| RBAC, service users, API keys | **Good** | API keys carry a key ID, so authentication is one bcrypt verification rather than a scan |
+| Audit logging | **Good** | 40+ actions, 19 resource types, plus authentication events from 0.6.0. Writes are best-effort and are not tamper-evident |
+| Observability | **New in 0.6.0** | Prometheus metrics, request IDs, working `RUST_LOG`, real health endpoints |
+| PostgreSQL backend | **Good** | The recommended backend. Provisioning from a fresh database was broken before 0.6.0 |
+| SQLite backend | **Good** | Single-writer; suitable for one node |
+| MongoDB backend | **Beta** | No index management, no transactions, four known-failing tests |
+| Kubernetes deployment | **Good** | The chart shipped referencing three templates that did not exist; all present and CI-linted from 0.6.0 |
+| Transactions for admin operations | **Missing** | See below |
+| HA at N > 1 replicas | **Partial** | See below |
+| Backup / restore / DR | **Undocumented and untested** | |
+
+### Known limitations
+
+Stated plainly rather than buried:
+
+- **Administrative multi-statement operations are not transactional.** Merging a
+  branch, creating a branch by copying assets, and cascading a catalog delete are
+  issued as independent statements on PostgreSQL and MongoDB. A failure partway
+  through leaves the catalog partially applied, with no rollback and no repair
+  tool. Take a backup before large administrative operations.
+  (The Iceberg table-commit path *is* safe — it uses compare-and-swap with
+  requirement enforcement.)
+- **No rate limiting.** There are global concurrency and body limits and a
+  request timeout, but no per-IP or per-account throttle, so the login endpoint
+  is brute-forceable.
+- **OAuth is not full OIDC.** No PKCE, no `id_token` validation, no JWKS, no
+  discovery. Users are matched on provider-supplied email with no
+  `email_verified` check. See [docs/operations/oidc.md](docs/operations/oidc.md).
+- **Warehouse cloud credentials are stored unencrypted** in the catalog database,
+  and the in-process warehouse cache is node-local, so a rotated credential can
+  be served by a peer for up to the cache TTL (5s by default).
+- **Running more than one replica works but is unproven.** The background token
+  cleanup job runs in every replica with no coordination, and the OAuth nonce
+  store is in-process, so OAuth needs session affinity.
+- **No backup, restore or DR procedure has been tested**, and there is no
+  published RPO/RTO. See [docs/operations/runbook.md](docs/operations/runbook.md).
+- **No published performance figures.** There is no load-test harness and no
+  measured capacity model.
+
+`AUDIT_EXECUTION_PLAN.md` in the repository root is a candid, itemised
+assessment of the codebase with a phased plan. It is the best place to
+understand what is weak and what is being worked on.
+
+### Iceberg REST coverage
+
+The README previously claimed 100% spec compliance. That was not supported by
+the code, and is not claimed now.
+
+**Implemented:** `getConfig` (per-warehouse from 0.6.0), `listNamespaces`,
+`createNamespace`, `dropNamespace`, `updateNamespaceProperties`, `listTables`,
+`createTable`, `loadTable`, `updateTable` (commit), `dropTable`, `tableExists`,
+`renameTable`, `createView`, `loadView`, credential vending, and the OAuth token
+endpoint.
+
+**Commit requirements**, all enforced from 0.6.0: `assert-create`,
+`assert-table-uuid`, `assert-ref-snapshot-id`, `assert-current-schema-id`,
+`assert-default-spec-id`, `assert-default-sort-order-id`,
+`assert-last-assigned-field-id`. An unrecognised requirement is refused rather
+than ignored.
+
+**Commit updates**, all applied from 0.6.0: `assign-uuid`,
+`upgrade-format-version`, `add-schema`, `set-current-schema`, `add-snapshot`,
+`set-snapshot-ref`, `remove-snapshot-ref`, `set-properties`,
+`remove-properties`, `set-location`, `add-spec`, `set-default-spec`,
+`add-sort-order`, `set-default-sort-order`, `remove-snapshots`. An unrecognised
+update returns `501` rather than a false `200 OK`.
+
+**Not implemented:** `loadNamespaceMetadata` (GET on a namespace),
+`namespaceExists` (HEAD), `registerTable`, `commitTransaction` (multi-table
+atomic commits), and most of the view API — no list, drop, replace, exists or
+rename.
 
 ---
 
@@ -173,6 +257,21 @@ catalog = load_catalog(
 table = catalog.load_table("analytics.sales@dev")
 df = table.scan().to_pandas()
 ```
+
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). A clean clone should be green with
+nothing but a Rust toolchain:
+
+```bash
+cd pangolin && cargo test --workspace
+```
+
+Security issues: [SECURITY.md](SECURITY.md) — please do not open a public issue.
+
+Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
