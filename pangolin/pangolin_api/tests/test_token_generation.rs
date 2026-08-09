@@ -1,16 +1,16 @@
 #[cfg(test)]
 mod tests {
     use axum::{
-        body::Body,
         body::to_bytes,
+        body::Body,
         http::{Request, StatusCode},
     };
-    use tower::ServiceExt;
-    use pangolin_store::memory::MemoryStore;
-    use std::sync::Arc;
-    use serial_test::serial;
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
     use pangolin_api::tests_common::EnvGuard;
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use pangolin_store::memory::MemoryStore;
+    use serial_test::serial;
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
     #[tokio::test]
     #[serial]
@@ -86,7 +86,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_token_contains_tenant_id() {
-        use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
+        use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
         use pangolin_api::auth::Claims;
 
         let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");

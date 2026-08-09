@@ -37,7 +37,10 @@ mod optimization_command_tests {
         let summary: CatalogSummary = serde_json::from_str(json).unwrap();
         assert_eq!(summary.name, "test_catalog");
         assert_eq!(summary.table_count, 15);
-        assert_eq!(summary.storage_location, Some("s3://bucket/path".to_string()));
+        assert_eq!(
+            summary.storage_location,
+            Some("s3://bucket/path".to_string())
+        );
     }
 
     #[test]
@@ -142,7 +145,10 @@ mod optimization_command_tests {
         assert_eq!(response.results.len(), 2);
         assert_eq!(response.results[0].available, true);
         assert_eq!(response.results[1].available, false);
-        assert_eq!(response.results[1].reason, Some("Name already exists".to_string()));
+        assert_eq!(
+            response.results[1].reason,
+            Some("Name already exists".to_string())
+        );
     }
 
     #[test]

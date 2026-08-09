@@ -1,8 +1,8 @@
 use super::PostgresStore;
 use anyhow::Result;
 use pangolin_core::model::Warehouse;
-use uuid::Uuid;
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Warehouse Operations
@@ -32,7 +32,8 @@ impl PostgresStore {
                 name: row.get("name"),
                 tenant_id: row.get("tenant_id"),
                 use_sts: row.try_get("use_sts").unwrap_or(false),
-                storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+                storage_config: serde_json::from_value(row.get("storage_config"))
+                    .unwrap_or_default(),
                 vending_strategy: serde_json::from_value(row.get("vending_strategy")).ok(),
             }))
         } else {
@@ -40,9 +41,17 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_warehouses(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Warehouse>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_warehouses(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Warehouse>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
             .bind(tenant_id)
@@ -58,14 +67,20 @@ impl PostgresStore {
                 name: row.get("name"),
                 tenant_id: row.get("tenant_id"),
                 use_sts: row.try_get("use_sts").unwrap_or(false),
-                storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+                storage_config: serde_json::from_value(row.get("storage_config"))
+                    .unwrap_or_default(),
                 vending_strategy: serde_json::from_value(row.get("vending_strategy")).ok(),
             });
         }
         Ok(warehouses)
     }
 
-    pub async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: pangolin_core::model::WarehouseUpdate) -> Result<Warehouse> {
+    pub async fn update_warehouse(
+        &self,
+        tenant_id: Uuid,
+        name: String,
+        updates: pangolin_core::model::WarehouseUpdate,
+    ) -> Result<Warehouse> {
         let mut query = String::from("UPDATE warehouses SET ");
         let mut set_clauses = Vec::new();
         let mut bind_count = 1;
@@ -84,7 +99,9 @@ impl PostgresStore {
         }
 
         if set_clauses.is_empty() {
-             return self.get_warehouse(tenant_id, name).await?
+            return self
+                .get_warehouse(tenant_id, name)
+                .await?
                 .ok_or_else(|| anyhow::anyhow!("Warehouse not found"));
         }
 
@@ -99,7 +116,7 @@ impl PostgresStore {
             q = q.bind(serde_json::to_value(storage_config)?);
         }
         if let Some(vending_strategy) = &updates.vending_strategy {
-             q = q.bind(serde_json::to_value(vending_strategy)?);
+            q = q.bind(serde_json::to_value(vending_strategy)?);
         }
         q = q.bind(tenant_id).bind(&name);
 
@@ -121,7 +138,7 @@ impl PostgresStore {
             .bind(&name)
             .execute(&self.pool)
             .await?;
-        
+
         if result.rows_affected() == 0 {
             return Err(anyhow::anyhow!("Warehouse '{}' not found", name));
         }

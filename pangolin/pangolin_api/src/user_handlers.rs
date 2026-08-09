@@ -1,16 +1,15 @@
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
-    Extension,
+    Extension, Json,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use pangolin_core::user::{User, UserRole, OAuthProvider, UserSession};
+use pangolin_core::user::{OAuthProvider, User, UserRole, UserSession};
 use pangolin_store::{CatalogStore, PaginationParams};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// Request to create a new user
 #[derive(Debug, Deserialize, ToSchema)]
@@ -105,17 +104,20 @@ pub async fn create_user(
     Json(req): Json<CreateUserRequest>,
 ) -> Response {
     // Check permissions - only root or tenant admin can create users
-    
+
     // Hash password if provided
     let password_hash = if let Some(password) = req.password {
         match crate::auth_middleware::hash_password(&password) {
             Ok(hash) => Some(hash),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password").into_response(),
+            Err(_) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password")
+                    .into_response()
+            }
         }
     } else {
         None
     };
-    
+
     let user = match req.role {
         UserRole::Root => {
             return (StatusCode::FORBIDDEN, "Cannot create another Root user").into_response();
@@ -123,12 +125,19 @@ pub async fn create_user(
         UserRole::TenantAdmin => {
             // Root can create Tenant Admin
             if session.role != UserRole::Root && session.role != UserRole::TenantAdmin {
-                 return (StatusCode::FORBIDDEN, "Only Root or Tenant Admin can create Tenant Admins").into_response();
+                return (
+                    StatusCode::FORBIDDEN,
+                    "Only Root or Tenant Admin can create Tenant Admins",
+                )
+                    .into_response();
             }
 
             let tenant_id = match req.tenant_id {
                 Some(id) => id,
-                None => return (StatusCode::BAD_REQUEST, "Tenant admin requires tenant_id").into_response(),
+                None => {
+                    return (StatusCode::BAD_REQUEST, "Tenant admin requires tenant_id")
+                        .into_response()
+                }
             };
             if password_hash.is_none() {
                 return (StatusCode::BAD_REQUEST, "Tenant admin requires password").into_response();
@@ -138,18 +147,29 @@ pub async fn create_user(
         UserRole::TenantUser => {
             // Root cannot create Tenant User
             if session.role == UserRole::Root {
-                return (StatusCode::FORBIDDEN, "Root user cannot create Tenant Users. Login as Tenant Admin.").into_response();
+                return (
+                    StatusCode::FORBIDDEN,
+                    "Root user cannot create Tenant Users. Login as Tenant Admin.",
+                )
+                    .into_response();
             }
 
             let tenant_id = match req.tenant_id {
                 Some(id) => id,
-                None => return (StatusCode::BAD_REQUEST, "Tenant user requires tenant_id").into_response(),
+                None => {
+                    return (StatusCode::BAD_REQUEST, "Tenant user requires tenant_id")
+                        .into_response()
+                }
             };
-            
+
             // Ensure Tenant Admin is creating user for THEIR tenant
             if let Some(session_tid) = session.tenant_id {
                 if session_tid != tenant_id {
-                     return (StatusCode::FORBIDDEN, "Cannot create user for another tenant").into_response();
+                    return (
+                        StatusCode::FORBIDDEN,
+                        "Cannot create user for another tenant",
+                    )
+                        .into_response();
                 }
             }
 
@@ -159,23 +179,28 @@ pub async fn create_user(
             User::new_tenant_user(req.username, req.email, password_hash.unwrap(), tenant_id)
         }
     };
-    
+
     // Store user in database
     if let Err(_) = store.create_user(user.clone()).await {
         return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create user").into_response();
     }
-    
+
     // Audit log
     // Log to the target tenant scope so admins can see it
     let target_tenant = user.tenant_id.unwrap_or_default();
-    let _ = store.log_audit_event(target_tenant, pangolin_core::audit::AuditLogEntry::legacy_new(
-        target_tenant,
-        session.username.clone(),
-        "create_user".to_string(),
-        user.username.clone(),
-        None
-    )).await;
-    
+    let _ = store
+        .log_audit_event(
+            target_tenant,
+            pangolin_core::audit::AuditLogEntry::legacy_new(
+                target_tenant,
+                session.username.clone(),
+                "create_user".to_string(),
+                user.username.clone(),
+                None,
+            ),
+        )
+        .await;
+
     (StatusCode::CREATED, Json(UserInfo::from(user))).into_response()
 }
 
@@ -205,10 +230,14 @@ pub async fn list_users(
 
     match store.list_users(Some(tenant_id), Some(pagination)).await {
         Ok(users) => {
-             let infos: Vec<UserInfo> = users.into_iter().map(UserInfo::from).collect();
-             (StatusCode::OK, Json(infos)).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list users: {}", e)).into_response(),
+            let infos: Vec<UserInfo> = users.into_iter().map(UserInfo::from).collect();
+            (StatusCode::OK, Json(infos)).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list users: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -237,11 +266,15 @@ pub async fn get_user(
     if session.user_id != user_id && !crate::authz::is_admin(&session.role) {
         return (StatusCode::FORBIDDEN, "Cannot view other users").into_response();
     }
-    
+
     match store.get_user(user_id).await {
         Ok(Some(user)) => (StatusCode::OK, Json(UserInfo::from(user))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "User not found").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get user: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get user: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -271,39 +304,52 @@ pub async fn update_user(
     // Permission check: Users can update themselves (limited fields), admins can update anyone
     let is_self = session.user_id == user_id;
     let is_admin = crate::authz::is_admin(&session.role);
-    
+
     if !is_self && !is_admin {
         return (StatusCode::FORBIDDEN, "Cannot update other users").into_response();
     }
-    
+
     // Check if user exists
     let existing_user = match store.get_user(user_id).await {
-         Ok(Some(u)) => u,
-         Ok(None) => return (StatusCode::NOT_FOUND, "User not found").into_response(),
-         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch user: {}", e)).into_response(),
+        Ok(Some(u)) => u,
+        Ok(None) => return (StatusCode::NOT_FOUND, "User not found").into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to fetch user: {}", e),
+            )
+                .into_response()
+        }
     };
-    
+
     let mut updated_user = existing_user;
-    
+
     if let Some(email) = req.email {
         updated_user.email = email;
     }
     if let Some(password) = req.password {
         match crate::auth_middleware::hash_password(&password) {
             Ok(hash) => updated_user.password_hash = Some(hash),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password").into_response(),
+            Err(_) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to hash password")
+                    .into_response()
+            }
         }
     }
     if let Some(active) = req.active {
         if !is_admin {
-             return (StatusCode::FORBIDDEN, "Only admins can change user status").into_response();
+            return (StatusCode::FORBIDDEN, "Only admins can change user status").into_response();
         }
         updated_user.active = active;
     }
-    
+
     match store.update_user(updated_user).await {
         Ok(_) => (StatusCode::OK, "User updated").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update user: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update user: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -332,28 +378,37 @@ pub async fn delete_user(
     if !crate::authz::is_admin(&session.role) {
         return (StatusCode::FORBIDDEN, "Only admins can delete users").into_response();
     }
-    
+
     // Cannot delete yourself
     if session.user_id == user_id {
         return (StatusCode::BAD_REQUEST, "Cannot delete yourself").into_response();
     }
-    
+
     match store.delete_user(user_id).await {
         Ok(_) => {
             // Audit Log
             // Since we don't have the user object, we log to the actor's tenant context
             let audit_tenant = session.tenant_id.unwrap_or_default();
-            let _ = store.log_audit_event(audit_tenant, pangolin_core::audit::AuditLogEntry::legacy_new(
-                audit_tenant,
-                session.username.clone(),
-                "delete_user".to_string(),
-                user_id.to_string(),
-                None
-            )).await;
+            let _ = store
+                .log_audit_event(
+                    audit_tenant,
+                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                        audit_tenant,
+                        session.username.clone(),
+                        "delete_user".to_string(),
+                        user_id.to_string(),
+                        None,
+                    ),
+                )
+                .await;
 
             (StatusCode::NO_CONTENT).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete user: {}", e)).into_response(),
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to delete user: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -377,11 +432,12 @@ pub async fn login(
     // This takes precedence over DB users to ensure Root is always accessible even if a tenant user shadows the name
     if req.tenant_id.is_none() {
         let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_else(|_| "admin".to_string());
-        let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
-        
+        let root_pass =
+            std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
+
         if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
             // Create a temporary User object for the root user session
-            let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap(); 
+            let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap();
             let user = User {
                 id: root_id,
                 username: root_user,
@@ -396,7 +452,7 @@ pub async fn login(
                 last_login: None,
                 active: true,
             };
-            
+
             // Create session
             let session = crate::auth_middleware::create_session(
                 user.id,
@@ -407,10 +463,17 @@ pub async fn login(
             );
 
             // Generate token
-            let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
+            let secret = std::env::var("PANGOLIN_JWT_SECRET")
+                .unwrap_or_else(|_| "default_secret_for_dev".to_string());
             let token = match crate::auth_middleware::generate_token(session, &secret) {
                 Ok(t) => t,
-                Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to generate token").into_response(),
+                Err(_) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to generate token",
+                    )
+                        .into_response()
+                }
             };
 
             let response = LoginResponse {
@@ -431,27 +494,40 @@ pub async fn login(
             Ok(users) => {
                 // Find user by username within this tenant's users
                 users.into_iter().find(|u| u.username == req.username)
-            },
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+            }
+            Err(_) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
         }
     } else {
         // Root login: tenant_id is null/omitted
         // Note: We already checked env vars above. This is for DB-persisted root users.
-        store.get_user_by_username(&req.username).await.unwrap_or(None)
+        store
+            .get_user_by_username(&req.username)
+            .await
+            .unwrap_or(None)
     };
-    
+
     let user = match user_opt {
         Some(u) => {
             // For tenant-scoped login, verify user is not Root
             if req.tenant_id.is_some() && u.role == UserRole::Root {
-                return (StatusCode::UNAUTHORIZED, "Root users must login without tenant_id").into_response();
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "Root users must login without tenant_id",
+                )
+                    .into_response();
             }
-            
+
             // For Root login (no tenant_id), verify user IS Root
             if req.tenant_id.is_none() && u.role != UserRole::Root {
-                return (StatusCode::UNAUTHORIZED, "Tenant users must login with tenant_id").into_response();
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "Tenant users must login with tenant_id",
+                )
+                    .into_response();
             }
-            
+
             // Verify password for DB user
             if let Some(hash) = &u.password_hash {
                 match crate::auth_middleware::verify_password(&req.password, hash) {
@@ -459,9 +535,13 @@ pub async fn login(
                     _ => return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response(),
                 }
             } else {
-                return (StatusCode::UNAUTHORIZED, "Account uses external authentication").into_response();
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    "Account uses external authentication",
+                )
+                    .into_response();
             }
-        },
+        }
         None => {
             return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response();
         }
@@ -477,10 +557,17 @@ pub async fn login(
     );
 
     // Generate token
-    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
+    let secret = std::env::var("PANGOLIN_JWT_SECRET")
+        .unwrap_or_else(|_| "default_secret_for_dev".to_string());
     let token = match crate::auth_middleware::generate_token(session, &secret) {
         Ok(t) => t,
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to generate token").into_response(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to generate token",
+            )
+                .into_response()
+        }
     };
 
     let response = LoginResponse {
@@ -510,7 +597,7 @@ pub async fn get_current_user(
 ) -> Response {
     // Try to fetch full user details from DB
     if let Ok(Some(user)) = store.get_user(session.user_id).await {
-         return (StatusCode::OK, Json(UserInfo::from(user))).into_response();
+        return (StatusCode::OK, Json(UserInfo::from(user))).into_response();
     }
 
     // Fallback for Root user or if DB fetch fails (e.g. ephemeral root session)
@@ -524,7 +611,7 @@ pub async fn get_current_user(
         created_at: chrono::Utc::now(),
         last_login: Some(chrono::Utc::now()),
     };
-    
+
     (StatusCode::OK, Json(user_info)).into_response()
 }
 
@@ -539,11 +626,9 @@ pub async fn get_current_user(
     ),
     security(("bearer_auth" = []))
 )]
-pub async fn logout(
-    State(_store): State<Arc<dyn CatalogStore + Send + Sync>>,
-) -> Response {
+pub async fn logout(State(_store): State<Arc<dyn CatalogStore + Send + Sync>>) -> Response {
     // TODO: Implement token invalidation if using token blacklist
-    
+
     (StatusCode::NO_CONTENT).into_response()
 }
 

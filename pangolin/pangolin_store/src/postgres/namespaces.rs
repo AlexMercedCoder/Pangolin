@@ -1,12 +1,17 @@
 use super::PostgresStore;
 use anyhow::Result;
 use pangolin_core::model::Namespace;
-use uuid::Uuid;
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Namespace Operations
-    pub async fn create_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Namespace) -> Result<()> {
+    pub async fn create_namespace(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Namespace,
+    ) -> Result<()> {
         sqlx::query("INSERT INTO namespaces (id, tenant_id, catalog_name, namespace_path, properties) VALUES ($1, $2, $3, $4, $5)")
             .bind(Uuid::new_v4())
             .bind(tenant_id)
@@ -18,7 +23,12 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub async fn get_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<Option<Namespace>> {
+    pub async fn get_namespace(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+    ) -> Result<Option<Namespace>> {
         let row: Option<sqlx::postgres::PgRow> = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3")
             .bind(tenant_id)
             .bind(catalog_name)
@@ -36,9 +46,19 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Namespace>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_namespaces(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        _parent: Option<String>,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Namespace>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 LIMIT $3 OFFSET $4")
             .bind(tenant_id)
@@ -58,7 +78,12 @@ impl PostgresStore {
         Ok(namespaces)
     }
 
-    pub async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()> {
+    pub async fn delete_namespace(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+    ) -> Result<()> {
         sqlx::query("DELETE FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 AND namespace_path = $3")
             .bind(tenant_id)
             .bind(catalog_name)
@@ -68,8 +93,16 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: std::collections::HashMap<String, String>) -> Result<()> {
-        let ns = self.get_namespace(tenant_id, catalog_name, namespace.clone()).await?;
+    pub async fn update_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        let ns = self
+            .get_namespace(tenant_id, catalog_name, namespace.clone())
+            .await?;
         if let Some(mut n) = ns {
             n.properties.extend(properties);
             sqlx::query("UPDATE namespaces SET properties = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_path = $4")

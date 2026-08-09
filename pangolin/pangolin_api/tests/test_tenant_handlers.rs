@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod tests {
+    use axum::body::to_bytes;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
-    use axum::body::to_bytes;
-    use tower::ServiceExt;
-    use pangolin_store::{memory::MemoryStore, CatalogStore};
-    use std::sync::Arc;
-    use serial_test::serial;
     use pangolin_api::tests_common::EnvGuard;
+    use pangolin_store::{memory::MemoryStore, CatalogStore};
+    use serial_test::serial;
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
     #[tokio::test]
     #[serial]
@@ -43,7 +43,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_tenant_creation_allowed_with_auth() {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
@@ -70,14 +70,14 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_list_tenants_works_in_no_auth_mode() {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         let _no_auth_guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
         let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
 
         let store = Arc::new(MemoryStore::new());
-        
+
         // Create default tenant
         let default_tenant = pangolin_core::model::Tenant {
             id: uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap(),

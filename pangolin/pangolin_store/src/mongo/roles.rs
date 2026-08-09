@@ -1,10 +1,10 @@
-use super::MongoStore;
 use super::main::to_bson_uuid;
+use super::MongoStore;
 use anyhow::Result;
+use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
 use pangolin_core::permission::{Role, UserRole};
 use uuid::Uuid;
-use futures::stream::TryStreamExt;
 
 impl MongoStore {
     pub async fn create_role(&self, role: Role) -> Result<()> {
@@ -19,17 +19,21 @@ impl MongoStore {
     }
 
     pub async fn get_role_by_name(&self, tenant_id: Uuid, name: &str) -> Result<Option<Role>> {
-        let filter = doc! { 
+        let filter = doc! {
             "tenant-id": to_bson_uuid(tenant_id),
-            "name": name 
+            "name": name
         };
         let role = self.roles().find_one(filter).await?;
         Ok(role)
     }
 
-    pub async fn list_roles(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Role>> {
+    pub async fn list_roles(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Role>> {
         let filter = doc! { "tenant-id": to_bson_uuid(tenant_id) };
-        
+
         let collection = self.roles();
         let mut find = collection.find(filter);
         if let Some(p) = pagination {
@@ -64,22 +68,32 @@ impl MongoStore {
     // Role Assignment
     pub async fn assign_role(&self, assignment: UserRole) -> Result<()> {
         let doc = mongodb::bson::to_document(&assignment)?;
-        self.db.collection::<Document>("user_roles").insert_one(doc).await?;
+        self.db
+            .collection::<Document>("user_roles")
+            .insert_one(doc)
+            .await?;
         Ok(())
     }
 
     pub async fn remove_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()> {
-        let filter = doc! { 
+        let filter = doc! {
             "user_id": to_bson_uuid(user_id),
             "role_id": to_bson_uuid(role_id)
         };
-        self.db.collection::<Document>("user_roles").delete_one(filter).await?;
+        self.db
+            .collection::<Document>("user_roles")
+            .delete_one(filter)
+            .await?;
         Ok(())
     }
 
     pub async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<UserRole>> {
         let filter = doc! { "user_id": to_bson_uuid(user_id) };
-        let cursor = self.db.collection::<UserRole>("user_roles").find(filter).await?;
+        let cursor = self
+            .db
+            .collection::<UserRole>("user_roles")
+            .find(filter)
+            .await?;
         let assignments: Vec<UserRole> = cursor.try_collect().await?;
         Ok(assignments)
     }

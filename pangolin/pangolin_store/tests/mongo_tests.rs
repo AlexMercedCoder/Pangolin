@@ -1,11 +1,11 @@
-use pangolin_store::{MongoStore, CatalogStore};
-use pangolin_core::model::{Tenant, Catalog, Namespace, Asset, AssetType, Branch, Warehouse};
-use uuid::Uuid;
+use pangolin_core::model::{Asset, AssetType, Branch, Catalog, Namespace, Tenant, Warehouse};
+use pangolin_store::{CatalogStore, MongoStore};
 use std::collections::HashMap;
 use std::env;
+use uuid::Uuid;
 
-use pangolin_core::user::{User, UserRole};
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use pangolin_core::user::{User, UserRole};
 
 #[tokio::test]
 async fn test_mongo_store_flow() {
@@ -17,7 +17,9 @@ async fn test_mongo_store_flow() {
         }
     };
 
-    let store = MongoStore::new(&connection_string, "admin").await.expect("Failed to create MongoStore");
+    let store = MongoStore::new(&connection_string, "admin")
+        .await
+        .expect("Failed to create MongoStore");
 
     // Test Tenant
     let tenant_id = Uuid::new_v4();
@@ -37,7 +39,10 @@ async fn test_mongo_store_flow() {
         use_sts: false,
         vending_strategy: None,
     };
-    store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
+    store
+        .create_warehouse(tenant_id, warehouse.clone())
+        .await
+        .unwrap();
 
     // 2. Create Catalog
     let catalog = Catalog {
@@ -49,14 +54,20 @@ async fn test_mongo_store_flow() {
         federated_config: None,
         properties: HashMap::new(),
     };
-    store.create_catalog(tenant_id, catalog.clone()).await.expect("Failed to create catalog");
+    store
+        .create_catalog(tenant_id, catalog.clone())
+        .await
+        .expect("Failed to create catalog");
 
     // 3. Create Namespace
     let namespace = Namespace {
         name: vec!["db".to_string(), "schema".to_string()],
         properties: HashMap::new(),
     };
-    store.create_namespace(tenant_id, "test_catalog", namespace.clone()).await.expect("Failed to create namespace");
+    store
+        .create_namespace(tenant_id, "test_catalog", namespace.clone())
+        .await
+        .expect("Failed to create namespace");
 
     // 4. Create Asset
     let asset = Asset {
@@ -66,22 +77,59 @@ async fn test_mongo_store_flow() {
         location: "s3://bucket/test".to_string(),
         properties: HashMap::new(),
     };
-    store.create_asset(tenant_id, "test_catalog", None, namespace.name.clone(), asset.clone()).await.expect("Failed to create asset");
+    store
+        .create_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            asset.clone(),
+        )
+        .await
+        .expect("Failed to create asset");
 
-    let fetched_asset = store.get_asset(tenant_id, "test_catalog", None, namespace.name.clone(), "test_table".to_string()).await.expect("Failed to get asset");
+    let fetched_asset = store
+        .get_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            "test_table".to_string(),
+        )
+        .await
+        .expect("Failed to get asset");
     assert_eq!(fetched_asset.unwrap().name, "test_table");
 
     // 5. List Assets
-    let assets = store.list_assets(tenant_id, "test_catalog", None, namespace.name.clone(), None).await.expect("Failed to list assets");
+    let assets = store
+        .list_assets(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            None,
+        )
+        .await
+        .expect("Failed to list assets");
     assert_eq!(assets.len(), 1);
     assert_eq!(assets[0].name, "test_table");
 
     // 6. Update Namespace Properties
     let mut new_props = HashMap::new();
     new_props.insert("owner".to_string(), "data_team".to_string());
-    store.update_namespace_properties(tenant_id, "test_catalog", namespace.name.clone(), new_props).await.expect("Failed to update namespace properties");
-    let updated_namespace = store.get_namespace(tenant_id, "test_catalog", namespace.name.clone()).await.expect("Failed to get namespace").unwrap();
-    assert_eq!(updated_namespace.properties.get("owner").unwrap(), "data_team");
+    store
+        .update_namespace_properties(tenant_id, "test_catalog", namespace.name.clone(), new_props)
+        .await
+        .expect("Failed to update namespace properties");
+    let updated_namespace = store
+        .get_namespace(tenant_id, "test_catalog", namespace.name.clone())
+        .await
+        .expect("Failed to get namespace")
+        .unwrap();
+    assert_eq!(
+        updated_namespace.properties.get("owner").unwrap(),
+        "data_team"
+    );
 
     // 7. Create Branch
     let branch = Branch {
@@ -90,8 +138,14 @@ async fn test_mongo_store_flow() {
         branch_type: pangolin_core::model::BranchType::Experimental,
         assets: vec![],
     };
-    store.create_branch(tenant_id, "test_catalog", branch.clone()).await.expect("Failed to create branch");
-    let fetched_branch = store.get_branch(tenant_id, "test_catalog", "dev".to_string()).await.expect("Failed to get branch");
+    store
+        .create_branch(tenant_id, "test_catalog", branch.clone())
+        .await
+        .expect("Failed to create branch");
+    let fetched_branch = store
+        .get_branch(tenant_id, "test_catalog", "dev".to_string())
+        .await
+        .expect("Failed to get branch");
     assert_eq!(fetched_branch.unwrap().name, "dev");
 
     // 8. Rename Asset
@@ -100,26 +154,85 @@ async fn test_mongo_store_flow() {
         name: dest_namespace.clone(),
         properties: HashMap::new(),
     };
-    store.create_namespace(tenant_id, "test_catalog", new_namespace.clone()).await.expect("Failed to create new namespace");
-    
-    store.rename_asset(tenant_id, "test_catalog", None, namespace.name.clone(), "test_table".to_string(), dest_namespace.clone(), "renamed_table".to_string()).await.expect("Failed to rename asset");
-    
-    let old_asset = store.get_asset(tenant_id, "test_catalog", None, namespace.name.clone(), "test_table".to_string()).await.expect("Failed to get old asset");
+    store
+        .create_namespace(tenant_id, "test_catalog", new_namespace.clone())
+        .await
+        .expect("Failed to create new namespace");
+
+    store
+        .rename_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            "test_table".to_string(),
+            dest_namespace.clone(),
+            "renamed_table".to_string(),
+        )
+        .await
+        .expect("Failed to rename asset");
+
+    let old_asset = store
+        .get_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            "test_table".to_string(),
+        )
+        .await
+        .expect("Failed to get old asset");
     assert!(old_asset.is_none());
-    
-    let new_asset = store.get_asset(tenant_id, "test_catalog", None, dest_namespace.clone(), "renamed_table".to_string()).await.expect("Failed to get new asset");
+
+    let new_asset = store
+        .get_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            dest_namespace.clone(),
+            "renamed_table".to_string(),
+        )
+        .await
+        .expect("Failed to get new asset");
     assert_eq!(new_asset.unwrap().name, "renamed_table");
 
     // 9. Delete Asset
-    store.delete_asset(tenant_id, "test_catalog", None, dest_namespace.clone(), "renamed_table".to_string()).await.expect("Failed to delete asset");
-    let deleted_asset = store.get_asset(tenant_id, "test_catalog", None, dest_namespace.clone(), "renamed_table".to_string()).await.expect("Failed to get deleted asset");
+    store
+        .delete_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            dest_namespace.clone(),
+            "renamed_table".to_string(),
+        )
+        .await
+        .expect("Failed to delete asset");
+    let deleted_asset = store
+        .get_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            dest_namespace.clone(),
+            "renamed_table".to_string(),
+        )
+        .await
+        .expect("Failed to get deleted asset");
     assert!(deleted_asset.is_none());
 
     // 10. Delete Namespace
-    store.delete_namespace(tenant_id, "test_catalog", namespace.name.clone()).await.expect("Failed to delete namespace");
-    let deleted_namespace = store.get_namespace(tenant_id, "test_catalog", namespace.name.clone()).await.expect("Failed to get deleted namespace");
+    store
+        .delete_namespace(tenant_id, "test_catalog", namespace.name.clone())
+        .await
+        .expect("Failed to delete namespace");
+    let deleted_namespace = store
+        .get_namespace(tenant_id, "test_catalog", namespace.name.clone())
+        .await
+        .expect("Failed to get deleted namespace");
     assert!(deleted_namespace.is_none());
-    let deleted_namespace = store.get_namespace(tenant_id, "test_catalog", namespace.name.clone()).await.expect("Failed to get deleted namespace");
+    let deleted_namespace = store
+        .get_namespace(tenant_id, "test_catalog", namespace.name.clone())
+        .await
+        .expect("Failed to get deleted namespace");
     assert!(deleted_namespace.is_none());
 }
 
@@ -133,7 +246,9 @@ async fn test_mongo_access_requests() {
         }
     };
 
-    let store = MongoStore::new(&connection_string, "admin_test").await.expect("Failed to create MongoStore");
+    let store = MongoStore::new(&connection_string, "admin_test")
+        .await
+        .expect("Failed to create MongoStore");
 
     // Setup: Tenant
     let tenant_id = Uuid::new_v4();
@@ -142,7 +257,10 @@ async fn test_mongo_access_requests() {
         name: "req_tenant".to_string(),
         properties: HashMap::new(),
     };
-    store.create_tenant(tenant.clone()).await.expect("Create tenant");
+    store
+        .create_tenant(tenant.clone())
+        .await
+        .expect("Create tenant");
 
     // Setup: User
     let user = User {
@@ -173,16 +291,16 @@ async fn test_mongo_access_requests() {
     // If not, I can't run this test fully. I might need to implement it.
     // FOR NOW, I will assume it exists or comment it out if generic, but Access Request relies on it.
     // `sqlite.rs` had `create_user` inside `impl SqliteStore`.
-    
+
     // I'll proceed assuming I need to add `create_user` if missing.
     // The test logic relies on `AccessRequest` pointing to `user_id`.
     // In Mongo, relations are weak, so it might work without creating user if no FK constraint.
     // BUT `list_access_requests` uses lookup on `users`. So user MUST exist.
-    
+
     // I will add `create_user` to `MongoStore` in `mongo.rs` if missing.
     // I'll assume I'll add it in next step if compilation fails, OR blindly add it now.
     // Let's add the test first.
-    
+
     // Setup: Asset
     let catalog = Catalog {
         id: Uuid::new_v4(),
@@ -193,13 +311,19 @@ async fn test_mongo_access_requests() {
         federated_config: None,
         properties: HashMap::new(),
     };
-    store.create_catalog(tenant_id, catalog.clone()).await.expect("Create catalog");
+    store
+        .create_catalog(tenant_id, catalog.clone())
+        .await
+        .expect("Create catalog");
 
     let namespace = Namespace {
         name: vec!["default".to_string()],
         properties: HashMap::new(),
     };
-    store.create_namespace(tenant_id, "req_catalog", namespace.clone()).await.expect("Create namespace");
+    store
+        .create_namespace(tenant_id, "req_catalog", namespace.clone())
+        .await
+        .expect("Create namespace");
 
     let asset = Asset {
         id: Uuid::new_v4(),
@@ -208,8 +332,17 @@ async fn test_mongo_access_requests() {
         location: "s3://bucket/sec".to_string(),
         properties: HashMap::new(),
     };
-    store.create_asset(tenant_id, "req_catalog", None, vec!["default".to_string()], asset.clone()).await.expect("Create asset");
-    
+    store
+        .create_asset(
+            tenant_id,
+            "req_catalog",
+            None,
+            vec!["default".to_string()],
+            asset.clone(),
+        )
+        .await
+        .expect("Create asset");
+
     // 1. Create Request (Mocking user existence for now if create_user missing, but lookup needs it)
     // Actually, I should IMPLEMENT `create_user` in mongo.rs first to be safe.
     // I will finish this replacement first.

@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 #[cfg(feature = "utoipa")]
 use utoipa::ToSchema;
@@ -11,43 +11,43 @@ use utoipa::ToSchema;
 pub struct AuditLogEntry {
     /// Unique identifier for this audit log entry
     pub id: Uuid,
-    
+
     /// Tenant that owns the resource being operated on
     pub tenant_id: Uuid,
-    
+
     /// User who performed the action (None for system operations)
     pub user_id: Option<Uuid>,
-    
+
     /// Username for readability (actor field for backward compatibility)
     pub username: String,
-    
+
     /// Type of action performed
     pub action: AuditAction,
-    
+
     /// Type of resource being operated on
     pub resource_type: ResourceType,
-    
+
     /// UUID of the specific resource (if applicable)
     pub resource_id: Option<Uuid>,
-    
+
     /// Human-readable resource name/path
     pub resource_name: String,
-    
+
     /// When the action occurred (UTC)
     pub timestamp: DateTime<Utc>,
-    
+
     /// Client IP address (if available)
     pub ip_address: Option<String>,
-    
+
     /// Client user agent (if available)
     pub user_agent: Option<String>,
-    
+
     /// Whether the operation succeeded or failed
     pub result: AuditResult,
-    
+
     /// Error message if the operation failed
     pub error_message: Option<String>,
-    
+
     /// Additional structured metadata about the operation
     pub metadata: Option<serde_json::Value>,
 }
@@ -63,12 +63,12 @@ pub enum AuditAction {
     CreateCatalog,
     UpdateCatalog,
     DeleteCatalog,
-    
+
     // Namespace Operations
     CreateNamespace,
     UpdateNamespace,
     DeleteNamespace,
-    
+
     // Table Operations
     CreateTable,
     UpdateTable,
@@ -76,79 +76,79 @@ pub enum AuditAction {
     RenameTable,
     CommitTable,
     LoadTable,
-    
+
     // View Operations
     CreateView,
     UpdateView,
     DropView,
     RenameView,
     LoadView,
-    
+
     // Branch Operations
     CreateBranch,
     DeleteBranch,
     MergeBranch,
-    
+
     // User Management
     CreateUser,
     UpdateUser,
     DeleteUser,
     Login,
     Logout,
-    
+
     // Service Users
     CreateServiceUser,
     UpdateServiceUser,
     DeleteServiceUser,
     RotateApiKey,
-    
+
     // Permissions
     GrantPermission,
     RevokePermission,
-    
+
     // Federated Catalogs
     CreateFederatedCatalog,
     UpdateFederatedCatalog,
     DeleteFederatedCatalog,
     TestFederatedConnection,
-    
+
     // Warehouses
     CreateWarehouse,
     UpdateWarehouse,
     DeleteWarehouse,
-    
+
     // Tenants
     CreateTenant,
     UpdateTenant,
     DeleteTenant,
-    
+
     // Tags
     CreateTag,
     DeleteTag,
-    
+
     // Merge Operations
     InitiateMerge,
     CompleteMerge,
     AbortMerge,
     ResolveConflict,
     ListConflicts,
-    
+
     // Business Metadata
     AddMetadata,
     UpdateMetadata,
     DeleteMetadata,
     SearchAssets,
-    
+
     // Access Requests
     RequestAccess,
     ApproveAccess,
     DenyAccess,
     UpdateAccessRequest,
-    
+
     // Tokens
     GenerateToken,
     RevokeToken,
-    
+
     // Commits
     CreateCommit,
     ListCommits,
@@ -199,28 +199,28 @@ pub enum AuditResult {
 pub struct AuditLogFilter {
     /// Filter by user who performed the action
     pub user_id: Option<Uuid>,
-    
+
     /// Filter by action type
     pub action: Option<AuditAction>,
-    
+
     /// Filter by resource type
     pub resource_type: Option<ResourceType>,
-    
+
     /// Filter by specific resource ID
     pub resource_id: Option<Uuid>,
-    
+
     /// Filter by start time (inclusive)
     pub start_time: Option<DateTime<Utc>>,
-    
+
     /// Filter by end time (inclusive)
     pub end_time: Option<DateTime<Utc>>,
-    
+
     /// Filter by result (success/failure)
     pub result: Option<AuditResult>,
-    
+
     /// Maximum number of results to return
     pub limit: Option<usize>,
-    
+
     /// Offset for pagination
     pub offset: Option<usize>,
 }
@@ -254,26 +254,26 @@ impl AuditLogEntry {
             metadata: None,
         }
     }
-    
+
     /// Add request context (IP address and user agent)
     pub fn with_context(mut self, ip_address: Option<String>, user_agent: Option<String>) -> Self {
         self.ip_address = ip_address;
         self.user_agent = user_agent;
         self
     }
-    
+
     /// Add error message for failed operations
     pub fn with_error(mut self, error: String) -> Self {
         self.error_message = Some(error);
         self
     }
-    
+
     /// Add structured metadata
     pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
         self.metadata = Some(metadata);
         self
     }
-    
+
     /// Create a success audit log entry
     pub fn success(
         tenant_id: Uuid,
@@ -295,7 +295,7 @@ impl AuditLogEntry {
             AuditResult::Success,
         )
     }
-    
+
     /// Create a failure audit log entry
     pub fn failure(
         tenant_id: Uuid,
@@ -323,13 +323,16 @@ impl AuditLogEntry {
 // Backward compatibility: Keep old constructor signature
 impl AuditLogEntry {
     /// Legacy constructor for backward compatibility
-    /// 
+    ///
     /// This maintains the old signature where:
     /// - actor -> username
     /// - action -> string (will be converted to AuditAction::UpdateMetadata as default)
     /// - resource -> resource_name
     /// - details -> metadata
-    #[deprecated(since = "0.2.0", note = "Use AuditLogEntry::new() or AuditLogEntry::success() instead")]
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use AuditLogEntry::new() or AuditLogEntry::success() instead"
+    )]
     pub fn legacy_new(
         tenant_id: Uuid,
         actor: String,
@@ -350,7 +353,7 @@ impl AuditLogEntry {
             "update_table" => AuditAction::UpdateTable,
             _ => AuditAction::UpdateMetadata, // Default fallback
         };
-        
+
         // Infer resource type from resource string
         let resource_type = if resource.contains("catalog") {
             ResourceType::Catalog
@@ -361,9 +364,9 @@ impl AuditLogEntry {
         } else {
             ResourceType::Metadata
         };
-        
+
         let metadata = details.map(|d| serde_json::json!({ "details": d }));
-        
+
         Self {
             id: Uuid::new_v4(),
             tenant_id,
@@ -414,12 +417,12 @@ mod tests {
             Some(Uuid::new_v4()),
             "analytics.sales.transactions".to_string(),
         );
-        
+
         assert_eq!(entry.result, AuditResult::Success);
         assert_eq!(entry.action, AuditAction::CreateTable);
         assert_eq!(entry.resource_type, ResourceType::Table);
     }
-    
+
     #[test]
     fn test_audit_log_entry_with_context() {
         let entry = AuditLogEntry::success(
@@ -435,11 +438,11 @@ mod tests {
             Some("192.168.1.100".to_string()),
             Some("PyIceberg/0.5.0".to_string()),
         );
-        
+
         assert_eq!(entry.ip_address, Some("192.168.1.100".to_string()));
         assert_eq!(entry.user_agent, Some("PyIceberg/0.5.0".to_string()));
     }
-    
+
     #[test]
     fn test_audit_log_entry_failure() {
         let entry = AuditLogEntry::failure(
@@ -451,11 +454,11 @@ mod tests {
             "analytics.sales.transactions".to_string(),
             "Table not found".to_string(),
         );
-        
+
         assert_eq!(entry.result, AuditResult::Failure);
         assert_eq!(entry.error_message, Some("Table not found".to_string()));
     }
-    
+
     #[test]
     fn test_audit_log_filter_default() {
         let filter = AuditLogFilter::default();

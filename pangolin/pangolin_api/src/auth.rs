@@ -1,14 +1,14 @@
-use uuid::Uuid;
-use serde::{Deserialize, Serialize};
-use pangolin_core::user::{UserRole, UserSession};
 use chrono::DateTime;
+use pangolin_core::user::{UserRole, UserSession};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug)]
 pub struct TenantId(pub Uuid);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: String, // user_id
+    pub sub: String,         // user_id
     pub jti: Option<String>, // JWT ID for token revocation (optional for backward compatibility)
     pub username: String,
     pub tenant_id: Option<String>,
@@ -36,7 +36,9 @@ impl Claims {
         Ok(UserSession {
             user_id: Uuid::parse_str(&self.sub).map_err(|e| e.to_string())?,
             username: self.username.clone(),
-            tenant_id: self.tenant_id.as_ref()
+            tenant_id: self
+                .tenant_id
+                .as_ref()
                 .map(|id| Uuid::parse_str(id))
                 .transpose()
                 .map_err(|e| e.to_string())?,

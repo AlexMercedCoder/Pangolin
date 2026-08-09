@@ -1,10 +1,10 @@
 /// User operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
-use sqlx::Row;
-use uuid::Uuid;
 use chrono::Utc;
 use pangolin_core::user::User;
+use sqlx::Row;
+use uuid::Uuid;
 
 impl SqliteStore {
     pub async fn create_user(&self, user: User) -> Result<()> {
@@ -31,7 +31,7 @@ impl SqliteStore {
             .bind(user_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
-            
+
         self.row_to_user(row)
     }
 
@@ -40,13 +40,21 @@ impl SqliteStore {
             .bind(username)
             .fetch_optional(&self.pool)
             .await?;
-            
+
         self.row_to_user(row)
     }
 
-    pub async fn list_users(&self, tenant_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<User>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_users(
+        &self,
+        tenant_id: Option<Uuid>,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<User>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = if let Some(tid) = tenant_id {
             sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE tenant_id = ? LIMIT ? OFFSET ?")
@@ -62,7 +70,7 @@ impl SqliteStore {
                 .fetch_all(&self.pool)
                 .await?
         };
-        
+
         let mut users = Vec::new();
         for row in rows {
             if let Some(user) = self.row_to_user(Some(row))? {
@@ -88,7 +96,10 @@ impl SqliteStore {
     }
 
     pub async fn delete_user(&self, user_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM users WHERE id = ?").bind(user_id.to_string()).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM users WHERE id = ?")
+            .bind(user_id.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }

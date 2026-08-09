@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenInfo {
@@ -25,9 +25,13 @@ pub struct RevokedToken {
 
 impl RevokedToken {
     pub fn new(id: Uuid, expires_at: DateTime<Utc>, reason: Option<String>) -> Self {
-        Self { id, expires_at, reason }
+        Self {
+            id,
+            expires_at,
+            reason,
+        }
     }
-    
+
     pub fn is_expired(&self) -> bool {
         self.expires_at < Utc::now()
     }

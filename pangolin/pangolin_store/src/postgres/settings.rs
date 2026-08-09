@@ -1,8 +1,8 @@
 use super::PostgresStore;
 use anyhow::Result;
 use pangolin_core::model::SystemSettings;
-use uuid::Uuid;
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // System Settings
@@ -27,7 +27,11 @@ impl PostgresStore {
         }
     }
 
-    pub async fn update_system_settings(&self, tenant_id: Uuid, settings: SystemSettings) -> Result<SystemSettings> {
+    pub async fn update_system_settings(
+        &self,
+        tenant_id: Uuid,
+        settings: SystemSettings,
+    ) -> Result<SystemSettings> {
         // Upsert
         sqlx::query("INSERT INTO system_settings (tenant_id, settings) VALUES ($1, $2) ON CONFLICT(tenant_id) DO UPDATE SET settings = $3")
             .bind(tenant_id)

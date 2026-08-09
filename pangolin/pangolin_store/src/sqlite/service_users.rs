@@ -1,11 +1,11 @@
+use anyhow::Result;
 /// Service Users implementation for SqliteStore
 use async_trait::async_trait;
-use anyhow::Result;
-use sqlx::Row;
-use uuid::Uuid;
 use chrono::Utc;
 use pangolin_core::user::{ServiceUser, UserRole};
+use sqlx::Row;
 use std::str::FromStr;
+use uuid::Uuid;
 
 use super::SqliteStore;
 
@@ -28,7 +28,7 @@ impl SqliteStore {
         .bind(service_user.active as i32)
         .execute(&self.pool)
         .await?;
-        
+
         Ok(())
     }
 
@@ -50,7 +50,7 @@ impl SqliteStore {
                     "TenantUser" => UserRole::TenantUser,
                     _ => UserRole::TenantUser,
                 };
-                
+
                 Ok(Some(ServiceUser {
                     id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                     name: row.get("name"),
@@ -60,8 +60,12 @@ impl SqliteStore {
                     role,
                     created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
                     created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                    last_used: row.get::<Option<i64>, _>("last_used").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
-                    expires_at: row.get::<Option<i64>, _>("expires_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                    last_used: row
+                        .get::<Option<i64>, _>("last_used")
+                        .and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                    expires_at: row
+                        .get::<Option<i64>, _>("expires_at")
+                        .and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                     active: row.get::<i32, _>("active") != 0,
                 }))
             }
@@ -69,7 +73,10 @@ impl SqliteStore {
         }
     }
 
-    pub async fn get_service_user_by_api_key_hash(&self, api_key_hash: &str) -> Result<Option<ServiceUser>> {
+    pub async fn get_service_user_by_api_key_hash(
+        &self,
+        api_key_hash: &str,
+    ) -> Result<Option<ServiceUser>> {
         let row = sqlx::query(
             "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active
              FROM service_users WHERE api_key_hash = ?"
@@ -87,7 +94,7 @@ impl SqliteStore {
                     "TenantUser" => UserRole::TenantUser,
                     _ => UserRole::TenantUser,
                 };
-                
+
                 Ok(Some(ServiceUser {
                     id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                     name: row.get("name"),
@@ -97,8 +104,12 @@ impl SqliteStore {
                     role,
                     created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
                     created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                    last_used: row.get::<Option<i64>, _>("last_used").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
-                    expires_at: row.get::<Option<i64>, _>("expires_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                    last_used: row
+                        .get::<Option<i64>, _>("last_used")
+                        .and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                    expires_at: row
+                        .get::<Option<i64>, _>("expires_at")
+                        .and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                     active: row.get::<i32, _>("active") != 0,
                 }))
             }
@@ -106,9 +117,17 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_service_users(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<ServiceUser>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_service_users(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<ServiceUser>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query(
             "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active
@@ -129,7 +148,7 @@ impl SqliteStore {
                 "TenantUser" => UserRole::TenantUser,
                 _ => UserRole::TenantUser,
             };
-            
+
             users.push(ServiceUser {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                 name: row.get("name"),
@@ -139,8 +158,12 @@ impl SqliteStore {
                 role,
                 created_at: chrono::DateTime::from_timestamp(row.get("created_at"), 0).unwrap(),
                 created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                last_used: row.get::<Option<i64>, _>("last_used").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
-                expires_at: row.get::<Option<i64>, _>("expires_at").and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                last_used: row
+                    .get::<Option<i64>, _>("last_used")
+                    .and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
+                expires_at: row
+                    .get::<Option<i64>, _>("expires_at")
+                    .and_then(|t| chrono::DateTime::from_timestamp(t, 0)),
                 active: row.get::<i32, _>("active") != 0,
             });
         }
@@ -148,7 +171,13 @@ impl SqliteStore {
         Ok(users)
     }
 
-    pub async fn update_service_user(&self, id: Uuid, name: Option<String>, description: Option<String>, active: Option<bool>) -> Result<()> {
+    pub async fn update_service_user(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        active: Option<bool>,
+    ) -> Result<()> {
         let mut query = String::from("UPDATE service_users SET ");
         let mut updates = Vec::new();
         let mut params: Vec<String> = Vec::new();
@@ -191,7 +220,11 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub async fn update_service_user_last_used(&self, id: Uuid, timestamp: chrono::DateTime<Utc>) -> Result<()> {
+    pub async fn update_service_user_last_used(
+        &self,
+        id: Uuid,
+        timestamp: chrono::DateTime<Utc>,
+    ) -> Result<()> {
         sqlx::query("UPDATE service_users SET last_used = ? WHERE id = ?")
             .bind(timestamp.timestamp())
             .bind(id.to_string())

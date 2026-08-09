@@ -1,19 +1,19 @@
-use axum::{
-    extract::{Path, State, Query, Extension},
-    Json,
-    response::IntoResponse,
-    http::StatusCode,
-};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use std::collections::HashMap;
-use pangolin_store::{CatalogStore, PaginationParams};
-use pangolin_core::model::{Branch, BranchType, Namespace};
-use uuid::Uuid;
 use crate::auth::TenantId;
-use pangolin_core::permission::{PermissionScope, Action};
-use pangolin_core::user::{UserSession, UserRole};
+use axum::{
+    extract::{Extension, Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use pangolin_core::model::{Branch, BranchType, Namespace};
+use pangolin_core::permission::{Action, PermissionScope};
+use pangolin_core::user::{UserRole, UserSession};
+use pangolin_store::{CatalogStore, PaginationParams};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 // Placeholder for AppState
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
@@ -82,11 +82,14 @@ pub async fn list_branches(
     Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Catalog is now required
     let catalog_name = &params.catalog;
-    
-    match store.list_branches(tenant_id, catalog_name, Some(pagination)).await {
+
+    match store
+        .list_branches(tenant_id, catalog_name, Some(pagination))
+        .await
+    {
         Ok(branches) => {
             let resp: Vec<BranchResponse> = branches.into_iter().map(|b| b.into()).collect();
             (StatusCode::OK, Json(resp)).into_response()
@@ -118,31 +121,37 @@ pub async fn create_branch(
 
     // Catalog is now required
     let catalog_name = &payload.catalog;
-    
+
     // Resolve catalog ID for permission check
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
 
     let b_type = match payload.branch_type.as_deref() {
         Some("ingest") => BranchType::Ingest,
         _ => BranchType::Experimental,
     };
-    
+
     let required_action = match b_type {
         BranchType::Ingest => Action::IngestBranching,
         BranchType::Experimental => Action::ExperimentalBranching,
     };
 
-    let scope = PermissionScope::Catalog { catalog_id: catalog.id };
-    
+    let scope = PermissionScope::Catalog {
+        catalog_id: catalog.id,
+    };
+
     // Check permission
     match crate::authz::check_permission(&store, &session, &required_action, &scope).await {
         Ok(true) => (),
         Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response()
+        }
     }
 
     let from_branch = payload.from_branch.as_deref().unwrap_or("main");
@@ -150,7 +159,7 @@ pub async fn create_branch(
     // Logic for partial branching:
     // 1. Create the branch object.
     // 2. If assets are specified, copy them from `from_branch`.
-    
+
     let branch = Branch {
         name: payload.name.clone(),
         head_commit_id: None,
@@ -160,11 +169,18 @@ pub async fn create_branch(
 
     // Create branch first
     if let Err(e) = store.create_branch(tenant_id, catalog_name, branch).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create branch: {}", e)).into_response();
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create branch: {}", e),
+        )
+            .into_response();
     }
 
     if let Some(assets_to_copy) = &payload.assets {
-        tracing::info!("Explicit asset list provided: {} assets", assets_to_copy.len());
+        tracing::info!(
+            "Explicit asset list provided: {} assets",
+            assets_to_copy.len()
+        );
         // For explicit asset list, we still iterate for now as copy_assets_bulk doesn't take a list
         // Optimization: We could add a filtered bulk copy in the future
         for asset_name in assets_to_copy {
@@ -173,48 +189,85 @@ pub async fn create_branch(
                 continue; // Skip invalid format
             }
             let table_name = parts.last().unwrap().to_string();
-            let namespace_parts = parts[0..parts.len()-1].iter().map(|s| s.to_string()).collect::<Vec<String>>();
-            
+            let namespace_parts = parts[0..parts.len() - 1]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>();
+
             // Get asset from source branch
-            if let Ok(Some(asset)) = store.get_asset(tenant_id, catalog_name, Some(from_branch.to_string()), namespace_parts.clone(), table_name.clone()).await {
+            if let Ok(Some(asset)) = store
+                .get_asset(
+                    tenant_id,
+                    catalog_name,
+                    Some(from_branch.to_string()),
+                    namespace_parts.clone(),
+                    table_name.clone(),
+                )
+                .await
+            {
                 // Create asset in new branch with NEW ID to avoid unique constraint violation
                 let mut new_asset = asset.clone();
                 new_asset.id = uuid::Uuid::new_v4();
-                if let Ok(_) = store.create_asset(tenant_id, catalog_name, Some(payload.name.clone()), namespace_parts, new_asset).await {
+                if let Ok(_) = store
+                    .create_asset(
+                        tenant_id,
+                        catalog_name,
+                        Some(payload.name.clone()),
+                        namespace_parts,
+                        new_asset,
+                    )
+                    .await
+                {
                     // branch_assets.push(asset_name.clone()); // Unnecessary as create_asset updates branch
                 }
             }
         }
     } else {
         tracing::info!("No explicit assets. Auto-propagating from {}", from_branch);
-        
+
         // Use optimized bulk copy
         // Note: This works because create_branch (above) initialized the branch, and copy_assets_bulk appends to it (or updates it)
-        match store.copy_assets_bulk(tenant_id, catalog_name, from_branch, &payload.name, None).await {
-            Ok(count) => tracing::info!("Bulk copied {} assets to new branch {}", count, payload.name),
+        match store
+            .copy_assets_bulk(tenant_id, catalog_name, from_branch, &payload.name, None)
+            .await
+        {
+            Ok(count) => tracing::info!(
+                "Bulk copied {} assets to new branch {}",
+                count,
+                payload.name
+            ),
             Err(e) => tracing::error!("Failed to bulk copy assets: {}", e),
         }
     }
 
     // Return success response only
     // Audit Log
-    let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
-        tenant_id,
-        session.username.clone(), // Get user from auth context
-        "create_branch".to_string(),
-        format!("{}/{}", catalog_name, payload.name),
-        None
-    )).await;
-    
-    (StatusCode::CREATED, Json(BranchResponse {
-        name: payload.name,
-        head_commit_id: None,
-        branch_type: match b_type {
-            BranchType::Ingest => "ingest".to_string(),
-            BranchType::Experimental => "experimental".to_string(),
-        },
-        assets: vec![], // Assets are not returned in this simplified response
-    })).into_response()
+    let _ = store
+        .log_audit_event(
+            tenant_id,
+            pangolin_core::audit::AuditLogEntry::legacy_new(
+                tenant_id,
+                session.username.clone(), // Get user from auth context
+                "create_branch".to_string(),
+                format!("{}/{}", catalog_name, payload.name),
+                None,
+            ),
+        )
+        .await;
+
+    (
+        StatusCode::CREATED,
+        Json(BranchResponse {
+            name: payload.name,
+            head_commit_id: None,
+            branch_type: match b_type {
+                BranchType::Ingest => "ingest".to_string(),
+                BranchType::Experimental => "experimental".to_string(),
+            },
+            assets: vec![], // Assets are not returned in this simplified response
+        }),
+    )
+        .into_response()
 }
 
 #[utoipa::path(
@@ -238,10 +291,10 @@ pub async fn get_branch(
     Query(params): Query<ListBranchParams>, // Reusing ListBranchParams which has optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Catalog is now required
     let catalog_name = &params.catalog;
-    
+
     match store.get_branch(tenant_id, catalog_name, name).await {
         Ok(Some(branch)) => (StatusCode::OK, Json(BranchResponse::from(branch))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Branch not found").into_response(),
@@ -279,8 +332,9 @@ pub async fn merge_branch(
         tenant, // Pass extension which wraps TenantId
         catalog_name,
         &payload.source_branch,
-        &payload.target_branch
-    ).await;
+        &payload.target_branch,
+    )
+    .await;
 
     // Create a merge operation
     let operation = pangolin_core::model::MergeOperation::new(
@@ -288,15 +342,19 @@ pub async fn merge_branch(
         catalog_name.to_string(),
         payload.source_branch.clone(),
         payload.target_branch.clone(),
-        base_commit_id, 
+        base_commit_id,
         session.user_id,
     );
 
     // Store the merge operation
     if let Err(e) = store.create_merge_operation(operation.clone()).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
-            "error": format!("Failed to create merge operation: {}", e)
-        }))).into_response();
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({
+                "error": format!("Failed to create merge operation: {}", e)
+            })),
+        )
+            .into_response();
     }
 
     // Detect conflicts
@@ -305,9 +363,13 @@ pub async fn merge_branch(
         Ok(c) => c,
         Err(e) => {
             let _ = store.abort_merge_operation(operation.id).await;
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
-                "error": format!("Failed to detect conflicts: {}", e)
-            }))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": format!("Failed to detect conflicts: {}", e)
+                })),
+            )
+                .into_response();
         }
     };
 
@@ -317,41 +379,68 @@ pub async fn merge_branch(
             if let Err(e) = store.create_merge_conflict(conflict.clone()).await {
                 eprintln!("Failed to store conflict: {}", e);
             }
-            if let Err(e) = store.add_conflict_to_operation(operation.id, conflict.id).await {
+            if let Err(e) = store
+                .add_conflict_to_operation(operation.id, conflict.id)
+                .await
+            {
                 eprintln!("Failed to link conflict to operation: {}", e);
             }
         }
 
         // Update operation status to Conflicted
-        let _ = store.update_merge_operation_status(
-            operation.id,
-            pangolin_core::model::MergeStatus::Conflicted
-        ).await;
+        let _ = store
+            .update_merge_operation_status(
+                operation.id,
+                pangolin_core::model::MergeStatus::Conflicted,
+            )
+            .await;
 
-        return (StatusCode::CONFLICT, Json(serde_json::json!({
-            "status": "conflicted",
-            "operation_id": operation.id,
-            "conflicts": conflicts.len(),
-            "message": format!("Merge has {} conflicts that need resolution", conflicts.len())
-        }))).into_response();
+        return (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "status": "conflicted",
+                "operation_id": operation.id,
+                "conflicts": conflicts.len(),
+                "message": format!("Merge has {} conflicts that need resolution", conflicts.len())
+            })),
+        )
+            .into_response();
     }
 
     // No conflicts - proceed with merge
-    match store.merge_branch(tenant_id, catalog_name, payload.target_branch.clone(), payload.source_branch.clone()).await {
+    match store
+        .merge_branch(
+            tenant_id,
+            catalog_name,
+            payload.target_branch.clone(),
+            payload.source_branch.clone(),
+        )
+        .await
+    {
         Ok(_) => {
             // Complete the merge operation
             let commit_id = uuid::Uuid::new_v4(); // In real implementation, get actual commit ID
-            let _ = store.complete_merge_operation(operation.id, commit_id).await;
+            let _ = store
+                .complete_merge_operation(operation.id, commit_id)
+                .await;
 
             // Audit Log
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
-                tenant_id,
-                session.username.clone(),
-                "merge_branch".to_string(),
-                format!("{}/{}->{}", catalog_name, payload.source_branch, payload.target_branch),
-                None
-            )).await;
-            
+            let _ = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                        tenant_id,
+                        session.username.clone(),
+                        "merge_branch".to_string(),
+                        format!(
+                            "{}/{}->{}",
+                            catalog_name, payload.source_branch, payload.target_branch
+                        ),
+                        None,
+                    ),
+                )
+                .await;
+
             // Return full updated operation object to satisfy SDK Pydantic model
             let mut result_op = operation.clone();
             result_op.status = pangolin_core::model::MergeStatus::Completed;
@@ -359,12 +448,16 @@ pub async fn merge_branch(
             result_op.completed_at = Some(chrono::Utc::now());
 
             (StatusCode::OK, Json(result_op)).into_response()
-        },
+        }
         Err(e) => {
             let _ = store.abort_merge_operation(operation.id).await;
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({
-                "error": e.to_string()
-            }))).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": e.to_string()
+                })),
+            )
+                .into_response()
         }
     }
 }
@@ -390,19 +483,31 @@ pub async fn list_commits(
     Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Catalog is now required
     let catalog_name = &params.catalog;
 
     // Get branch to find head commit
-    let branch = match store.get_branch(tenant_id, catalog_name, branch_name.clone()).await {
+    let branch = match store
+        .get_branch(tenant_id, catalog_name, branch_name.clone())
+        .await
+    {
         Ok(Some(b)) => b,
         Ok(None) => return (StatusCode::NOT_FOUND, "Branch not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get branch").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to get branch").into_response()
+        }
     };
 
     let limit = pagination.limit.unwrap_or(100);
-    let commits = match store.get_commit_ancestry(tenant_id, branch.head_commit_id.unwrap_or(Uuid::nil()), limit).await {
+    let commits = match store
+        .get_commit_ancestry(
+            tenant_id,
+            branch.head_commit_id.unwrap_or(Uuid::nil()),
+            limit,
+        )
+        .await
+    {
         Ok(c) => c,
         Err(_) => Vec::new(),
     };
@@ -449,11 +554,14 @@ pub async fn list_tags(
     Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Catalog is now required
     let catalog_name = &params.catalog;
 
-    match store.list_tags(tenant_id, catalog_name, Some(pagination)).await {
+    match store
+        .list_tags(tenant_id, catalog_name, Some(pagination))
+        .await
+    {
         Ok(tags) => {
             let resp: Vec<TagResponse> = tags.into_iter().map(|t| t.into()).collect();
             (StatusCode::OK, Json(resp)).into_response()
@@ -478,7 +586,10 @@ pub async fn create_tag(
     Json(payload): Json<CreateTagRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    let catalog_name_string = payload.catalog.clone().unwrap_or_else(|| "default".to_string());
+    let catalog_name_string = payload
+        .catalog
+        .clone()
+        .unwrap_or_else(|| "default".to_string());
     let catalog_name = catalog_name_string.as_str();
 
     let tag = pangolin_core::model::Tag {
@@ -512,7 +623,7 @@ pub async fn delete_tag(
     Query(params): Query<ListBranchParams>, // Reusing struct with optional catalog
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Catalog is now required
     let catalog_name = &params.catalog;
 
@@ -544,26 +655,30 @@ pub async fn rebase_branch(
     Path(branch_name): Path<String>,
     Json(payload): Json<CreateBranchRequest>, // We need catalog_name from body
 ) -> impl IntoResponse {
-     let tenant_id = tenant.0;
-     
-     // Rebase = Merge main into branch
-     // Source: main
-     // Target: branch_name
-     
-     // Check permissions
-     // TODO: Granular permissions? For now assume Write on Catalog
-    
-    
+    let tenant_id = tenant.0;
+
+    // Rebase = Merge main into branch
+    // Source: main
+    // Target: branch_name
+
+    // Check permissions
+    // TODO: Granular permissions? For now assume Write on Catalog
+
     // Catalog is now required
     let catalog_name = &payload.catalog;
-    
-    match store.merge_branch(tenant_id, catalog_name, "main".to_string(), branch_name).await {
+
+    match store
+        .merge_branch(tenant_id, catalog_name, "main".to_string(), branch_name)
+        .await
+    {
         Ok(_) => StatusCode::OK.into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Rebase failed: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Rebase failed: {}", e),
+        )
+            .into_response(),
     }
 }
-
-
 
 // Catalog Management
 #[derive(Deserialize, ToSchema)]
@@ -634,21 +749,29 @@ pub async fn list_catalogs(
             let permissions = if matches!(session.role, UserRole::TenantUser) {
                 match store.list_user_permissions(session.user_id, None).await {
                     Ok(p) => p,
-                    Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch permissions").into_response(),
+                    Err(_) => {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "Failed to fetch permissions",
+                        )
+                            .into_response()
+                    }
                 }
             } else {
                 Vec::new() // Root/TenantAdmin bypass filtering
             };
 
-            let filtered_catalogs = crate::authz_utils::filter_catalogs(
-                catalogs,
-                &permissions,
-                session.role.clone()
+            let filtered_catalogs =
+                crate::authz_utils::filter_catalogs(catalogs, &permissions, session.role.clone());
+
+            tracing::info!(
+                "list_catalogs returning {} catalogs for user {}",
+                filtered_catalogs.len(),
+                session.user_id
             );
 
-            tracing::info!("list_catalogs returning {} catalogs for user {}", filtered_catalogs.len(), session.user_id);
-            
-            let resp: Vec<CatalogResponse> = filtered_catalogs.into_iter().map(|c| c.into()).collect();
+            let resp: Vec<CatalogResponse> =
+                filtered_catalogs.into_iter().map(|c| c.into()).collect();
             (StatusCode::OK, Json(resp)).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
@@ -675,30 +798,54 @@ pub async fn create_catalog(
     Json(payload): Json<CreateCatalogRequest>,
 ) -> impl IntoResponse {
     if session.role == UserRole::Root {
-         return (StatusCode::FORBIDDEN, "Root user cannot create catalogs. Please login as Tenant Admin.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Root user cannot create catalogs. Please login as Tenant Admin.",
+        )
+            .into_response();
     }
 
     let tenant_id = tenant.0;
-    tracing::info!("create_catalog: tenant_id={}, catalog_name={}", tenant_id, payload.name);
-    
+    tracing::info!(
+        "create_catalog: tenant_id={}, catalog_name={}",
+        tenant_id,
+        payload.name
+    );
+
     // Validate warehouse exists if specified
     if let Some(ref warehouse_name) = payload.warehouse_name {
         if !warehouse_name.is_empty() {
-             match store.get_warehouse(tenant_id, warehouse_name.clone()).await {
-                Ok(Some(_)) => {}, // Warehouse exists, continue
-                Ok(None) => return (StatusCode::BAD_REQUEST, "Warehouse not found").into_response(),
-                Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to validate warehouse").into_response(),
+            match store.get_warehouse(tenant_id, warehouse_name.clone()).await {
+                Ok(Some(_)) => {} // Warehouse exists, continue
+                Ok(None) => {
+                    return (StatusCode::BAD_REQUEST, "Warehouse not found").into_response()
+                }
+                Err(_) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to validate warehouse",
+                    )
+                        .into_response()
+                }
             }
         }
     }
-    
-    let catalog_type = payload.catalog_type.unwrap_or(pangolin_core::model::CatalogType::Local);
-    
+
+    let catalog_type = payload
+        .catalog_type
+        .unwrap_or(pangolin_core::model::CatalogType::Local);
+
     // If Federate, check config
-    if catalog_type == pangolin_core::model::CatalogType::Federated && payload.federated_config.is_none() {
-         return (StatusCode::BAD_REQUEST, "Federated catalog requires configuration").into_response();
+    if catalog_type == pangolin_core::model::CatalogType::Federated
+        && payload.federated_config.is_none()
+    {
+        return (
+            StatusCode::BAD_REQUEST,
+            "Federated catalog requires configuration",
+        )
+            .into_response();
     }
-    
+
     let catalog = pangolin_core::model::Catalog {
         id: Uuid::new_v4(),
         name: payload.name.clone(),
@@ -717,31 +864,47 @@ pub async fn create_catalog(
                 properties: HashMap::new(),
             };
             if let Err(e) = store.create_namespace(tenant_id, &catalog.name, ns).await {
-                tracing::warn!("Failed to create default namespace for catalog {}: {}", catalog.name, e);
+                tracing::warn!(
+                    "Failed to create default namespace for catalog {}: {}",
+                    catalog.name,
+                    e
+                );
             }
 
             // Create 'main' branch
-             let main_branch = pangolin_core::model::Branch {
+            let main_branch = pangolin_core::model::Branch {
                 name: "main".to_string(),
                 head_commit_id: None,
                 branch_type: pangolin_core::model::BranchType::Ingest,
                 assets: vec![],
-             };
-            if let Err(e) = store.create_branch(tenant_id, &catalog.name, main_branch).await {
-                tracing::warn!("Failed to create main branch for catalog {}: {}", catalog.name, e);
+            };
+            if let Err(e) = store
+                .create_branch(tenant_id, &catalog.name, main_branch)
+                .await
+            {
+                tracing::warn!(
+                    "Failed to create main branch for catalog {}: {}",
+                    catalog.name,
+                    e
+                );
             }
 
             // Audit Log
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
-                tenant_id,
-                session.username.clone(),
-                "create_catalog".to_string(),
-                catalog.name.clone(),
-                None
-            )).await;
+            let _ = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                        tenant_id,
+                        session.username.clone(),
+                        "create_catalog".to_string(),
+                        catalog.name.clone(),
+                        None,
+                    ),
+                )
+                .await;
 
             (StatusCode::CREATED, Json(CatalogResponse::from(catalog))).into_response()
-        },
+        }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
@@ -792,23 +955,32 @@ pub async fn delete_catalog(
     Path(name): Path<String>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    tracing::info!("delete_catalog: tenant_id={}, catalog_name={}", tenant_id, name);
-    
+    tracing::info!(
+        "delete_catalog: tenant_id={}, catalog_name={}",
+        tenant_id,
+        name
+    );
+
     match store.delete_catalog(tenant_id, name.clone()).await {
         Ok(_) => {
             tracing::info!("Successfully deleted catalog: {}", name);
-            
+
             // Audit Log
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
-                tenant_id,
-                session.username.clone(), // This extension might need to be added to arguments if not present
-                "delete_catalog".to_string(),
-                name,
-                None
-            )).await;
+            let _ = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::legacy_new(
+                        tenant_id,
+                        session.username.clone(), // This extension might need to be added to arguments if not present
+                        "delete_catalog".to_string(),
+                        name,
+                        None,
+                    ),
+                )
+                .await;
 
             StatusCode::NO_CONTENT.into_response()
-        },
+        }
         Err(e) => {
             tracing::error!("Failed to delete catalog {}: {}", name, e);
             (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
@@ -838,13 +1010,13 @@ pub async fn update_catalog(
     Json(payload): Json<UpdateCatalogRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     let updates = pangolin_core::model::CatalogUpdate {
         warehouse_name: payload.warehouse_name,
         storage_location: payload.storage_location,
         properties: payload.properties,
     };
-    
+
     match store.update_catalog(tenant_id, name, updates).await {
         Ok(catalog) => (StatusCode::OK, Json(CatalogResponse::from(catalog))).into_response(),
         Err(e) => {
@@ -857,7 +1029,6 @@ pub async fn update_catalog(
     }
 }
 
-
 /// Helper: Find the common ancestor commit between two branches
 async fn find_common_ancestor(
     store: &Arc<dyn CatalogStore + Send + Sync>,
@@ -867,8 +1038,14 @@ async fn find_common_ancestor(
     target_branch_name: &str,
 ) -> Option<uuid::Uuid> {
     // Get branches
-    let source_branch = store.get_branch(tenant_id.0, catalog_name, source_branch_name.to_string()).await.ok()??;
-    let target_branch = store.get_branch(tenant_id.0, catalog_name, target_branch_name.to_string()).await.ok()??;
+    let source_branch = store
+        .get_branch(tenant_id.0, catalog_name, source_branch_name.to_string())
+        .await
+        .ok()??;
+    let target_branch = store
+        .get_branch(tenant_id.0, catalog_name, target_branch_name.to_string())
+        .await
+        .ok()??;
 
     // Get commit chains
     let source_chain = get_commit_chain(store, tenant_id, source_branch.head_commit_id).await;

@@ -1,15 +1,15 @@
 use pangolin_api::federated_proxy::FederatedCatalogProxy;
+use pangolin_core::model::{Catalog, CatalogType, FederatedCatalogConfig, Tenant};
 use pangolin_store::memory::MemoryStore;
 use pangolin_store::CatalogStore;
-use pangolin_core::model::{Tenant, Catalog, CatalogType, FederatedCatalogConfig};
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[tokio::test]
 async fn test_federated_catalog_identification() {
     let store = Arc::new(MemoryStore::new());
-    
+
     // Create tenant
     let tenant_id = Uuid::new_v4();
     let tenant = Tenant {
@@ -18,7 +18,7 @@ async fn test_federated_catalog_identification() {
         properties: HashMap::new(),
     };
     store.create_tenant(tenant).await.unwrap();
-    
+
     // Create local catalog
     let local_catalog = Catalog {
         id: Uuid::new_v4(),
@@ -29,8 +29,11 @@ async fn test_federated_catalog_identification() {
         federated_config: None,
         properties: HashMap::new(),
     };
-    store.create_catalog(tenant_id, local_catalog).await.unwrap();
-    
+    store
+        .create_catalog(tenant_id, local_catalog)
+        .await
+        .unwrap();
+
     // Create federated catalog
     let federated_catalog = Catalog {
         id: Uuid::new_v4(),
@@ -46,21 +49,33 @@ async fn test_federated_catalog_identification() {
         }),
         properties: HashMap::new(),
     };
-    store.create_catalog(tenant_id, federated_catalog).await.unwrap();
-    
+    store
+        .create_catalog(tenant_id, federated_catalog)
+        .await
+        .unwrap();
+
     // Verify local catalog is not federated
-    let local_cat = store.get_catalog(tenant_id, "local_catalog".to_string()).await.unwrap();
+    let local_cat = store
+        .get_catalog(tenant_id, "local_catalog".to_string())
+        .await
+        .unwrap();
     assert!(local_cat.is_some());
     assert_eq!(local_cat.unwrap().catalog_type, CatalogType::Local);
-    
+
     // Verify federated catalog is correctly identified
-    let fed_cat = store.get_catalog(tenant_id, "federated_catalog".to_string()).await.unwrap();
+    let fed_cat = store
+        .get_catalog(tenant_id, "federated_catalog".to_string())
+        .await
+        .unwrap();
     assert!(fed_cat.is_some());
     let fed_cat = fed_cat.unwrap();
     assert_eq!(fed_cat.catalog_type, CatalogType::Federated);
     assert!(fed_cat.federated_config.is_some());
     let config = fed_cat.federated_config.unwrap();
-    assert_eq!(config.properties.get("uri"), Some(&"http://remote-catalog:8080".to_string()));
+    assert_eq!(
+        config.properties.get("uri"),
+        Some(&"http://remote-catalog:8080".to_string())
+    );
 }
 
 #[tokio::test]
@@ -69,7 +84,7 @@ async fn test_federated_proxy_creation() {
     // Simply verifying that we can instantiate it
     // Actual request forwarding logic requires a mock server which is complex to set up here
     // but the implementation logic is covered in other tests or review.
-    assert!(true); 
+    assert!(true);
 }
 
 #[tokio::test]
@@ -77,18 +92,16 @@ async fn test_federated_config_validation() {
     // Valid config
     let valid_config = FederatedCatalogConfig {
         properties: HashMap::from([
-             ("uri".to_string(), "http://valid-url:8080".to_string()),
-             ("token".to_string(), "token".to_string()),
+            ("uri".to_string(), "http://valid-url:8080".to_string()),
+            ("token".to_string(), "token".to_string()),
         ]),
     };
     assert!(valid_config.properties.contains_key("uri"));
     assert!(!valid_config.properties.get("uri").unwrap().is_empty());
-    
+
     // Config without auth token (should still be valid)
     let no_auth_config = FederatedCatalogConfig {
-        properties: HashMap::from([
-             ("uri".to_string(), "http://public-catalog:8080".to_string()),
-        ]),
+        properties: HashMap::from([("uri".to_string(), "http://public-catalog:8080".to_string())]),
     };
     assert!(no_auth_config.properties.contains_key("uri"));
     assert!(!no_auth_config.properties.get("uri").unwrap().is_empty());

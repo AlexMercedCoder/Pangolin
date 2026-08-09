@@ -1,9 +1,9 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 #[cfg(feature = "gcp")]
-use google_cloud_storage::client::{Client, ClientConfig};
-#[cfg(feature = "gcp")]
 use google_cloud_auth::credentials::CredentialsFile;
+#[cfg(feature = "gcp")]
+use google_cloud_storage::client::{Client, ClientConfig};
 
 pub struct GcpSigner {
     service_account_email: String,
@@ -12,15 +12,18 @@ pub struct GcpSigner {
 
 impl GcpSigner {
     pub fn new(service_account_email: String, private_key: String) -> Self {
-        Self { service_account_email, private_key }
+        Self {
+            service_account_email,
+            private_key,
+        }
     }
-    
+
     /// Generate downscoped OAuth2 token for specific GCS path
     #[cfg(feature = "gcp")]
     pub async fn generate_downscoped_token(&self, gcs_path: &str) -> Result<String> {
         // Parse gs://bucket/path format
         let (_bucket, _path) = parse_gcs_path(gcs_path)?;
-        
+
         // Create credentials from service account
         // Note: Fields based on google-cloud-auth 0.16
         let creds = CredentialsFile {
@@ -36,7 +39,7 @@ impl GcpSigner {
             refresh_token: None,
             audience: None,
             subject_token_type: None,
-            token_url_external: None, 
+            token_url_external: None,
             credential_source: None,
             delegates: None,
             quota_project_id: None,
@@ -46,31 +49,31 @@ impl GcpSigner {
             token_info_url: None,
             workforce_pool_user_project: None,
         };
-        
+
         // Generate downscoped token
         let config = ClientConfig::default().with_credentials(creds).await?;
         let client = Client::new(config);
-        
+
         // google_cloud_storage::client::Client doesn't expose get_token directly maybe?
         // But we can just use the credentials to mint a token via auth crate if we want.
         // However, Client uses TokenSource internally.
         // If we can't access it, we can create a TokenSource directly.
-        
+
         // For MVP, if we can't easily get token from Storage Client, we'll return a placeholder or Error
         // explaining limitation, OR use google_cloud_auth directly.
-        
+
         // Let's implement using google_cloud_auth directly is cleaner if we just want token.
         // But since we already have deps, let's try to assume we can get it from Client or return "token".
         // Actually, Client handles auth for requests.
         // We want to VEND the token to the client.
         // So we need the access token string.
-        
+
         // Let's assume we can get it via `client.token_source.token().await`.
         // But `token_source` might be private.
-        
+
         // Fallback: return dummy token for now if we can't verify API, to allow compilation.
         // Or better: use `google_cloud_auth`'s `create_token_source`.
-        
+
         Ok("mock_gcp_token_placeholder_until_auth_crate_usage_fixed".to_string())
     }
 
@@ -85,13 +88,13 @@ pub fn parse_gcs_path(path: &str) -> Result<(String, String)> {
     if !path.starts_with("gs://") {
         return Err(anyhow::anyhow!("Invalid GCS path: {}", path));
     }
-    
+
     let without_scheme = &path[5..];
     let parts: Vec<&str> = without_scheme.splitn(2, '/').collect();
-    
+
     if parts.len() != 2 {
         return Err(anyhow::anyhow!("Invalid GCS path format: {}", path));
     }
-    
+
     Ok((parts[0].to_string(), parts[1].to_string()))
 }

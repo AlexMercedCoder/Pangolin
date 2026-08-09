@@ -1,17 +1,17 @@
 use axum::{
-    extract::{Path, State, Extension, Query},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use std::sync::Arc;
-use std::collections::HashSet;
-use pangolin_core::permission::{Role, Permission, PermissionScope, Action, UserRole};
-use pangolin_core::user::{UserSession, UserRole as AuthRole};
+use pangolin_core::permission::{Action, Permission, PermissionScope, Role, UserRole};
+use pangolin_core::user::{UserRole as AuthRole, UserSession};
 use pangolin_store::{CatalogStore, PaginationParams};
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// Request to create a new role
 #[derive(Debug, Deserialize, ToSchema)]
@@ -60,18 +60,17 @@ pub async fn create_role(
     if session.role != AuthRole::Root && session.role != AuthRole::TenantAdmin {
         return (StatusCode::FORBIDDEN, "Only admins can create roles").into_response();
     }
-    
-    let role = Role::new(
-        req.name,
-        req.description,
-        req.tenant_id,
-        session.user_id,
-    );
-    
+
+    let role = Role::new(req.name, req.description, req.tenant_id, session.user_id);
+
     if let Err(e) = store.create_role(role.clone()).await {
-        return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create role: {}", e)).into_response();
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create role: {}", e),
+        )
+            .into_response();
     }
-    
+
     (StatusCode::CREATED, Json(role)).into_response()
 }
 
@@ -91,14 +90,20 @@ pub async fn list_roles(
     Extension(session): Extension<UserSession>,
     Query(pagination): Query<PaginationParams>,
 ) -> Response {
-    let tenant_id = session.tenant_id.unwrap_or_default(); 
-    
+    let tenant_id = session.tenant_id.unwrap_or_default();
+
     // For now list for session tenant
     let roles = match store.list_roles(tenant_id, Some(pagination)).await {
         Ok(roles) => roles,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list roles: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to list roles: {}", e),
+            )
+                .into_response()
+        }
     };
-    
+
     (StatusCode::OK, Json(roles)).into_response()
 }
 
@@ -124,7 +129,11 @@ pub async fn get_role(
     match store.get_role(role_id).await {
         Ok(Some(role)) => (StatusCode::OK, Json(role)).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Role not found").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get role: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get role: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -156,12 +165,16 @@ pub async fn update_role(
     }
 
     if role.id != role_id {
-         return (StatusCode::BAD_REQUEST, "Role ID mismatch").into_response();
+        return (StatusCode::BAD_REQUEST, "Role ID mismatch").into_response();
     }
 
     match store.update_role(role).await {
         Ok(_) => (StatusCode::OK).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update role: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update role: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -191,7 +204,11 @@ pub async fn delete_role(
 
     match store.delete_role(role_id).await {
         Ok(_) => (StatusCode::NO_CONTENT).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete role: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to delete role: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -225,32 +242,44 @@ pub async fn assign_role(
     // Validate principal exists (User or Service User)
     // We relaxed FKs so we must check manually.
     let user_exists = match store.get_user(target_user_id).await {
-         Ok(opt) => opt.is_some(),
-         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
+        Ok(opt) => opt.is_some(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("DB Error: {}", e),
+            )
+                .into_response()
+        }
     };
 
     let principal_valid = if user_exists {
         true
     } else {
-         match store.get_service_user(target_user_id).await {
-             Ok(opt) => opt.is_some(),
-             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
-         }
+        match store.get_service_user(target_user_id).await {
+            Ok(opt) => opt.is_some(),
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("DB Error: {}", e),
+                )
+                    .into_response()
+            }
+        }
     };
 
     if !principal_valid {
-         return (StatusCode::NOT_FOUND, "User or Service User not found").into_response();
+        return (StatusCode::NOT_FOUND, "User or Service User not found").into_response();
     }
 
-    let user_role = UserRole::new(
-        target_user_id,
-        req.role_id,
-        session.user_id,
-    );
-    
+    let user_role = UserRole::new(target_user_id, req.role_id, session.user_id);
+
     match store.assign_role(user_role).await {
         Ok(_) => (StatusCode::CREATED).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to assign role: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to assign role: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -278,15 +307,19 @@ pub async fn get_user_roles(
         // The frontend expects Role[].
         // So we need to fetch the roles from the store for each UserRole.
         Ok(user_roles) => {
-             let mut roles = Vec::new();
-             for ur in user_roles {
-                 if let Ok(Some(role)) = store.get_role(ur.role_id).await {
-                     roles.push(role);
-                 }
-             }
-             (StatusCode::OK, Json(roles)).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get user roles: {}", e)).into_response(),
+            let mut roles = Vec::new();
+            for ur in user_roles {
+                if let Ok(Some(role)) = store.get_role(ur.role_id).await {
+                    roles.push(role);
+                }
+            }
+            (StatusCode::OK, Json(roles)).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get user roles: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -318,7 +351,11 @@ pub async fn revoke_role(
 
     match store.revoke_role(target_user_id, role_id).await {
         Ok(_) => (StatusCode::NO_CONTENT).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to revoke role: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to revoke role: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -341,31 +378,49 @@ pub async fn grant_permission(
     Json(req): Json<GrantPermissionRequest>,
 ) -> Response {
     if session.role == pangolin_core::user::UserRole::Root {
-        return (StatusCode::FORBIDDEN, "Root user cannot grant granular permissions. Please login as Tenant Admin.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Root user cannot grant granular permissions. Please login as Tenant Admin.",
+        )
+            .into_response();
     }
 
     let tenant_id = match session.tenant_id {
         Some(id) => id,
-        None => return (StatusCode::BAD_REQUEST, "User must be scoped to a tenant").into_response(),
+        None => {
+            return (StatusCode::BAD_REQUEST, "User must be scoped to a tenant").into_response()
+        }
     };
 
     // Validate principal exists (User or Service User)
     let user_exists = match store.get_user(req.user_id).await {
-         Ok(opt) => opt.is_some(),
-         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
+        Ok(opt) => opt.is_some(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("DB Error: {}", e),
+            )
+                .into_response()
+        }
     };
 
     let principal_valid = if user_exists {
         true
     } else {
-          match store.get_service_user(req.user_id).await {
-             Ok(opt) => opt.is_some(),
-             Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("DB Error: {}", e)).into_response(),
-         }
+        match store.get_service_user(req.user_id).await {
+            Ok(opt) => opt.is_some(),
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("DB Error: {}", e),
+                )
+                    .into_response()
+            }
+        }
     };
 
     if !principal_valid {
-         return (StatusCode::NOT_FOUND, "User or Service User not found").into_response();
+        return (StatusCode::NOT_FOUND, "User or Service User not found").into_response();
     }
 
     let permission = Permission::new(
@@ -375,10 +430,14 @@ pub async fn grant_permission(
         req.actions,
         session.user_id,
     );
-    
+
     match store.create_permission(permission.clone()).await {
         Ok(_) => (StatusCode::CREATED, Json(permission)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to grant permission: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to grant permission: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -403,7 +462,11 @@ pub async fn revoke_permission(
 ) -> Response {
     match store.revoke_permission(permission_id).await {
         Ok(_) => (StatusCode::NO_CONTENT).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to revoke permission: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to revoke permission: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -435,23 +498,36 @@ pub async fn list_permissions(
     // Simple check:
     // param user filter: if user filters by themselves, allow.
     // if listing all, require admin.
-    
+
     // For MVP, if listing specific user:
     if let Some(target_user_id) = params.user {
-         match store.list_user_permissions(target_user_id, Some(pagination)).await {
+        match store
+            .list_user_permissions(target_user_id, Some(pagination))
+            .await
+        {
             Ok(perms) => (StatusCode::OK, Json(perms)).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list user permissions: {}", e)).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to list user permissions: {}", e),
+            )
+                .into_response(),
         }
     } else {
         // List all permissions for tenant
         let tenant_id = match session.tenant_id {
             Some(t) => t,
-            None => return (StatusCode::BAD_REQUEST, "User must belong to a tenant").into_response(),
+            None => {
+                return (StatusCode::BAD_REQUEST, "User must belong to a tenant").into_response()
+            }
         };
 
         match store.list_permissions(tenant_id, Some(pagination)).await {
             Ok(perms) => (StatusCode::OK, Json(perms)).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list permissions: {}", e)).into_response(),
+            Err(e) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to list permissions: {}", e),
+            )
+                .into_response(),
         }
     }
 }

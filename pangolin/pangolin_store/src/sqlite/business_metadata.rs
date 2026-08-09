@@ -1,12 +1,12 @@
 /// Business Metadata and Search operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
-use sqlx::Row;
-use uuid::Uuid;
-use chrono::{DateTime, Utc, TimeZone};
-use pangolin_core::model::{Asset, AssetType, Catalog, CatalogType, Namespace, Branch, BranchType};
+use chrono::{DateTime, TimeZone, Utc};
 use pangolin_core::business_metadata::BusinessMetadata;
+use pangolin_core::model::{Asset, AssetType, Branch, BranchType, Catalog, CatalogType, Namespace};
+use sqlx::Row;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 impl SqliteStore {
     pub async fn upsert_business_metadata(&self, metadata: BusinessMetadata) -> Result<()> {
@@ -38,7 +38,7 @@ impl SqliteStore {
             .await?;
 
         if let Some(row) = row {
-             Ok(Some(BusinessMetadata {
+            Ok(Some(BusinessMetadata {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                 asset_id: Uuid::parse_str(&row.get::<String, _>("asset_id"))?,
                 description: row.get("description"),
@@ -46,10 +46,16 @@ impl SqliteStore {
                 properties: serde_json::from_str(&row.get::<String, _>("properties"))?,
                 discoverable: row.get::<i32, _>("discoverable") != 0,
                 created_by: Uuid::parse_str(&row.get::<String, _>("created_by"))?,
-                created_at: Utc.timestamp_millis_opt(row.get("created_at")).single().unwrap_or_default(),
+                created_at: Utc
+                    .timestamp_millis_opt(row.get("created_at"))
+                    .single()
+                    .unwrap_or_default(),
                 updated_by: Uuid::parse_str(&row.get::<String, _>("updated_by"))?,
-                updated_at: Utc.timestamp_millis_opt(row.get("updated_at")).single().unwrap_or_default(),
-             }))
+                updated_at: Utc
+                    .timestamp_millis_opt(row.get("updated_at"))
+                    .single()
+                    .unwrap_or_default(),
+            }))
         } else {
             Ok(None)
         }
@@ -63,7 +69,12 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub async fn search_assets(&self, tenant_id: Uuid, query: &str, tags: Option<Vec<String>>) -> Result<Vec<(Asset, Option<BusinessMetadata>, String, Vec<String>)>> {
+    pub async fn search_assets(
+        &self,
+        tenant_id: Uuid,
+        query: &str,
+        tags: Option<Vec<String>>,
+    ) -> Result<Vec<(Asset, Option<BusinessMetadata>, String, Vec<String>)>> {
         let mut sql = String::from(
             "SELECT 
                 a.id, a.tenant_id, a.catalog_name, a.namespace_path, a.name, a.metadata_location, a.properties as asset_properties, a.branch_name, a.asset_type,
@@ -75,12 +86,14 @@ impl SqliteStore {
         );
 
         let query_pattern = format!("%{}%", query);
-        
+
         if let Some(ref tag_list) = tags {
             if !tag_list.is_empty() {
                 sql.push_str(" AND EXISTS (SELECT 1 FROM json_each(m.tags) WHERE value IN (");
                 for (i, _) in tag_list.iter().enumerate() {
-                    if i > 0 { sql.push_str(", "); }
+                    if i > 0 {
+                        sql.push_str(", ");
+                    }
                     sql.push_str("?");
                 }
                 sql.push_str("))");
@@ -115,7 +128,9 @@ impl SqliteStore {
                 id: Uuid::parse_str(row.get("id"))?,
                 name: row.get("name"),
                 kind,
-                location: row.get::<Option<String>, _>("metadata_location").unwrap_or_default(),
+                location: row
+                    .get::<Option<String>, _>("metadata_location")
+                    .unwrap_or_default(),
                 properties: serde_json::from_str(row.get("asset_properties")).unwrap_or_default(),
             };
 
@@ -126,7 +141,8 @@ impl SqliteStore {
                     asset_id: asset.id,
                     description: row.get("description"),
                     tags: serde_json::from_str(row.get("tags")).unwrap_or_default(),
-                    properties: serde_json::from_str(row.get("meta_properties")).unwrap_or_default(),
+                    properties: serde_json::from_str(row.get("meta_properties"))
+                        .unwrap_or_default(),
                     discoverable: row.get::<i32, _>("discoverable") != 0,
                     created_by: Uuid::parse_str(row.get("meta_created_by"))?,
                     created_at: Utc.timestamp_nanos(row.get("meta_created_at")),
@@ -136,7 +152,7 @@ impl SqliteStore {
             } else {
                 None
             };
-            
+
             let catalog_name: String = row.get("catalog_name");
             let namespace_path: String = row.get("namespace_path");
             let namespace: Vec<String> = namespace_path.split('\x1F').map(String::from).collect();
@@ -160,17 +176,28 @@ impl SqliteStore {
             catalogs.push(Catalog {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
                 name: row.get("name"),
-                catalog_type: serde_json::from_str(&format!("\"{}\"", row.get::<String, _>("catalog_type"))).unwrap_or(CatalogType::Local),
+                catalog_type: serde_json::from_str(&format!(
+                    "\"{}\"",
+                    row.get::<String, _>("catalog_type")
+                ))
+                .unwrap_or(CatalogType::Local),
                 warehouse_name: row.get("warehouse_name"),
                 storage_location: row.get("storage_location"),
-                federated_config: row.get::<Option<String>, _>("federated_config").and_then(|s| serde_json::from_str(&s).ok()),
-                properties: serde_json::from_str(&row.get::<String, _>("properties")).unwrap_or_default(),
+                federated_config: row
+                    .get::<Option<String>, _>("federated_config")
+                    .and_then(|s| serde_json::from_str(&s).ok()),
+                properties: serde_json::from_str(&row.get::<String, _>("properties"))
+                    .unwrap_or_default(),
             });
         }
         Ok(catalogs)
     }
 
-    pub async fn search_namespaces(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Namespace, String)>> {
+    pub async fn search_namespaces(
+        &self,
+        tenant_id: Uuid,
+        query: &str,
+    ) -> Result<Vec<(Namespace, String)>> {
         let query_pattern = format!("%{}%", query);
         let rows = sqlx::query("SELECT catalog_name, namespace_path, properties FROM namespaces WHERE tenant_id = ? AND namespace_path LIKE ?")
             .bind(tenant_id.to_string())
@@ -182,17 +209,26 @@ impl SqliteStore {
         for row in rows {
             let catalog_name: String = row.get("catalog_name");
             let namespace_json: String = row.get("namespace_path");
-            let namespace_path: Vec<String> = serde_json::from_str(&namespace_json).unwrap_or_default();
-            
-            namespaces.push((Namespace {
-                name: namespace_path,
-                properties: serde_json::from_str(&row.get::<String, _>("properties")).unwrap_or_default(),
-            }, catalog_name));
+            let namespace_path: Vec<String> =
+                serde_json::from_str(&namespace_json).unwrap_or_default();
+
+            namespaces.push((
+                Namespace {
+                    name: namespace_path,
+                    properties: serde_json::from_str(&row.get::<String, _>("properties"))
+                        .unwrap_or_default(),
+                },
+                catalog_name,
+            ));
         }
         Ok(namespaces)
     }
 
-    pub async fn search_branches(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Branch, String)>> {
+    pub async fn search_branches(
+        &self,
+        tenant_id: Uuid,
+        query: &str,
+    ) -> Result<Vec<(Branch, String)>> {
         let query_pattern = format!("%{}%", query);
         let rows = sqlx::query("SELECT catalog_name, name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND name LIKE ?")
             .bind(tenant_id.to_string())
@@ -209,12 +245,19 @@ impl SqliteStore {
                 _ => BranchType::Experimental,
             };
 
-            branches.push((Branch {
-                name: row.get("name"),
-                head_commit_id: row.get::<Option<String>, _>("head_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
-                branch_type,
-                assets: serde_json::from_str(&row.get::<String, _>("assets")).unwrap_or_default(),
-            }, catalog_name));
+            branches.push((
+                Branch {
+                    name: row.get("name"),
+                    head_commit_id: row
+                        .get::<Option<String>, _>("head_commit_id")
+                        .map(|s| Uuid::parse_str(&s))
+                        .transpose()?,
+                    branch_type,
+                    assets: serde_json::from_str(&row.get::<String, _>("assets"))
+                        .unwrap_or_default(),
+                },
+                catalog_name,
+            ));
         }
         Ok(branches)
     }

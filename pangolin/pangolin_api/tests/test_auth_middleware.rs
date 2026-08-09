@@ -1,19 +1,17 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{
-        http::{Request, StatusCode},
-    };
     use axum::body::Body;
-    use tower::ServiceExt;
+    use axum::http::{Request, StatusCode};
     use pangolin_api::app;
-    use pangolin_store::CatalogStore;
     use pangolin_api::auth::Claims;
+    use pangolin_api::tests_common::EnvGuard;
     use pangolin_core::user::UserRole; // Use Core UserRole
     use pangolin_store::memory::MemoryStore;
-    use std::sync::Arc;
+    use pangolin_store::CatalogStore;
     use serial_test::serial;
-    use pangolin_api::tests_common::EnvGuard;
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
     #[tokio::test]
     #[serial]
@@ -24,20 +22,29 @@ mod tests {
         let store = Arc::new(MemoryStore::new());
         // Create default tenant and analytics catalog
         let default_tenant_id = uuid::Uuid::nil();
-        store.create_tenant(pangolin_core::model::Tenant {
-            id: default_tenant_id,
-            name: "default".to_string(),
-            properties: std::collections::HashMap::new(),
-        }).await.unwrap();
-        store.create_catalog(default_tenant_id, pangolin_core::model::Catalog {
-            catalog_type: pangolin_core::model::CatalogType::Local,
-            id: uuid::Uuid::new_v4(),
-            name: "analytics".to_string(),
-            warehouse_name: None,
-            storage_location: None,
-            federated_config: None,
-            properties: std::collections::HashMap::new(),
-        }).await.unwrap();
+        store
+            .create_tenant(pangolin_core::model::Tenant {
+                id: default_tenant_id,
+                name: "default".to_string(),
+                properties: std::collections::HashMap::new(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_catalog(
+                default_tenant_id,
+                pangolin_core::model::Catalog {
+                    catalog_type: pangolin_core::model::CatalogType::Local,
+                    id: uuid::Uuid::new_v4(),
+                    name: "analytics".to_string(),
+                    warehouse_name: None,
+                    storage_location: None,
+                    federated_config: None,
+                    properties: std::collections::HashMap::new(),
+                },
+            )
+            .await
+            .unwrap();
 
         let app = pangolin_api::app(store);
 
@@ -72,30 +79,39 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_bearer_token_authentication() {
+        use chrono::Utc;
         use jsonwebtoken::{encode, EncodingKey, Header};
         use pangolin_api::auth::Claims; // Use proper Claims
-        use chrono::Utc;
 
         let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
 
         let store = Arc::new(MemoryStore::new());
-        
+
         // Setup Tenant and Catalog
         let tenant_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
-        store.create_tenant(pangolin_core::model::Tenant {
-            id: tenant_id,
-            name: "test_tenant".to_string(),
-            properties: std::collections::HashMap::new(),
-        }).await.unwrap();
-        store.create_catalog(tenant_id, pangolin_core::model::Catalog {
-            catalog_type: pangolin_core::model::CatalogType::Local,
-            id: uuid::Uuid::new_v4(),
-            name: "analytics".to_string(),
-            warehouse_name: None,
-            storage_location: None,
-            federated_config: None,
-            properties: std::collections::HashMap::new(),
-        }).await.unwrap();
+        store
+            .create_tenant(pangolin_core::model::Tenant {
+                id: tenant_id,
+                name: "test_tenant".to_string(),
+                properties: std::collections::HashMap::new(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_catalog(
+                tenant_id,
+                pangolin_core::model::Catalog {
+                    catalog_type: pangolin_core::model::CatalogType::Local,
+                    id: uuid::Uuid::new_v4(),
+                    name: "analytics".to_string(),
+                    warehouse_name: None,
+                    storage_location: None,
+                    federated_config: None,
+                    properties: std::collections::HashMap::new(),
+                },
+            )
+            .await
+            .unwrap();
 
         let app = pangolin_api::app(store);
 
@@ -150,9 +166,9 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_expired_token_rejected() {
+        use chrono::Utc;
         use jsonwebtoken::{encode, EncodingKey, Header};
         use pangolin_api::auth::Claims;
-        use chrono::Utc;
 
         let _guard = EnvGuard::new("PANGOLIN_JWT_SECRET", "secret");
         let store = Arc::new(MemoryStore::new());
@@ -194,23 +210,32 @@ mod tests {
         let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
         let store = Arc::new(MemoryStore::new());
-        
+
         // Create default tenant and analytics catalog
         let default_tenant_id = uuid::Uuid::nil();
-        store.create_tenant(pangolin_core::model::Tenant {
-            id: default_tenant_id,
-            name: "default".to_string(),
-            properties: std::collections::HashMap::new(),
-        }).await.unwrap();
-        store.create_catalog(default_tenant_id, pangolin_core::model::Catalog {
-            catalog_type: pangolin_core::model::CatalogType::Local,
-            id: uuid::Uuid::new_v4(),
-            name: "analytics".to_string(),
-            warehouse_name: None,
-            storage_location: None,
-            federated_config: None,
-            properties: std::collections::HashMap::new(),
-        }).await.unwrap();
+        store
+            .create_tenant(pangolin_core::model::Tenant {
+                id: default_tenant_id,
+                name: "default".to_string(),
+                properties: std::collections::HashMap::new(),
+            })
+            .await
+            .unwrap();
+        store
+            .create_catalog(
+                default_tenant_id,
+                pangolin_core::model::Catalog {
+                    catalog_type: pangolin_core::model::CatalogType::Local,
+                    id: uuid::Uuid::new_v4(),
+                    name: "analytics".to_string(),
+                    warehouse_name: None,
+                    storage_location: None,
+                    federated_config: None,
+                    properties: std::collections::HashMap::new(),
+                },
+            )
+            .await
+            .unwrap();
 
         let app = pangolin_api::app(store);
 
@@ -227,7 +252,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_basic_auth_for_root_user() {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
@@ -251,7 +276,7 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn test_wrong_basic_auth_rejected() {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");

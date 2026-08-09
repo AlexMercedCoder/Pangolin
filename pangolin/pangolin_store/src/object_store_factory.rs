@@ -14,7 +14,10 @@ pub fn create_object_store(
     } else if location.starts_with("file://") || location.starts_with("/") {
         create_local_store(storage_config, location)
     } else {
-        Err(anyhow::anyhow!("Unsupported scheme for location: {}", location))
+        Err(anyhow::anyhow!(
+            "Unsupported scheme for location: {}",
+            location
+        ))
     }
 }
 
@@ -27,11 +30,13 @@ fn create_local_store(
     } else {
         location
     };
-    
+
     // Ensure directory exists
     std::fs::create_dir_all(path)?;
-    
-    Ok(Box::new(object_store::local::LocalFileSystem::new_with_prefix(path)?))
+
+    Ok(Box::new(
+        object_store::local::LocalFileSystem::new_with_prefix(path)?,
+    ))
 }
 
 fn create_s3_store(
@@ -77,8 +82,11 @@ fn create_s3_store(
     if let Some(ep) = endpoint {
         builder = builder.with_endpoint(ep);
     }
-    
-    println!("DEBUG: s3.path-style-access config check: {:?}", config.get("s3.path-style-access"));
+
+    println!(
+        "DEBUG: s3.path-style-access config check: {:?}",
+        config.get("s3.path-style-access")
+    );
     if let Some(true) = config.get("s3.path-style-access").map(|s| s == "true") {
         println!("DEBUG: Enabling path-style access (virtual_hosted_style_request = false)");
         builder = builder.with_virtual_hosted_style_request(false);
@@ -95,19 +103,33 @@ fn create_azure_store(
 ) -> Result<Box<dyn ObjectStore>> {
     // Basic Azure implementation (can expand as needed)
     let container = if location.starts_with("az://") {
-        location.strip_prefix("az://").unwrap().split('/').next().unwrap()
+        location
+            .strip_prefix("az://")
+            .unwrap()
+            .split('/')
+            .next()
+            .unwrap()
     } else {
-        location.strip_prefix("abfs://").unwrap().split('@').next().unwrap()
+        location
+            .strip_prefix("abfs://")
+            .unwrap()
+            .split('@')
+            .next()
+            .unwrap()
     };
 
-    let account = config.get("azure.account-name").ok_or_else(|| anyhow::anyhow!("Missing azure.account-name"))?;
-    let key = config.get("azure.account-key").ok_or_else(|| anyhow::anyhow!("Missing azure.account-key"))?;
+    let account = config
+        .get("azure.account-name")
+        .ok_or_else(|| anyhow::anyhow!("Missing azure.account-name"))?;
+    let key = config
+        .get("azure.account-key")
+        .ok_or_else(|| anyhow::anyhow!("Missing azure.account-key"))?;
 
     let builder = object_store::azure::MicrosoftAzureBuilder::new()
         .with_account(account)
         .with_access_key(key)
         .with_container_name(container);
-        
+
     Ok(Box::new(builder.build()?))
 }
 
@@ -115,12 +137,19 @@ fn create_gcp_store(
     config: &HashMap<String, String>,
     location: &str,
 ) -> Result<Box<dyn ObjectStore>> {
-    let bucket = location.strip_prefix("gs://").unwrap().split('/').next().unwrap();
-    let service_account = config.get("gcp.service-account").ok_or_else(|| anyhow::anyhow!("Missing gcp.service-account"))?; // Path to key file or json content? Usually path or env.
+    let bucket = location
+        .strip_prefix("gs://")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let service_account = config
+        .get("gcp.service-account")
+        .ok_or_else(|| anyhow::anyhow!("Missing gcp.service-account"))?; // Path to key file or json content? Usually path or env.
 
     // object_store crate for GCP usually expects GOOGLE_APPLICATION_CREDENTIALS env or path.
     // Builder has `with_service_account_path` or `with_service_account_key`.
-    
+
     // For now assuming service-account points to a file path
     let builder = object_store::gcp::GoogleCloudStorageBuilder::new()
         .with_bucket_name(bucket)

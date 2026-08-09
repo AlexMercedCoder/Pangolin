@@ -1,10 +1,10 @@
-use super::MongoStore;
 use super::main::to_bson_uuid;
+use super::MongoStore;
 use anyhow::Result;
+use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
 use pangolin_core::business_metadata::AccessRequest;
 use uuid::Uuid;
-use futures::stream::TryStreamExt;
 
 impl MongoStore {
     pub async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
@@ -18,7 +18,11 @@ impl MongoStore {
         Ok(req)
     }
 
-    pub async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<AccessRequest>> {
+    pub async fn list_access_requests(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<AccessRequest>> {
         let mut pipeline = vec![
             doc! {
                 "$lookup": {
@@ -34,7 +38,7 @@ impl MongoStore {
                 "$project": {
                     "user": 0
                 }
-            }
+            },
         ];
 
         if let Some(p) = pagination {
@@ -48,10 +52,10 @@ impl MongoStore {
 
         let cursor = self.access_requests().aggregate(pipeline).await?;
         let docs: Vec<Document> = cursor.try_collect().await?;
-        
+
         let mut reqs = Vec::new();
         for d in docs {
-             reqs.push(mongodb::bson::from_document(d)?);
+            reqs.push(mongodb::bson::from_document(d)?);
         }
         Ok(reqs)
     }

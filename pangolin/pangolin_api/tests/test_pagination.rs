@@ -1,30 +1,29 @@
-
 #[cfg(test)]
 mod tests {
+    use axum::body::to_bytes;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
-    use axum::body::to_bytes;
-    use tower::ServiceExt;
-    use pangolin_store::{memory::MemoryStore, CatalogStore};
-    use std::sync::Arc;
-    use serial_test::serial;
     use pangolin_api::tests_common::EnvGuard;
     use pangolin_core::model::Tenant;
+    use pangolin_store::{memory::MemoryStore, CatalogStore};
+    use serial_test::serial;
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
     #[tokio::test]
     #[serial]
     async fn test_tenant_pagination() {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
+        use base64::{engine::general_purpose::STANDARD, Engine as _};
 
         // Authenticate as root
         let _user_guard = EnvGuard::new("PANGOLIN_ROOT_USER", "admin");
         let _pass_guard = EnvGuard::new("PANGOLIN_ROOT_PASSWORD", "password");
 
         let store = Arc::new(MemoryStore::new());
-        
+
         // Seed 5 tenants
         for i in 0..5 {
             let tenant = Tenant {

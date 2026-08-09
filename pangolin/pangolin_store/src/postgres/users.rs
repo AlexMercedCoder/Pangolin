@@ -1,8 +1,8 @@
 use super::PostgresStore;
 use anyhow::Result;
-use pangolin_core::user::{User, UserRole, OAuthProvider};
-use uuid::Uuid;
+use pangolin_core::user::{OAuthProvider, User, UserRole};
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Helper to Convert Row to User
@@ -64,7 +64,7 @@ impl PostgresStore {
             .bind(user_id)
             .fetch_optional(&self.pool)
             .await?;
-        
+
         if let Some(row) = row {
             self.row_to_user(row)
         } else {
@@ -77,7 +77,7 @@ impl PostgresStore {
             .bind(username)
             .fetch_optional(&self.pool)
             .await?;
-        
+
         if let Some(row) = row {
             self.row_to_user(row)
         } else {
@@ -85,9 +85,17 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_users(&self, tenant_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<User>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_users(
+        &self,
+        tenant_id: Option<Uuid>,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<User>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = if let Some(tid) = tenant_id {
             sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
@@ -129,7 +137,10 @@ impl PostgresStore {
     }
 
     pub async fn delete_user(&self, user_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM users WHERE id = $1").bind(user_id).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 }

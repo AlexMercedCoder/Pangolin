@@ -1,21 +1,21 @@
-use axum::{
-    extract::{Path, State, Extension, Query},
-    Json,
-    response::IntoResponse,
-    http::StatusCode,
-};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use pangolin_store::{CatalogStore, PaginationParams};
-use pangolin_core::model::{Asset, AssetType};
-use uuid::Uuid;
 use crate::auth::TenantId;
 use crate::authz::check_permission;
-use pangolin_core::permission::{PermissionScope, Action};
-use pangolin_core::user::UserSession;
-use crate::iceberg::AppState;
 use crate::iceberg::parse_table_identifier;
+use crate::iceberg::AppState;
+use axum::{
+    extract::{Extension, Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use pangolin_core::model::{Asset, AssetType};
+use pangolin_core::permission::{Action, PermissionScope};
+use pangolin_core::user::UserSession;
+use pangolin_store::{CatalogStore, PaginationParams};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateViewRequest {
@@ -38,7 +38,11 @@ impl From<Asset> for ViewResponse {
         Self {
             name: asset.name,
             sql: asset.properties.get("sql").cloned().unwrap_or_default(),
-            dialect: asset.properties.get("dialect").cloned().unwrap_or_else(|| "ansi".to_string()),
+            dialect: asset
+                .properties
+                .get("dialect")
+                .cloned()
+                .unwrap_or_else(|| "ansi".to_string()),
             properties: asset.properties,
         }
     }
@@ -68,16 +72,19 @@ pub async fn create_view(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let (view_name, branch_from_name) = parse_table_identifier(&payload.name);
     let branch = branch_from_name.unwrap_or("main".to_string());
-    
+
     // Parse namespace
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
 
     let mut properties = payload.properties.unwrap_or_default();
     properties.insert("sql".to_string(), payload.sql);
-    properties.insert("dialect".to_string(), payload.dialect.unwrap_or_else(|| "ansi".to_string()));
+    properties.insert(
+        "dialect".to_string(),
+        payload.dialect.unwrap_or_else(|| "ansi".to_string()),
+    );
 
     let asset = Asset {
         id: Uuid::new_v4(),
@@ -87,7 +94,16 @@ pub async fn create_view(
         properties,
     };
 
-    match store.create_asset(tenant_id, &catalog_name, Some(branch), namespace_parts, asset.clone()).await {
+    match store
+        .create_asset(
+            tenant_id,
+            &catalog_name,
+            Some(branch),
+            namespace_parts,
+            asset.clone(),
+        )
+        .await
+    {
         Ok(_) => (StatusCode::CREATED, Json(ViewResponse::from(asset))).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
@@ -117,20 +133,29 @@ pub async fn get_view(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let (view_name, branch_from_name) = parse_table_identifier(&view);
     let branch = branch_from_name.unwrap_or("main".to_string());
-    
+
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
 
-    match store.get_asset(tenant_id, &catalog_name, Some(branch), namespace_parts, view_name).await {
+    match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            Some(branch),
+            namespace_parts,
+            view_name,
+        )
+        .await
+    {
         Ok(Some(asset)) => {
             if asset.kind == AssetType::View {
                 (StatusCode::OK, Json(ViewResponse::from(asset))).into_response()
             } else {
                 (StatusCode::NOT_FOUND, "Asset is not a view").into_response()
             }
-        },
+        }
         Ok(None) => (StatusCode::NOT_FOUND, "View not found").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
@@ -179,7 +204,7 @@ pub async fn register_asset(
     Json(payload): Json<RegisterAssetRequest>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Resolve catalog
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
@@ -192,11 +217,11 @@ pub async fn register_asset(
             return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
         }
     };
-    
+
     // Check permissions (Create on Namespace)
-    let scope = PermissionScope::Namespace { 
-        catalog_id: catalog.id, 
-        namespace: namespace.clone() 
+    let scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: namespace.clone(),
     };
     match check_permission(&store, &session, &Action::Create, &scope).await {
         Ok(true) => (),
@@ -207,20 +232,28 @@ pub async fn register_asset(
                 catalog_name,
                 namespace
             );
-            return (StatusCode::FORBIDDEN, "Forbidden: Create permission required").into_response();
+            return (
+                StatusCode::FORBIDDEN,
+                "Forbidden: Create permission required",
+            )
+                .into_response();
         }
         Err(e) => {
             tracing::error!("Permission check failed: {}", e);
-            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Permission check failed: {}", e),
+            )
+                .into_response();
         }
     }
-    
+
     // Generate asset ID
     let asset_id = Uuid::new_v4();
-    
+
     // Parse namespace parts (assuming dot-separated for generic registration)
     let namespace_parts: Vec<String> = namespace.split('.').map(|s| s.to_string()).collect();
-    
+
     tracing::info!(
         "Registering generic asset: id={}, name={}, kind={:?}, catalog={}, namespace={:?}, user={}",
         asset_id,
@@ -230,7 +263,7 @@ pub async fn register_asset(
         namespace_parts,
         session.username
     );
-    
+
     let asset = Asset {
         id: asset_id,
         name: payload.name.clone(),
@@ -238,12 +271,21 @@ pub async fn register_asset(
         location: payload.location.clone(),
         properties: payload.properties,
     };
-    
+
     // Use "main" branch by default for generic assets
     // In future we could allow parsing @branch from namespace or name if needed
     let branch = "main".to_string();
 
-    match store.create_asset(tenant_id, &catalog_name, Some(branch), namespace_parts, asset).await {
+    match store
+        .create_asset(
+            tenant_id,
+            &catalog_name,
+            Some(branch),
+            namespace_parts,
+            asset,
+        )
+        .await
+    {
         Ok(_) => {
             let response = RegisterAssetResponse {
                 id: asset_id.to_string(),
@@ -252,10 +294,10 @@ pub async fn register_asset(
                 location: payload.location,
             };
             (StatusCode::CREATED, Json(response)).into_response()
-        },
+        }
         Err(e) => {
-             tracing::error!("Failed to create asset in store: {}", e);
-             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to persist asset").into_response()
+            tracing::error!("Failed to create asset in store: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to persist asset").into_response()
         }
     }
 }
@@ -284,35 +326,60 @@ pub async fn get_asset(
     Path((catalog_name, namespace, asset_name)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Resolve catalog to get ID for permission check
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get catalog: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get catalog: {}", e),
+            )
+                .into_response()
+        }
     };
 
     // Parse namespace
     let namespace_parts: Vec<String> = namespace.split('.').map(|s| s.to_string()).collect();
 
     // Get asset first to resolve ID for permission check
-    let asset = match store.get_asset(tenant_id, &catalog_name, None, namespace_parts.clone(), asset_name.clone()).await {
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            None,
+            namespace_parts.clone(),
+            asset_name.clone(),
+        )
+        .await
+    {
         Ok(Some(a)) => a,
         Ok(None) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get asset: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get asset: {}", e),
+            )
+                .into_response()
+        }
     };
 
     // Permission Check
-    let scope = PermissionScope::Asset { 
-        catalog_id: catalog.id, 
-        namespace: namespace.clone(), 
-        asset_id: asset.id 
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace.clone(),
+        asset_id: asset.id,
     };
-    
+
     match check_permission(&store, &session, &Action::Read, &scope).await {
-         Ok(true) => (StatusCode::OK, Json(asset)).into_response(),
-         Ok(false) => (StatusCode::FORBIDDEN, "Forbidden: Read permission required").into_response(),
-         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
+        Ok(true) => (StatusCode::OK, Json(asset)).into_response(),
+        Ok(false) => (StatusCode::FORBIDDEN, "Forbidden: Read permission required").into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Permission check failed: {}", e),
+        )
+            .into_response(),
     }
 }
 #[derive(Serialize, ToSchema)]
@@ -348,62 +415,89 @@ pub async fn list_assets(
     Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
+
     // Resolve catalog
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get catalog: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get catalog: {}", e),
+            )
+                .into_response()
+        }
     };
-    
+
     // Parse namespace
     let namespace_parts: Vec<String> = namespace.split('.').map(|s| s.to_string()).collect();
-    
+
     // Get all assets
     // We use "main" branch for listings by default, or iterate all branches?
     // Ideally store.list_assets would take an optional branch.
     // However, existing store.list_assets might depend on implementation.
     // For now, let's assume "main" branch or whatever the store defaults to.
-    
-    match store.list_assets(tenant_id, &catalog_name, None, namespace_parts.clone(), Some(pagination)).await {
+
+    match store
+        .list_assets(
+            tenant_id,
+            &catalog_name,
+            None,
+            namespace_parts.clone(),
+            Some(pagination),
+        )
+        .await
+    {
         Ok(assets) => {
             // Get user permissions
             let permissions = match store.list_user_permissions(session.user_id, None).await {
                 Ok(p) => p,
-                Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get permissions: {}", e)).into_response(),
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to get permissions: {}", e),
+                    )
+                        .into_response()
+                }
             };
-            
+
             // Map for filtering
             let mut catalog_map = std::collections::HashMap::new();
             catalog_map.insert(catalog_name.clone(), catalog.id);
-            
+
             // Prepare assets with metadata for filtering
             let mut assets_with_metadata = Vec::new();
-            
+
             for asset in assets {
                 // Fetch business metadata for discoverability check
                 let metadata = match store.get_business_metadata(asset.id).await {
                     Ok(m) => m,
                     Err(e) => {
-                         tracing::warn!("Failed to fetch metadata for asset {}: {}", asset.id, e);
-                         None
+                        tracing::warn!("Failed to fetch metadata for asset {}: {}", asset.id, e);
+                        None
                     }
                 };
-                
-                assets_with_metadata.push((asset, metadata, catalog_name.clone(), namespace_parts.clone()));
+
+                assets_with_metadata.push((
+                    asset,
+                    metadata,
+                    catalog_name.clone(),
+                    namespace_parts.clone(),
+                ));
             }
 
             // Filter assets based on permissions
             let filtered = crate::authz_utils::filter_assets(
-                assets_with_metadata, 
-                &permissions, 
-                session.role, 
-                &catalog_map
+                assets_with_metadata,
+                &permissions,
+                session.role,
+                &catalog_map,
             );
-            
+
             // Map to AssetSummary
-            let summaries: Vec<AssetSummary> = filtered.into_iter().map(|(asset, _, _, _)| {
-                AssetSummary {
+            let summaries: Vec<AssetSummary> = filtered
+                .into_iter()
+                .map(|(asset, _, _, _)| AssetSummary {
                     id: asset.id,
                     name: asset.name.clone(),
                     namespace: namespace_parts.clone(),
@@ -411,34 +505,38 @@ pub async fn list_assets(
                     identifier: crate::iceberg::TableIdentifier {
                         namespace: namespace_parts.clone(),
                         name: asset.name,
-                    }
-                }
-            }).collect();
-            
+                    },
+                })
+                .collect();
+
             (StatusCode::OK, Json(summaries)).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list assets: {}", e)).into_response(),
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list assets: {}", e),
+        )
+            .into_response(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::iceberg::AppState;
-    use pangolin_core::user::UserSession;
-    use pangolin_core::permission::{PermissionScope, Action};
     use crate::auth::TenantId;
+    use crate::iceberg::AppState;
     use axum::Extension;
     use pangolin_core::model::{Catalog, CatalogType, Tenant};
-    use pangolin_core::user::{User, UserRole};
     use pangolin_core::permission::Permission;
+    use pangolin_core::permission::{Action, PermissionScope};
+    use pangolin_core::user::UserSession;
+    use pangolin_core::user::{User, UserRole};
     use pangolin_store::memory::MemoryStore;
     use std::sync::Arc;
     use uuid::Uuid;
 
     async fn setup_test_store() -> (AppState, Uuid, Uuid, Uuid, Uuid) {
         let store = Arc::new(MemoryStore::new());
-        
+
         // Create tenant
         let tenant = Tenant {
             id: Uuid::new_v4(),
@@ -446,7 +544,7 @@ mod tests {
             properties: std::collections::HashMap::new(),
         };
         store.create_tenant(tenant.clone()).await.unwrap();
-        
+
         // Create admin user
         let admin_user = User::new_tenant_admin(
             "admin".to_string(),
@@ -455,7 +553,7 @@ mod tests {
             tenant.id,
         );
         store.create_user(admin_user.clone()).await.unwrap();
-        
+
         // Create regular user
         let regular_user = User::new_tenant_user(
             "user".to_string(),
@@ -464,7 +562,7 @@ mod tests {
             tenant.id,
         );
         store.create_user(regular_user.clone()).await.unwrap();
-        
+
         // Create catalog
         let catalog = Catalog {
             id: Uuid::new_v4(),
@@ -475,8 +573,11 @@ mod tests {
             properties: std::collections::HashMap::new(),
             federated_config: None,
         };
-        store.create_catalog(tenant.id, catalog.clone()).await.unwrap();
-        
+        store
+            .create_catalog(tenant.id, catalog.clone())
+            .await
+            .unwrap();
+
         // Grant Create permission to regular user on namespace
         let permission = Permission {
             id: Uuid::new_v4(),
@@ -491,7 +592,7 @@ mod tests {
             granted_at: chrono::Utc::now(),
         };
         store.create_permission(permission).await.unwrap();
-        
+
         (
             store.clone() as AppState,
             tenant.id,
@@ -504,7 +605,7 @@ mod tests {
     #[tokio::test]
     async fn test_register_asset_success() {
         let (state, tenant_id, _catalog_id, _admin_id, user_id) = setup_test_store().await;
-        
+
         let session = UserSession {
             user_id,
             username: "user".to_string(),
@@ -513,14 +614,14 @@ mod tests {
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
         };
-        
+
         let payload = RegisterAssetRequest {
             name: "my_delta_table".to_string(),
             kind: AssetType::DeltaTable,
             location: "s3://bucket/delta/table".to_string(),
             properties: std::collections::HashMap::new(),
         };
-        
+
         let response = register_asset(
             State(state),
             Extension(TenantId(tenant_id)),
@@ -530,14 +631,14 @@ mod tests {
         )
         .await
         .into_response();
-        
+
         assert_eq!(response.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
     async fn test_register_asset_forbidden() {
         let (state, tenant_id, _catalog_id, _admin_id, user_id) = setup_test_store().await;
-        
+
         let session = UserSession {
             user_id,
             username: "user".to_string(),
@@ -546,14 +647,14 @@ mod tests {
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
         };
-        
+
         let payload = RegisterAssetRequest {
             name: "my_delta_table".to_string(),
             kind: AssetType::DeltaTable,
             location: "s3://bucket/delta/table".to_string(),
             properties: std::collections::HashMap::new(),
         };
-        
+
         // Try to register in a namespace without permission
         let response = register_asset(
             State(state),
@@ -564,14 +665,14 @@ mod tests {
         )
         .await
         .into_response();
-        
+
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
     async fn test_register_asset_catalog_not_found() {
         let (state, tenant_id, _catalog_id, _admin_id, user_id) = setup_test_store().await;
-        
+
         let session = UserSession {
             user_id,
             username: "user".to_string(),
@@ -580,14 +681,14 @@ mod tests {
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
         };
-        
+
         let payload = RegisterAssetRequest {
             name: "my_delta_table".to_string(),
             kind: AssetType::DeltaTable,
             location: "s3://bucket/delta/table".to_string(),
             properties: std::collections::HashMap::new(),
         };
-        
+
         let response = register_asset(
             State(state),
             Extension(TenantId(tenant_id)),
@@ -597,14 +698,14 @@ mod tests {
         )
         .await
         .into_response();
-        
+
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]
     async fn test_register_different_asset_types() {
         let (state, tenant_id, _catalog_id, _admin_id, user_id) = setup_test_store().await;
-        
+
         let session = UserSession {
             user_id,
             username: "user".to_string(),
@@ -613,7 +714,7 @@ mod tests {
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
         };
-        
+
         let asset_types = vec![
             AssetType::DeltaTable,
             AssetType::HudiTable,
@@ -623,7 +724,7 @@ mod tests {
             AssetType::View,
             AssetType::MlModel,
         ];
-        
+
         for asset_type in asset_types {
             let payload = RegisterAssetRequest {
                 name: format!("test_{:?}", asset_type),
@@ -631,7 +732,7 @@ mod tests {
                 location: "s3://bucket/path".to_string(),
                 properties: std::collections::HashMap::new(),
             };
-            
+
             let response = register_asset(
                 State(state.clone()),
                 Extension(TenantId(tenant_id)),
@@ -641,8 +742,13 @@ mod tests {
             )
             .await
             .into_response();
-            
-            assert_eq!(response.status(), StatusCode::CREATED, "Failed for {:?}", asset_type);
+
+            assert_eq!(
+                response.status(),
+                StatusCode::CREATED,
+                "Failed for {:?}",
+                asset_type
+            );
         }
     }
 }

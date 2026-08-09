@@ -1,13 +1,12 @@
 use dashmap::DashMap;
+use pangolin_core::audit::AuditLogEntry;
+use pangolin_core::model::{
+    Asset, Branch, Catalog, Commit, Namespace, SyncStats, SystemSettings, Tag, Tenant, Warehouse,
+};
+use pangolin_core::permission::{Permission, Role, UserRole};
+use pangolin_core::user::User;
 use std::sync::Arc;
 use uuid::Uuid;
-use pangolin_core::model::{
-    Catalog, Namespace, Warehouse, Asset, Commit, Branch, Tag, Tenant,
-    SystemSettings, SyncStats
-};
-use pangolin_core::user::User;
-use pangolin_core::permission::{Role, UserRole, Permission};
-use pangolin_core::audit::AuditLogEntry;
 
 #[derive(Clone)]
 pub struct MemoryStore {
@@ -26,7 +25,8 @@ pub struct MemoryStore {
     pub(crate) signer: crate::signer::SignerImpl,
     pub(crate) user_roles: Arc<DashMap<(Uuid, Uuid), UserRole>>,
     pub(crate) permissions: Arc<DashMap<Uuid, Permission>>,
-    pub(crate) business_metadata: Arc<DashMap<Uuid, pangolin_core::business_metadata::BusinessMetadata>>,
+    pub(crate) business_metadata:
+        Arc<DashMap<Uuid, pangolin_core::business_metadata::BusinessMetadata>>,
     pub(crate) access_requests: Arc<DashMap<Uuid, pangolin_core::business_metadata::AccessRequest>>,
     pub(crate) service_users: Arc<DashMap<Uuid, pangolin_core::user::ServiceUser>>,
     pub(crate) merge_operations: Arc<DashMap<Uuid, pangolin_core::model::MergeOperation>>,

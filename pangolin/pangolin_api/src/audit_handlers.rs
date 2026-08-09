@@ -1,17 +1,17 @@
+use crate::auth::TenantId;
 use axum::{
-    extract::{Path, Query, State, Extension},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
 use pangolin_core::audit::{AuditLogEntry, AuditLogFilter};
-use pangolin_core::user::{UserSession, UserRole};
+use pangolin_core::user::{UserRole, UserSession};
+use pangolin_store::CatalogStore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use uuid::Uuid;
-use pangolin_store::CatalogStore;
-use crate::auth::TenantId;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
@@ -91,12 +91,12 @@ pub async fn list_audit_events(
     // Parse query parameters into AuditLogFilter
     let filter = AuditLogFilter {
         user_id: query.user_id,
-        action: query.action.and_then(|s| {
-            serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()
-        }),
-        resource_type: query.resource_type.and_then(|s| {
-            serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()
-        }),
+        action: query
+            .action
+            .and_then(|s| serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()),
+        resource_type: query
+            .resource_type
+            .and_then(|s| serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()),
         resource_id: query.resource_id,
         start_time: query.start_time.and_then(|s| {
             chrono::DateTime::parse_from_rfc3339(&s)
@@ -108,9 +108,9 @@ pub async fn list_audit_events(
                 .ok()
                 .map(|dt| dt.with_timezone(&chrono::Utc))
         }),
-        result: query.result.and_then(|s| {
-            serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()
-        }),
+        result: query
+            .result
+            .and_then(|s| serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()),
         limit: Some(query.limit.unwrap_or(100).min(1000)),
         offset: query.offset,
     };
@@ -122,10 +122,17 @@ pub async fn list_audit_events(
             Ok(tenants) => {
                 let mut all_events = Vec::new();
                 for tenant in tenants {
-                    match store.list_audit_events(tenant.id, Some(filter.clone())).await {
+                    match store
+                        .list_audit_events(tenant.id, Some(filter.clone()))
+                        .await
+                    {
                         Ok(mut events) => all_events.append(&mut events),
                         Err(e) => {
-                            tracing::warn!("Failed to fetch audit events for tenant {}: {}", tenant.id, e);
+                            tracing::warn!(
+                                "Failed to fetch audit events for tenant {}: {}",
+                                tenant.id,
+                                e
+                            );
                         }
                     }
                 }
@@ -136,8 +143,8 @@ pub async fn list_audit_events(
                 let limit = filter.limit.unwrap_or(100);
                 let events: Vec<_> = all_events.into_iter().skip(offset).take(limit).collect();
                 Ok(events)
-            },
-            Err(e) => Err(e)
+            }
+            Err(e) => Err(e),
         }
     } else {
         // Non-root users only see events from their tenant
@@ -198,8 +205,8 @@ pub async fn get_audit_event(
                     }
                 }
                 Ok(found_event)
-            },
-            Err(e) => Err(e)
+            }
+            Err(e) => Err(e),
         }
     } else {
         // Non-root users only see events from their tenant
@@ -264,12 +271,12 @@ pub async fn count_audit_events(
     // Parse query parameters into AuditLogFilter (same as list_audit_events)
     let filter = AuditLogFilter {
         user_id: query.user_id,
-        action: query.action.and_then(|s| {
-            serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()
-        }),
-        resource_type: query.resource_type.and_then(|s| {
-            serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()
-        }),
+        action: query
+            .action
+            .and_then(|s| serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()),
+        resource_type: query
+            .resource_type
+            .and_then(|s| serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()),
         resource_id: query.resource_id,
         start_time: query.start_time.and_then(|s| {
             chrono::DateTime::parse_from_rfc3339(&s)
@@ -281,9 +288,9 @@ pub async fn count_audit_events(
                 .ok()
                 .map(|dt| dt.with_timezone(&chrono::Utc))
         }),
-        result: query.result.and_then(|s| {
-            serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()
-        }),
+        result: query
+            .result
+            .and_then(|s| serde_json::from_str(&format!("\"{}\"", s.to_lowercase())).ok()),
         limit: None,  // Not needed for counting
         offset: None, // Not needed for counting
     };
@@ -295,16 +302,23 @@ pub async fn count_audit_events(
             Ok(tenants) => {
                 let mut total_count = 0;
                 for tenant in tenants {
-                    match store.count_audit_events(tenant.id, Some(filter.clone())).await {
+                    match store
+                        .count_audit_events(tenant.id, Some(filter.clone()))
+                        .await
+                    {
                         Ok(count) => total_count += count,
                         Err(e) => {
-                            tracing::warn!("Failed to count audit events for tenant {}: {}", tenant.id, e);
+                            tracing::warn!(
+                                "Failed to count audit events for tenant {}: {}",
+                                tenant.id,
+                                e
+                            );
                         }
                     }
                 }
                 Ok(total_count)
-            },
-            Err(e) => Err(e)
+            }
+            Err(e) => Err(e),
         }
     } else {
         // Non-root users only count events from their tenant

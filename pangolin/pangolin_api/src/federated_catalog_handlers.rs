@@ -1,19 +1,19 @@
+use crate::auth::TenantId;
+use crate::federated_proxy::FederatedCatalogProxy;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     Extension, Json,
 };
+use pangolin_core::model::SyncStats;
 use pangolin_core::model::{Catalog, CatalogType, FederatedCatalogConfig};
+use pangolin_core::user::{UserRole, UserSession};
 use pangolin_store::CatalogStore;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use uuid::Uuid;
-use crate::auth::TenantId;
-use pangolin_core::user::{UserSession, UserRole};
-use crate::federated_proxy::FederatedCatalogProxy;
 use utoipa::ToSchema;
-use pangolin_core::model::SyncStats;
+use uuid::Uuid;
 
 type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
@@ -36,7 +36,7 @@ impl From<Catalog> for FederatedCatalogResponse {
         let config = catalog.federated_config.unwrap_or_else(|| {
             panic!("Attempted to convert non-federated catalog to FederatedCatalogResponse")
         });
-        
+
         Self {
             id: catalog.id,
             name: catalog.name,
@@ -109,7 +109,11 @@ pub async fn create_federated_catalog(
     };
 
     match store.create_catalog(tenant.0, catalog.clone()).await {
-        Ok(_) => (StatusCode::CREATED, Json(FederatedCatalogResponse::from(catalog))).into_response(),
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(FederatedCatalogResponse::from(catalog)),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": e.to_string()})),
@@ -219,12 +223,20 @@ pub async fn sync_federated_catalog(
 ) -> impl IntoResponse {
     // Only Admin
     if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
-         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
+        return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
 
     match store.sync_federated_catalog(tenant.0, &catalog_name).await {
-         Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "Sync triggered"}))).into_response(),
-         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Sync failed: {}", e)).into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "Sync triggered"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Sync failed: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -252,12 +264,19 @@ pub async fn get_federated_catalog_stats(
     // Check permissions? Assuming Read on Catalog is enough or Admin.
     // Let's require Admin for now as stats might reveal system details.
     if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
-         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
+        return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
 
-    match store.get_federated_catalog_stats(tenant.0, &catalog_name).await {
-         Ok(stats) => (StatusCode::OK, Json(stats)).into_response(),
-         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get stats: {}", e)).into_response(),
+    match store
+        .get_federated_catalog_stats(tenant.0, &catalog_name)
+        .await
+    {
+        Ok(stats) => (StatusCode::OK, Json(stats)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get stats: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -386,18 +405,21 @@ pub async fn test_federated_connection(
     }
 
     let config = catalog.federated_config.unwrap();
-    
+
     // Try to list namespaces as a connection test
     let proxy = FederatedCatalogProxy::new();
     let test_path = format!("/v1/{}/namespaces", catalog_name);
-    
-    match proxy.forward_request(
-        &config,
-        axum::http::Method::GET,
-        &test_path,
-        None,
-        axum::http::HeaderMap::new(),
-    ).await {
+
+    match proxy
+        .forward_request(
+            &config,
+            axum::http::Method::GET,
+            &test_path,
+            None,
+            axum::http::HeaderMap::new(),
+        )
+        .await
+    {
         Ok(_) => (
             StatusCode::OK,
             Json(serde_json::json!({

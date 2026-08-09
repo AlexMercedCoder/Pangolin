@@ -11,7 +11,7 @@ mod postgres_bulk_ops_tests {
             // Default to the docker container used in development if var not set
             // matches docker-compose.db-test.yml
             .unwrap_or_else(|_| "postgres://testuser:testpass@localhost:5432/testdb".to_string());
-        
+
         PostgresStore::new(&database_url)
             .await
             .expect("Failed to create PostgresStore")

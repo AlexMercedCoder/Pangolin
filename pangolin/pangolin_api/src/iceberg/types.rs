@@ -1,7 +1,7 @@
+use pangolin_core::iceberg_metadata::{Snapshot, TableMetadata};
 use serde::{Deserialize, Serialize};
-use utoipa::{ToSchema, IntoParams};
 use std::collections::HashMap;
-use pangolin_core::iceberg_metadata::{TableMetadata, Snapshot};
+use utoipa::{IntoParams, ToSchema};
 
 #[derive(Serialize, ToSchema)]
 pub struct CatalogConfig {
@@ -47,7 +47,7 @@ pub struct CreateNamespaceResponse {
 pub struct CreateTableRequest {
     pub name: String,
     pub location: Option<String>,
-    pub schema: Option<serde_json::Value>,  // Accept schema as JSON
+    pub schema: Option<serde_json::Value>, // Accept schema as JSON
     pub properties: Option<HashMap<String, String>>,
 }
 
@@ -66,29 +66,35 @@ pub struct TableResponse {
 }
 
 impl TableResponse {
-    pub fn new(metadata_location: Option<String>, metadata: TableMetadata, asset_id: Option<uuid::Uuid>) -> Self {
+    pub fn new(
+        metadata_location: Option<String>,
+        metadata: TableMetadata,
+        asset_id: Option<uuid::Uuid>,
+    ) -> Self {
         Self::with_credentials(metadata_location, metadata, None, asset_id)
     }
-    
+
     pub fn with_credentials(
-        metadata_location: Option<String>, 
+        metadata_location: Option<String>,
         metadata: TableMetadata,
         credentials: Option<HashMap<String, String>>,
         asset_id: Option<uuid::Uuid>,
     ) -> Self {
         let mut config = HashMap::new();
-        
+
         // Merge vended credentials into config
         if let Some(creds) = credentials {
             config.extend(creds);
         }
-        
+
         // Add S3 defaults if not already present
-        config.entry("s3.endpoint".to_string())
-            .or_insert_with(|| std::env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string()));
-        config.entry("s3.region".to_string())
-            .or_insert_with(|| std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
-        
+        config.entry("s3.endpoint".to_string()).or_insert_with(|| {
+            std::env::var("S3_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string())
+        });
+        config.entry("s3.region".to_string()).or_insert_with(|| {
+            std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string())
+        });
+
         Self {
             id: asset_id,
             metadata_location,
@@ -132,7 +138,7 @@ pub enum CommitRequirement {
     #[serde(rename = "assert-table-uuid")]
     AssertTableUuid { uuid: String },
     #[serde(rename = "assert-ref-snapshot-id")]
-    AssertRefSnapshotId { 
+    AssertRefSnapshotId {
         #[serde(rename = "ref")]
         reference: String,
         #[serde(rename = "snapshot-id")]
@@ -152,16 +158,16 @@ pub enum CommitUpdate {
     #[serde(rename = "assign-uuid")]
     AssignUuid { uuid: String },
     #[serde(rename = "upgrade-format-version")]
-    UpgradeFormatVersion { 
+    UpgradeFormatVersion {
         #[serde(rename = "format-version")]
-        format_version: i32 
+        format_version: i32,
     },
     #[serde(rename = "add-schema")]
     AddSchema { schema: serde_json::Value },
     #[serde(rename = "set-current-schema")]
-    SetCurrentSchema { 
+    SetCurrentSchema {
         #[serde(rename = "schema-id")]
-        schema_id: i32 
+        schema_id: i32,
     },
     #[serde(rename = "add-snapshot")]
     AddSnapshot { snapshot: serde_json::Value },
@@ -175,9 +181,7 @@ pub enum CommitUpdate {
         ref_type: String,
     },
     #[serde(rename = "set-properties")]
-    SetProperties {
-        updates: HashMap<String, String>,
-    },
+    SetProperties { updates: HashMap<String, String> },
     // Add others as needed
 }
 

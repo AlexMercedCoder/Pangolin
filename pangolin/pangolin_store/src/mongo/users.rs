@@ -1,10 +1,10 @@
-use super::MongoStore;
 use super::main::to_bson_uuid;
+use super::MongoStore;
 use anyhow::Result;
-use mongodb::bson::{doc};
-use pangolin_core::user::{User, OAuthProvider};
-use uuid::Uuid;
 use futures::stream::TryStreamExt;
+use mongodb::bson::doc;
+use pangolin_core::user::{OAuthProvider, User};
+use uuid::Uuid;
 
 impl MongoStore {
     pub async fn create_user_internal(&self, user: User) -> Result<()> {
@@ -30,22 +30,30 @@ impl MongoStore {
         Ok(user)
     }
 
-    pub async fn get_user_by_oauth(&self, provider: OAuthProvider, external_id: &str) -> Result<Option<User>> {
-        let filter = doc! { 
-            "oauth-provider": format!("{:?}", provider), 
-            "oauth-external-id": external_id 
+    pub async fn get_user_by_oauth(
+        &self,
+        provider: OAuthProvider,
+        external_id: &str,
+    ) -> Result<Option<User>> {
+        let filter = doc! {
+            "oauth-provider": format!("{:?}", provider),
+            "oauth-external-id": external_id
         };
         let user = self.users().find_one(filter).await?;
         Ok(user)
     }
 
-    pub async fn list_users(&self, tenant_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<User>> {
+    pub async fn list_users(
+        &self,
+        tenant_id: Option<Uuid>,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<User>> {
         let filter = if let Some(tid) = tenant_id {
             doc! { "tenant-id": to_bson_uuid(tid) }
         } else {
             doc! {}
         };
-        
+
         let collection = self.users();
         let mut find = collection.find(filter);
         if let Some(p) = pagination {
@@ -68,10 +76,16 @@ impl MongoStore {
         Ok(())
     }
 
-    pub async fn update_user_fields(&self, id: Uuid, username: Option<String>, email: Option<String>, active: Option<bool>) -> Result<User> {
+    pub async fn update_user_fields(
+        &self,
+        id: Uuid,
+        username: Option<String>,
+        email: Option<String>,
+        active: Option<bool>,
+    ) -> Result<User> {
         let filter = doc! { "id": to_bson_uuid(id) };
         let mut update_doc = doc! {};
-        
+
         if let Some(uname) = username {
             update_doc.insert("username", uname);
         }
@@ -81,16 +95,19 @@ impl MongoStore {
         if let Some(act) = active {
             update_doc.insert("active", act);
         }
-        
+
         if update_doc.is_empty() {
-            return self.get_user(id).await?
+            return self
+                .get_user(id)
+                .await?
                 .ok_or_else(|| anyhow::anyhow!("User not found"));
         }
-        
+
         let update = doc! { "$set": update_doc };
         self.users().update_one(filter, update).await?;
-        
-        self.get_user(id).await?
+
+        self.get_user(id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("User not found"))
     }
 

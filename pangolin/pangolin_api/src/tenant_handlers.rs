@@ -1,20 +1,20 @@
-use axum::{
-    extract::{Path, State, Extension, Query},
-    Json,
-    response::IntoResponse,
-    http::StatusCode,
-};
-use crate::error::ApiError;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use std::collections::HashMap;
-use pangolin_store::{CatalogStore, PaginationParams};
-use pangolin_core::model::Tenant;
-use uuid::Uuid;
 use crate::auth::TenantId;
+use crate::error::ApiError;
 use crate::iceberg::AppState;
+use axum::{
+    extract::{Extension, Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use pangolin_core::model::Tenant;
+use pangolin_core::user::{UserRole, UserSession};
+use pangolin_store::{CatalogStore, PaginationParams};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use utoipa::ToSchema;
-use pangolin_core::user::{UserSession, UserRole};
+use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateTenantRequest {
@@ -65,14 +65,17 @@ pub async fn list_tenants(
         .unwrap_or(false);
 
     if !no_auth_enabled && session.role != UserRole::Root {
-         return ApiError::forbidden("Only Root can list tenants").into_response();
+        return ApiError::forbidden("Only Root can list tenants").into_response();
     }
 
     match store.list_tenants(Some(pagination)).await {
         Ok(tenants) => {
-            let response: Vec<TenantResponse> = tenants.into_iter().map(|t: Tenant| TenantResponse::from(t)).collect();
+            let response: Vec<TenantResponse> = tenants
+                .into_iter()
+                .map(|t: Tenant| TenantResponse::from(t))
+                .collect();
             (StatusCode::OK, Json(response)).into_response()
-        },
+        }
         Err(e) => ApiError::from(e).into_response(),
     }
 }
@@ -98,7 +101,7 @@ pub async fn create_tenant(
     let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
         .map(|v| v.to_lowercase() == "true")
         .unwrap_or(false);
-    
+
     if no_auth_enabled {
         return (
             StatusCode::FORBIDDEN,
@@ -111,9 +114,9 @@ pub async fn create_tenant(
     }
 
     if session.role != UserRole::Root {
-         return (StatusCode::FORBIDDEN, "Only Root can create tenants").into_response();
+        return (StatusCode::FORBIDDEN, "Only Root can create tenants").into_response();
     }
-    
+
     let tenant = Tenant {
         id: Uuid::new_v4(),
         name: payload.name,
@@ -121,9 +124,7 @@ pub async fn create_tenant(
     };
 
     match store.create_tenant(tenant.clone()).await {
-        Ok(_) => {
-            (StatusCode::CREATED, Json(TenantResponse::from(tenant))).into_response()
-        },
+        Ok(_) => (StatusCode::CREATED, Json(TenantResponse::from(tenant))).into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
@@ -155,7 +156,7 @@ pub async fn get_tenant(
         // Tenants can view themselves? Usually yes.
         // If session tenant_id matches requested id
         if session.tenant_id != Some(id) {
-             return ApiError::forbidden("Forbidden").into_response();
+            return ApiError::forbidden("Forbidden").into_response();
         }
     }
 
@@ -189,14 +190,14 @@ pub async fn update_tenant(
 ) -> impl IntoResponse {
     // Only root can update tenants (for now)
     if session.role != UserRole::Root {
-         return (StatusCode::FORBIDDEN, "Only Root can update tenants").into_response();
+        return (StatusCode::FORBIDDEN, "Only Root can update tenants").into_response();
     }
 
     let updates = pangolin_core::model::TenantUpdate {
         name: payload.name,
         properties: payload.properties,
     };
-    
+
     match store.update_tenant(id, updates).await {
         Ok(tenant) => (StatusCode::OK, Json(TenantResponse::from(tenant))).into_response(),
         Err(e) => {
@@ -229,7 +230,7 @@ pub async fn delete_tenant(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     if session.role != UserRole::Root {
-         return (StatusCode::FORBIDDEN, "Only Root can delete tenants").into_response();
+        return (StatusCode::FORBIDDEN, "Only Root can delete tenants").into_response();
     }
 
     match store.delete_tenant(id).await {

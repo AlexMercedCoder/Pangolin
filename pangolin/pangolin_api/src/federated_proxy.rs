@@ -30,11 +30,13 @@ impl FederatedCatalogProxy {
         body: Option<Bytes>,
         headers: HeaderMap,
     ) -> Result<Response> {
-        let base_url = config.properties.get("uri")
+        let base_url = config
+            .properties
+            .get("uri")
             .ok_or_else(|| anyhow::anyhow!("Federated catalog missing 'uri' property"))?;
-            
+
         let url = format!("{}{}", base_url, path);
-        
+
         // Convert axum::http::Method to reqwest::Method
         let reqwest_method = match method {
             Method::GET => reqwest::Method::GET,
@@ -46,12 +48,12 @@ impl FederatedCatalogProxy {
             Method::PATCH => reqwest::Method::PATCH,
             _ => reqwest::Method::GET, // Default fallback
         };
-        
+
         let mut request = self.client.request(reqwest_method, &url);
-        
+
         // Add authentication
         request = self.add_auth(request, config);
-        
+
         // Forward relevant headers (skip auth headers from client)
         for (key, value) in headers.iter() {
             if !Self::is_auth_header(key.as_str()) {
@@ -61,21 +63,21 @@ impl FederatedCatalogProxy {
                 }
             }
         }
-        
+
         // Add body if present
         if let Some(body) = body {
             request = request.body(body);
         }
-        
+
         // Send request
         let response = request.send().await.map_err(|e| {
             anyhow::anyhow!("Failed to forward request to federated catalog: {}", e)
         })?;
-        
+
         // Convert reqwest::Response to axum::Response
         let status = StatusCode::from_u16(response.status().as_u16())
             .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        
+
         let mut response_headers = HeaderMap::new();
         for (key, value) in response.headers().iter() {
             if let Ok(header_name) = axum::http::HeaderName::from_bytes(key.as_str().as_bytes()) {
@@ -84,32 +86,44 @@ impl FederatedCatalogProxy {
                 }
             }
         }
-        
-        let body_bytes = response.bytes().await.map_err(|e| {
-            anyhow::anyhow!("Failed to read response body: {}", e)
-        })?;
-        
+
+        let body_bytes = response
+            .bytes()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to read response body: {}", e))?;
+
         Ok((status, response_headers, body_bytes).into_response())
     }
-    
+
     /// Add authentication to the request based on config properties
-    fn add_auth(&self, mut request: RequestBuilder, config: &FederatedCatalogConfig) -> RequestBuilder {
+    fn add_auth(
+        &self,
+        mut request: RequestBuilder,
+        config: &FederatedCatalogConfig,
+    ) -> RequestBuilder {
         // Bearer Token
         if let Some(token) = config.properties.get("token") {
-             request = request.bearer_auth(token);
-        } 
+            request = request.bearer_auth(token);
+        }
         // Basic Auth (username/password)
-        else if let (Some(username), Some(password)) = (config.properties.get("username"), config.properties.get("password")) {
+        else if let (Some(username), Some(password)) = (
+            config.properties.get("username"),
+            config.properties.get("password"),
+        ) {
             request = request.basic_auth(username, Some(password));
         }
         // X-API-Key
-        else if let Some(api_key) = config.properties.get("api_key").or_else(|| config.properties.get("x-api-key")) {
-             request = request.header("X-API-Key", api_key);
+        else if let Some(api_key) = config
+            .properties
+            .get("api_key")
+            .or_else(|| config.properties.get("x-api-key"))
+        {
+            request = request.header("X-API-Key", api_key);
         }
-        
+
         request
     }
-    
+
     /// Check if a header is an authentication header that should not be forwarded
     fn is_auth_header(header_name: &str) -> bool {
         matches!(

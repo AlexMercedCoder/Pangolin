@@ -1,9 +1,9 @@
 /// System Settings operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
+use pangolin_core::model::SystemSettings;
 use sqlx::Row;
 use uuid::Uuid;
-use pangolin_core::model::SystemSettings;
 
 impl SqliteStore {
     pub async fn get_system_settings(&self, tenant_id: Uuid) -> Result<SystemSettings> {
@@ -27,7 +27,11 @@ impl SqliteStore {
         }
     }
 
-    pub async fn update_system_settings(&self, tenant_id: Uuid, settings: SystemSettings) -> Result<SystemSettings> {
+    pub async fn update_system_settings(
+        &self,
+        tenant_id: Uuid,
+        settings: SystemSettings,
+    ) -> Result<SystemSettings> {
         // Upsert
         sqlx::query("INSERT INTO system_settings (tenant_id, settings) VALUES (?, ?) ON CONFLICT(tenant_id) DO UPDATE SET settings = ?")
             .bind(tenant_id.to_string())

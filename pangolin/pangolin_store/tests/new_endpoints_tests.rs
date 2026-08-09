@@ -1,9 +1,9 @@
-use pangolin_store::{CatalogStore, SqliteStore, PostgresStore, MongoStore};
-use pangolin_core::token::TokenInfo;
-use pangolin_core::model::{SystemSettings, SyncStats};
-use uuid::Uuid;
-use chrono::Utc;
 use anyhow::Result;
+use chrono::Utc;
+use pangolin_core::model::{SyncStats, SystemSettings};
+use pangolin_core::token::TokenInfo;
+use pangolin_store::{CatalogStore, MongoStore, PostgresStore, SqliteStore};
+use uuid::Uuid;
 
 // Helper to create test token
 fn create_test_token(user_id: Uuid) -> TokenInfo {
@@ -72,9 +72,14 @@ mod sqlite_new_endpoints_tests {
             smtp_password: Some("password".to_string()),
         };
 
-        let updated = store.update_system_settings(tenant_id, new_settings.clone()).await?;
+        let updated = store
+            .update_system_settings(tenant_id, new_settings.clone())
+            .await?;
         assert_eq!(updated.allow_public_signup, Some(true));
-        assert_eq!(updated.default_warehouse_bucket, Some("test-bucket".to_string()));
+        assert_eq!(
+            updated.default_warehouse_bucket,
+            Some("test-bucket".to_string())
+        );
 
         // Test retrieving updated settings
         let retrieved = store.get_system_settings(tenant_id).await?;
@@ -91,15 +96,21 @@ mod sqlite_new_endpoints_tests {
         let catalog_name = "test_catalog";
 
         // Test getting stats for non-existent catalog
-        let stats = store.get_federated_catalog_stats(tenant_id, catalog_name).await?;
+        let stats = store
+            .get_federated_catalog_stats(tenant_id, catalog_name)
+            .await?;
         assert_eq!(stats.sync_status, "Never Synced");
         assert!(stats.last_synced_at.is_none());
 
         // Test syncing catalog
-        store.sync_federated_catalog(tenant_id, catalog_name).await?;
+        store
+            .sync_federated_catalog(tenant_id, catalog_name)
+            .await?;
 
         // Test retrieving stats after sync
-        let stats = store.get_federated_catalog_stats(tenant_id, catalog_name).await?;
+        let stats = store
+            .get_federated_catalog_stats(tenant_id, catalog_name)
+            .await?;
         assert_eq!(stats.sync_status, "Success");
         assert!(stats.last_synced_at.is_some());
         assert_eq!(stats.tables_synced, 0);
@@ -140,7 +151,9 @@ mod sqlite_new_endpoints_tests {
             branch_type: pangolin_core::model::BranchType::Experimental,
             assets: vec![],
         };
-        store.create_branch(tenant_id, catalog_name, source_branch.clone()).await?;
+        store
+            .create_branch(tenant_id, catalog_name, source_branch.clone())
+            .await?;
 
         let target_branch = pangolin_core::model::Branch {
             name: "target".to_string(),
@@ -148,13 +161,24 @@ mod sqlite_new_endpoints_tests {
             branch_type: pangolin_core::model::BranchType::Experimental,
             assets: vec![],
         };
-        store.create_branch(tenant_id, catalog_name, target_branch).await?;
+        store
+            .create_branch(tenant_id, catalog_name, target_branch)
+            .await?;
 
         // Test merge
-        store.merge_branch(tenant_id, catalog_name, "target".to_string(), "source".to_string()).await?;
+        store
+            .merge_branch(
+                tenant_id,
+                catalog_name,
+                "target".to_string(),
+                "source".to_string(),
+            )
+            .await?;
 
         // Verify target branch now has source's head
-        let merged_target = store.get_branch(tenant_id, catalog_name, "target".to_string()).await?
+        let merged_target = store
+            .get_branch(tenant_id, catalog_name, "target".to_string())
+            .await?
             .expect("Target branch should exist");
         assert_eq!(merged_target.head_commit_id, source_branch.head_commit_id);
 
@@ -167,8 +191,9 @@ mod postgres_new_endpoints_tests {
     use super::*;
 
     async fn setup_postgres() -> Result<PostgresStore> {
-        let db_url = std::env::var("TEST_POSTGRES_URL")
-            .unwrap_or_else(|_| "postgres://pangolin:password@localhost:5433/pangolin_test".to_string());
+        let db_url = std::env::var("TEST_POSTGRES_URL").unwrap_or_else(|_| {
+            "postgres://pangolin:password@localhost:5433/pangolin_test".to_string()
+        });
         PostgresStore::new(&db_url).await
     }
 
@@ -182,7 +207,9 @@ mod postgres_new_endpoints_tests {
         let token = create_test_token(user_id);
         store.store_token(token.clone()).await?;
 
-        let tokens = store.list_active_tokens(tenant_id, Some(user_id), None).await?;
+        let tokens = store
+            .list_active_tokens(tenant_id, Some(user_id), None)
+            .await?;
         assert!(!tokens.is_empty());
 
         Ok(())
@@ -207,7 +234,9 @@ mod postgres_new_endpoints_tests {
             smtp_password: None,
         };
 
-        let updated = store.update_system_settings(tenant_id, new_settings).await?;
+        let updated = store
+            .update_system_settings(tenant_id, new_settings)
+            .await?;
         assert_eq!(updated.allow_public_signup, Some(true));
 
         Ok(())
@@ -234,7 +263,9 @@ mod mongo_new_endpoints_tests {
         let token = create_test_token(user_id);
         store.store_token(token.clone()).await?;
 
-        let tokens = store.list_active_tokens(tenant_id, Some(user_id), None).await?;
+        let tokens = store
+            .list_active_tokens(tenant_id, Some(user_id), None)
+            .await?;
         assert!(!tokens.is_empty());
 
         Ok(())
@@ -247,9 +278,13 @@ mod mongo_new_endpoints_tests {
         let tenant_id = Uuid::new_v4();
         let catalog_name = "test_catalog";
 
-        store.sync_federated_catalog(tenant_id, catalog_name).await?;
+        store
+            .sync_federated_catalog(tenant_id, catalog_name)
+            .await?;
 
-        let stats = store.get_federated_catalog_stats(tenant_id, catalog_name).await?;
+        let stats = store
+            .get_federated_catalog_stats(tenant_id, catalog_name)
+            .await?;
         assert_eq!(stats.sync_status, "Success");
 
         Ok(())

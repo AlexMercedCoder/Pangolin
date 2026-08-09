@@ -1,10 +1,10 @@
 /// Token operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
-use sqlx::Row;
-use uuid::Uuid;
 use chrono::Utc;
 use pangolin_core::token::TokenInfo;
+use sqlx::Row;
+use uuid::Uuid;
 
 impl SqliteStore {
     pub async fn store_token(&self, token_info: TokenInfo) -> Result<()> {
@@ -29,29 +29,31 @@ impl SqliteStore {
             .await?;
 
         if let Some(row) = row {
-             let token_id_str: String = row.get("token_id");
-             let token_id = Uuid::parse_str(&token_id_str)?;
+            let token_id_str: String = row.get("token_id");
+            let token_id = Uuid::parse_str(&token_id_str)?;
 
-             // 2. Check if it's in revoked_tokens
-             let is_revoked: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM revoked_tokens WHERE token_id = ?")
-                .bind(&token_id_str)
-                .fetch_one(&self.pool)
-                .await?;
-            
-             if is_revoked > 0 {
-                 return Ok(None);
-             }
+            // 2. Check if it's in revoked_tokens
+            let is_revoked: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM revoked_tokens WHERE token_id = ?")
+                    .bind(&token_id_str)
+                    .fetch_one(&self.pool)
+                    .await?;
+
+            if is_revoked > 0 {
+                return Ok(None);
+            }
 
             let tenant_id_str: String = row.get("tenant_id");
             let tenant_id = Uuid::parse_str(&tenant_id_str).unwrap_or_default();
 
             Ok(Some(TokenInfo {
                 id: token_id,
-                tenant_id, 
+                tenant_id,
                 user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
                 username: "unknown".to_string(),
                 token: Some(row.get("token")),
-                expires_at: chrono::DateTime::from_timestamp(row.get("expires_at"), 0).unwrap_or_default(),
+                expires_at: chrono::DateTime::from_timestamp(row.get("expires_at"), 0)
+                    .unwrap_or_default(),
                 created_at: Utc::now(),
                 is_valid: true,
             }))
@@ -60,9 +62,18 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_active_tokens(&self, tenant_id: Uuid, user_id: Option<Uuid>, pagination: Option<crate::PaginationParams>) -> Result<Vec<TokenInfo>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_active_tokens(
+        &self,
+        tenant_id: Uuid,
+        user_id: Option<Uuid>,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<TokenInfo>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = if let Some(uid) = user_id {
             sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = ? AND user_id = ? AND expires_at > ? LIMIT ? OFFSET ?")
@@ -85,29 +96,31 @@ impl SqliteStore {
 
         let mut tokens = Vec::new();
         for row in rows {
-             let token_id_str: String = row.get("token_id");
-             
-             // Check revocation
-             let is_revoked: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM revoked_tokens WHERE token_id = ?")
-                .bind(&token_id_str)
-                .fetch_one(&self.pool)
-                .await?;
-                
-             if is_revoked == 0 {
+            let token_id_str: String = row.get("token_id");
+
+            // Check revocation
+            let is_revoked: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM revoked_tokens WHERE token_id = ?")
+                    .bind(&token_id_str)
+                    .fetch_one(&self.pool)
+                    .await?;
+
+            if is_revoked == 0 {
                 let tenant_id_str: String = row.get("tenant_id");
                 let t_id = Uuid::parse_str(&tenant_id_str).unwrap_or_default();
-                
+
                 tokens.push(TokenInfo {
                     id: Uuid::parse_str(&token_id_str)?,
                     tenant_id: t_id,
                     user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
                     username: "unknown".to_string(), // Inefficient to join username unless needed
                     token: Some(row.get("token")),
-                    expires_at: chrono::DateTime::from_timestamp(row.get("expires_at"), 0).unwrap_or_default(),
+                    expires_at: chrono::DateTime::from_timestamp(row.get("expires_at"), 0)
+                        .unwrap_or_default(),
                     created_at: Utc::now(),
                     is_valid: true,
                 });
-             }
+            }
         }
         Ok(tokens)
     }

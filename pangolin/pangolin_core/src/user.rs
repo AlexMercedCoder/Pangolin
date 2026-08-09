@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// User in the system
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
@@ -66,10 +66,10 @@ pub struct ServiceUser {
     pub name: String,
     pub description: Option<String>,
     pub tenant_id: Uuid,
-    pub api_key_hash: String,  // bcrypt hash of API key
+    pub api_key_hash: String, // bcrypt hash of API key
     pub role: UserRole,
     pub created_at: DateTime<Utc>,
-    pub created_by: Uuid,  // User who created this service user
+    pub created_by: Uuid, // User who created this service user
     pub last_used: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
     pub active: bool,
@@ -83,7 +83,7 @@ pub struct ApiKeyResponse {
     pub description: Option<String>,
     pub tenant_id: Uuid,
     pub role: UserRole,
-    pub api_key: String,  // Plain text, only shown once on creation
+    pub api_key: String, // Plain text, only shown once on creation
     pub created_at: DateTime<Utc>,
     pub created_by: Uuid,
     pub expires_at: Option<DateTime<Utc>>,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use std::collections::HashSet;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 /// Permission scope - where the permission applies
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, ToSchema)]
@@ -12,7 +12,11 @@ pub enum PermissionScope {
     /// Applies to namespace and all assets within
     Namespace { catalog_id: Uuid, namespace: String },
     /// Applies to specific asset
-    Asset { catalog_id: Uuid, namespace: String, asset_id: Uuid },
+    Asset {
+        catalog_id: Uuid,
+        namespace: String,
+        asset_id: Uuid,
+    },
     /// Applies to all assets with specific tag
     Tag { tag_name: String },
     /// Applies to everything in the tenant
@@ -27,20 +31,48 @@ impl PermissionScope {
 
             // Tenant covers everything
             (PermissionScope::Tenant, _) => true,
-            
+
             // Catalog covers everything in it
-            (PermissionScope::Catalog { catalog_id: id1 }, PermissionScope::Catalog { catalog_id: id2 }) => id1 == id2,
-            (PermissionScope::Catalog { catalog_id: id1 }, PermissionScope::Namespace { catalog_id: id2, .. }) => id1 == id2,
-            (PermissionScope::Catalog { catalog_id: id1 }, PermissionScope::Asset { catalog_id: id2, .. }) => id1 == id2,
-            
+            (
+                PermissionScope::Catalog { catalog_id: id1 },
+                PermissionScope::Catalog { catalog_id: id2 },
+            ) => id1 == id2,
+            (
+                PermissionScope::Catalog { catalog_id: id1 },
+                PermissionScope::Namespace {
+                    catalog_id: id2, ..
+                },
+            ) => id1 == id2,
+            (
+                PermissionScope::Catalog { catalog_id: id1 },
+                PermissionScope::Asset {
+                    catalog_id: id2, ..
+                },
+            ) => id1 == id2,
+
             // Namespace covers assets in it (and sub-namespaces?)
-            (PermissionScope::Namespace { catalog_id: id1, namespace: ns1 }, PermissionScope::Namespace { catalog_id: id2, namespace: ns2 }) => {
-                id1 == id2 && (ns1 == ns2 || ns2.starts_with(&format!("{}.", ns1)))
-            },
-            (PermissionScope::Namespace { catalog_id: id1, namespace: ns1 }, PermissionScope::Asset { catalog_id: id2, namespace: ns2, .. }) => {
-                id1 == id2 && (ns1 == ns2 || ns2.starts_with(&format!("{}.", ns1)))
-            },
-            
+            (
+                PermissionScope::Namespace {
+                    catalog_id: id1,
+                    namespace: ns1,
+                },
+                PermissionScope::Namespace {
+                    catalog_id: id2,
+                    namespace: ns2,
+                },
+            ) => id1 == id2 && (ns1 == ns2 || ns2.starts_with(&format!("{}.", ns1))),
+            (
+                PermissionScope::Namespace {
+                    catalog_id: id1,
+                    namespace: ns1,
+                },
+                PermissionScope::Asset {
+                    catalog_id: id2,
+                    namespace: ns2,
+                    ..
+                },
+            ) => id1 == id2 && (ns1 == ns2 || ns2.starts_with(&format!("{}.", ns1))),
+
             _ => false,
         }
     }
@@ -68,11 +100,16 @@ pub enum Action {
 impl Action {
     /// Check if this action implies another action
     pub fn implies(&self, other: &Action) -> bool {
-        if self == other { return true; }
-        
+        if self == other {
+            return true;
+        }
+
         match self {
             Action::All => true,
-            Action::Write => matches!(other, Action::Read | Action::Update | Action::Delete | Action::Create | Action::List),
+            Action::Write => matches!(
+                other,
+                Action::Read | Action::Update | Action::Delete | Action::Create | Action::List
+            ),
             Action::Read => matches!(other, Action::List),
             _ => false,
         }
@@ -94,7 +131,13 @@ pub struct Permission {
 }
 
 impl Permission {
-    pub fn new(user_id: Uuid, tenant_id: Uuid, scope: PermissionScope, actions: HashSet<Action>, granted_by: Uuid) -> Self {
+    pub fn new(
+        user_id: Uuid,
+        tenant_id: Uuid,
+        scope: PermissionScope,
+        actions: HashSet<Action>,
+        granted_by: Uuid,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             user_id,
@@ -135,7 +178,12 @@ pub struct PermissionGrant {
 }
 
 impl Role {
-    pub fn new(name: String, description: Option<String>, tenant_id: Uuid, created_by: Uuid) -> Self {
+    pub fn new(
+        name: String,
+        description: Option<String>,
+        tenant_id: Uuid,
+        created_by: Uuid,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             name,

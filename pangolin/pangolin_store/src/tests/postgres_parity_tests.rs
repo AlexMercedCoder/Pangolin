@@ -2,21 +2,22 @@
 /// Ensures Service Users, System Settings, and Audit Logs remain fully implemented
 use crate::postgres::PostgresStore;
 use crate::CatalogStore;
+use chrono::Utc;
 use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
 use pangolin_core::model::{SystemSettings, Tenant};
 use pangolin_core::user::{ServiceUser, UserRole};
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::Utc;
 
 #[cfg(test)]
 mod postgres_parity_tests {
     use super::*;
 
     async fn setup_postgres_store() -> PostgresStore {
-        let database_url = std::env::var("TEST_DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://admin:password@localhost:5432/pangolin_test".to_string());
-        
+        let database_url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://admin:password@localhost:5432/pangolin_test".to_string()
+        });
+
         PostgresStore::new(&database_url)
             .await
             .expect("Failed to create PostgresStore")
@@ -29,7 +30,10 @@ mod postgres_parity_tests {
             name: format!("test_tenant_{}", tenant_id),
             properties: HashMap::new(),
         };
-        store.create_tenant(tenant).await.expect("Failed to create tenant");
+        store
+            .create_tenant(tenant)
+            .await
+            .expect("Failed to create tenant");
         tenant_id
     }
 
@@ -53,7 +57,11 @@ mod postgres_parity_tests {
         };
 
         let result = store.create_service_user(service_user.clone()).await;
-        assert!(result.is_ok(), "Failed to create service user: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to create service user: {:?}",
+            result.err()
+        );
     }
 
     #[tokio::test]
@@ -76,7 +84,10 @@ mod postgres_parity_tests {
             active: true,
         };
 
-        store.create_service_user(service_user.clone()).await.unwrap();
+        store
+            .create_service_user(service_user.clone())
+            .await
+            .unwrap();
 
         let retrieved = store.get_service_user(service_user_id).await.unwrap();
         assert!(retrieved.is_some(), "Service user should exist");
@@ -103,10 +114,19 @@ mod postgres_parity_tests {
             active: true,
         };
 
-        store.create_service_user(service_user.clone()).await.unwrap();
+        store
+            .create_service_user(service_user.clone())
+            .await
+            .unwrap();
 
-        let retrieved = store.get_service_user_by_api_key_hash(&api_key_hash).await.unwrap();
-        assert!(retrieved.is_some(), "Service user should be found by API key hash");
+        let retrieved = store
+            .get_service_user_by_api_key_hash(&api_key_hash)
+            .await
+            .unwrap();
+        assert!(
+            retrieved.is_some(),
+            "Service user should be found by API key hash"
+        );
         assert_eq!(retrieved.unwrap().api_key_hash, api_key_hash);
     }
 
@@ -160,16 +180,22 @@ mod postgres_parity_tests {
         store.create_service_user(service_user).await.unwrap();
 
         // Update
-        let result = store.update_service_user(
-            service_user_id,
-            Some("updated-name".to_string()),
-            Some("Updated description".to_string()),
-            Some(false),
-        ).await;
+        let result = store
+            .update_service_user(
+                service_user_id,
+                Some("updated-name".to_string()),
+                Some("Updated description".to_string()),
+                Some(false),
+            )
+            .await;
         assert!(result.is_ok(), "Failed to update service user");
 
         // Verify update
-        let updated = store.get_service_user(service_user_id).await.unwrap().unwrap();
+        let updated = store
+            .get_service_user(service_user_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.name, "updated-name");
         assert_eq!(updated.description, Some("Updated description".to_string()));
         assert_eq!(updated.active, false);
@@ -230,11 +256,17 @@ mod postgres_parity_tests {
 
         // Update last_used
         let timestamp = Utc::now();
-        let result = store.update_service_user_last_used(service_user_id, timestamp).await;
+        let result = store
+            .update_service_user_last_used(service_user_id, timestamp)
+            .await;
         assert!(result.is_ok(), "Failed to update last_used");
 
         // Verify
-        let updated = store.get_service_user(service_user_id).await.unwrap().unwrap();
+        let updated = store
+            .get_service_user(service_user_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert!(updated.last_used.is_some(), "last_used should be set");
     }
 
@@ -244,7 +276,7 @@ mod postgres_parity_tests {
         let tenant_id = setup_tenant(&store).await;
 
         let settings = store.get_system_settings(tenant_id).await.unwrap();
-        
+
         // Default settings should have all None values
         assert!(settings.allow_public_signup.is_none());
         assert!(settings.default_warehouse_bucket.is_none());
@@ -266,13 +298,18 @@ mod postgres_parity_tests {
             smtp_password: Some("password".to_string()),
         };
 
-        let result = store.update_system_settings(tenant_id, new_settings.clone()).await;
+        let result = store
+            .update_system_settings(tenant_id, new_settings.clone())
+            .await;
         assert!(result.is_ok(), "Failed to update system settings");
 
         // Verify
         let retrieved = store.get_system_settings(tenant_id).await.unwrap();
         assert_eq!(retrieved.allow_public_signup, Some(false));
-        assert_eq!(retrieved.default_warehouse_bucket, Some("test-bucket".to_string()));
+        assert_eq!(
+            retrieved.default_warehouse_bucket,
+            Some("test-bucket".to_string())
+        );
         assert_eq!(retrieved.default_retention_days, Some(90));
     }
 
@@ -291,7 +328,10 @@ mod postgres_parity_tests {
             smtp_user: None,
             smtp_password: None,
         };
-        store.update_system_settings(tenant_id, settings1).await.unwrap();
+        store
+            .update_system_settings(tenant_id, settings1)
+            .await
+            .unwrap();
 
         // Second update (upsert)
         let settings2 = SystemSettings {
@@ -303,12 +343,18 @@ mod postgres_parity_tests {
             smtp_user: None,
             smtp_password: None,
         };
-        store.update_system_settings(tenant_id, settings2).await.unwrap();
+        store
+            .update_system_settings(tenant_id, settings2)
+            .await
+            .unwrap();
 
         // Verify latest values
         let retrieved = store.get_system_settings(tenant_id).await.unwrap();
         assert_eq!(retrieved.allow_public_signup, Some(false));
-        assert_eq!(retrieved.default_warehouse_bucket, Some("bucket2".to_string()));
+        assert_eq!(
+            retrieved.default_warehouse_bucket,
+            Some("bucket2".to_string())
+        );
         assert_eq!(retrieved.default_retention_days, Some(60));
     }
 
@@ -335,7 +381,10 @@ mod postgres_parity_tests {
         };
 
         let result = store.log_audit_event(tenant_id, audit_entry.clone()).await;
-        assert!(result.is_ok(), "Failed to log audit event with enhanced schema");
+        assert!(
+            result.is_ok(),
+            "Failed to log audit event with enhanced schema"
+        );
 
         // Verify retrieval
         let logs = store.list_audit_events(tenant_id, None).await.unwrap();
@@ -382,7 +431,13 @@ mod postgres_parity_tests {
             offset: Some(0),
         };
 
-        let filtered_logs = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
-        assert!(filtered_logs.len() >= 5, "Should have at least 5 filtered logs");
+        let filtered_logs = store
+            .list_audit_events(tenant_id, Some(filter))
+            .await
+            .unwrap();
+        assert!(
+            filtered_logs.len() >= 5,
+            "Should have at least 5 filtered logs"
+        );
     }
 }

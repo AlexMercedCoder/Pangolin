@@ -22,7 +22,7 @@ pub enum AdminCommand {
     },
     /// Switch tenant context (Root operations only)
     Use {
-        name: String
+        name: String,
     },
     /// List all tenants (Root Only)
     ListTenants {
@@ -68,7 +68,7 @@ pub enum AdminCommand {
         #[arg(long)]
         password: Option<String>,
         #[arg(long)]
-        tenant_id: Option<String>
+        tenant_id: Option<String>,
     },
     DeleteUser {
         username: String,
@@ -184,9 +184,9 @@ pub enum AdminCommand {
         resource: String,
     },
     RevokePermission {
-         role: String,
-         action: String,
-         resource: String,
+        role: String,
+        action: String,
+        resource: String,
     },
     /// Assign a role to a user
     AssignRole {
