@@ -271,10 +271,7 @@ impl CatalogStore for MongoStore {
         source_branch: String,
         target_branch: String,
     ) -> Result<()> {
-        // The inherent implementation takes (target, source); the trait
-        // declares (source, target). Swap explicitly rather than relying on
-        // two mistakes cancelling out.
-        self.merge_branch(tenant_id, catalog_name, target_branch, source_branch)
+        self.merge_branch_into(tenant_id, catalog_name, source_branch, target_branch)
             .await
     }
 

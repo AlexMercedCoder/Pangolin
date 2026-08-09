@@ -182,13 +182,15 @@ mod sqlite_new_endpoints_tests {
             .create_branch(tenant_id, catalog_name, target_branch)
             .await?;
 
-        // Test merge
+        // Test merge. `CatalogStore::merge_branch` takes (source, target); the
+        // arguments used to be the other way round here because the inherent
+        // SqliteStore method took the opposite order under the same name.
         store
             .merge_branch(
                 tenant_id,
                 catalog_name,
-                "target".to_string(),
                 "source".to_string(),
+                "target".to_string(),
             )
             .await?;
 

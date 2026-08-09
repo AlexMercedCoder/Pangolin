@@ -96,51 +96,81 @@ impl PostgresStore {
         Ok(branches)
     }
 
+    /// Delete a branch and the assets that live on it.
+    ///
+    /// Transactional: the branch row and its assets are two statements, and a
+    /// failure between them used to leave assets belonging to a branch that no
+    /// longer exists, invisible to every listing and impossible to clean up
+    /// through the API (A-24).
     pub async fn delete_branch(
         &self,
         tenant_id: Uuid,
         catalog_name: &str,
         name: String,
     ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
         let result = sqlx::query(
             "DELETE FROM branches WHERE tenant_id = $1 AND catalog_name = $2 AND name = $3",
         )
         .bind(tenant_id)
         .bind(catalog_name)
         .bind(&name)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
         if result.rows_affected() == 0 {
+            // Rolls back on drop.
             return Err(anyhow::anyhow!("Branch not found"));
         }
 
-        // Also delete assets associated with this branch
+        // `branch`, not `branch_name`: the column was renamed by
+        // 20251221000000_fix_asset_branching.sql and this query was never
+        // updated, so it failed at runtime every time.
         sqlx::query(
-            "DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch = $3",
+            "DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3",
         )
         .bind(tenant_id)
         .bind(catalog_name)
         .bind(&name)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
+        tx.commit().await?;
         Ok(())
     }
 
-    pub async fn merge_branch(
+    /// Fast-forward `target_branch` to `source_branch`.
+    ///
+    /// Transactional. Moving the branch head and copying the assets are
+    /// separate statements; a failure between them left the target pointing at
+    /// the source's head while still carrying its own assets — a catalog that
+    /// claims one state and holds another, with no rollback and no repair tool
+    /// (A-24).
+    /// Fast-forward `target_branch` to `source_branch`.
+    ///
+    /// Named differently from `CatalogStore::merge_branch`, and taking the same
+    /// (source, target) order, on purpose. There used to be an inherent
+    /// `merge_branch` taking (target, source) alongside a trait `merge_branch`
+    /// taking (source, target): Rust resolves the inherent method first, so any
+    /// caller holding a concrete backend silently merged in the opposite
+    /// direction. Two names cannot be confused; two argument orders under one
+    /// name can.
+    pub async fn merge_branch_into(
         &self,
         tenant_id: Uuid,
         catalog_name: &str,
-        target_branch: String,
         source_branch: String,
+        target_branch: String,
     ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
         // 1. Get Source Branch
         let source_row: sqlx::postgres::PgRow = sqlx::query("SELECT head_commit_id FROM branches WHERE tenant_id = $1 AND catalog_name = $2 AND name = $3")
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(&source_branch)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&mut *tx)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Source branch not found"))?;
 
@@ -152,7 +182,7 @@ impl PostgresStore {
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(&target_branch)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         if result.rows_affected() == 0 {
@@ -178,9 +208,10 @@ impl PostgresStore {
         .bind(tenant_id)
         .bind(catalog_name)
         .bind(&source_branch)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
+        tx.commit().await?;
         Ok(())
     }
 }

@@ -130,12 +130,21 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub async fn merge_branch(
+    /// Fast-forward `target_branch` to `source_branch`.
+    ///
+    /// Named differently from `CatalogStore::merge_branch`, and taking the same
+    /// (source, target) order, on purpose. There used to be an inherent
+    /// `merge_branch` taking (target, source) alongside a trait `merge_branch`
+    /// taking (source, target): Rust resolves the inherent method first, so any
+    /// caller holding a concrete backend silently merged in the opposite
+    /// direction. Two names cannot be confused; two argument orders under one
+    /// name can.
+    pub async fn merge_branch_into(
         &self,
         tenant_id: Uuid,
         catalog_name: &str,
-        target_branch: String,
         source_branch: String,
+        target_branch: String,
     ) -> Result<()> {
         // 1. Get Source Branch
         let source_row = sqlx::query("SELECT head_commit_id FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?")

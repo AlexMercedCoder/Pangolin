@@ -107,32 +107,80 @@ impl MongoStore {
             .ok_or_else(|| anyhow::anyhow!("Catalog not found"))
     }
 
+    /// Delete a catalog and everything under it.
+    ///
+    /// Attempts the five deletes inside a transaction so a failure partway
+    /// through does not leave a half-deleted catalog (A-24). MongoDB
+    /// transactions require a replica set or a sharded cluster; against a
+    /// standalone `mongod` the driver refuses to start a transaction, and this
+    /// falls back to sequential deletes with a warning rather than failing the
+    /// operation outright.
     pub async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
         let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": &name };
         let child_filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "catalog_name": &name };
 
-        // 1. Tags
-        self.db
-            .collection::<Document>("tags")
-            .delete_many(child_filter.clone())
-            .await?;
-        // 2. Branches
-        self.db
-            .collection::<Document>("branches")
-            .delete_many(child_filter.clone())
-            .await?;
-        // 3. Assets
-        self.db
-            .collection::<Document>("assets")
-            .delete_many(child_filter.clone())
-            .await?;
-        // 4. Namespaces
-        self.db
-            .collection::<Document>("namespaces")
-            .delete_many(child_filter.clone())
-            .await?;
+        let mut session = match self.client.start_session().await {
+            Ok(session) => Some(session),
+            Err(e) => {
+                tracing::warn!(error = %e, "could not open a MongoDB session; deleting without a transaction");
+                None
+            }
+        };
 
-        // 5. Catalog
+        if let Some(session) = session.as_mut() {
+            if let Err(e) = session.start_transaction().await {
+                tracing::warn!(
+                    error = %e,
+                    "this MongoDB deployment does not support transactions (a replica set is \
+                     required); deleting a catalog will not be atomic"
+                );
+                return self
+                    .delete_catalog_unsafe(filter, child_filter, &name)
+                    .await;
+            }
+
+            for collection in ["tags", "branches", "assets", "namespaces"] {
+                self.db
+                    .collection::<Document>(collection)
+                    .delete_many(child_filter.clone())
+                    .session(&mut *session)
+                    .await?;
+            }
+
+            let result = self
+                .db
+                .collection::<Document>("catalogs")
+                .delete_one(filter)
+                .session(&mut *session)
+                .await?;
+
+            if result.deleted_count == 0 {
+                let _ = session.abort_transaction().await;
+                return Err(anyhow::anyhow!("Catalog '{}' not found", name));
+            }
+
+            session.commit_transaction().await?;
+            return Ok(());
+        }
+
+        self.delete_catalog_unsafe(filter, child_filter, &name)
+            .await
+    }
+
+    /// Non-atomic fallback for deployments without transaction support.
+    async fn delete_catalog_unsafe(
+        &self,
+        filter: Document,
+        child_filter: Document,
+        name: &str,
+    ) -> Result<()> {
+        for collection in ["tags", "branches", "assets", "namespaces"] {
+            self.db
+                .collection::<Document>(collection)
+                .delete_many(child_filter.clone())
+                .await?;
+        }
+
         let result = self
             .db
             .collection::<Document>("catalogs")
