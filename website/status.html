@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Readiness Status - Pangolin 0.6.0</title>
+    <meta name="description" content="An honest maturity assessment of Pangolin 0.6.0: what is solid, what is beta, and what is missing — rate limiting, full OIDC, encryption at rest, tested disaster recovery, MongoDB parity and unimplemented Iceberg endpoints.">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@300;400;500;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <script defer src="script.js"></script>
+</head>
+<body>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <a href="index.html" class="logo">Pangolin</a>
+            <button class="mobile-menu-btn" aria-label="Toggle Menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <ul class="nav-links">
+                <li><a href="index.html#features">Features</a></li>
+                <li><a href="status.html">Status</a></li>
+                <li><a href="index.html#videos">Videos</a></li>
+                <li><a href="deployment.html">Deployment</a></li>
+                <li><a href="index.html#gallery">Gallery</a></li>
+                <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/README.md">Docs</a></li>
+                <li><a href="https://github.com/AlexMercedCoder/Pangolin" class="btn btn-primary">Star on GitHub</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="page-header">
+        <div class="container">
+            <div class="badge-row">
+                <span class="pill pill-version">v0.6.0</span>
+                <span class="pill pill-alpha">Alpha</span>
+                <span class="pill pill-security">Security release</span>
+            </div>
+            <h1>Production Readiness Status</h1>
+            <p class="lede">Pangolin is pre-1.0 software under active hardening. It is a capable catalog with a broad feature set, and it is not yet something we would tell you to put in front of a production data lake without reading this page first.</p>
+        </div>
+    </header>
+
+    <!-- Summary -->
+    <section class="section">
+        <div class="container prose">
+            <div class="callout callout-ok">
+                <h3>Why this page exists</h3>
+                <p>Earlier versions of this site and the project README claimed 100% Apache Iceberg REST spec compliance and marked eleven features "Production-Ready". Neither claim was supported by the code. Both are gone. What follows is the same maturity assessment that now ships in the repository README — the good and the bad, in the same place.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Maturity table -->
+    <section id="maturity" class="section" style="background-color: #faf9f8;">
+        <div class="container">
+            <h2 class="section-title">Maturity by Area</h2>
+            <div class="table-wrap">
+                <table class="maturity">
+                    <thead>
+                        <tr><th>Area</th><th>Maturity</th><th>Notes</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Iceberg REST — namespaces, tables, commits</td>
+                            <td><span class="m m-solid">Solid</span></td>
+                            <td>Commit requirements including <code>assert-ref-snapshot-id</code> are enforced; unsupported operations return an error rather than a false <code>200 OK</code>.</td>
+                        </tr>
+                        <tr>
+                            <td>Iceberg REST — full spec coverage</td>
+                            <td><span class="m m-partial">Partial</span></td>
+                            <td>Several endpoints are missing. <a href="#coverage">See the coverage list below.</a></td>
+                        </tr>
+                        <tr>
+                            <td>Multi-tenancy and isolation</td>
+                            <td><span class="m m-solid">Solid</span></td>
+                            <td>Tenant scope is a required parameter throughout; isolation tests pass against the production middleware.</td>
+                        </tr>
+                        <tr>
+                            <td>Git-style branching, tags, merge</td>
+                            <td><span class="m m-good">Good</span></td>
+                            <td>Merge direction and branch-asset tracking were fixed in 0.6.0.</td>
+                        </tr>
+                        <tr>
+                            <td>RBAC, service users, API keys</td>
+                            <td><span class="m m-good">Good</span></td>
+                            <td>API keys carry a key ID, so authentication is one bcrypt verification rather than a scan of every service user.</td>
+                        </tr>
+                        <tr>
+                            <td>Audit logging</td>
+                            <td><span class="m m-good">Good</span></td>
+                            <td>40+ actions, 19 resource types, plus authentication events from 0.6.0. Writes are best-effort and records are not tamper-evident.</td>
+                        </tr>
+                        <tr>
+                            <td>Observability</td>
+                            <td><span class="m m-new">New in 0.6.0</span></td>
+                            <td>Prometheus metrics, request correlation IDs, a working <code>RUST_LOG</code>, JSON logs, and real health endpoints.</td>
+                        </tr>
+                        <tr>
+                            <td>PostgreSQL backend</td>
+                            <td><span class="m m-good">Good</span></td>
+                            <td>The recommended backend. Provisioning from a fresh database was broken before 0.6.0.</td>
+                        </tr>
+                        <tr>
+                            <td>SQLite backend</td>
+                            <td><span class="m m-good">Good</span></td>
+                            <td>Single-writer; suitable for one node or an evaluation. Versioned migrations added in 0.6.0.</td>
+                        </tr>
+                        <tr>
+                            <td>MongoDB backend</td>
+                            <td><span class="m m-beta">Beta</span></td>
+                            <td>No index management, transactions only where the deployment supports sessions, four known-failing tests.</td>
+                        </tr>
+                        <tr>
+                            <td>Kubernetes deployment</td>
+                            <td><span class="m m-good">Good</span></td>
+                            <td>The chart shipped referencing three templates that did not exist; all present and CI-linted from 0.6.0.</td>
+                        </tr>
+                        <tr>
+                            <td>Transactions for admin operations</td>
+                            <td><span class="m m-partial">Partial</span></td>
+                            <td>Landed late in 0.6.0. PostgreSQL now wraps <code>delete_catalog</code>, <code>delete_branch</code> and <code>merge_branch</code> in transactions; MongoDB covers <code>delete_catalog</code> only, and only on a deployment that supports sessions. Branch creation by copying assets is still not atomic.</td>
+                        </tr>
+                        <tr>
+                            <td>Rate limiting</td>
+                            <td><span class="m m-missing">Missing</span></td>
+                            <td>Global concurrency and body limits and a request timeout exist; there is no per-IP or per-account throttle.</td>
+                        </tr>
+                        <tr>
+                            <td>OIDC (PKCE, JWKS, discovery)</td>
+                            <td><span class="m m-missing">Missing</span></td>
+                            <td>OAuth works and is now safe, but it is not full OIDC.</td>
+                        </tr>
+                        <tr>
+                            <td>Encryption at rest for warehouse credentials</td>
+                            <td><span class="m m-missing">Missing</span></td>
+                            <td>Cloud credentials are stored unencrypted in the catalog database.</td>
+                        </tr>
+                        <tr>
+                            <td>HA at more than one replica</td>
+                            <td><span class="m m-partial">Partial</span></td>
+                            <td>It works, but it is unproven — see the limitations below.</td>
+                        </tr>
+                        <tr>
+                            <td>Backup / restore / DR</td>
+                            <td><span class="m m-missing">Undocumented and untested</span></td>
+                            <td>No published RPO or RTO.</td>
+                        </tr>
+                        <tr>
+                            <td>Performance</td>
+                            <td><span class="m m-missing">Unmeasured</span></td>
+                            <td>No load-test harness, no published figures, no capacity model.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p style="text-align: center; color: var(--color-text-light); font-size: 0.9rem;">
+                <code>AUDIT_EXECUTION_PLAN.md</code> in the repository root is a candid, itemised assessment of the codebase with a phased plan. It is the best place to understand what is weak and what is being worked on.
+            </p>
+        </div>
+    </section>
+
+    <!-- Known limitations -->
+    <section id="limitations" class="section">
+        <div class="container prose">
+            <h2 class="section-title">Known Limitations</h2>
+            <p style="text-align: center; margin-bottom: 2rem;">Stated plainly rather than buried.</p>
+
+            <div class="callout callout-warn">
+                <h4>Administrative operations are only partly transactional</h4>
+                <p>As of 0.6.0, PostgreSQL wraps a cascading catalog delete, a branch delete and a branch merge in a database transaction, and MongoDB wraps a cascading catalog delete where the deployment supports a session — a standalone <code>mongod</code> cannot. <strong>Creating a branch by copying assets is still issued as independent statements</strong>, so a failure partway through leaves the catalog partially applied with no rollback and no repair tool. Take a backup before large administrative operations.</p>
+                <p>The Iceberg table-commit path <em>is</em> safe: it uses compare-and-swap with full requirement enforcement.</p>
+            </div>
+
+            <div class="callout callout-warn">
+                <h4>No rate limiting</h4>
+                <p>There are global concurrency and body-size limits and a per-request timeout, but no per-IP or per-account throttle. The login endpoint is brute-forceable. Put Pangolin behind a gateway that can rate-limit if it is exposed to anything untrusted.</p>
+            </div>
+
+            <div class="callout callout-warn">
+                <h4>OAuth is not full OIDC</h4>
+                <p>The 0.6.0 flow is safe — signed <code>state</code>, server-side nonces, allowlisted redirects, code exchange instead of a token in a URL — but it is not a complete OIDC implementation. There is no PKCE, no <code>id_token</code> signature validation, no JWKS, and no discovery document. Users are matched on the email a provider returns, with no <code>email_verified</code> check. JWTs are symmetric HS256 with no key rotation, so rotating the secret ends every session at once.</p>
+            </div>
+
+            <div class="callout callout-warn">
+                <h4>Warehouse credentials are stored unencrypted</h4>
+                <p>Cloud storage credentials live in the clear in the catalog database. Envelope encryption at rest is not implemented. Encrypt your database backups. The in-process warehouse cache is also node-local, so a rotated credential can be served by a peer for up to the cache TTL — 5 seconds by default.</p>
+            </div>
+
+            <div class="callout callout-warn">
+                <h4>Running more than one replica works but is unproven</h4>
+                <p>The background token-cleanup job runs in every replica with no coordination, and the OAuth nonce store is in-process — so OAuth needs session affinity across replicas.</p>
+            </div>
+
+            <div class="callout callout-warn">
+                <h4>No tested backup, restore or disaster recovery</h4>
+                <p>No procedure has been exercised and there is no published RPO or RTO. The <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/runbook.md">production runbook</a> covers health, metrics, incidents and upgrades, and is explicit about where the gaps are.</p>
+            </div>
+
+            <div class="callout callout-warn">
+                <h4>No published performance figures</h4>
+                <p>Rust makes for a small, fast binary, but "fast" is a claim we have not measured. There is no load-test harness and no capacity model.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Iceberg coverage -->
+    <section id="coverage" class="section" style="background-color: #faf9f8;">
+        <div class="container prose">
+            <h2 class="section-title">Iceberg REST Coverage</h2>
+            <p style="text-align: center; margin-bottom: 2rem;">This project previously claimed 100% spec compliance. That was not supported by the code, and is not claimed now.</p>
+
+            <div class="coverage-grid">
+                <div class="coverage-col">
+                    <h4 style="color: #065f46;">✅ Implemented</h4>
+                    <p>
+                        <code>getConfig</code> <code>listNamespaces</code> <code>createNamespace</code>
+                        <code>dropNamespace</code> <code>updateNamespaceProperties</code> <code>listTables</code>
+                        <code>createTable</code> <code>loadTable</code> <code>updateTable</code>
+                        <code>dropTable</code> <code>tableExists</code> <code>renameTable</code>
+                        <code>createView</code> <code>loadView</code>
+                    </p>
+                    <p>Plus credential vending and the OAuth token endpoint. <code>getConfig</code> returns per-warehouse configuration from 0.6.0.</p>
+                </div>
+
+                <div class="coverage-col">
+                    <h4 style="color: #991b1b;">❌ Not implemented</h4>
+                    <p>
+                        <code>loadNamespaceMetadata</code> <code>namespaceExists</code>
+                        <code>registerTable</code> <code>commitTransaction</code>
+                    </p>
+                    <p>Plus most of the view API — no list, drop, replace, exists or rename. <code>commitTransaction</code> means there are no multi-table atomic commits.</p>
+                </div>
+
+                <div class="coverage-col">
+                    <h4 style="color: #1e40af;">🔒 Commit requirements — all enforced</h4>
+                    <p>
+                        <code>assert-create</code> <code>assert-table-uuid</code>
+                        <code>assert-ref-snapshot-id</code> <code>assert-current-schema-id</code>
+                        <code>assert-default-spec-id</code> <code>assert-default-sort-order-id</code>
+                        <code>assert-last-assigned-field-id</code>
+                    </p>
+                    <p>An unrecognised requirement is refused rather than ignored.</p>
+                </div>
+
+                <div class="coverage-col">
+                    <h4 style="color: #1e40af;">🔧 Commit updates — all applied</h4>
+                    <p>
+                        <code>assign-uuid</code> <code>upgrade-format-version</code> <code>add-schema</code>
+                        <code>set-current-schema</code> <code>add-snapshot</code> <code>set-snapshot-ref</code>
+                        <code>remove-snapshot-ref</code> <code>set-properties</code> <code>remove-properties</code>
+                        <code>set-location</code> <code>add-spec</code> <code>set-default-spec</code>
+                        <code>add-sort-order</code> <code>set-default-sort-order</code> <code>remove-snapshots</code>
+                    </p>
+                    <p>An unrecognised update returns <code>501</code> rather than a false <code>200 OK</code>.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Backend parity -->
+    <section id="backends" class="section">
+        <div class="container prose">
+            <h2 class="section-title">Backend Parity</h2>
+            <p style="text-align: center; margin-bottom: 2rem;">
+                <code>CatalogStore</code> is a large trait in which many methods carry a default implementation returning "Operation not supported by this store" — so a missing method compiles cleanly and surfaces only as an opaque runtime <code>500</code>. This is the matrix that tells you, before you deploy, which features work where.
+            </p>
+
+            <div class="table-wrap">
+                <table class="maturity">
+                    <thead>
+                        <tr><th>Capability</th><th>Memory</th><th>SQLite</th><th>PostgreSQL</th><th>MongoDB</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Tenants, catalogs, namespaces, assets</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Warehouses and credential vending</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Branches, tags, commits</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Branch merge</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Merge operations and conflicts</td><td>✅</td><td>✅</td><td>✅</td><td>⚠️</td></tr>
+                        <tr><td>Users, roles, permissions (RBAC)</td><td>✅</td><td>✅</td><td>✅</td><td>⚠️</td></tr>
+                        <tr><td>Service users and API keys</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Token issue / revoke / list</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Audit logging, filtering and counting</td><td>✅</td><td>✅</td><td>✅</td><td>⚠️</td></tr>
+                        <tr><td>Business metadata and access requests</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Federated catalogs</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Asset search</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                        <tr><td>Versioned schema migrations</td><td>n/a</td><td>✅</td><td>✅</td><td>❌</td></tr>
+                        <tr><td>Multi-statement transactions</td><td>n/a</td><td>⚠️</td><td>⚠️</td><td>⚠️</td></tr>
+                        <tr><td>Survives a restart</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p style="text-align: center; font-size: 0.9rem;">✅ implemented and covered by tests · ⚠️ implemented with known gaps · ❌ not available</p>
+
+            <h3>Choosing a backend</h3>
+            <ul>
+                <li><strong>PostgreSQL — recommended.</strong> The schema comes from a timestamped <code>sqlx</code> migration chain applied at startup under a <code>pg_advisory_lock</code>, so concurrent replicas do not race. Before 0.6.0 the chain could not provision a fresh database at all.</li>
+                <li><strong>SQLite.</strong> Single-writer. Good for a single node or an evaluation. Versioned migrations and a schema version table arrived in 0.6.0, as did the <code>revoked_tokens</code> table without which token revocation failed at runtime.</li>
+                <li><strong>MongoDB — beta.</strong> Functional for core catalog operations, but there is no index management at all (indexes must be created by hand), transactions require a deployment with session support, and four tests around RBAC aggregation and audit-log filtering are known to fail.</li>
+                <li><strong>Memory.</strong> Development and tests only. Everything is lost on restart, and it is selected silently whenever <code>DATABASE_URL</code> is unset — the server logs a warning when this happens.</li>
+            </ul>
+
+            <p><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/backend-parity.md">Full backend parity documentation →</a></p>
+        </div>
+    </section>
+
+    <!-- Security posture -->
+    <section id="security" class="section" style="background-color: #faf9f8;">
+        <div class="container prose">
+            <h2 class="section-title">Security Posture</h2>
+
+            <h3>Fixed in 0.6.0</h3>
+            <div class="table-wrap">
+                <table class="maturity">
+                    <thead>
+                        <tr><th>ID</th><th>Issue</th><th>Impact</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>A-8</strong></td>
+                            <td>The OAuth callback appended the session JWT to a redirect URL taken from the unsigned <code>state</code> parameter, with no allowlist</td>
+                            <td><strong>Account takeover.</strong> An authorize link whose <code>state</code> decoded to <code>{"redirect_uri":"https://evil.example/"}</code> delivered a valid token for the victim to the attacker's access log, with no credential theft required</td>
+                        </tr>
+                        <tr>
+                            <td><strong>A-9</strong></td>
+                            <td>The OAuth <code>state</code> nonce was generated but never stored or verified</td>
+                            <td><strong>Login CSRF.</strong> An attacker could bind a victim's browser to the attacker's account</td>
+                        </tr>
+                        <tr>
+                            <td><strong>A-10</strong></td>
+                            <td><code>PANGOLIN_JWT_SECRET</code> fell back to a value published in this repository; the Helm chart shipped working placeholder passwords and the seeded admin used <code>password123</code></td>
+                            <td><strong>Anyone could forge a <code>Root</code> token</strong> against a deployment that missed one environment variable</td>
+                        </tr>
+                        <tr>
+                            <td><strong>A-11</strong></td>
+                            <td>The authentication whitelist matched any path <em>ending in</em> <code>/config</code> and any path <em>containing</em> <code>/oauth/tokens</code></td>
+                            <td><strong>Authentication bypass.</strong> A namespace or table named <code>config</code> was reachable unauthenticated, including its DELETE route</td>
+                        </tr>
+                        <tr>
+                            <td><strong>A-12</strong></td>
+                            <td>API-key authentication ran <code>bcrypt::verify</code> against every service user in every tenant</td>
+                            <td><strong>Unauthenticated denial of service.</strong> At 100 service users a single request with a bogus key burned roughly 25 CPU-seconds, before any rate limiting</td>
+                        </tr>
+                        <tr>
+                            <td><strong>A-13</strong></td>
+                            <td>A store error during the token-revocation check was logged and ignored</td>
+                            <td><strong>Revoked tokens were accepted again</strong> during any database disruption. It now returns <code>503</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong>A-14</strong></td>
+                            <td>The root password was compared with <code>==</code></td>
+                            <td>Timing oracle on the password</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>Known gaps that remain</h3>
+            <ul>
+                <li><strong>No rate limiting on authentication endpoints.</strong> The login endpoint is brute-forceable.</li>
+                <li><strong>OAuth is not full OIDC.</strong> No PKCE, no <code>id_token</code> signature validation, no JWKS, no discovery.</li>
+                <li><strong>Symmetric HS256 JWTs with no key rotation.</strong> Rotating the secret invalidates every session at once.</li>
+                <li><strong>Warehouse credentials are stored unencrypted</strong> in the catalog database.</li>
+                <li><strong>Audit records are not tamper-evident.</strong> They live in the same database as application data, with no hash chaining and no WORM option, and there is no SIEM export.</li>
+                <li><strong>No MFA, password policy, or account lockout.</strong></li>
+            </ul>
+
+            <h3>Before you expose Pangolin to anything you care about</h3>
+            <ul>
+                <li><code>PANGOLIN_JWT_SECRET</code> is at least 32 bytes of real entropy and is not in Git. Prefer <code>existingSecret</code> in the Helm chart over <code>values.yaml</code>.</li>
+                <li><code>PANGOLIN_NO_AUTH</code> is unset. It grants tenant-admin to anonymous callers; the server refuses to start with it enabled on a non-loopback address, but do not rely on that.</li>
+                <li><code>PANGOLIN_DEV_MODE</code> is unset, and <code>PANGOLIN_ROOT_USER</code> is unset unless you actively need root basic auth.</li>
+                <li>TLS is terminated in front of the server. Pangolin binds plain HTTP.</li>
+                <li><code>PANGOLIN_CORS_ALLOWED_ORIGINS</code> is set. The default allows any origin, which is only safe behind a trusted gateway.</li>
+                <li><code>PANGOLIN_ALLOW_LEGACY_API_KEYS</code> is unset once keys are rotated.</li>
+                <li>Containers run as non-root with a read-only root filesystem — the shipped chart defaults do this; confirm you have not overridden them.</li>
+                <li>Database backups are encrypted, because warehouse rows contain cloud storage credentials in the clear.</li>
+                <li><code>/metrics</code> is not exposed publicly. It is unauthenticated by design for scraping; set <code>PANGOLIN_METRICS_ENABLED=false</code> if you cannot restrict it.</li>
+            </ul>
+
+            <p><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md">Full security policy, advisory and hardening checklist →</a></p>
+        </div>
+    </section>
+
+    <!-- What's next -->
+    <section id="roadmap" class="section">
+        <div class="container prose">
+            <h2 class="section-title">What Comes Next</h2>
+            <p style="text-align: center; margin-bottom: 2rem;">The outstanding work, tracked in <code>AUDIT_EXECUTION_PLAN.md</code>.</p>
+            <ul>
+                <li>Rate limiting on authentication endpoints.</li>
+                <li>Full OIDC: PKCE, JWKS, <code>id_token</code> validation, discovery, and lookup by <code>(provider, subject)</code> rather than email.</li>
+                <li>Asymmetric JWTs with key rotation.</li>
+                <li>Envelope encryption for warehouse credentials at rest.</li>
+                <li>Tamper-evident audit records and SIEM export.</li>
+                <li>Tested backup, restore and disaster recovery with a published RPO and RTO.</li>
+                <li>Cross-node warehouse cache invalidation and coordinated background jobs.</li>
+                <li>Transactional branch creation by copy, completing the administrative transaction work.</li>
+                <li>The missing Iceberg endpoints: <code>loadNamespaceMetadata</code>, <code>namespaceExists</code>, <code>registerTable</code>, <code>commitTransaction</code>, and the rest of the view API.</li>
+                <li>MongoDB parity: index management, full transaction coverage, and the four known-failing tests.</li>
+                <li>A load-test harness and published performance figures.</li>
+            </ul>
+
+            <div class="callout callout-info">
+                <h4>Should you use Pangolin?</h4>
+                <p><strong>Yes, if</strong> you are evaluating Iceberg catalogs, want Git-style branching over catalog metadata, are running a single-tenant internal lakehouse behind a trusted network, or want to contribute to a Rust catalog implementation.</p>
+                <p><strong>Not yet, if</strong> you need a catalog in front of production data with a tested recovery path, a compliance-grade audit trail, credential encryption at rest, or full Iceberg REST spec coverage. <a href="index.html#ecosystem">Apache Polaris and Dremio are the honest recommendations for that today.</a></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-content">
+            <div class="footer-sections">
+                <div class="footer-col">
+                    <h4>Pangolin</h4>
+                    <p>An open Iceberg REST catalog in Rust.<br>v0.6.0 · Alpha · MIT licensed.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Project</h4>
+                    <ul>
+                        <li><a href="status.html">Readiness Status</a></li>
+                        <li><a href="deployment.html">Deployment</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/CHANGELOG.md">Changelog</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md">Security Policy</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/CONTRIBUTING.md">Contributing</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Operations</h4>
+                    <ul>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/runbook.md">Production Runbook</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/backend-parity.md">Backend Parity</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/oidc.md">OAuth / SSO</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/known-issues/README.md">Known Issues</a></li>
+                    </ul>
+                </div>
+                <div class="footer-col">
+                    <h4>Connect</h4>
+                    <ul>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin">GitHub</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/discussions">Discussions</a></li>
+                        <li><a href="https://alexmerced.com">AlexMerced.com</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Alex Merced. MIT licensed. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

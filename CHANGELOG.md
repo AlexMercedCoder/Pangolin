@@ -102,6 +102,20 @@ This release implements Phase 0 and much of Phases 1–3 of
 
 ### Fixed — storage and data integrity
 
+- **Transactions for the multi-statement admin paths (A-24, partial).** The
+  PostgreSQL and MongoDB backends used zero transactions, so any failure midway
+  through a cascading delete or a merge left the catalog partially applied.
+  PostgreSQL now wraps `delete_catalog` (five statements), `delete_branch` (two)
+  and `merge_branch` (three) in a transaction; MongoDB wraps `delete_catalog` in
+  a session-backed transaction where the deployment supports one, falling back
+  to sequential deletes with a warning against a standalone `mongod`. Two bugs
+  surfaced while writing the regression tests: `delete_branch` deleted assets by
+  a column that had been renamed, so the statement failed every time and
+  deleting a branch orphaned its assets; and each backend carried an inherent
+  `merge_branch(target, source)` alongside the trait's `merge_branch(source,
+  target)`, which Rust resolves in favour of the inherent method — the inherent
+  one is renamed `merge_branch_into` and takes the trait's argument order.
+  **Branch creation by copying assets is still not atomic.**
 - **PostgreSQL could not be provisioned from a fresh database.**
   `active_tokens` and `federated_sync_stats` were defined only in a schema file
   no runner applied, while a migration created an index on `active_tokens`, so
@@ -201,7 +215,7 @@ This release implements Phase 0 and much of Phases 1–3 of
 - **The test suite runs again (B-11).** `cargo test --workspace` executed
   **zero** tests: five targets failed to compile because model structs had
   gained fields and functions had gained parameters with no test updated, and
-  nothing had compiled the test code in a long time. It now runs **330 tests,
+  nothing had compiled the test code in a long time. It now runs **334 tests,
   all passing**, with 10 skipped when no database is configured.
 - **The tenant-isolation tests pass (B-13/C-6)**, and now exercise the
   **production** middleware rather than a drifted test-only wrapper that did not
@@ -278,9 +292,11 @@ This release implements Phase 0 and much of Phases 1–3 of
 
 Honestly stated, and tracked in `AUDIT_EXECUTION_PLAN.md`:
 
-- Multi-statement transactions for administrative operations on PostgreSQL and
-  MongoDB (A-24, Phase 1.7). The Iceberg commit path is safe; branch merges,
-  branch creation by copy, and cascading deletes are not atomic.
+- Transactional **branch creation by copy** — the remainder of A-24. PostgreSQL
+  now wraps `delete_catalog`, `delete_branch` and `merge_branch` in a
+  transaction, and MongoDB wraps `delete_catalog` where the deployment supports
+  a session, but copying assets into a new branch is still a sequence of
+  independent statements.
 - Rate limiting on authentication endpoints (C-5).
 - Full OIDC: PKCE, JWKS, `id_token` validation, discovery, lookup by
   `(provider, subject)` (C-2/C-3, Phase 3.1).

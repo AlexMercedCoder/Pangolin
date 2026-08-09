@@ -154,7 +154,7 @@ could silently fork snapshot lineage under concurrent writers. See
 | SQLite backend | **Good** | Single-writer; suitable for one node |
 | MongoDB backend | **Beta** | No index management, no transactions, four known-failing tests |
 | Kubernetes deployment | **Good** | The chart shipped referencing three templates that did not exist; all present and CI-linted from 0.6.0 |
-| Transactions for admin operations | **Missing** | See below |
+| Transactions for admin operations | **Partial** | PostgreSQL wraps `delete_catalog`, `delete_branch` and `merge_branch`; MongoDB wraps `delete_catalog` where the deployment supports sessions. Branch creation by copy is still not atomic |
 | HA at N > 1 replicas | **Partial** | See below |
 | Backup / restore / DR | **Undocumented and untested** | |
 
@@ -162,11 +162,14 @@ could silently fork snapshot lineage under concurrent writers. See
 
 Stated plainly rather than buried:
 
-- **Administrative multi-statement operations are not transactional.** Merging a
-  branch, creating a branch by copying assets, and cascading a catalog delete are
-  issued as independent statements on PostgreSQL and MongoDB. A failure partway
-  through leaves the catalog partially applied, with no rollback and no repair
-  tool. Take a backup before large administrative operations.
+- **Administrative multi-statement operations are only partly transactional.**
+  As of 0.6.0 PostgreSQL wraps a cascading catalog delete, a branch delete and a
+  branch merge in a transaction, and MongoDB wraps a cascading catalog delete
+  where the deployment supports a session — a standalone `mongod` cannot.
+  **Creating a branch by copying assets is still issued as independent
+  statements**, so a failure partway through leaves the catalog partially
+  applied, with no rollback and no repair tool. Take a backup before large
+  administrative operations.
   (The Iceberg table-commit path *is* safe — it uses compare-and-swap with
   requirement enforcement.)
 - **No rate limiting.** There are global concurrency and body limits and a

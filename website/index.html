@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pangolin - Open Source Lakehouse Catalog</title>
-    <meta name="description" content="Pangolin is an OSS Lakehouse Catalog in Rust. High performance, multi-cloud, and multi-backend support.">
+    <title>Pangolin 0.6.0 - An Open Iceberg REST Catalog in Rust</title>
+    <meta name="description" content="Pangolin is an MIT-licensed Iceberg REST catalog written in Rust, with multi-tenancy, Git-style branching and credential vending. Version 0.6.0 is a security and correctness hardening release. Status: alpha.">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,7 +16,7 @@
     <!-- Navigation -->
     <nav class="navbar">
         <div class="container">
-            <a href="#" class="logo">Pangolin</a>
+            <a href="index.html" class="logo">Pangolin</a>
             <button class="mobile-menu-btn" aria-label="Toggle Menu">
                 <span></span>
                 <span></span>
@@ -24,9 +24,10 @@
             </button>
             <ul class="nav-links">
                 <li><a href="#features">Features</a></li>
-                <li><a href="#gallery">Gallery</a></li>
+                <li><a href="status.html">Status</a></li>
+                <li><a href="#videos">Videos</a></li>
                 <li><a href="deployment.html">Deployment</a></li>
-                <li><a href="#ecosystem">Ecosystem</a></li>
+                <li><a href="#gallery">Gallery</a></li>
                 <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/README.md">Docs</a></li>
                 <li><a href="https://github.com/AlexMercedCoder/Pangolin" class="btn btn-primary">Star on GitHub</a></li>
             </ul>
@@ -37,15 +38,21 @@
     <header class="hero">
         <div class="container hero-content">
             <div class="hero-text">
-                <h1>A Feature Rich <span class="highlight">Lakehouse Catalog </span></h1>
-                <p>Pangolin is an MIT licensed Open Source Lakehouse Catalog written in Rust. Designed for enthusiasts who want multi-table consistency, catalog federation, multi-tenancy, and business metadata catalog features in one catalog. Pangolin is currently in alpha and not ready for production. Contributions are welcome!</p>
-                <div class="hero-actions">
-                    <a href="https://github.com/AlexMercedCoder/Pangolin/releases" class="btn btn-primary">Download Binaries</a>
-                    <a href="deployment.html#docker" class="btn btn-secondary">Docker Images</a>
-                    <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/README.md" target="_blank" class="btn btn-secondary" style="background-color: #333; color: #fff;">View Documentation</a>
-                    <a href="#features" class="btn btn-outline" style="border: 2px solid var(--color-text-light); color: var(--color-text-light);">Learn More</a>
+                <div class="badge-row">
+                    <span class="pill pill-version">v0.6.0</span>
+                    <span class="pill pill-alpha">Alpha</span>
+                    <span class="pill pill-security">Security release</span>
                 </div>
-                <p class="hero-note">Passion project by <a href="https://alexmerced.com">Alex Merced</a>.</p>
+                <h1>An Open <span class="highlight">Iceberg REST Catalog</span> in Rust</h1>
+                <p>Pangolin is an MIT-licensed lakehouse catalog written in Rust. It implements the core of the Apache Iceberg REST specification and adds multi-tenancy, Git-style branching and merging, catalog federation, credential vending and a business metadata layer.</p>
+                <p><strong>Pangolin is alpha software.</strong> 0.6.0 is a security and correctness hardening release, and it closes a lot of real ground — but there are limitations we name plainly rather than bury. Read the <a href="status.html" style="color: var(--color-accent); font-weight: 600;">production readiness status</a> before you point anything important at it.</p>
+                <div class="hero-actions">
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/releases" class="btn btn-primary">Download 0.6.0</a>
+                    <a href="deployment.html#docker" class="btn btn-secondary">Docker Images</a>
+                    <a href="status.html" class="btn btn-secondary" style="background-color: #333; color: #fff;">Readiness Status</a>
+                    <a href="#videos" class="btn btn-outline" style="border: 2px solid var(--color-text-light); color: var(--color-text-light);">Watch the Videos</a>
+                </div>
+                <p class="hero-note">Passion project by <a href="https://alexmerced.com">Alex Merced</a>. Contributions welcome.</p>
             </div>
             <div class="hero-image">
                 <img src="img/image (8).png" alt="Pangolin Dashboard Interface" loading="lazy">
@@ -53,83 +60,242 @@
         </div>
     </header>
 
+    <!-- 0.6.0 Security Release -->
+    <section id="security" class="section">
+        <div class="container">
+            <div class="callout callout-alert">
+                <h3>⚠️ 0.6.0 is a security release — upgrade from anything earlier</h3>
+                <p>If you are running 0.5.x or earlier, upgrade and rotate your credentials. 0.6.0 fixes issues that were exploitable in earlier builds:</p>
+                <ul>
+                    <li><strong>OAuth account takeover (A-8).</strong> The callback appended the freshly minted session JWT to a redirect URL taken from the unsigned <code>state</code> parameter, with no allowlist. An authorize link could deliver a valid token for the victim straight to an attacker's access log. <code>state</code> is now HMAC-SHA256 signed with an expiry, redirect targets are allowlisted by exact match, and the token is no longer placed in a URL at all — the callback returns a single-use code redeemed at <code>POST /api/v1/oauth/exchange</code>.</li>
+                    <li><strong>OAuth login CSRF (A-9).</strong> The <code>state</code> nonce was generated and never stored or verified. Nonces are now registered server-side, consumed exactly once, and bound to the issuing provider.</li>
+                    <li><strong>A working default signing secret (A-10).</strong> <code>PANGOLIN_JWT_SECRET</code> fell back to a value published in the repository, so anyone could forge a <code>Root</code> token. The Helm chart shipped working placeholder passwords. All are gone; the server refuses to start without a strong secret.</li>
+                    <li><strong>Authentication bypass via path suffix (A-11).</strong> The whitelist matched any path <em>ending in</em> <code>/config</code>, so a namespace or table named <code>config</code> was reachable unauthenticated — including its DELETE route. Matching is now structural per route segment.</li>
+                    <li><strong>Unauthenticated denial of service (A-12).</strong> API-key auth ran <code>bcrypt::verify</code> against every service user in every tenant. Keys now carry a public key ID (<code>pgl_&lt;key-id&gt;_&lt;secret&gt;</code>), making authentication one lookup plus at most one verification.</li>
+                    <li><strong>Token revocation now fails closed (A-13)</strong> and credentials are compared in constant time (A-14).</li>
+                </ul>
+                <p style="margin-top: 1rem;"><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md" style="color: #991b1b; font-weight: 700;">Read the full advisory and hardening checklist in SECURITY.md →</a></p>
+            </div>
+
+            <div class="callout callout-warn">
+                <h4>Iceberg correctness fixes in the same release</h4>
+                <ul>
+                    <li><strong>Commit requirements are enforced (A-1).</strong> Only <code>assert-current-schema-id</code> and <code>assert-table-uuid</code> were implemented; the rest were discarded. The important one is <code>assert-ref-snapshot-id</code> — without it, a writer that lost a compare-and-swap would retry against the winner's metadata and blindly re-apply its own snapshot, producing forked snapshot lineage and orphaned data files with <strong>no error ever surfaced</strong>.</li>
+                    <li><strong>Commit updates are applied or refused, never silently dropped (A-2).</strong> Eleven update types were discarded while the handler returned <code>200 OK</code>. All are implemented; an unrecognised update now returns <code>501</code>.</li>
+                    <li><strong><code>last_sequence_number</code> is a monotonic counter again (A-3).</strong> It was being assigned the snapshot ID, a random 64-bit value — which can produce incorrect query results on merge-on-read tables.</li>
+                    <li><strong><code>GET /v1/{prefix}/config</code> returns per-warehouse configuration (A-4)</strong> instead of process-wide environment defaults, and no longer exposes credential-bearing warehouse properties.</li>
+                    <li><strong>Errors on <code>/v1/*</code> use the Iceberg error envelope (A-6)</strong>, so engines can tell <code>NoSuchTableException</code> from <code>CommitFailedException</code> and retry correctly.</li>
+                </ul>
+            </div>
+
+            <div class="callout callout-info">
+                <h4>Breaking changes you need to action</h4>
+                <ul>
+                    <li><code>PANGOLIN_JWT_SECRET</code> is required. Generate one with <code>openssl rand -base64 48</code>. Setting it ends every existing session, which is intended.</li>
+                    <li>OAuth clients must move to the code-exchange flow, and redirect targets must be allowlisted via <code>PANGOLIN_OAUTH_REDIRECT_URIS</code>.</li>
+                    <li>Service-user API keys should be rotated. Legacy keys work only with <code>PANGOLIN_ALLOW_LEGACY_API_KEYS=true</code>.</li>
+                    <li>Seeding an admin requires <code>PANGOLIN_ADMIN_PASSWORD</code>; there is no default. <code>POST /api/v1/users/login</code> no longer has default root credentials.</li>
+                    <li>Health probes should move to <code>/health/live</code> and <code>/health/ready</code>.</li>
+                    <li>Unsupported Iceberg commit operations now return <code>501</code> where they previously returned <code>200 OK</code> and did nothing — a client that appeared to work may now surface a real error.</li>
+                </ul>
+                <p style="margin-top: 1rem;"><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/CHANGELOG.md" style="color: #1e40af; font-weight: 700;">Full 0.6.0 changelog →</a></p>
+            </div>
+        </div>
+    </section>
+
     <!-- Features Section -->
     <section id="features" class="section features">
         <div class="container">
-            <h2 class="section-title">Why Pangolin?</h2>
+            <h2 class="section-title">What Pangolin Does</h2>
             <div class="feature-grid">
                 <div class="feature-card">
+                    <div class="icon">🧊</div>
+                    <h3>Iceberg REST Catalog</h3>
+                    <p>Implements the core of the Iceberg REST spec — namespace and table CRUD, commits with full requirement enforcement, and credential vending. Not the whole spec yet; <a href="status.html#coverage" style="color: var(--color-accent);">see the coverage list</a>.</p>
+                </div>
+                <div class="feature-card">
                     <div class="icon">🚀</div>
-                    <h3>High Performance</h3>
-                    <p>Built with Rust for blazing fast API responses and low resource footprint.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">☁️</div>
-                    <h3>Multi-Cloud Ready</h3>
-                    <p>Deploy anywhere. First-class support for AWS S3, Azure Blob Storage, and Google Cloud Storage.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">💾</div>
-                    <h3>Flexible Backends</h3>
-                    <p>Store your metadata in PostgreSQL, MongoDB, or SQLite. Choose what fits your stack.</p>
+                    <h3>Written in Rust</h3>
+                    <p>A single static binary with a low resource footprint and no runtime to install. <code>unsafe_code = "forbid"</code> across the workspace. No published benchmark figures yet.</p>
                 </div>
                 <div class="feature-card">
                     <div class="icon">🔒</div>
-                    <h3>Secure & Multi-Tenant</h3>
-                    <p>Built-in Role-Based Access Control (RBAC) and Multi-Tenancy support out of the box.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">📋</div>
-                    <h3>Business Metadata</h3>
-                    <p>Tag, document, and organize your data assets with validatable business metadata.</p>
+                    <h3>Multi-Tenancy</h3>
+                    <p>Tenant scope is a required parameter throughout. Isolation is verified by tests running against the production auth middleware, not a test-only wrapper.</p>
                 </div>
                 <div class="feature-card">
                     <div class="icon">🌿</div>
                     <h3>Git-Like Branching</h3>
-                    <p>Experiment safely with Zero-Copy branching for your data catalogs.</p>
+                    <p>Branch, tag and merge catalogs for safe experimentation, with 3-way merge and conflict detection. Merge direction and branch-asset tracking were fixed in 0.6.0.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="icon">🏷️</div>
-                    <h3>Tag-Based Access Control</h3>
-                    <p>Granular permission management using tags for easier governance at scale.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">🖥️</div>
-                    <h3>Management UI</h3>
-                    <p>A beautiful, modern interface to manage your catalogs, users, and permissions.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">⌨️</div>
-                    <h3>Powerful CLI</h3>
-                    <p>Full control of your catalog from the terminal for automation and power users.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="icon">🔍</div>
-                    <h3>Dataset Discovery</h3>
-                    <p>Easily find dataset across all your catalogs with robust search and filtering.</p>
+                    <div class="icon">☁️</div>
+                    <h3>Multi-Cloud Storage</h3>
+                    <p>Native support for AWS S3, Azure Blob Storage and Google Cloud Storage, configured per warehouse rather than per process.</p>
                 </div>
                 <div class="feature-card">
                     <div class="icon">🔑</div>
                     <h3>Credential Vending</h3>
-                    <p>Securely vend temporary credentials for S3, Azure, and GCS to compute engines.</p>
+                    <p>Vends scoped, temporary credentials to compute engines — AWS STS, Azure SAS and GCP downscoped tokens — so engines never hold long-lived keys.</p>
                 </div>
                 <div class="feature-card">
-                    <div class="icon">🧊</div>
-                    <h3>Iceberg REST Catalog</h3>
-                    <p>Fully compliant implementation of the Iceberg REST Catalog specification.</p>
+                    <div class="icon">💾</div>
+                    <h3>Pluggable Backends</h3>
+                    <p>PostgreSQL (recommended), SQLite, MongoDB (beta) or in-memory. <a href="status.html#backends" style="color: var(--color-accent);">Feature parity varies by backend.</a></p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🛡️</div>
+                    <h3>RBAC & Service Users</h3>
+                    <p>Role- and tag-based access control, plus API-key service users for CI/CD and ETL. Keys carry a key ID, so authentication is a single bcrypt verification.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">📋</div>
+                    <h3>Audit Logging</h3>
+                    <p>40+ actions across 19 resource types, plus authentication events from 0.6.0. Writes are best-effort and records are not yet tamper-evident.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">📈</div>
+                    <h3>Observability</h3>
+                    <p><span class="m m-new">New in 0.6.0</span> Prometheus metrics at <code>/metrics</code>, request correlation IDs, a working <code>RUST_LOG</code>, JSON logs, and real liveness/readiness endpoints.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🔗</div>
+                    <h3>Federated Catalogs</h3>
+                    <p>Connect external Iceberg REST catalogs and proxy them transparently, so one endpoint fronts several sources.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🖥️</div>
+                    <h3>UI, CLIs and Python SDK</h3>
+                    <p>A SvelteKit management UI, <code>pangolin-admin</code> and <code>pangolin-user</code> CLIs, and the PyPangolin client on PyPI — all versioned together at 0.6.0.</p>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <!-- Production Readiness Summary -->
+    <section id="readiness" class="section" style="background-color: #faf9f8;">
+        <div class="container">
+            <h2 class="section-title">Where Pangolin Actually Stands</h2>
+            <p class="section-subtitle">The honest version. Pangolin is pre-1.0 software under active hardening — a capable catalog that we would not yet tell you to put in front of a production data lake without reading this.</p>
+
+            <div class="split-grid">
+                <div class="split-col ready">
+                    <h3>✅ Ready to rely on today</h3>
+                    <ul>
+                        <li><strong>Iceberg table commits.</strong> Compare-and-swap with every commit requirement enforced, including <code>assert-ref-snapshot-id</code>. This is the one path that is genuinely safe under concurrent writers.</li>
+                        <li><strong>Tenant isolation.</strong> Enforced throughout and tested against the production middleware.</li>
+                        <li><strong>PostgreSQL as the metadata backend.</strong> The recommended choice; fresh-database provisioning was repaired in 0.6.0.</li>
+                        <li><strong>Authentication and RBAC.</strong> No default secrets, no default credentials, constant-time comparison, fail-closed revocation.</li>
+                        <li><strong>Operating the thing.</strong> Prometheus metrics, structured logs, request IDs, real health probes, graceful shutdown, request limits.</li>
+                        <li><strong>Kubernetes deployment.</strong> A chart that renders — three referenced templates simply did not exist before 0.6.0 — with hardened pod defaults and CI linting.</li>
+                        <li><strong>A test suite that runs.</strong> 334 tests passing, with CI on every push and pull request — <code>cargo test --workspace</code> previously executed zero.</li>
+                    </ul>
+                </div>
+                <div class="split-col notyet">
+                    <h3>⏳ Not there yet</h3>
+                    <ul>
+                        <li><strong>No rate limiting.</strong> There are global concurrency and body limits and a request timeout, but no per-IP or per-account throttle — the login endpoint is brute-forceable.</li>
+                        <li><strong>Admin operations are only partly transactional.</strong> PostgreSQL wraps catalog deletes, branch deletes and merges; branch creation by copy is still a sequence of independent statements. Take a backup first.</li>
+                        <li><strong>OAuth is not full OIDC.</strong> No PKCE, no <code>id_token</code> validation, no JWKS, no discovery, no <code>email_verified</code> check.</li>
+                        <li><strong>Warehouse cloud credentials are stored unencrypted</strong> in the catalog database. Envelope encryption at rest is not implemented.</li>
+                        <li><strong>Backup, restore and DR are undocumented and untested.</strong> There is no published RPO or RTO.</li>
+                        <li><strong>MongoDB is beta.</strong> No index management, no transactions, four known-failing tests.</li>
+                        <li><strong>Multiple replicas work but are unproven.</strong> Token cleanup runs uncoordinated in every replica and the OAuth nonce store is in-process.</li>
+                        <li><strong>Missing Iceberg endpoints.</strong> <code>loadNamespaceMetadata</code>, <code>namespaceExists</code>, <code>registerTable</code>, <code>commitTransaction</code> and most of the view API.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <p style="text-align: center; margin-top: 2rem;">
+                <a href="status.html" class="btn btn-primary">See the full maturity table →</a>
+            </p>
+        </div>
+    </section>
+
+    <!-- Video Gallery -->
+    <section id="videos" class="section videos">
+        <div class="container">
+            <h2 class="section-title">Pangolin in Five Short Videos</h2>
+            <p class="section-subtitle">Silent, 30–45 second explainers covering what Pangolin is, how it is built, what changed in 0.6.0, and how ready it really is.</p>
+
+            <div class="video-grid">
+                <div class="video-card">
+                    <div class="video-frame">
+                        <video src="videos/what-is-pangolin.mp4" poster="videos/what-is-pangolin.jpg"
+                               muted autoplay loop playsinline preload="metadata" controls
+                               aria-label="What is Pangolin"></video>
+                    </div>
+                    <div class="video-meta">
+                        <span class="video-duration">Overview</span>
+                        <h3>What is Pangolin?</h3>
+                        <p>An open Iceberg REST catalog written in Rust — what it is, who it is for, and what it is not.</p>
+                    </div>
+                </div>
+
+                <div class="video-card">
+                    <div class="video-frame">
+                        <video src="videos/architecture-and-features.mp4" poster="videos/architecture-and-features.jpg"
+                               muted autoplay loop playsinline preload="metadata" controls
+                               aria-label="Architecture and features"></video>
+                    </div>
+                    <div class="video-meta">
+                        <span class="video-duration">Architecture</span>
+                        <h3>Architecture &amp; Features</h3>
+                        <p>One Rust binary, a pluggable metadata backend, multi-cloud warehouses, branching and credential vending.</p>
+                    </div>
+                </div>
+
+                <div class="video-card">
+                    <div class="video-frame">
+                        <video src="videos/whats-new-in-0-6-0.mp4" poster="videos/whats-new-in-0-6-0.jpg"
+                               muted autoplay loop playsinline preload="metadata" controls
+                               aria-label="What's new in Pangolin 0.6.0"></video>
+                    </div>
+                    <div class="video-meta">
+                        <span class="video-duration">Release</span>
+                        <h3>What's New in 0.6.0</h3>
+                        <p>The security release: OAuth takeover, default secrets, an auth bypass, a DoS primitive, and forked snapshot lineage — all fixed.</p>
+                    </div>
+                </div>
+
+                <div class="video-card">
+                    <div class="video-frame">
+                        <video src="videos/production-readiness.mp4" poster="videos/production-readiness.jpg"
+                               muted autoplay loop playsinline preload="metadata" controls
+                               aria-label="Pangolin production readiness status"></video>
+                    </div>
+                    <div class="video-meta">
+                        <span class="video-duration">Status</span>
+                        <h3>Production Readiness</h3>
+                        <p>The maturity table without the marketing: what is solid, what is beta, and what is simply missing.</p>
+                    </div>
+                </div>
+
+                <div class="video-card">
+                    <div class="video-frame">
+                        <video src="videos/getting-started.mp4" poster="videos/getting-started.jpg"
+                               muted autoplay loop playsinline preload="metadata" controls
+                               aria-label="Getting started with Pangolin"></video>
+                    </div>
+                    <div class="video-meta">
+                        <span class="video-duration">Deploy</span>
+                        <h3>Getting Started</h3>
+                        <p>From <code>cargo run</code> to Docker Compose to a Helm chart — and the four environment variables 0.6.0 now requires.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p class="video-note">These videos have no audio track. Play them muted, on loop, or with the controls — whichever you prefer.</p>
         </div>
     </section>
 
     <!-- UI Gallery Section -->
     <section id="gallery" class="section gallery">
         <div class="container">
-            <h2 class="section-title">Experience the Interface</h2>
-            <p class="section-subtitle">A clean, modern management UI for your Data Lakehouse.</p>
-            
+            <h2 class="section-title">The Management UI</h2>
+            <p class="section-subtitle">A SvelteKit interface for administrators and data explorers, versioned alongside the server at 0.6.0.</p>
+
             <div class="gallery-grid">
-                <!-- Using images from the img directory -->
                 <div class="gallery-item">
                     <img src="img/image (3).png" alt="Pangolin Catalog View" loading="lazy">
                     <div class="caption">Dataset Explorer</div>
@@ -153,16 +319,16 @@
     <!-- PyPangolin Section -->
     <section id="pypangolin" class="section pypangolin">
         <div class="container">
-            <h2 class="section-title">PyPangolin - Official Python Client</h2>
+            <h2 class="section-title">PyPangolin — Official Python Client</h2>
             <p class="section-subtitle">
-                Full-featured Python library for Pangolin with PyIceberg integration, multi-format support, and secure database connection management.
-                <br><strong>Now available on PyPI:</strong> <code>pip install pypangolin</code>
+                A Python library for Pangolin with PyIceberg integration, multi-format support and secure database connection management.
+                <br><strong>Available on PyPI:</strong> <code>pip install pypangolin</code>
             </p>
 
             <div class="pypangolin-intro">
                 <div class="feature-highlight">
                     <h3>🐍 Complete Python Integration</h3>
-                    <p>PyPangolin provides a comprehensive Python interface to all Pangolin features, plus specialized support for popular data formats and database connections.</p>
+                    <p>PyPangolin provides a Python interface to Pangolin's catalog, governance and Git-style operations, plus support for common table formats and database connections.</p>
                     <a href="https://pypi.org/project/pypangolin/" target="_blank" class="btn btn-primary">View on PyPI →</a>
                     <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/pypangolin" target="_blank" class="btn btn-secondary">Documentation →</a>
                 </div>
@@ -173,7 +339,7 @@
                 <div class="format-card">
                     <div class="format-icon">🧊</div>
                     <h4>Apache Iceberg</h4>
-                    <p>Full PyIceberg integration with read/write operations</p>
+                    <p>PyIceberg integration with read/write operations</p>
                     <span class="badge tested">✅ Tested</span>
                 </div>
                 <div class="format-card">
@@ -221,7 +387,7 @@
             </div>
 
             <h3 class="subsection-title">Database Connection Management</h3>
-            <p class="subsection-description">Securely store and manage database credentials with Fernet encryption</p>
+            <p class="subsection-description">Store and manage database credentials with Fernet encryption</p>
             <div class="database-grid">
                 <div class="db-card">
                     <div class="db-icon">🐘</div>
@@ -313,11 +479,12 @@
     <section id="ecosystem" class="section ecosystem">
         <div class="container">
             <div class="ecosystem-content">
-                <h2>Looking for Enterprise Scale?</h2>
+                <h2>Need Something Production-Proven Today?</h2>
+                <p style="max-width: 700px; margin: 0 auto var(--spacing-md); color: var(--color-text-light);">Pangolin is alpha, and being honest about that means pointing you elsewhere when that is the right answer. If you need a catalog you can put in front of a production lakehouse right now, start with these.</p>
                 <div class="ecosystem-cards">
                     <div class="eco-card polaris">
                         <h3>Apache Polaris</h3>
-                        <p>The production-grade community-run lakehouse catalog. Best for large-scale open source deployments.</p>
+                        <p>The production-grade, community-run lakehouse catalog. Best for large-scale open source deployments.</p>
                         <a href="https://polaris.apache.org/" target="_blank" class="link">Visit Polaris &rarr;</a>
                     </div>
                     <div class="eco-card dremio">
@@ -327,7 +494,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="community-highlight">
                 <h3>Join the Community</h3>
                 <p>Discuss Pangolin, Iceframe, and Dremioframe in the <strong>#pangolin-catalog</strong> channel on the Data Lakehouse Hub Slack.</p>
@@ -342,20 +509,24 @@
             <div class="footer-sections">
                 <div class="footer-col">
                     <h4>Pangolin</h4>
-                    <p>OSS Lakehouse Catalog in Rust.</p>
+                    <p>An open Iceberg REST catalog in Rust.<br>v0.6.0 · Alpha · MIT licensed.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Project</h4>
+                    <ul>
+                        <li><a href="status.html">Readiness Status</a></li>
+                        <li><a href="deployment.html">Deployment</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/CHANGELOG.md">Changelog</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md">Security Policy</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/CONTRIBUTING.md">Contributing</a></li>
+                    </ul>
                 </div>
                 <div class="footer-col">
                     <h4>Tools</h4>
                     <ul>
+                        <li><a href="https://pypi.org/project/pypangolin/">PyPangolin</a></li>
                         <li><a href="https://pypi.org/project/dremioframe/">Dremioframe</a></li>
                         <li><a href="https://pypi.org/project/iceframe/">Iceframe</a></li>
-                    </ul>
-                </div>
-                <div class="footer-col">
-                    <h4>Connect</h4>
-                    <ul>
-                        <li><a href="https://github.com/AlexMercedCoder/Pangolin">GitHub</a></li>
-                        <li><a href="https://alexmerced.com">AlexMerced.com</a></li>
                     </ul>
                 </div>
                 <div class="footer-col">
@@ -366,12 +537,100 @@
                         <li><a href="https://hub.docker.com/r/alexmerced/pangolin-ui">Management UI</a></li>
                     </ul>
                 </div>
+                <div class="footer-col">
+                    <h4>Connect</h4>
+                    <ul>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin">GitHub</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/discussions">Discussions</a></li>
+                        <li><a href="https://alexmerced.com">AlexMerced.com</a></li>
+                    </ul>
+                </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 Alex Merced. All rights reserved.</p>
+                <p>&copy; 2026 Alex Merced. MIT licensed. All rights reserved.</p>
             </div>
         </div>
     </footer>
+
+    <!-- Structured data: the videos on this page -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "Pangolin",
+          "applicationCategory": "DeveloperApplication",
+          "softwareVersion": "0.6.0",
+          "operatingSystem": "Linux, macOS, Windows",
+          "description": "An MIT-licensed Iceberg REST catalog written in Rust, with multi-tenancy, Git-style branching, catalog federation and credential vending. Alpha software.",
+          "license": "https://opensource.org/licenses/MIT",
+          "codeRepository": "https://github.com/AlexMercedCoder/Pangolin",
+          "author": { "@type": "Person", "name": "Alex Merced", "url": "https://alexmerced.com" }
+        },
+        {
+          "@type": "VideoObject",
+          "name": "What is Pangolin?",
+          "description": "An open Iceberg REST catalog written in Rust — what Pangolin is, who it is for, and what it is not. Pangolin 0.6.0 is alpha software.",
+          "thumbnailUrl": "videos/what-is-pangolin.jpg",
+          "contentUrl": "videos/what-is-pangolin.mp4",
+          "uploadDate": "2026-08-09",
+          "duration": "PT40S",
+          "isFamilyFriendly": true,
+          "inLanguage": "en",
+          "publisher": { "@type": "Person", "name": "Alex Merced", "url": "https://alexmerced.com" }
+        },
+        {
+          "@type": "VideoObject",
+          "name": "Pangolin Architecture & Features",
+          "description": "One Rust binary, a pluggable metadata backend, multi-cloud warehouses, Git-style branching and credential vending — how Pangolin 0.6.0 is put together.",
+          "thumbnailUrl": "videos/architecture-and-features.jpg",
+          "contentUrl": "videos/architecture-and-features.mp4",
+          "uploadDate": "2026-08-09",
+          "duration": "PT40S",
+          "isFamilyFriendly": true,
+          "inLanguage": "en",
+          "publisher": { "@type": "Person", "name": "Alex Merced", "url": "https://alexmerced.com" }
+        },
+        {
+          "@type": "VideoObject",
+          "name": "What's New in Pangolin 0.6.0",
+          "description": "The 0.6.0 security release: an OAuth account-takeover path, a published default JWT secret, an authentication bypass, a denial-of-service primitive and forked Iceberg snapshot lineage — all fixed.",
+          "thumbnailUrl": "videos/whats-new-in-0-6-0.jpg",
+          "contentUrl": "videos/whats-new-in-0-6-0.mp4",
+          "uploadDate": "2026-08-09",
+          "duration": "PT45S",
+          "isFamilyFriendly": true,
+          "inLanguage": "en",
+          "publisher": { "@type": "Person", "name": "Alex Merced", "url": "https://alexmerced.com" }
+        },
+        {
+          "@type": "VideoObject",
+          "name": "Pangolin Production Readiness Status",
+          "description": "The honest maturity view of Pangolin 0.6.0 — what is solid, what is beta, and what is missing, including rate limiting, full OIDC, encryption at rest and tested disaster recovery.",
+          "thumbnailUrl": "videos/production-readiness.jpg",
+          "contentUrl": "videos/production-readiness.mp4",
+          "uploadDate": "2026-08-09",
+          "duration": "PT45S",
+          "isFamilyFriendly": true,
+          "inLanguage": "en",
+          "publisher": { "@type": "Person", "name": "Alex Merced", "url": "https://alexmerced.com" }
+        },
+        {
+          "@type": "VideoObject",
+          "name": "Getting Started with Pangolin 0.6.0",
+          "description": "Running Pangolin from cargo, Docker Compose or the Helm chart, and the environment variables 0.6.0 now requires.",
+          "thumbnailUrl": "videos/getting-started.jpg",
+          "contentUrl": "videos/getting-started.mp4",
+          "uploadDate": "2026-08-09",
+          "duration": "PT40S",
+          "isFamilyFriendly": true,
+          "inLanguage": "en",
+          "publisher": { "@type": "Person", "name": "Alex Merced", "url": "https://alexmerced.com" }
+        }
+      ]
+    }
+    </script>
 
 </body>
 </html>

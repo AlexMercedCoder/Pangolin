@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deployment Guide - Pangolin</title>
-    <meta name="description" content="Deploy Pangolin - the OSS Lakehouse Catalog. Download binaries, Docker images, and production configurations.">
+    <title>Deployment Guide - Pangolin 0.6.0</title>
+    <meta name="description" content="Deploy Pangolin 0.6.0 - an open Iceberg REST catalog in Rust. Binaries, Docker images, Helm charts, and the environment variables 0.6.0 now requires.">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -214,9 +214,11 @@
             </button>
             <ul class="nav-links">
                 <li><a href="index.html#features">Features</a></li>
-                <li><a href="index.html#gallery">Gallery</a></li>
+                <li><a href="status.html">Status</a></li>
+                <li><a href="index.html#videos">Videos</a></li>
                 <li><a href="deployment.html">Deployment</a></li>
-                <li><a href="index.html#ecosystem">Ecosystem</a></li>
+                <li><a href="index.html#gallery">Gallery</a></li>
+                <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/README.md">Docs</a></li>
                 <li><a href="https://github.com/AlexMercedCoder/Pangolin" class="btn btn-primary">Star on GitHub</a></li>
             </ul>
         </div>
@@ -228,8 +230,8 @@
             <div style="display: flex; align-items: center; gap: 2rem; flex-wrap: wrap; justify-content: center;">
                 <div class="hero-text" style="text-align: center; max-width: 600px;">
                     <h1>Deployment Guide</h1>
-                    <p>Get Pangolin running in minutes with Docker, binaries, or production-ready configurations.</p>
-                    <span class="alpha-badge">⚠️ ALPHA VERSION</span>
+                    <p>Get Pangolin 0.6.0 running with Docker, binaries, or a Helm chart — and set the four environment variables this release now requires.</p>
+                    <span class="alpha-badge">⚠️ ALPHA — v0.6.0</span>
                 </div>
                 <div style="max-width: 200px;">
                     <img src="img/pangolin_waving_hello.png" alt="Pangolin mascot waving hello" style="width: 100%; height: auto;">
@@ -241,16 +243,106 @@
     <!-- Alpha Warning -->
     <section class="section">
         <div class="container">
+            <div class="callout callout-alert">
+                <h4>🔐 0.6.0 is a security release — upgrade from anything earlier</h4>
+                <p>Earlier versions contained a remotely exploitable OAuth account-takeover path, a working default JWT signing secret published in the repository, an authentication bypass, an unauthenticated denial-of-service primitive, and an Iceberg commit path that could silently fork snapshot lineage under concurrent writers. If you are running 0.5.x or earlier, <strong>upgrade and rotate credentials</strong>.</p>
+                <p style="margin-top: 1rem;"><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md" style="color: #991b1b; font-weight: 700;">Read the advisory →</a></p>
+            </div>
+
             <div class="warning-box">
                 <h4>⚠️ Alpha Software Notice</h4>
-                <p>Pangolin is currently in <strong>alpha</strong> status. This means:</p>
+                <p>Pangolin is <strong>alpha</strong>, pre-1.0 software under active hardening. This means:</p>
                 <ul>
-                    <li>Bugs and issues may occur</li>
-                    <li>Breaking API changes may happen in future releases</li>
-                    <li>Features are actively being developed and refined</li>
-                    <li>Not recommended for production use without thorough testing</li>
+                    <li>Breaking changes may land in a minor release — 0.6.0 itself contains several</li>
+                    <li>Backup, restore and disaster recovery are undocumented and untested; there is no published RPO or RTO</li>
+                    <li>There is no rate limiting on authentication endpoints</li>
+                    <li>Warehouse cloud credentials are stored unencrypted in the catalog database</li>
+                    <li>Not all of the Iceberg REST spec is implemented, and MongoDB is beta</li>
                 </ul>
-                <p style="margin-top: 1rem;">We encourage you to test, provide feedback, and contribute!</p>
+                <p style="margin-top: 1rem;">Read the <a href="status.html" style="color: #92400e; font-weight: 700;">full production readiness status</a> before deploying anything you care about. We encourage you to test, provide feedback, and contribute.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Required configuration -->
+    <section id="required-config" class="section" style="background-color: #faf9f8;">
+        <div class="container">
+            <h2 class="section-title">🔑 Required Configuration in 0.6.0</h2>
+            <p style="text-align: center; margin-bottom: 2rem;">0.6.0 removed every insecure default. The server will not start without real values — which is the point.</p>
+
+            <div class="callout callout-info">
+                <h4>Minimum viable environment</h4>
+                <pre># Required. The server refuses to start without it and rejects known
+# placeholders. Setting it invalidates every existing session.
+PANGOLIN_JWT_SECRET=$(openssl rand -base64 48)
+
+# Required if you seed an admin user. There is no default.
+PANGOLIN_ADMIN_PASSWORD=...
+
+# Required if you use OAuth. Redirect targets are allowlisted by exact
+# match; FRONTEND_URL is always permitted.
+PANGOLIN_OAUTH_REDIRECT_URIS=https://catalog.example.com/auth/callback
+
+# Recommended. The default allows any origin, which is only safe behind
+# a trusted gateway.
+PANGOLIN_CORS_ALLOWED_ORIGINS=https://catalog.example.com
+
+# Pick your metadata backend. PANGOLIN_STORAGE_TYPE is honoured from
+# 0.6.0 — before this release it was read and never used.
+PANGOLIN_STORAGE_TYPE=postgres
+DATABASE_URL=postgres://...</pre>
+            </div>
+
+            <h3 style="margin-top: 2rem;">Upgrading from 0.5.x</h3>
+            <ol style="margin-left: 1.5rem; margin-top: 1rem;">
+                <li style="margin-bottom: 0.5rem;">Generate a signing secret with <code>openssl rand -base64 48</code> and set <code>PANGOLIN_JWT_SECRET</code>. Existing sessions end.</li>
+                <li style="margin-bottom: 0.5rem;">If you use OAuth, set <code>PANGOLIN_OAUTH_REDIRECT_URIS</code> and update clients to the code-exchange flow — the callback now carries <code>code</code>, not <code>token</code>, redeemed at <code>POST /api/v1/oauth/exchange</code>.</li>
+                <li style="margin-bottom: 0.5rem;">If you seed an admin, set <code>PANGOLIN_ADMIN_PASSWORD</code>.</li>
+                <li style="margin-bottom: 0.5rem;">Rotate service-user API keys to the new <code>pgl_&lt;key-id&gt;_&lt;secret&gt;</code> format, or set <code>PANGOLIN_ALLOW_LEGACY_API_KEYS=true</code> temporarily.</li>
+                <li style="margin-bottom: 0.5rem;">Repoint Kubernetes probes at <code>/health/live</code> and <code>/health/ready</code>. <code>/health</code> still works and is equivalent to readiness.</li>
+                <li style="margin-bottom: 0.5rem;">Roll one replica first. Schema migrations are additive and applied under an advisory lock, so a brief mixed-version window is safe.</li>
+                <li style="margin-bottom: 0.5rem;">Review your audit log for <code>tenant_impersonation</code>, <code>login_failed</code> and <code>api_key_rejected</code> events, which are recorded from 0.6.0 onward.</li>
+            </ol>
+
+            <div class="warning-box" style="margin-top: 2rem;">
+                <h4>One behavioural change worth planning for</h4>
+                <p>Unsupported Iceberg commit operations now return <code>501</code> where they previously returned <code>200 OK</code> and silently did nothing. A client that appeared to work against 0.5.x may now surface a real error — that error was always true, it just was not reported.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Observability -->
+    <section id="observability" class="section">
+        <div class="container">
+            <h2 class="section-title">📈 Observability</h2>
+            <p class="section-subtitle">New in 0.6.0. Before this release <code>/health</code> returned <code>200</code> whether or not the database was reachable, and <code>RUST_LOG</code> was silently ignored.</p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <h4>Health Probes</h4>
+                    <p>Two distinct endpoints, so a pod with a dead database leaves the Service instead of staying in it.</p>
+                    <ul>
+                        <li><code>/health/live</code> — process only</li>
+                        <li><code>/health/ready</code> — store round-trip</li>
+                    </ul>
+                </div>
+                <div class="card">
+                    <h4>Prometheus Metrics</h4>
+                    <p>RED metrics per route, commit success/conflict/retry counters, authentication outcomes, audit-write failures, cache hit rates and a readiness gauge at <code>/metrics</code>. A <code>ServiceMonitor</code> template ships with the chart.</p>
+                </div>
+                <div class="card">
+                    <h4>Structured Logging</h4>
+                    <p><code>RUST_LOG</code> works, <code>LOG_FORMAT=json</code> emits structured logs, and request correlation IDs — honoured from a trusted gateway's <code>x-request-id</code> — are attached to every log line and echoed on the response.</p>
+                </div>
+                <div class="card">
+                    <h4>Graceful Shutdown</h4>
+                    <p>SIGTERM and SIGINT stop readiness immediately and drain in-flight requests. Request body-size, per-request timeout and global concurrency limits are all enforced; before 0.6.0 there were none of any kind.</p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <h4>Do not expose <code>/metrics</code> publicly</h4>
+                <p>It is unauthenticated by design so Prometheus can scrape it. Restrict it at the network layer, or set <code>PANGOLIN_METRICS_ENABLED=false</code> if you cannot.</p>
             </div>
         </div>
     </section>
@@ -261,9 +353,11 @@
             <h2 class="section-title">🚀 Quick Start</h2>
             <p style="text-align: center; margin-bottom: 2rem;">Choose your deployment method:</p>
             <div class="quick-links" style="justify-content: center;">
+                <a href="#required-config" class="quick-link">Required Config</a>
                 <a href="#demo" class="quick-link">Try Demo (5 min)</a>
                 <a href="#binaries" class="quick-link">Download Binaries</a>
                 <a href="#docker" class="quick-link">Docker Images</a>
+                <a href="#observability" class="quick-link">Observability</a>
                 <a href="#production" class="quick-link">Production Setup</a>
             </div>
         </div>
@@ -366,24 +460,37 @@ docker compose up -d
     <section id="docker" class="section">
         <div class="container">
             <h2 class="section-title">🐳 Docker Images</h2>
-            <p class="section-subtitle">Official Docker images published to Docker Hub</p>
+            <p class="section-subtitle">Official Docker images published to Docker Hub. From 0.6.0 the server, both CLIs, the Python SDK, the UI and the Helm chart all carry the same version number.</p>
 
             <div class="card-grid">
                 <div class="card">
                     <h4>API Server</h4>
-                    <p><code>alexmerced/pangolin-api:0.3.0</code></p>
+                    <p><code>alexmerced/pangolin-api:0.6.0</code></p>
                     <a href="https://hub.docker.com/r/alexmerced/pangolin-api">View on Docker Hub</a>
                 </div>
                 <div class="card">
                     <h4>CLI Tools</h4>
-                    <p><code>alexmerced/pangolin-cli:0.3.0</code></p>
+                    <p><code>alexmerced/pangolin-cli:0.6.0</code></p>
                     <a href="https://hub.docker.com/r/alexmerced/pangolin-cli">View on Docker Hub</a>
                 </div>
                 <div class="card">
                     <h4>Management UI</h4>
-                    <p><code>alexmerced/pangolin-ui:0.3.0</code></p>
+                    <p><code>alexmerced/pangolin-ui:0.6.0</code></p>
                     <a href="https://hub.docker.com/r/alexmerced/pangolin-ui">View on Docker Hub</a>
                 </div>
+            </div>
+
+            <div class="callout callout-ok" style="margin-top: 2rem;">
+                <h4>The container was hardened in 0.6.0</h4>
+                <ul>
+                    <li>Runs as a non-root user (UID 10001) under <code>tini</code>, not as root</li>
+                    <li><code>--locked</code> builds with dependency-caching layers and OCI labels</li>
+                    <li>Ships <code>libssl3</code> rather than the <code>libssl-dev</code> <em>development</em> package</li>
+                    <li>A base image matching the Rust version the project requires</li>
+                    <li>A real <code>HEALTHCHECK</code>, via a <code>--healthcheck</code> mode on the binary</li>
+                    <li>Test fixtures no longer ship in the release binary</li>
+                </ul>
+                <p style="margin-top: 1rem;">CI asserts on every build that the image does not run as root.</p>
             </div>
         </div>
     </section>
@@ -397,7 +504,7 @@ docker compose up -d
                 </div>
                 <div style="flex: 1; min-width: 300px;">
                     <h2 class="section-title" style="text-align: left; margin-bottom: 1rem;">🏭 Production Deployments</h2>
-                    <p class="section-subtitle" style="text-align: left; margin: 0;">Production-ready configurations for various cloud providers and databases</p>
+                    <p class="section-subtitle" style="text-align: left; margin: 0;">Reference configurations for various cloud providers and databases. Read the <a href="status.html" style="color: var(--color-accent);">readiness status</a> first — these show you how to wire Pangolin up, not that Pangolin is production-proven.</p>
                 </div>
             </div>
 
@@ -438,15 +545,29 @@ docker compose up -d
             <h3 style="margin-top: 3rem;">Kubernetes (Helm Charts)</h3>
             <p>Deploy to Kubernetes using our Helm charts:</p>
             <div class="card" style="margin-top: 1.5rem;">
-                <h4>Pangolin Helm Chart</h4>
-                <p>Production-ready Helm chart with configurable values for different cloud providers.</p>
+                <h4>Pangolin Helm Chart — v0.6.0</h4>
+                <p>The chart version jumped from 0.1.0 to 0.6.0 to match everything else, and was substantially repaired in this release.</p>
                 <ul>
                     <li>Supports PostgreSQL and MongoDB backends</li>
-                    <li>Configurable resource limits and autoscaling</li>
                     <li>Example values for AWS, Azure, and GCP</li>
-                    <li>Ingress and TLS support</li>
+                    <li>Ingress, TLS and autoscaling — <strong>all three of these templates were referenced by <code>values.yaml</code> but did not exist before 0.6.0</strong>, so enabling autoscaling removed the replica count and created no autoscaler, and pods referenced a ServiceAccount that was never created</li>
+                    <li>Adds a <code>PodDisruptionBudget</code> and a <code>ServiceMonitor</code></li>
+                    <li>Hardened pod defaults: <code>runAsNonRoot</code>, <code>readOnlyRootFilesystem</code>, all capabilities dropped, <code>RuntimeDefault</code> seccomp</li>
+                    <li>Real resource requests and limits — <code>resources: {}</code> previously put pods in the BestEffort QoS class, first to be evicted under node pressure</li>
+                    <li><code>image.tag</code> pinned to the release instead of <code>latest</code></li>
+                    <li><code>helm lint</code> and <code>helm template</code> now run in CI</li>
                 </ul>
                 <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/deployment_assets/helm">View Helm Charts</a>
+            </div>
+
+            <div class="warning-box" style="margin-top: 1.5rem;">
+                <h4>The chart will not install without a real signing secret</h4>
+                <p>It previously shipped <code>change-me-please</code> and <code>password</code> as <em>working</em> defaults. It now refuses to render without a real <code>PANGOLIN_JWT_SECRET</code>. Prefer <code>existingSecret</code> over putting the value in <code>values.yaml</code>.</p>
+            </div>
+
+            <div class="callout callout-warn" style="margin-top: 1.5rem;">
+                <h4>Before you scale past one replica</h4>
+                <p>Multiple replicas work but are unproven. The background token-cleanup job runs in every replica with no coordination, and the OAuth nonce store is in-process — so OAuth requires session affinity. The warehouse cache is also node-local with a 5-second default TTL, so a rotated credential can briefly be served by a peer.</p>
             </div>
 
             <h3 style="margin-top: 3rem;">Infrastructure as Code (Terraform)</h3>
@@ -496,6 +617,26 @@ docker compose up -d
                     <p>Visual guide to the administration portal.</p>
                     <a href="https://github.com/AlexMercedCoder/Pangolin/tree/main/docs/ui">Read Docs</a>
                 </div>
+                <div class="card">
+                    <h4>Production Runbook</h4>
+                    <p>Health, metrics, incident response, upgrades and backup — including where the gaps are.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/runbook.md">Read Docs</a>
+                </div>
+                <div class="card">
+                    <h4>Backend Parity Matrix</h4>
+                    <p>Which features work on Memory, SQLite, PostgreSQL and MongoDB.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/backend-parity.md">Read Docs</a>
+                </div>
+                <div class="card">
+                    <h4>OAuth / SSO</h4>
+                    <p>Configuration, the 0.6.0 client change, and the OIDC features that are not implemented.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/docs/operations/oidc.md">Read Docs</a>
+                </div>
+                <div class="card">
+                    <h4>Security Policy</h4>
+                    <p>The 0.6.0 advisory, the hardening checklist, and the known gaps.</p>
+                    <a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md">Read Docs</a>
+                </div>
             </div>
         </div>
     </section>
@@ -533,11 +674,21 @@ docker compose up -d
             <div class="footer-sections">
                 <div class="footer-col">
                     <h4>Pangolin</h4>
-                    <p>OSS Lakehouse Catalog in Rust.</p>
+                    <p>An open Iceberg REST catalog in Rust.<br>v0.6.0 · Alpha · MIT licensed.</p>
+                </div>
+                <div class="footer-col">
+                    <h4>Project</h4>
+                    <ul>
+                        <li><a href="status.html">Readiness Status</a></li>
+                        <li><a href="index.html#videos">Videos</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/CHANGELOG.md">Changelog</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md">Security Policy</a></li>
+                    </ul>
                 </div>
                 <div class="footer-col">
                     <h4>Tools</h4>
                     <ul>
+                        <li><a href="https://pypi.org/project/pypangolin/">PyPangolin</a></li>
                         <li><a href="https://pypi.org/project/dremioframe/">Dremioframe</a></li>
                         <li><a href="https://pypi.org/project/iceframe/">Iceframe</a></li>
                     </ul>
@@ -546,12 +697,13 @@ docker compose up -d
                     <h4>Connect</h4>
                     <ul>
                         <li><a href="https://github.com/AlexMercedCoder/Pangolin">GitHub</a></li>
+                        <li><a href="https://github.com/AlexMercedCoder/Pangolin/discussions">Discussions</a></li>
                         <li><a href="https://alexmerced.com">AlexMerced.com</a></li>
                     </ul>
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2025 Alex Merced. All rights reserved.</p>
+                <p>&copy; 2026 Alex Merced. MIT licensed. All rights reserved.</p>
             </div>
         </div>
     </footer>
