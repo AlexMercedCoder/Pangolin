@@ -20,16 +20,31 @@ pub struct CachedCatalogStore {
 }
 
 impl CachedCatalogStore {
+    /// Wrap a store with the default warehouse-cache TTL.
     pub fn new(inner: Arc<dyn CatalogStore + Send + Sync>) -> Self {
+        Self::with_ttl(inner, DEFAULT_WAREHOUSE_CACHE_TTL)
+    }
+
+    /// Wrap a store with an explicit warehouse-cache TTL.
+    ///
+    /// The cache is node-local and holds storage credentials, so with more than
+    /// one replica a rotated credential keeps being vended by peers for up to
+    /// the TTL (A-28). The default is therefore short; operators running a
+    /// single replica can raise it with `PANGOLIN_WAREHOUSE_CACHE_TTL_SECS`.
+    pub fn with_ttl(inner: Arc<dyn CatalogStore + Send + Sync>, ttl: Duration) -> Self {
         Self {
             inner,
             warehouse_cache: Cache::builder()
                 .max_capacity(1000)
-                .time_to_live(Duration::from_secs(60)) // 1 minute TTL for credentials
+                .time_to_live(ttl)
                 .build(),
         }
     }
 }
+
+/// Default TTL for cached warehouses. Deliberately short: the entries hold
+/// cloud storage credentials and the cache cannot be invalidated across nodes.
+pub const DEFAULT_WAREHOUSE_CACHE_TTL: Duration = Duration::from_secs(5);
 
 #[async_trait]
 impl Signer for CachedCatalogStore {
@@ -50,11 +65,11 @@ impl CatalogStore for CachedCatalogStore {
         let key = (tenant_id, name.clone());
 
         if let Some(warehouse) = self.warehouse_cache.get(&key).await {
-            tracing::info!("Cache HIT for warehouse: {}/{}", tenant_id, name);
+            tracing::trace!("warehouse cache hit: {}/{}", tenant_id, name);
             return Ok(Some(warehouse));
         }
 
-        tracing::info!("Cache MISS for warehouse: {}/{}", tenant_id, name);
+        tracing::trace!("warehouse cache miss: {}/{}", tenant_id, name);
         let warehouse = self.inner.get_warehouse(tenant_id, name.clone()).await?;
 
         if let Some(w) = &warehouse {

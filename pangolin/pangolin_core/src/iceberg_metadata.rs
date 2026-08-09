@@ -23,6 +23,29 @@ pub struct TableMetadata {
     pub snapshots: Option<Vec<Snapshot>>,
     pub snapshot_log: Option<Vec<SnapshotLogEntry>>,
     pub metadata_log: Option<Vec<MetadataLogEntry>>,
+    /// Named branches and tags, keyed by ref name.
+    ///
+    /// Required by the Iceberg spec for `set-snapshot-ref` and
+    /// `assert-ref-snapshot-id`. `main` conventionally tracks
+    /// `current_snapshot_id`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub refs: Option<HashMap<String, SnapshotReference>>,
+}
+
+/// A named branch or tag pointing at a snapshot.
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct SnapshotReference {
+    pub snapshot_id: i64,
+    /// `"branch"` or `"tag"`.
+    #[serde(rename = "type")]
+    pub ref_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_snapshots_to_keep: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_snapshot_age_ms: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_ref_age_ms: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]

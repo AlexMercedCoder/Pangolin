@@ -102,8 +102,9 @@ async fn test_auth_flow() {
                 Json(session)
             }),
         )
-        .layer(middleware::from_fn(
-            pangolin_api::auth_middleware::auth_middleware_wrapper,
+        .layer(axum::middleware::from_fn_with_state(
+            store.clone() as std::sync::Arc<dyn pangolin_store::CatalogStore + Send + Sync>,
+            pangolin_api::auth_middleware::auth_middleware,
         ))
         .with_state(store.clone());
 

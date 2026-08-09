@@ -111,8 +111,7 @@ pub async fn handle_oauth_token(
     let expires_at = now + Duration::seconds(expires_in_seconds as i64);
 
     let token_id = Uuid::new_v4();
-    let secret = std::env::var("PANGOLIN_JWT_SECRET")
-        .unwrap_or_else(|_| "default_secret_for_dev".to_string());
+    let secret = crate::config::jwt_secret();
 
     let claims = Claims {
         sub: service_user.id.to_string(),

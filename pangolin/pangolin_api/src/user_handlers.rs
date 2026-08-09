@@ -430,12 +430,17 @@ pub async fn login(
 ) -> Response {
     // 1. Check for Root User via Environment Variables (only if tenant_id is null)
     // This takes precedence over DB users to ensure Root is always accessible even if a tenant user shadows the name
+    // Root basic credentials are only honoured when the operator has configured
+    // both. There used to be an `admin`/`password` fallback here, which meant a
+    // deployment that never set these variables shipped a working root login.
     if req.tenant_id.is_none() {
-        let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_else(|_| "admin".to_string());
-        let root_pass =
-            std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_else(|_| "password".to_string());
+        let (root_user, root_pass) =
+            crate::config::root_credentials().unwrap_or_else(|| (String::new(), String::new()));
 
-        if !root_user.is_empty() && req.username == root_user && req.password == root_pass {
+        if !root_user.is_empty()
+            && crate::config::constant_time_eq(&req.username, &root_user)
+            && crate::config::constant_time_eq(&req.password, &root_pass)
+        {
             // Create a temporary User object for the root user session
             let root_id = Uuid::parse_str("ffffffff-ffff-ffff-ffff-ffffffffffff").unwrap();
             let user = User {
@@ -463,8 +468,7 @@ pub async fn login(
             );
 
             // Generate token
-            let secret = std::env::var("PANGOLIN_JWT_SECRET")
-                .unwrap_or_else(|_| "default_secret_for_dev".to_string());
+            let secret = crate::config::jwt_secret();
             let token = match crate::auth_middleware::generate_token(session, &secret) {
                 Ok(t) => t,
                 Err(_) => {
@@ -557,8 +561,7 @@ pub async fn login(
     );
 
     // Generate token
-    let secret = std::env::var("PANGOLIN_JWT_SECRET")
-        .unwrap_or_else(|_| "default_secret_for_dev".to_string());
+    let secret = crate::config::jwt_secret();
     let token = match crate::auth_middleware::generate_token(session, &secret) {
         Ok(t) => t,
         Err(_) => {

@@ -35,6 +35,7 @@ fn test_add_snapshot_deserializes_full_object() {
         snapshots: Some(vec![]),
         snapshot_log: Some(vec![]),
         metadata_log: Some(vec![]),
+        refs: None,
     };
 
     // Simulate the AddSnapshot update
@@ -83,6 +84,7 @@ fn test_add_snapshot_handles_multiple_snapshots() {
         snapshots: Some(vec![]),
         snapshot_log: Some(vec![]),
         metadata_log: Some(vec![]),
+        refs: None,
     };
 
     // Add first snapshot
@@ -145,6 +147,7 @@ fn test_table_response_includes_config() {
         snapshots: Some(vec![]),
         snapshot_log: Some(vec![]),
         metadata_log: Some(vec![]),
+        refs: None,
     };
 
     let response = TableResponse::new(

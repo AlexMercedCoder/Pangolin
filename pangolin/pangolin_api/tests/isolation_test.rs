@@ -31,9 +31,12 @@ mod tests {
                 "/api/v1/warehouses",
                 get(list_warehouses).post(create_warehouse),
             )
-            // Use the wrapper which is stateless and easier to test if it works
-            .layer(middleware::from_fn(
-                pangolin_api::auth_middleware::auth_middleware_wrapper,
+            // Exercise the *production* middleware, not a test-only wrapper:
+            // the wrapper had already drifted and did not cover service-user
+            // API keys or token revocation (A-15).
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                pangolin_api::auth_middleware::auth_middleware,
             ))
             .with_state(state)
     }
@@ -104,8 +107,9 @@ mod tests {
                 "/api/v1/warehouses",
                 get(list_warehouses).post(create_warehouse),
             )
-            .layer(middleware::from_fn(
-                pangolin_api::auth_middleware::auth_middleware_wrapper,
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                pangolin_api::auth_middleware::auth_middleware,
             ))
             .with_state(state);
 
@@ -257,8 +261,9 @@ mod tests {
                 get(pangolin_api::pangolin_handlers::list_catalogs)
                     .post(pangolin_api::pangolin_handlers::create_catalog),
             )
-            .layer(middleware::from_fn(
-                pangolin_api::auth_middleware::auth_middleware_wrapper,
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                pangolin_api::auth_middleware::auth_middleware,
             ))
             .with_state(state);
 

@@ -42,8 +42,9 @@ async fn test_business_metadata_flow() {
             "/api/v1/access-requests/:id",
             put(update_access_request).get(get_access_request),
         )
-        .layer(axum::middleware::from_fn(
-            pangolin_api::auth_middleware::auth_middleware_wrapper,
+        .layer(axum::middleware::from_fn_with_state(
+            store.clone() as std::sync::Arc<dyn pangolin_store::CatalogStore + Send + Sync>,
+            pangolin_api::auth_middleware::auth_middleware,
         ))
         .with_state(store.clone());
 

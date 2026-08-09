@@ -1,7 +1,7 @@
+use axum::extract::DefaultBodyLimit;
 use axum::http::{HeaderValue, Method};
 use axum::routing::{delete, get, post, put};
 use axum::Router;
-use pangolin_store::memory::MemoryStore;
 use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
@@ -18,6 +18,7 @@ pub mod signing_handlers;
 pub mod tenant_handlers;
 pub mod warehouse_handlers;
 
+pub mod api_key;
 pub mod audit_handlers;
 #[cfg(test)]
 pub mod audit_tests;
@@ -25,11 +26,25 @@ pub mod auth_middleware;
 pub mod authz;
 pub mod authz_utils; // Permission filtering utilities
 pub mod business_metadata_handlers;
+pub mod config;
 pub mod conflict_detector;
 pub mod federated_catalog_handlers;
 pub mod federated_proxy;
+pub mod health;
 pub mod merge_handlers;
+pub mod metrics;
 pub mod oauth_handlers;
+pub mod oauth_state;
+pub mod observability;
+pub mod public_paths;
+/// Shared test fixtures.
+///
+/// Compiled only for tests: these helpers used to ship inside the release
+/// binary because the module was declared unconditionally (B-7). Integration
+/// tests under `tests/` cannot see a `#[cfg(test)]` module of the library, so
+/// the gate is `test` *or* the `test-fixtures` feature, which the dev-dependency
+/// on this crate enables.
+#[cfg(any(test, feature = "test-fixtures"))]
 pub mod tests_common;
 pub mod token_handlers;
 pub mod user_handlers;
@@ -45,31 +60,73 @@ pub mod permission_handlers; // Registered new module
 pub mod service_user_handlers; // Service user management
 pub mod system_config_handlers; // System configuration // Search, bulk ops, validation
 
+/// Build the router with default (development-friendly) settings.
 pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
-    let cors = CorsLayer::new()
-        //.allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
-        .allow_origin(Any)
-        .allow_methods([
-            Method::GET,
-            Method::POST,
-            Method::PUT,
-            Method::DELETE,
-            Method::PATCH,
-            Method::OPTIONS,
-        ])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-            axum::http::header::ACCEPT,
-            "x-pangolin-tenant"
-                .parse::<axum::http::HeaderName>()
-                .unwrap(),
-            "x-api-key".parse::<axum::http::HeaderName>().unwrap(),
-        ]);
-    //.allow_credentials(true);
+    app_with_options(store, RouterOptions::default())
+}
+
+/// Build the router from a validated [`config::AppConfig`].
+pub fn app_with_config(
+    store: Arc<dyn CatalogStore + Send + Sync>,
+    config: config::AppConfig,
+) -> Router {
+    app_with_options(
+        store,
+        RouterOptions {
+            body_limit_bytes: config.body_limit_bytes,
+            request_timeout: config.request_timeout,
+            concurrency_limit: config.concurrency_limit,
+            metrics_enabled: config.metrics_enabled,
+            cors_allowed_origins: config.cors_allowed_origins.clone(),
+        },
+    )
+}
+
+/// Router-level resource and CORS settings.
+#[derive(Debug, Clone)]
+pub struct RouterOptions {
+    /// Maximum accepted request body size, in bytes.
+    pub body_limit_bytes: usize,
+    /// Deadline applied to every request.
+    pub request_timeout: std::time::Duration,
+    /// Maximum number of requests in flight at once.
+    pub concurrency_limit: usize,
+    /// Whether `/metrics` is routed.
+    pub metrics_enabled: bool,
+    /// Explicit CORS origins. `None` allows any origin.
+    pub cors_allowed_origins: Option<Vec<String>>,
+}
+
+impl Default for RouterOptions {
+    fn default() -> Self {
+        Self {
+            body_limit_bytes: 16 * 1024 * 1024,
+            request_timeout: std::time::Duration::from_secs(30),
+            concurrency_limit: 512,
+            metrics_enabled: true,
+            cors_allowed_origins: None,
+        }
+    }
+}
+
+pub fn app_with_options(
+    store: Arc<dyn CatalogStore + Send + Sync>,
+    options: RouterOptions,
+) -> Router {
+    let cors = build_cors(options.cors_allowed_origins.as_deref());
+
+    let metrics_route = if options.metrics_enabled {
+        Router::new().route("/metrics", get(metrics::metrics_handler))
+    } else {
+        Router::new()
+    };
 
     Router::new()
-        .route("/health", get(|| async { "OK" }))
+        // Health. `/health` is kept as an alias of readiness for compatibility.
+        .route("/health", get(health::health))
+        .route("/health/live", get(health::live))
+        .route("/health/ready", get(health::ready))
+        .merge(metrics_route)
         // Swagger UI for API documentation
         .merge(
             utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
@@ -87,7 +144,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         )
         .route(
             "/v1/:prefix/config",
-            get(iceberg::config::get_iceberg_catalog_config_handler),
+            get(iceberg::config::get_prefixed_catalog_config_handler),
         )
         .route(
             "/v1/:prefix/namespaces",
@@ -127,7 +184,7 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // PyIceberg compatibility: it might append v1/config to a path that already includes v1/prefix
         .route(
             "/v1/:prefix/v1/config",
-            get(iceberg::config::get_iceberg_catalog_config_handler),
+            get(iceberg::config::get_prefixed_catalog_config_handler),
         )
         .route(
             "/v1/:prefix/v1/namespaces",
@@ -456,6 +513,10 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
             "/oauth/callback/:provider",
             get(oauth_handlers::oauth_callback),
         )
+        .route(
+            "/api/v1/oauth/exchange",
+            post(oauth_handlers::oauth_exchange),
+        )
         // Business Metadata (by asset id)
         .route(
             "/api/v1/business-metadata/:asset_id",
@@ -494,6 +555,68 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
             },
             auth_middleware::auth_middleware,
         ))
+        // Resource safety. There were previously no limits of any kind (A-20):
+        // a single large POST could be buffered without bound and a slow
+        // backend request had no deadline.
+        .layer(DefaultBodyLimit::max(options.body_limit_bytes))
+        .layer(tower_http::timeout::TimeoutLayer::new(
+            options.request_timeout,
+        ))
+        // GlobalConcurrencyLimitLayer rather than ConcurrencyLimitLayer: the
+        // latter's service is not `Clone`, which axum requires.
+        .layer(tower::limit::GlobalConcurrencyLimitLayer::new(
+            options.concurrency_limit,
+        ))
+        // Request IDs, access logging and metrics. `tower-http` was already
+        // built with the `trace` feature but `TraceLayer` was never applied.
+        .layer(axum::middleware::from_fn(observability::track_request))
+        .layer(tower_http::trace::TraceLayer::new_for_http())
         .layer(cors)
         .with_state(store)
+}
+
+/// Build the CORS layer.
+///
+/// `allow_origin(Any)` was hardcoded, with the origin-specific line commented
+/// out just above it (A-32). Any origin is still the default because Pangolin
+/// is normally deployed behind a gateway, but it is now configurable via
+/// `PANGOLIN_CORS_ALLOWED_ORIGINS`.
+fn build_cors(allowed: Option<&[String]>) -> CorsLayer {
+    let base = CorsLayer::new()
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::DELETE,
+            Method::PATCH,
+            Method::OPTIONS,
+        ])
+        .allow_headers([
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::ACCEPT,
+            axum::http::HeaderName::from_static("x-pangolin-tenant"),
+            axum::http::HeaderName::from_static("x-api-key"),
+        ]);
+
+    match allowed {
+        None => base.allow_origin(Any),
+        Some(origins) => {
+            let parsed: Vec<HeaderValue> = origins
+                .iter()
+                .filter_map(|o| match o.parse::<HeaderValue>() {
+                    Ok(v) => Some(v),
+                    Err(_) => {
+                        tracing::warn!(origin = %o, "ignoring unparseable CORS origin");
+                        None
+                    }
+                })
+                .collect();
+            if parsed.is_empty() {
+                base.allow_origin(Any)
+            } else {
+                base.allow_origin(parsed)
+            }
+        }
+    }
 }

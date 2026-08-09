@@ -52,8 +52,7 @@ pub async fn generate_token(
         Err(_) => return (StatusCode::BAD_REQUEST, "Invalid tenant_id format").into_response(),
     };
 
-    let secret = std::env::var("PANGOLIN_JWT_SECRET")
-        .unwrap_or_else(|_| "default_secret_for_dev".to_string());
+    let secret = crate::config::jwt_secret();
     let expires_in = payload.expires_in_hours.unwrap_or(24);
     let now = chrono::Utc::now();
     let exp = now
@@ -472,8 +471,7 @@ pub async fn rotate_token(
     // Reusing logic is better to avoid duplication but `generate_token` takes a Json payload.
     // We'll reimplement specific logic here for rotation.
 
-    let secret = std::env::var("PANGOLIN_JWT_SECRET")
-        .unwrap_or_else(|_| "default_secret_for_dev".to_string());
+    let secret = crate::config::jwt_secret();
     let now = chrono::Utc::now();
     let expires_in = 24; // Default rotation to 24h
     let exp = now

@@ -82,8 +82,9 @@ async fn test_tenant_user_create_namespace_denied() {
         .route("/api/v1/users/login", post(login))
         // Target Route (Protected)
         .route("/v1/:prefix/namespaces", post(namespaces::create_namespace))
-        .layer(axum::middleware::from_fn(
-            pangolin_api::auth_middleware::auth_middleware_wrapper,
+        .layer(axum::middleware::from_fn_with_state(
+            store.clone() as std::sync::Arc<dyn pangolin_store::CatalogStore + Send + Sync>,
+            pangolin_api::auth_middleware::auth_middleware,
         ))
         .with_state(store.clone());
 

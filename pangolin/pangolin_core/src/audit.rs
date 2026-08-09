@@ -152,6 +152,19 @@ pub enum AuditAction {
     // Commits
     CreateCommit,
     ListCommits,
+
+    // Authentication and authorization events.
+    //
+    // Auth events are the first thing an incident responder looks for, and
+    // none of them were recorded before (C-19).
+    LoginFailed,
+    ApiKeyAuthenticated,
+    ApiKeyRejected,
+    TokenRejected,
+    PermissionDenied,
+    /// A Root session assumed another tenant's context via X-Pangolin-Tenant.
+    /// Privileged cross-tenant access is exactly what auditors want logged (C-7).
+    TenantImpersonation,
 }
 
 /// Types of resources that can be operated on

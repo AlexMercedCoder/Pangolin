@@ -149,7 +149,33 @@ pub enum CommitRequirement {
         #[serde(rename = "current-schema-id")]
         current_schema_id: Option<i32>,
     },
-    // Add others as needed
+    #[serde(rename = "assert-last-assigned-field-id")]
+    AssertLastAssignedFieldId {
+        #[serde(rename = "last-assigned-field-id")]
+        last_assigned_field_id: i32,
+    },
+    #[serde(rename = "assert-default-spec-id")]
+    AssertDefaultSpecId {
+        #[serde(rename = "default-spec-id")]
+        default_spec_id: i32,
+    },
+    #[serde(rename = "assert-last-assigned-partition-id")]
+    AssertLastAssignedPartitionId {
+        #[serde(rename = "last-assigned-partition-id")]
+        last_assigned_partition_id: i32,
+    },
+    #[serde(rename = "assert-default-sort-order-id")]
+    AssertDefaultSortOrderId {
+        #[serde(rename = "default-sort-order-id")]
+        default_sort_order_id: i32,
+    },
+    /// A requirement type this server does not implement.
+    ///
+    /// Modelled explicitly rather than swallowed by a catch-all match arm: an
+    /// unrecognised requirement must fail the commit, because the client is
+    /// asserting a precondition the server cannot check (A-1).
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
@@ -182,7 +208,45 @@ pub enum CommitUpdate {
     },
     #[serde(rename = "set-properties")]
     SetProperties { updates: HashMap<String, String> },
-    // Add others as needed
+    #[serde(rename = "remove-properties")]
+    RemoveProperties { removals: Vec<String> },
+    #[serde(rename = "set-location")]
+    SetLocation { location: String },
+    #[serde(rename = "add-spec")]
+    AddSpec { spec: serde_json::Value },
+    #[serde(rename = "set-default-spec")]
+    SetDefaultSpec {
+        #[serde(rename = "spec-id")]
+        spec_id: i32,
+    },
+    #[serde(rename = "add-sort-order")]
+    AddSortOrder {
+        #[serde(rename = "sort-order")]
+        sort_order: serde_json::Value,
+    },
+    #[serde(rename = "set-default-sort-order")]
+    SetDefaultSortOrder {
+        #[serde(rename = "sort-order-id")]
+        sort_order_id: i32,
+    },
+    #[serde(rename = "remove-snapshots")]
+    RemoveSnapshots {
+        #[serde(rename = "snapshot-ids")]
+        snapshot_ids: Vec<i64>,
+    },
+    #[serde(rename = "remove-snapshot-ref")]
+    RemoveSnapshotRef {
+        #[serde(rename = "ref-name")]
+        ref_name: String,
+    },
+    /// Any update type this server does not know about.
+    ///
+    /// The previous `_ => {}` arm meant a client running
+    /// `ALTER TABLE ... SET TBLPROPERTIES`, evolving a partition spec or
+    /// expiring snapshots received `200 OK` for an operation that never
+    /// happened (A-2). Unknown updates are now rejected.
+    #[serde(other)]
+    Unknown,
 }
 
 // Helper to parse "table@branch"

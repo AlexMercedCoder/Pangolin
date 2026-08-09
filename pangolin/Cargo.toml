@@ -20,13 +20,13 @@ object_store = { version = "0.11", features = ["aws", "azure", "gcp"] }
 thiserror = "1.0"
 anyhow = "1.0"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
 dotenvy = "0.15"
 async-trait = "0.1"
 dashmap = "6.0"
 futures = "0.3"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower = { version = "0.4", features = ["limit", "util"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit"] }
 reqwest = { version = "0.11", features = ["json"] }
 url = "2.5"
 bytes = "1.5"

@@ -247,6 +247,7 @@ fn create_test_metadata() -> TableMetadata {
         snapshots: None,
         snapshot_log: None,
         metadata_log: None,
+        refs: None,
         sort_orders: vec![SortOrder {
             order_id: 0,
             fields: vec![],

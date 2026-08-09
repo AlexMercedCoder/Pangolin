@@ -13,6 +13,9 @@ use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
 use uuid::Uuid;
 
+/// Version of `sql/sqlite_schema.sql` recorded after a successful migration.
+pub const SQLITE_SCHEMA_VERSION: i64 = 1;
+
 #[derive(Clone)]
 pub struct SqliteStore {
     pub(crate) pool: SqlitePool,
@@ -39,8 +42,15 @@ impl SqliteStore {
             }
         }
 
+        // Pool sizing was hardcoded here while Postgres exposed
+        // DATABASE_MAX_CONNECTIONS (A-29); SQLite now honours the same knob.
+        let max_connections = std::env::var("DATABASE_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(5);
+
         let pool = SqlitePoolOptions::new()
-            .max_connections(5)
+            .max_connections(max_connections)
             .connect(database_url)
             .await?;
 
@@ -54,6 +64,53 @@ impl SqliteStore {
             object_store_cache: crate::ObjectStoreCache::new(),
             metadata_cache: crate::MetadataCache::default(),
         })
+    }
+
+    /// Bring the database up to the current schema, recording the applied
+    /// version.
+    ///
+    /// SQLite had no migration mechanism at all: the full schema file was
+    /// replayed on every boot with no version table, so schema changes needed
+    /// manual intervention on existing databases (A-27). The schema is written
+    /// with `IF NOT EXISTS` throughout, so replaying it is safe; what was
+    /// missing was any record of what had been applied.
+    pub async fn run_migrations(&self) -> Result<()> {
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS _pangolin_schema_version (
+                 version     INTEGER PRIMARY KEY,
+                 applied_at  TEXT NOT NULL
+             )",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        let schema = include_str!("../../sql/sqlite_schema.sql");
+        self.apply_schema(schema).await?;
+
+        sqlx::query(
+            "INSERT OR REPLACE INTO _pangolin_schema_version (version, applied_at)
+             VALUES (?, ?)",
+        )
+        .bind(SQLITE_SCHEMA_VERSION)
+        .bind(Utc::now().to_rfc3339())
+        .execute(&self.pool)
+        .await?;
+
+        tracing::info!(
+            version = SQLITE_SCHEMA_VERSION,
+            "sqlite schema is up to date"
+        );
+        Ok(())
+    }
+
+    /// The schema version currently recorded in the database, if any.
+    pub async fn schema_version(&self) -> Result<Option<i64>> {
+        let row = sqlx::query("SELECT MAX(version) as v FROM _pangolin_schema_version")
+            .fetch_optional(&self.pool)
+            .await
+            .ok()
+            .flatten();
+        Ok(row.and_then(|r| r.try_get::<Option<i64>, _>("v").ok().flatten()))
     }
 
     pub async fn apply_schema(&self, schema_sql: &str) -> Result<()> {

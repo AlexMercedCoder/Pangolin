@@ -1,5 +1,5 @@
 use super::types::*;
-use super::{check_and_forward_if_federated, AppState};
+use super::{check_and_forward_if_federated, commit, iceberg_error, AppState};
 use crate::auth::TenantId;
 use crate::authz::check_permission;
 use axum::{
@@ -398,6 +398,7 @@ pub async fn create_table(
         snapshots: Some(vec![]),
         snapshot_log: Some(vec![]),
         metadata_log: Some(vec![]),
+        refs: None,
     };
 
     let metadata_json = serde_json::to_string(&metadata).unwrap();
@@ -780,6 +781,8 @@ pub async fn update_table(
         }
     }
 
+    crate::metrics::inc(&crate::metrics::COMMITS_TOTAL);
+
     let mut retries = 0;
     const MAX_RETRIES: i32 = 5;
 
@@ -838,73 +841,17 @@ pub async fn update_table(
             }
         };
 
-        // Requirements check
-        for requirement in &payload.requirements {
-            match requirement {
-                CommitRequirement::AssertCurrentSchemaId { current_schema_id } => {
-                    if let Some(req_id) = current_schema_id {
-                        if metadata.current_schema_id != *req_id {
-                            return (StatusCode::CONFLICT, "Current schema ID mismatch")
-                                .into_response();
-                        }
-                    }
-                }
-                CommitRequirement::AssertTableUuid { uuid } => {
-                    if metadata.table_uuid.to_string() != *uuid {
-                        return (StatusCode::CONFLICT, "Table UUID mismatch").into_response();
-                    }
-                }
-                _ => {}
-            }
+        // Requirements are evaluated against the metadata we just read, on
+        // every attempt. This is what makes the compare-and-swap retry below
+        // safe: a writer whose view is stale is rejected instead of having its
+        // update replayed onto a branch that moved on (A-1).
+        if let Err(e) = commit::check_requirements(&metadata, &payload.requirements, true) {
+            crate::metrics::inc(&crate::metrics::COMMITS_CONFLICTED);
+            return commit_error_response(e);
         }
 
-        // Apply updates
-        for update in &payload.updates {
-            match update {
-                CommitUpdate::AddSnapshot { snapshot } => {
-                    match serde_json::from_value::<Snapshot>(snapshot.clone()) {
-                        Ok(snapshot_obj) => {
-                            if let Some(ref mut snapshots) = metadata.snapshots {
-                                snapshots.push(snapshot_obj.clone());
-                            } else {
-                                metadata.snapshots = Some(vec![snapshot_obj.clone()]);
-                            }
-                            metadata.current_snapshot_id = Some(snapshot_obj.snapshot_id);
-                            metadata.last_updated_ms = Utc::now().timestamp_millis();
-                            metadata.last_sequence_number = snapshot_obj.snapshot_id;
-                        }
-                        Err(_) => {
-                            if let Some(snapshot_id) =
-                                snapshot.get("snapshot-id").and_then(|v| v.as_i64())
-                            {
-                                metadata.current_snapshot_id = Some(snapshot_id);
-                                metadata.last_updated_ms = Utc::now().timestamp_millis();
-                                metadata.last_sequence_number = snapshot_id;
-                            }
-                        }
-                    }
-                }
-                CommitUpdate::AddSchema { schema } => {
-                    if let Ok(new_schema) = serde_json::from_value::<
-                        pangolin_core::iceberg_metadata::Schema,
-                    >(schema.clone())
-                    {
-                        metadata.schemas.push(new_schema);
-                    }
-                }
-                CommitUpdate::SetCurrentSchema { schema_id } => {
-                    if *schema_id == -1 {
-                        if let Some(last) = metadata.schemas.last() {
-                            metadata.current_schema_id = last.schema_id;
-                        } else {
-                            metadata.current_schema_id = *schema_id;
-                        }
-                    } else {
-                        metadata.current_schema_id = *schema_id;
-                    }
-                }
-                _ => {}
-            }
+        if let Err(e) = commit::apply_updates(&mut metadata, &payload.updates, &branch) {
+            return commit_error_response(e);
         }
 
         let new_metadata_location = format!(
@@ -912,7 +859,17 @@ pub async fn update_table(
             metadata.location,
             Uuid::new_v4()
         );
-        let metadata_json = serde_json::to_string(&metadata).unwrap();
+        let metadata_json = match serde_json::to_string(&metadata) {
+            Ok(json) => json,
+            Err(e) => {
+                tracing::error!(error = %e, "could not serialise table metadata");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to serialise table metadata",
+                )
+                    .into_response();
+            }
+        };
 
         if let Err(_) = store
             .write_file(&new_metadata_location, metadata_json.into_bytes())
@@ -938,15 +895,33 @@ pub async fn update_table(
             .await
         {
             Ok(_) => {
-                let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::success(
-                    tenant_id,
-                    Some(session.user_id),
-                    session.username.clone(),
-                    pangolin_core::audit::AuditAction::UpdateTable,
-                    pangolin_core::audit::ResourceType::Table,
-                    Some(asset.id),
-                    format!("{}/{}/{}", catalog_name, namespace, table_name),
-                ).with_metadata(serde_json::json!({ "new_metadata_location": new_metadata_location.clone() }))).await;
+                crate::metrics::inc(&crate::metrics::COMMITS_SUCCEEDED);
+                // The audit write is no longer discarded with `let _ = ...`: a
+                // dropped record means the commit happened with no trace of who
+                // made it (C-18).
+                if let Err(e) = store
+                    .log_audit_event(
+                        tenant_id,
+                        pangolin_core::audit::AuditLogEntry::success(
+                            tenant_id,
+                            Some(session.user_id),
+                            session.username.clone(),
+                            pangolin_core::audit::AuditAction::CommitTable,
+                            pangolin_core::audit::ResourceType::Table,
+                            Some(asset.id),
+                            format!("{}/{}/{}", catalog_name, namespace, table_name),
+                        )
+                        .with_metadata(serde_json::json!({
+                            "new_metadata_location": new_metadata_location.clone(),
+                            "snapshot_id": metadata.current_snapshot_id,
+                            "sequence_number": metadata.last_sequence_number,
+                        })),
+                    )
+                    .await
+                {
+                    crate::metrics::inc(&crate::metrics::AUDIT_WRITE_FAILURES);
+                    tracing::error!(error = %e, "failed to write the table-commit audit record");
+                }
 
                 return (
                     StatusCode::OK,
@@ -958,14 +933,44 @@ pub async fn update_table(
                 )
                     .into_response();
             }
-            Err(_) => {
+            Err(e) => {
+                // The compare-and-swap lost: another writer published first.
+                // Re-read and re-check requirements on the next pass.
+                tracing::debug!(error = %e, attempt = retries, "metadata CAS lost, retrying");
+                crate::metrics::inc(&crate::metrics::COMMIT_CAS_RETRIES);
                 retries += 1;
                 continue;
             }
         }
     }
 
-    (StatusCode::CONFLICT, "Failed to commit after retries").into_response()
+    crate::metrics::inc(&crate::metrics::COMMITS_CONFLICTED);
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "CommitFailedException",
+        "Failed to commit after the maximum number of retries",
+    )
+}
+
+/// Map a commit failure onto the Iceberg REST error envelope.
+fn commit_error_response(error: commit::CommitError) -> axum::response::Response {
+    match error {
+        commit::CommitError::RequirementFailed { .. } => iceberg_error(
+            StatusCode::CONFLICT,
+            "CommitFailedException",
+            &error.to_string(),
+        ),
+        commit::CommitError::Unsupported { .. } => iceberg_error(
+            StatusCode::NOT_IMPLEMENTED,
+            "UnsupportedOperationException",
+            &error.to_string(),
+        ),
+        commit::CommitError::Invalid { .. } => iceberg_error(
+            StatusCode::BAD_REQUEST,
+            "BadRequestException",
+            &error.to_string(),
+        ),
+    }
 }
 
 /// Rename a table
