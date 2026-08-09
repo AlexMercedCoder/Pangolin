@@ -1,0 +1,37 @@
+[
+  {
+    "slug": "what-is-pangolin",
+    "title": "What is Pangolin?",
+    "series": "Pangolin // 01 — Overview",
+    "scenes": 6,
+    "duration": 36.2
+  },
+  {
+    "slug": "architecture-and-features",
+    "title": "Architecture & Features",
+    "series": "Pangolin // 02 — Architecture",
+    "scenes": 6,
+    "duration": 38.7
+  },
+  {
+    "slug": "whats-new-in-0-6-0",
+    "title": "What's New in 0.6.0",
+    "series": "Pangolin // 03 — Release",
+    "scenes": 6,
+    "duration": 38.35
+  },
+  {
+    "slug": "production-readiness",
+    "title": "Production Readiness",
+    "series": "Pangolin // 04 — Status",
+    "scenes": 6,
+    "duration": 39.9
+  },
+  {
+    "slug": "getting-started",
+    "title": "Getting Started",
+    "series": "Pangolin // 05 — Deploy",
+    "scenes": 6,
+    "duration": 40.05
+  }
+]

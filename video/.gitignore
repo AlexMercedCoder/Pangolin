@@ -1,0 +1,11 @@
+node_modules/
+
+# Generated projects — rebuild with `node build.mjs`.
+out/
+
+# Render products. The copies the site serves are committed under
+# ../website/videos/; these are the working originals.
+renders/
+render.log
+snapshots/
+.hyperframes/

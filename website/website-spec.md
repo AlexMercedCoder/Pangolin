@@ -4,6 +4,37 @@
 
 ---
 
+## 0. Current state (updated for 0.6.0 — 2026-08-09)
+
+This sheet is the original design system and still governs colour and type. The
+site itself has moved on; what actually ships today:
+
+**Pages**
+
+| File | Purpose |
+| --- | --- |
+| `index.html` | Landing page. Hero, the 0.6.0 security advisory, feature grid, a ready/not-yet readiness summary, the video gallery, UI screenshots, PyPangolin, ecosystem. Carries `SoftwareApplication` + five `VideoObject` JSON-LD. |
+| `status.html` | Production readiness. The README's maturity table, known limitations, Iceberg REST coverage, backend parity, the 0.6.0 advisory table and remaining gaps. |
+| `deployment.html` | Binaries, required 0.6.0 configuration, upgrade steps, Docker, observability, production and Kubernetes deployment. |
+| `videos/` | Five silent MP4 explainers plus posters, generated from `../video/` (see that directory's README). |
+
+**Editorial rule, and the reason this section exists.** The site previously
+claimed "fully compliant" Iceberg REST support and shipped "production-ready"
+configurations. Neither was true. Copy on this site must match the maturity
+framing in the repository `README.md` — if the README says Beta, Partial or
+Missing, so does the site. Do not reintroduce blanket "production-ready" or
+compliance percentages. When the README's maturity table changes, `status.html`
+and the readiness section of `index.html` change with it.
+
+**Build and deploy.** There is no build step and no framework — hand-authored
+static HTML with a single shared `style.css` and a small `script.js` for the
+mobile menu. Fonts come from Google Fonts; everything else is local. Open
+`index.html` directly, or serve the folder with any static server. There is no
+deployment pipeline committed to this repository, so publishing is whatever
+static host the folder is uploaded to.
+
+---
+
 ## 1. Project Overview
 
 **Project Name:** Pangolin OSS Lakehouse Catalog
