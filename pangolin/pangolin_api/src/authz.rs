@@ -202,7 +202,7 @@ mod tests {
         // 7. Grant Direct Write Permission
         let mut write_actions = HashSet::new();
         write_actions.insert(Action::Write);
-        let perm = Permission::new(user_id, scope_ns.clone(), write_actions, Uuid::new_v4());
+        let perm = Permission::new(user_id, tenant_id, scope_ns.clone(), write_actions, Uuid::new_v4());
         store.create_permission(perm).await.unwrap();
         
         // 8. Check Write (Should NOW Pass)

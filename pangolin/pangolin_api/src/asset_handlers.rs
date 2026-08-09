@@ -481,6 +481,7 @@ mod tests {
         let permission = Permission {
             id: Uuid::new_v4(),
             user_id: regular_user.id,
+            tenant_id: tenant.id,
             scope: PermissionScope::Namespace {
                 catalog_id: catalog.id,
                 namespace: "test_ns".to_string(),

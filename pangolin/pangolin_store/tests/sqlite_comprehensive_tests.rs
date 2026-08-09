@@ -549,7 +549,7 @@ async fn test_sqlite_list_user_permissions_aggregation() {
     let direct_scope = PermissionScope::Catalog { catalog_id: Uuid::new_v4() };
     let mut direct_actions = HashSet::new();
     direct_actions.insert(Action::Write);
-    let direct_perm = Permission::new(user_id, direct_scope.clone(), direct_actions, admin_id);
+    let direct_perm = Permission::new(user_id, tenant_id, direct_scope.clone(), direct_actions, admin_id);
     store.create_permission(direct_perm.clone()).await.unwrap();
 
     // 4. List user permissions and verify aggregation

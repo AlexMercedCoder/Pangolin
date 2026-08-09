@@ -189,6 +189,7 @@ async fn test_service_user_rbac() {
         role: UserRole::TenantUser,
         created_by: Uuid::new_v4(),
         created_at: chrono::Utc::now(),
+        last_used: None,
         expires_at: None,
         active: true,
     };
@@ -201,15 +202,21 @@ async fn test_service_user_rbac() {
         description: None,
         tenant_id,
         permissions: vec![],
+        created_by: Uuid::new_v4(),
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };
     store.create_role(role.clone()).await.expect("Create role");
 
     // 4. Assign Role to Service User (Testing FK Relaxation on user_roles.user_id)
-    store.assign_role(service_user.id, role.id).await.expect("Assign role to service user");
+    let assignment = pangolin_core::permission::UserRole::new(
+        service_user.id,
+        role.id,
+        service_user.created_by,
+    );
+    store.assign_role(assignment).await.expect("Assign role to service user");
 
     let user_roles = store.get_user_roles(service_user.id).await.expect("Get user roles");
     assert_eq!(user_roles.len(), 1);
-    assert_eq!(user_roles[0].id, role.id);
+    assert_eq!(user_roles[0].role_id, role.id);
 }

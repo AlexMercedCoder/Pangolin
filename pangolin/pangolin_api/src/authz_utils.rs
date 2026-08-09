@@ -201,6 +201,7 @@ mod tests {
         let permission = Permission {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
             scope: PermissionScope::Catalog { catalog_id },
             actions,
             granted_by: Uuid::new_v4(),
@@ -219,6 +220,7 @@ mod tests {
         let permission = Permission {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
             scope: PermissionScope::Tenant,
             actions,
             granted_by: Uuid::new_v4(),
@@ -238,6 +240,7 @@ mod tests {
         let permission = Permission {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
             scope: PermissionScope::Catalog { catalog_id: other_catalog_id },
             actions,
             granted_by: Uuid::new_v4(),
@@ -286,6 +289,7 @@ mod tests {
         let permission = Permission {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
             scope: PermissionScope::Catalog { catalog_id },
             actions,
             granted_by: Uuid::new_v4(),
