@@ -1,7 +1,7 @@
-use reqwest::{Client, Response};
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use crate::config::CliConfig;
 use crate::error::CliError;
+use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
+use reqwest::{Client, Response};
 use serde_json::json;
 
 pub struct PangolinClient {
@@ -27,16 +27,19 @@ impl PangolinClient {
 
         if let Some(token) = &self.config.auth_token {
             let auth_value = format!("Bearer {}", token);
-            headers.insert(AUTHORIZATION, HeaderValue::from_str(&auth_value)
-                .map_err(|e| CliError::Internal(format!("Invalid auth header: {}", e)))?);
+            headers.insert(
+                AUTHORIZATION,
+                HeaderValue::from_str(&auth_value)
+                    .map_err(|e| CliError::Internal(format!("Invalid auth header: {}", e)))?,
+            );
         } else {
-             // eprintln!("DEBUG: No auth token found in config during build_headers.");
+            // eprintln!("DEBUG: No auth token found in config during build_headers.");
         }
-        
+
         if let Some(tenant) = &self.config.tenant_id {
-             if let Ok(val) = HeaderValue::from_str(tenant) {
-                 headers.insert("x-pangolin-tenant", val);
-             }
+            if let Ok(val) = HeaderValue::from_str(tenant) {
+                headers.insert("x-pangolin-tenant", val);
+            }
         }
 
         Ok(headers)
@@ -48,18 +51,26 @@ impl PangolinClient {
 
     pub async fn get(&self, path: &str) -> Result<Response, CliError> {
         let headers = self.build_headers()?;
-        let res = self.client.get(&self.url(path))
+        let res = self
+            .client
+            .get(self.url(path))
             .headers(headers)
             .send()
             .await
             .map_err(|e| CliError::ApiError(e.to_string()))?;
-            
+
         Ok(res)
     }
 
-    pub async fn post<T: serde::Serialize>(&self, path: &str, body: &T) -> Result<Response, CliError> {
+    pub async fn post<T: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+    ) -> Result<Response, CliError> {
         let headers = self.build_headers()?;
-        let res = self.client.post(&self.url(path))
+        let res = self
+            .client
+            .post(self.url(path))
             .headers(headers)
             .json(body)
             .send()
@@ -69,9 +80,15 @@ impl PangolinClient {
         Ok(res)
     }
 
-    pub async fn put<T: serde::Serialize>(&self, path: &str, body: &T) -> Result<Response, CliError> {
+    pub async fn put<T: serde::Serialize>(
+        &self,
+        path: &str,
+        body: &T,
+    ) -> Result<Response, CliError> {
         let headers = self.build_headers()?;
-        let res = self.client.put(&self.url(path))
+        let res = self
+            .client
+            .put(self.url(path))
             .headers(headers)
             .json(body)
             .send()
@@ -83,25 +100,32 @@ impl PangolinClient {
 
     pub async fn delete(&self, path: &str) -> Result<Response, CliError> {
         let headers = self.build_headers()?;
-        let res = self.client.delete(&self.url(path))
+        let res = self
+            .client
+            .delete(self.url(path))
             .headers(headers)
             .send()
             .await
             .map_err(|e| CliError::ApiError(e.to_string()))?;
-            
+
         Ok(res)
     }
-    
+
     pub async fn login(&mut self, username: &str, password: &str) -> Result<(), CliError> {
         self.login_with_tenant(username, password, None).await
     }
-    
-    pub async fn login_with_tenant(&mut self, username: &str, password: &str, tenant_id: Option<&str>) -> Result<(), CliError> {
+
+    pub async fn login_with_tenant(
+        &mut self,
+        username: &str,
+        password: &str,
+        tenant_id: Option<&str>,
+    ) -> Result<(), CliError> {
         let mut body = json!({
             "username": username,
             "password": password,
         });
-        
+
         // Add tenant-id field (kebab-case!)
         if let Some(tid) = tenant_id {
             body["tenant-id"] = json!(tid);
@@ -109,14 +133,19 @@ impl PangolinClient {
             body["tenant-id"] = json!(null);
         }
 
-        let res = self.client.post(&self.url("/api/v1/users/login"))
+        let res = self
+            .client
+            .post(self.url("/api/v1/users/login"))
             .json(&body)
             .send()
             .await
             .map_err(|e| CliError::ApiError(e.to_string()))?;
 
         if !res.status().is_success() {
-            let error_text = res.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            let error_text = res
+                .text()
+                .await
+                .unwrap_or_else(|_| "Unknown error".to_string());
             return Err(CliError::AuthError(format!("Login failed: {}", error_text)));
         }
 
@@ -126,16 +155,17 @@ impl PangolinClient {
             user: serde_json::Value,
         }
 
-        let data: LoginResponse = res.json()
+        let data: LoginResponse = res
+            .json()
             .await
             .map_err(|e| CliError::ApiError(format!("Failed to parse login response: {}", e)))?;
 
         self.config.auth_token = Some(data.token);
         self.config.username = Some(username.to_string());
-        
+
         // Try to extract tenant from user object if available
         if let Some(tenant_id) = data.user.get("tenant-id").and_then(|t| t.as_str()) {
-             self.config.tenant_id = Some(tenant_id.to_string());
+            self.config.tenant_id = Some(tenant_id.to_string());
         }
 
         Ok(())

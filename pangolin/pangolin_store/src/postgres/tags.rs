@@ -1,23 +1,30 @@
 use super::PostgresStore;
 use anyhow::Result;
 use pangolin_core::model::Tag;
-use uuid::Uuid;
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Tag Operations
     pub async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()> {
-        sqlx::query("INSERT INTO tags (tenant_id, catalog_name, name, commit_id) VALUES ($1, $2, $3, $4)")
-            .bind(tenant_id)
-            .bind(catalog_name)
-            .bind(tag.name)
-            .bind(tag.commit_id)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "INSERT INTO tags (tenant_id, catalog_name, name, commit_id) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(tenant_id)
+        .bind(catalog_name)
+        .bind(tag.name)
+        .bind(tag.commit_id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
-    pub async fn get_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Tag>> {
+    pub async fn get_tag(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        name: String,
+    ) -> Result<Option<Tag>> {
         let row: Option<sqlx::postgres::PgRow> = sqlx::query("SELECT name, commit_id FROM tags WHERE tenant_id = $1 AND catalog_name = $2 AND name = $3")
             .bind(tenant_id)
             .bind(catalog_name)
@@ -35,9 +42,18 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_tags(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<Tag>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_tags(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Tag>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT name, commit_id FROM tags WHERE tenant_id = $1 AND catalog_name = $2 LIMIT $3 OFFSET $4")
             .bind(tenant_id)
@@ -57,7 +73,12 @@ impl PostgresStore {
         Ok(tags)
     }
 
-    pub async fn delete_tag(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
+    pub async fn delete_tag(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        name: String,
+    ) -> Result<()> {
         sqlx::query("DELETE FROM tags WHERE tenant_id = $1 AND catalog_name = $2 AND name = $3")
             .bind(tenant_id)
             .bind(catalog_name)

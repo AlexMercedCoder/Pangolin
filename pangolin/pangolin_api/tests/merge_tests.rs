@@ -2,17 +2,17 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use tower::ServiceExt; // for `oneshot`
 use pangolin_api::app;
-use pangolin_core::model::{Catalog, Tenant, Asset, AssetType};
-use std::collections::HashMap;
-use serde_json::{json, Value};
-use uuid::Uuid;
-use std::sync::Arc;
-use pangolin_store::memory::MemoryStore;
-use serial_test::serial;
 use pangolin_api::tests_common::EnvGuard;
+use pangolin_core::model::Catalog;
+use pangolin_store::memory::MemoryStore;
 use pangolin_store::CatalogStore;
+use serde_json::json;
+use serial_test::serial;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tower::ServiceExt; // for `oneshot`
+use uuid::Uuid;
 
 #[tokio::test]
 #[serial]
@@ -31,26 +31,35 @@ async fn test_merge_branch_flow() {
         .uri("/api/v1/tenants")
         .header("Content-Type", "application/json")
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=") // admin:password
-        .body(Body::from(json!({
-            "name": "MergeTestTenant",
-            "id": tenant_id.to_string(),
-            "admin_username": "merge_admin",
-            "admin_password": "password"
-        }).to_string()))
+        .body(Body::from(
+            json!({
+                "name": "MergeTestTenant",
+                "id": tenant_id.to_string(),
+                "admin_username": "merge_admin",
+                "admin_password": "password"
+            })
+            .to_string(),
+        ))
         .unwrap();
     let resp = app.clone().oneshot(create_tenant_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
 
     // 2.1 Create 'default' Catalog directly in store
-    store.create_catalog(tenant_id, Catalog {
-            catalog_type: pangolin_core::model::CatalogType::Local,
-        id: Uuid::new_v4(),
-        name: "default".to_string(),
-        warehouse_name: None,
-        storage_location: None,
-        properties: HashMap::new(),
-            federated_config: None,
-    }).await.unwrap();
+    store
+        .create_catalog(
+            tenant_id,
+            Catalog {
+                catalog_type: pangolin_core::model::CatalogType::Local,
+                id: Uuid::new_v4(),
+                name: "default".to_string(),
+                warehouse_name: None,
+                storage_location: None,
+                properties: HashMap::new(),
+                federated_config: None,
+            },
+        )
+        .await
+        .unwrap();
 
     // 2.5 Create Namespace
     let create_ns_req = Request::builder()
@@ -59,9 +68,12 @@ async fn test_merge_branch_flow() {
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
-        .body(Body::from(json!({
-            "namespace": ["default"]
-        }).to_string()))
+        .body(Body::from(
+            json!({
+                "namespace": ["default"]
+            })
+            .to_string(),
+        ))
         .unwrap();
     let resp = app.clone().oneshot(create_ns_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -69,15 +81,18 @@ async fn test_merge_branch_flow() {
     // 3. Create Asset on 'main'
     let create_asset_req = Request::builder()
         .method("POST")
-        .uri(format!("/v1/default/namespaces/default/tables?branch=main"))
+        .uri("/v1/default/namespaces/default/tables?branch=main".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
-        .body(Body::from(json!({
-            "name": "table1",
-            "location": "s3://bucket/table1",
-            "properties": {"v": "1"}
-        }).to_string()))
+        .body(Body::from(
+            json!({
+                "name": "table1",
+                "location": "s3://bucket/table1",
+                "properties": {"v": "1"}
+            })
+            .to_string(),
+        ))
         .unwrap();
     let resp = app.clone().oneshot(create_asset_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -89,12 +104,15 @@ async fn test_merge_branch_flow() {
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
-        .body(Body::from(json!({
-            "name": "dev",
-            "from_branch": "main",
-            "catalog": "default",
-            "assets": ["default.table1"]
-        }).to_string()))
+        .body(Body::from(
+            json!({
+                "name": "dev",
+                "from_branch": "main",
+                "catalog": "default",
+                "assets": ["default.table1"]
+            })
+            .to_string(),
+        ))
         .unwrap();
     let resp = app.clone().oneshot(create_branch_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -102,15 +120,18 @@ async fn test_merge_branch_flow() {
     // 5. Create NEW Asset on 'dev' (Simulate feature work)
     let create_asset_2_req = Request::builder()
         .method("POST")
-        .uri(format!("/v1/default/namespaces/default/tables?branch=dev"))
+        .uri("/v1/default/namespaces/default/tables?branch=dev".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
-        .body(Body::from(json!({
-            "name": "table2",
-            "location": "s3://bucket/table2",
-            "properties": {"v": "2"}
-        }).to_string()))
+        .body(Body::from(
+            json!({
+                "name": "table2",
+                "location": "s3://bucket/table2",
+                "properties": {"v": "2"}
+            })
+            .to_string(),
+        ))
         .unwrap();
     let resp = app.clone().oneshot(create_asset_2_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -118,7 +139,7 @@ async fn test_merge_branch_flow() {
     // 6. Verify 'main' does NOT have table2 yet
     let get_main_req = Request::builder()
         .method("GET")
-        .uri(format!("/v1/default/namespaces/default/tables/table2?branch=main"))
+        .uri("/v1/default/namespaces/default/tables/table2?branch=main".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .body(Body::empty())
@@ -133,11 +154,14 @@ async fn test_merge_branch_flow() {
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .header("Content-Type", "application/json")
-        .body(Body::from(json!({
-            "source_branch": "dev",
-            "target_branch": "main",
-            "catalog": "default"
-        }).to_string()))
+        .body(Body::from(
+            json!({
+                "source_branch": "dev",
+                "target_branch": "main",
+                "catalog": "default"
+            })
+            .to_string(),
+        ))
         .unwrap();
     let resp = app.clone().oneshot(merge_req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -145,7 +169,7 @@ async fn test_merge_branch_flow() {
     // 8. Verify 'main' now has table2
     let get_main_req_2 = Request::builder()
         .method("GET")
-        .uri(format!("/v1/default/namespaces/default/tables/table2?branch=main"))
+        .uri("/v1/default/namespaces/default/tables/table2?branch=main".to_string())
         .header("X-Pangolin-Tenant", tenant_id.to_string())
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=")
         .body(Body::empty())

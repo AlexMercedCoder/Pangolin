@@ -1,19 +1,17 @@
+use crate::iceberg::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    Extension,
-    Json,
+    Extension, Json,
 };
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use pangolin_store::{CatalogStore, PaginationParams};
-use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestStatus};
-use pangolin_core::user::{UserSession, UserRole};
+use pangolin_core::business_metadata::{AccessRequest, BusinessMetadata, RequestStatus};
 use pangolin_core::permission::{Action, PermissionScope};
-use uuid::Uuid;
-use crate::iceberg::AppState;
+use pangolin_core::user::{UserRole, UserSession};
+use pangolin_store::PaginationParams;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct AddMetadataRequest {
@@ -57,23 +55,37 @@ pub async fn add_business_metadata(
         let (catalog_name, _namespace) = match store.get_asset_by_id(tenant_id, asset_id).await {
             Ok(Some((_, cat, ns))) => (cat, ns),
             Ok(None) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
-            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Store error: {}", e)).into_response(),
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Store error: {}", e),
+                )
+                    .into_response()
+            }
         };
-        
+
         // Granular Check: MANAGE_DISCOVERY on specific Catalog
         // Need to find catalog_id from name first? Or use name in scope if supported?
         // PermissionScope uses Catalog options.
         // Let's Resolve Catalog ID from Name
-        let catalogs = store.list_catalogs(tenant_id, None).await.unwrap_or_default();
-        let catalog_id = catalogs.iter().find(|c| c.name == catalog_name).map(|c| c.id);
+        let catalogs = store
+            .list_catalogs(tenant_id, None)
+            .await
+            .unwrap_or_default();
+        let catalog_id = catalogs
+            .iter()
+            .find(|c| c.name == catalog_name)
+            .map(|c| c.id);
 
         let has_perm = if let Some(cid) = catalog_id {
             match crate::authz::check_permission(
-                &store, 
-                &session, 
-                &Action::ManageDiscovery, 
-                &PermissionScope::Catalog { catalog_id: cid }
-            ).await {
+                &store,
+                &session,
+                &Action::ManageDiscovery,
+                &PermissionScope::Catalog { catalog_id: cid },
+            )
+            .await
+            {
                 Ok(v) => v,
                 Err(_) => false,
             }
@@ -82,7 +94,11 @@ pub async fn add_business_metadata(
         };
 
         if !has_perm && !crate::authz::is_admin(&session.role) {
-             return (StatusCode::FORBIDDEN, "Missing MANAGE_DISCOVERY permission on this catalog").into_response();
+            return (
+                StatusCode::FORBIDDEN,
+                "Missing MANAGE_DISCOVERY permission on this catalog",
+            )
+                .into_response();
         }
     }
 
@@ -93,12 +109,16 @@ pub async fn add_business_metadata(
     if let Some(desc) = payload.description {
         metadata = metadata.with_description(desc);
     }
-    
+
     metadata.properties = payload.properties;
 
     match store.upsert_business_metadata(metadata.clone()).await {
         Ok(_) => (StatusCode::OK, Json(MetadataResponse { metadata })).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to save metadata: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to save metadata: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -124,11 +144,15 @@ pub async fn get_business_metadata(
     // Check read permission? Or discoverability?
     // If user has read access, return it.
     // If not, return only if discoverable?
-    
+
     match store.get_business_metadata(asset_id).await {
         Ok(Some(metadata)) => (StatusCode::OK, Json(MetadataResponse { metadata })).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Metadata not found").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Server Error: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Internal Server Error: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -151,10 +175,14 @@ pub async fn delete_business_metadata(
     Path(asset_id): Path<Uuid>,
 ) -> impl IntoResponse {
     // Check permission logic
-    
+
     match store.delete_business_metadata(asset_id).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to delete: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -180,7 +208,7 @@ pub async fn search_assets(
     Query(params): Query<SearchRequest>,
 ) -> impl IntoResponse {
     let tenant_id = session.tenant_id.unwrap_or_default();
-    
+
     // Handle #tag syntax in query
     let (query, tags) = if params.query.trim().starts_with('#') {
         let tag = params.query.trim()[1..].to_string();
@@ -188,75 +216,87 @@ pub async fn search_assets(
         t.push(tag);
         ("".to_string(), Some(t))
     } else {
-         (params.query, params.tags)
+        (params.query, params.tags)
     };
-    
+
     match store.search_assets(tenant_id, &query, tags).await {
         Ok(results) => {
             tracing::info!("SEARCH DEBUG: Session user_id: {}", session.user_id);
-            
+
             // Use authz_utils for consistent permission filtering
             let permissions = if matches!(session.role, UserRole::TenantUser) {
-                store.list_user_permissions(session.user_id, None).await.unwrap_or_default()
+                store
+                    .list_user_permissions(session.user_id, None)
+                    .await
+                    .unwrap_or_default()
             } else {
                 Vec::new() // Root/TenantAdmin bypass filtering
             };
-            
+
             // Build catalog ID map for filtering
-            let catalogs = store.list_catalogs(tenant_id, None).await.unwrap_or_default();
-            let catalog_map: std::collections::HashMap<_, _> = catalogs.iter()
-                .map(|c| (c.name.clone(), c.id))
-                .collect();
+            let catalogs = store
+                .list_catalogs(tenant_id, None)
+                .await
+                .unwrap_or_default();
+            let catalog_map: std::collections::HashMap<_, _> =
+                catalogs.iter().map(|c| (c.name.clone(), c.id)).collect();
 
             // Apply permission-based filtering
             let filtered_results = crate::authz_utils::filter_assets(
                 results,
                 &permissions,
                 session.role.clone(),
-                &catalog_map
+                &catalog_map,
             );
 
             // Map to response format with has_access and discoverable flags
-            let mapped_results: Vec<_> = filtered_results.into_iter().map(|(asset, metadata, catalog, namespace)| {
-                // User has access if they are admin OR have specific read permission
-                // If they only see it because it's discoverable, has_access should be false
-                let has_access = if matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
-                    true
-                } else {
-                    if let Some(&catalog_id) = catalog_map.get(&catalog) {
-                        let ns_str = namespace.join(".");
-                        let required_actions = vec![pangolin_core::permission::Action::Read];
-                        crate::authz_utils::has_asset_access(
-                            catalog_id,
-                            &ns_str,
-                            asset.id,
-                            &permissions,
-                            &required_actions
-                        )
-                    } else {
-                        false
-                    }
-                };
+            let mapped_results: Vec<_> = filtered_results
+                .into_iter()
+                .map(|(asset, metadata, catalog, namespace)| {
+                    // User has access if they are admin OR have specific read permission
+                    // If they only see it because it's discoverable, has_access should be false
+                    let has_access =
+                        if matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
+                            true
+                        } else if let Some(&catalog_id) = catalog_map.get(&catalog) {
+                            let ns_str = namespace.join(".");
+                            let required_actions = vec![pangolin_core::permission::Action::Read];
+                            crate::authz_utils::has_asset_access(
+                                catalog_id,
+                                &ns_str,
+                                asset.id,
+                                &permissions,
+                                &required_actions,
+                            )
+                        } else {
+                            false
+                        };
 
-                let is_discoverable = metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
-                
-                serde_json::json!({
-                    "id": asset.id,
-                    "name": asset.name,
-                    "kind": asset.kind,
-                    "location": asset.location,
-                    "description": metadata.as_ref().and_then(|m| m.description.clone()),
-                    "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
-                    "has_access": has_access,
-                    "discoverable": is_discoverable,
-                    "catalog": catalog,
-                    "namespace": namespace.join(".")
+                    let is_discoverable =
+                        metadata.as_ref().map(|m| m.discoverable).unwrap_or(false);
+
+                    serde_json::json!({
+                        "id": asset.id,
+                        "name": asset.name,
+                        "kind": asset.kind,
+                        "location": asset.location,
+                        "description": metadata.as_ref().and_then(|m| m.description.clone()),
+                        "tags": metadata.as_ref().map(|m| &m.tags).unwrap_or(&vec![]),
+                        "has_access": has_access,
+                        "discoverable": is_discoverable,
+                        "catalog": catalog,
+                        "namespace": namespace.join(".")
+                    })
                 })
-            }).collect();
-            
+                .collect();
+
             (StatusCode::OK, Json(mapped_results)).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Search failed: {}", e)).into_response(),
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Search failed: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -290,7 +330,11 @@ pub async fn request_access(
 
     match store.create_access_request(request.clone()).await {
         Ok(_) => (StatusCode::CREATED, Json(request)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create request: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create request: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -314,20 +358,31 @@ pub async fn list_access_requests(
     // AccessRequest logic:
     // - TenantAdmin sees all requests for tenant
     // - User sees their own requests?
-    
+
     let tenant_id = session.tenant_id.unwrap_or_default(); // Or root tenant?
-    
-    match store.list_access_requests(tenant_id, Some(pagination)).await {
+
+    match store
+        .list_access_requests(tenant_id, Some(pagination))
+        .await
+    {
         Ok(requests) => {
             // Filter if not admin?
-            let filtered = if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
-                 requests.into_iter().filter(|r| r.user_id == session.user_id).collect()
-            } else {
-                requests
-            };
+            let filtered =
+                if session.role != UserRole::TenantAdmin && session.role != UserRole::Root {
+                    requests
+                        .into_iter()
+                        .filter(|r| r.user_id == session.user_id)
+                        .collect()
+                } else {
+                    requests
+                };
             (StatusCode::OK, Json(filtered)).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list requests: {}", e)).into_response(),
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list requests: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -370,50 +425,68 @@ pub async fn update_access_request(
             match payload.status {
                 RequestStatus::Approved => {
                     request.approve(session.user_id, payload.comment);
-                    
+
                     // Grant Read Permission automatically
-                    if let Ok(Some((_, catalog_name, namespace_vec))) = store.get_asset_by_id(request.tenant_id, request.asset_id).await {
-                         // Resolve Catalog ID from name (needed for PermissionScope)
-                         if let Ok(catalogs) = store.list_catalogs(request.tenant_id, None).await {
-                             if let Some(catalog) = catalogs.iter().find(|c| c.name == catalog_name) {
-                                  // Construct the Permission Scope
-                                  let scope = pangolin_core::permission::PermissionScope::Asset {
-                                      catalog_id: catalog.id,
-                                      namespace: namespace_vec.join("."),
-                                      asset_id: request.asset_id
-                                  };
-                                  
-                                  // Define Actions (Read)
-                                  let mut actions = std::collections::HashSet::new();
-                                  actions.insert(pangolin_core::permission::Action::Read);
-                                  
-                                  // Create the Permission Object
-                                  let permission = pangolin_core::permission::Permission::new(
-                                      request.user_id,
-                                      request.tenant_id, 
-                                      scope,
-                                      actions,
-                                      session.user_id // Granted by the approving admin
-                                  );
-                                  
-                                  // Save to Store
-                                  let _ = store.create_permission(permission).await;
-                                  tracing::info!("Automatically granted READ permission for approved request {}", request.id);
-                             }
-                         }
+                    if let Ok(Some((_, catalog_name, namespace_vec))) = store
+                        .get_asset_by_id(request.tenant_id, request.asset_id)
+                        .await
+                    {
+                        // Resolve Catalog ID from name (needed for PermissionScope)
+                        if let Ok(catalogs) = store.list_catalogs(request.tenant_id, None).await {
+                            if let Some(catalog) = catalogs.iter().find(|c| c.name == catalog_name)
+                            {
+                                // Construct the Permission Scope
+                                let scope = pangolin_core::permission::PermissionScope::Asset {
+                                    catalog_id: catalog.id,
+                                    namespace: namespace_vec.join("."),
+                                    asset_id: request.asset_id,
+                                };
+
+                                // Define Actions (Read)
+                                let mut actions = std::collections::HashSet::new();
+                                actions.insert(pangolin_core::permission::Action::Read);
+
+                                // Create the Permission Object
+                                let permission = pangolin_core::permission::Permission::new(
+                                    request.user_id,
+                                    request.tenant_id,
+                                    scope,
+                                    actions,
+                                    session.user_id, // Granted by the approving admin
+                                );
+
+                                // Save to Store
+                                let _ = store.create_permission(permission).await;
+                                tracing::info!(
+                                    "Automatically granted READ permission for approved request {}",
+                                    request.id
+                                );
+                            }
+                        }
                     }
-                },
+                }
                 RequestStatus::Rejected => request.reject(session.user_id, payload.comment),
-                RequestStatus::Pending => return (StatusCode::BAD_REQUEST, "Cannot set status back to pending").into_response(),
+                RequestStatus::Pending => {
+                    return (StatusCode::BAD_REQUEST, "Cannot set status back to pending")
+                        .into_response()
+                }
             }
-            
+
             match store.update_access_request(request.clone()).await {
                 Ok(_) => (StatusCode::OK, Json(request)).into_response(),
-                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update request: {}", e)).into_response(),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to update request: {}", e),
+                )
+                    .into_response(),
             }
-        },
+        }
         Ok(None) => (StatusCode::NOT_FOUND, "Request not found").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal error: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Internal error: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -440,13 +513,20 @@ pub async fn get_access_request(
     match store.get_access_request(request_id).await {
         Ok(Some(request)) => {
             // Check visibility: Admin or requester
-            if session.role != UserRole::TenantAdmin && session.role != UserRole::Root && request.user_id != session.user_id {
+            if session.role != UserRole::TenantAdmin
+                && session.role != UserRole::Root
+                && request.user_id != session.user_id
+            {
                 return (StatusCode::FORBIDDEN, "Access denied").into_response();
             }
             (StatusCode::OK, Json(request)).into_response()
-        },
+        }
         Ok(None) => (StatusCode::NOT_FOUND, "Request not found").into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal error: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Internal error: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -471,12 +551,18 @@ pub async fn get_asset_details(
     Path(asset_id): Path<Uuid>,
 ) -> impl IntoResponse {
     let tenant_id = session.tenant_id.unwrap_or_default();
-    
+
     // O(1) Lookup
     let (asset, catalog_name, namespace) = match store.get_asset_by_id(tenant_id, asset_id).await {
         Ok(Some(t)) => t,
         Ok(None) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Store error: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Store error: {}", e),
+            )
+                .into_response()
+        }
     };
 
     // Metadata
@@ -486,16 +572,24 @@ pub async fn get_asset_details(
     // Permission Check
     // If not admin and not discoverable, check catalog read permission
     if !crate::authz::is_admin(&session.role) && !is_discoverable {
-        let catalogs = store.list_catalogs(tenant_id, None).await.unwrap_or_default();
-        let catalog_id = catalogs.iter().find(|c| c.name == catalog_name).map(|c| c.id);
-        
+        let catalogs = store
+            .list_catalogs(tenant_id, None)
+            .await
+            .unwrap_or_default();
+        let catalog_id = catalogs
+            .iter()
+            .find(|c| c.name == catalog_name)
+            .map(|c| c.id);
+
         let has_perm = if let Some(cid) = catalog_id {
             match crate::authz::check_permission(
-                &store, 
-                &session, 
-                &Action::Read, 
-                &PermissionScope::Catalog { catalog_id: cid }
-            ).await {
+                &store,
+                &session,
+                &Action::Read,
+                &PermissionScope::Catalog { catalog_id: cid },
+            )
+            .await
+            {
                 Ok(v) => v,
                 Err(_) => false,
             }
@@ -507,11 +601,15 @@ pub async fn get_asset_details(
             return (StatusCode::FORBIDDEN, "Access denied").into_response();
         }
     }
-    
-    (StatusCode::OK, Json(serde_json::json!({
-        "asset": asset,
-        "metadata": metadata,
-        "catalog": catalog_name,
-        "namespace": namespace
-    }))).into_response()
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "asset": asset,
+            "metadata": metadata,
+            "catalog": catalog_name,
+            "namespace": namespace
+        })),
+    )
+        .into_response()
 }

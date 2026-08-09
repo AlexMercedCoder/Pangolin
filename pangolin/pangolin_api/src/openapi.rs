@@ -1,40 +1,42 @@
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
 use utoipa::OpenApi;
-use utoipa::openapi::security::{SecurityScheme, HttpAuthScheme, HttpBuilder};
 
 // Import all handler modules to access their path annotations
-use crate::tenant_handlers;
-use crate::warehouse_handlers;
-use crate::pangolin_handlers;
-use crate::user_handlers;
-use crate::token_handlers;
-use crate::permission_handlers;
-use crate::federated_catalog_handlers;
-use crate::service_user_handlers;
-use crate::oauth_handlers;
-use crate::merge_handlers;
-use crate::business_metadata_handlers;
-use crate::audit_handlers;
-use crate::system_config_handlers;
-use crate::iceberg;
-use crate::signing_handlers;
 use crate::asset_handlers;
+use crate::audit_handlers;
+use crate::business_metadata_handlers;
 use crate::dashboard_handlers;
+use crate::federated_catalog_handlers;
+use crate::iceberg;
+use crate::merge_handlers;
+use crate::oauth_handlers;
 use crate::optimization_handlers;
+use crate::pangolin_handlers;
+use crate::permission_handlers;
+use crate::service_user_handlers;
+use crate::signing_handlers;
+use crate::system_config_handlers;
+use crate::tenant_handlers;
+use crate::token_handlers;
+use crate::user_handlers;
+use crate::warehouse_handlers;
 
 // Import all schema types
-use pangolin_core::model::{
-    Tenant, TenantUpdate, Warehouse, WarehouseUpdate, VendingStrategy,
-    Catalog, CatalogUpdate, CatalogType, FederatedCatalogConfig,
-    MergeOperation, MergeConflict, ConflictResolution, ResolutionStrategy, MergeStatus, ConflictType,
-};
+use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditResult, ResourceType};
+use pangolin_core::business_metadata::{AccessRequest, BusinessMetadata, RequestStatus};
 use pangolin_core::iceberg_metadata::{
-    TableMetadata, Schema as IcebergSchema, NestedField, Type as IcebergType, PartitionSpec, PartitionField,
-    SortOrder, SortField, Snapshot, SnapshotLogEntry, MetadataLogEntry,
+    MetadataLogEntry, NestedField, PartitionField, PartitionSpec, Schema as IcebergSchema,
+    Snapshot, SnapshotLogEntry, SortField, SortOrder, TableMetadata, Type as IcebergType,
 };
-use pangolin_core::audit::{AuditLogEntry, AuditAction, ResourceType, AuditResult};
-use pangolin_core::user::{User, UserRole, UserSession, ServiceUser, OAuthProvider, ApiKeyResponse};
-use pangolin_core::permission::{Permission, PermissionScope, Action, Role, PermissionGrant};
-use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestStatus};
+use pangolin_core::model::{
+    Catalog, CatalogType, CatalogUpdate, ConflictResolution, ConflictType, FederatedCatalogConfig,
+    MergeConflict, MergeOperation, MergeStatus, ResolutionStrategy, Tenant, TenantUpdate,
+    VendingStrategy, Warehouse, WarehouseUpdate,
+};
+use pangolin_core::permission::{Action, Permission, PermissionGrant, PermissionScope, Role};
+use pangolin_core::user::{
+    ApiKeyResponse, OAuthProvider, ServiceUser, User, UserRole, UserSession,
+};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -45,21 +47,21 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         tenant_handlers::get_tenant,
         tenant_handlers::update_tenant,
         tenant_handlers::delete_tenant,
-        
+
         // Warehouse endpoints
         warehouse_handlers::list_warehouses,
         warehouse_handlers::create_warehouse,
         warehouse_handlers::get_warehouse,
         warehouse_handlers::update_warehouse,
         warehouse_handlers::delete_warehouse,
-        
+
         // Catalog endpoints
         pangolin_handlers::list_catalogs,
         pangolin_handlers::create_catalog,
         pangolin_handlers::get_catalog,
         pangolin_handlers::update_catalog,
         pangolin_handlers::delete_catalog,
-        
+
         // User endpoints
         user_handlers::create_user,
         user_handlers::list_users,
@@ -70,7 +72,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         user_handlers::logout,
         user_handlers::get_current_user,
         user_handlers::get_app_config,
-        
+
         // Token endpoints
         token_handlers::generate_token,
         token_handlers::revoke_current_token,
@@ -80,7 +82,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         token_handlers::cleanup_expired_tokens,
         token_handlers::rotate_token,
         token_handlers::delete_token,
-        
+
         // Role & Permission endpoints
         permission_handlers::assign_role,
         permission_handlers::get_user_roles,
@@ -93,7 +95,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         permission_handlers::get_role,
         permission_handlers::update_role,
         permission_handlers::delete_role,
-        
+
         // Federated catalog endpoints
         federated_catalog_handlers::list_federated_catalogs,
         federated_catalog_handlers::create_federated_catalog,
@@ -102,7 +104,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         federated_catalog_handlers::sync_federated_catalog,
         federated_catalog_handlers::test_federated_connection,
         federated_catalog_handlers::get_federated_catalog_stats,
-        
+
         // Service user endpoints
         service_user_handlers::list_service_users,
         service_user_handlers::create_service_user,
@@ -110,23 +112,23 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         service_user_handlers::update_service_user,
         service_user_handlers::delete_service_user,
         service_user_handlers::rotate_api_key,
-        
+
         // OAuth endpoints
         oauth_handlers::oauth_authorize,
         oauth_handlers::oauth_callback,
-        
+
         // Branch endpoints
         pangolin_handlers::list_branches,
         pangolin_handlers::create_branch,
         pangolin_handlers::get_branch,
         pangolin_handlers::merge_branch,
         pangolin_handlers::rebase_branch,
-        
+
         // Tag endpoints
         pangolin_handlers::list_tags,
         pangolin_handlers::create_tag,
         pangolin_handlers::delete_tag,
-        
+
         // Merge operation endpoints
         merge_handlers::list_merge_operations,
         merge_handlers::get_merge_operation,
@@ -134,7 +136,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         merge_handlers::complete_merge,
         merge_handlers::abort_merge,
         merge_handlers::resolve_conflict,
-        
+
         // Business metadata endpoints
         business_metadata_handlers::get_business_metadata,
         business_metadata_handlers::delete_business_metadata,
@@ -144,22 +146,22 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         business_metadata_handlers::list_access_requests,
         business_metadata_handlers::get_access_request,
         business_metadata_handlers::update_access_request,
-        
+
         // Audit logging endpoints
         audit_handlers::list_audit_events,
         audit_handlers::get_audit_event,
         audit_handlers::count_audit_events,
-        
+
         // Dashboard endpoints
         dashboard_handlers::get_dashboard_stats,
         dashboard_handlers::get_catalog_summary,
-        
+
         // Optimization endpoints
         optimization_handlers::search_assets_by_name,
         optimization_handlers::bulk_delete_assets,
         optimization_handlers::validate_names,
         optimization_handlers::unified_search,
-        
+
         // System Config
         system_config_handlers::get_system_settings,
         system_config_handlers::update_system_settings,
@@ -180,7 +182,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         iceberg::tables::perform_maintenance,
         iceberg::tables::table_exists,
         iceberg::namespaces::list_namespaces_tree,
-        
+
         // Iceberg OAuth
         iceberg::oauth::handle_oauth_token,
 
@@ -191,7 +193,7 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
         // Views
         asset_handlers::create_view,
         asset_handlers::get_view,
-        
+
         // Generic Assets
         asset_handlers::register_asset,
         asset_handlers::list_assets,
@@ -203,13 +205,13 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             Warehouse, WarehouseUpdate, VendingStrategy,
             Catalog, CatalogUpdate, CatalogType,
             FederatedCatalogConfig,
-            
+
             // User models
             User, UserRole, UserSession, ServiceUser, OAuthProvider, ApiKeyResponse,
-            
+
             // Permission models
             Permission, PermissionScope, Action, Role, PermissionGrant,
-            
+
             // Request/Response types
             tenant_handlers::CreateTenantRequest, tenant_handlers::TenantResponse,
             warehouse_handlers::CreateWarehouseRequest, warehouse_handlers::UpdateWarehouseRequest, warehouse_handlers::WarehouseResponse,
@@ -221,32 +223,32 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             federated_catalog_handlers::CreateFederatedCatalogRequest, federated_catalog_handlers::FederatedCatalogResponse,
             service_user_handlers::CreateServiceUserRequest, service_user_handlers::UpdateServiceUserRequest,
             oauth_handlers::OAuthCallback, oauth_handlers::AuthorizeParams,
-            
+
             // Iceberg OAuth types
             iceberg::oauth::OAuthTokenRequest, iceberg::oauth::OAuthTokenResponse,
-            
+
             // Branch/Tag/Merge types
             pangolin_handlers::CreateBranchRequest, pangolin_handlers::ListBranchParams, pangolin_handlers::MergeBranchRequest, pangolin_handlers::BranchResponse,
             merge_handlers::ResolveConflictRequest, merge_handlers::MergeOperationResponse,
             MergeOperation, MergeConflict, ConflictResolution, ResolutionStrategy, MergeStatus, ConflictType,
-            
+
             // Business metadata types
             business_metadata_handlers::AddMetadataRequest, business_metadata_handlers::MetadataResponse, business_metadata_handlers::SearchRequest,
             business_metadata_handlers::CreateAccessRequestPayload, business_metadata_handlers::UpdateRequestStatus,
             BusinessMetadata, AccessRequest, RequestStatus,
-            
+
             // Audit logging types
             audit_handlers::AuditListQuery, audit_handlers::AuditCountResponse,
-            
+
             // Dashboard types
             dashboard_handlers::DashboardStats, dashboard_handlers::CatalogSummary,
-            
+
             // Optimization types
             optimization_handlers::SearchQuery, optimization_handlers::AssetSearchResult, optimization_handlers::SearchResponse,
             optimization_handlers::BulkDeleteAssetsRequest, optimization_handlers::BulkOperationResponse,
             optimization_handlers::ValidateNamesRequest, optimization_handlers::NameValidationResult, optimization_handlers::ValidateNamesResponse,
             optimization_handlers::UnifiedSearchResult, optimization_handlers::UnifiedSearchResponse, optimization_handlers::UnifiedSearchQuery, optimization_handlers::SearchResultType,
-            
+
             // Iceberg/Data models
             iceberg::types::ListNamespacesResponse, iceberg::types::CreateNamespaceRequest, iceberg::types::CreateNamespaceResponse,
             iceberg::types::CreateTableRequest, iceberg::types::TableResponse, iceberg::types::ListTablesResponse, iceberg::types::TableIdentifier,
@@ -254,22 +256,22 @@ use pangolin_core::business_metadata::{BusinessMetadata, AccessRequest, RequestS
             iceberg::types::UpdateNamespacePropertiesRequest, iceberg::types::UpdateNamespacePropertiesResponse,
             iceberg::types::NamespaceNode, iceberg::types::ListNamespacesTreeResponse,
             iceberg::tables::MaintenanceRequest,
-            
+
             // Signing/Vending models
             signing_handlers::StorageCredential, signing_handlers::LoadCredentialsResponse, signing_handlers::PresignResponse, signing_handlers::PresignParams,
-            
+
             // View models
             asset_handlers::CreateViewRequest, asset_handlers::ViewResponse,
-            
+
             // Generic Asset models
             asset_handlers::RegisterAssetRequest, asset_handlers::RegisterAssetResponse, asset_handlers::AssetSummary,
-            
+
             // App models
             user_handlers::AppConfig,
-            
+
             // Core Iceberg models (from pangolin-core)
             TableMetadata, IcebergSchema, NestedField, IcebergType, PartitionSpec, PartitionField,
-            SortOrder, SortField, Snapshot, SnapshotLogEntry, MetadataLogEntry, 
+            SortOrder, SortField, Snapshot, SnapshotLogEntry, MetadataLogEntry,
             AuditLogEntry, AuditAction, ResourceType, AuditResult,
         )
     ),
@@ -325,8 +327,10 @@ impl utoipa::Modify for SecurityAddon {
                     HttpBuilder::new()
                         .scheme(HttpAuthScheme::Bearer)
                         .bearer_format("JWT")
-                        .description(Some("JWT token obtained from /api/v1/users/login or /api/v1/tokens"))
-                        .build()
+                        .description(Some(
+                            "JWT token obtained from /api/v1/users/login or /api/v1/tokens",
+                        ))
+                        .build(),
                 ),
             )
         }

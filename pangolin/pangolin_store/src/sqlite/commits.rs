@@ -1,9 +1,9 @@
 /// Commit operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
+use pangolin_core::model::Commit;
 use sqlx::Row;
 use uuid::Uuid;
-use pangolin_core::model::Commit;
 
 impl SqliteStore {
     pub async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()> {
@@ -26,7 +26,7 @@ impl SqliteStore {
     pub async fn get_commit(&self, tenant_id: Uuid, id: Uuid) -> Result<Option<Commit>> {
         let row = sqlx::query(
             "SELECT id, parent_id, timestamp, author, message, operations 
-             FROM commits WHERE tenant_id = ? AND id = ?"
+             FROM commits WHERE tenant_id = ? AND id = ?",
         )
         .bind(tenant_id.to_string())
         .bind(id.to_string())
@@ -36,18 +36,27 @@ impl SqliteStore {
         if let Some(row) = row {
             Ok(Some(Commit {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
-                parent_id: row.get::<Option<String>, _>("parent_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                parent_id: row
+                    .get::<Option<String>, _>("parent_id")
+                    .map(|s| Uuid::parse_str(&s))
+                    .transpose()?,
                 timestamp: row.get("timestamp"),
                 author: row.get("author"),
                 message: row.get("message"),
-                operations: serde_json::from_str(&row.get::<String, _>("operations")).unwrap_or_default(),
+                operations: serde_json::from_str(&row.get::<String, _>("operations"))
+                    .unwrap_or_default(),
             }))
         } else {
             Ok(None)
         }
     }
 
-    pub async fn get_commit_ancestry(&self, tenant_id: Uuid, commit_id: Uuid, limit: usize) -> Result<Vec<Commit>> {
+    pub async fn get_commit_ancestry(
+        &self,
+        tenant_id: Uuid,
+        commit_id: Uuid,
+        limit: usize,
+    ) -> Result<Vec<Commit>> {
         // Recursive CTE to fetch ancestry
         // Note: We use LIMIT in the final select to restrict depth
         let query = "
@@ -76,14 +85,18 @@ impl SqliteStore {
         for row in rows {
             commits.push(Commit {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
-                parent_id: row.get::<Option<String>, _>("parent_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                parent_id: row
+                    .get::<Option<String>, _>("parent_id")
+                    .map(|s| Uuid::parse_str(&s))
+                    .transpose()?,
                 timestamp: row.get("timestamp"),
                 author: row.get("author"),
                 message: row.get("message"),
-                operations: serde_json::from_str(&row.get::<String, _>("operations")).unwrap_or_default(),
+                operations: serde_json::from_str(&row.get::<String, _>("operations"))
+                    .unwrap_or_default(),
             });
         }
-        
+
         Ok(commits)
     }
 }

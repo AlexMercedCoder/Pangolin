@@ -1,13 +1,18 @@
 /// Namespace operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
-use sqlx::Row;
-use uuid::Uuid;
 use pangolin_core::model::Namespace;
+use sqlx::Row;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 impl SqliteStore {
-    pub async fn create_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Namespace) -> Result<()> {
+    pub async fn create_namespace(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Namespace,
+    ) -> Result<()> {
         let namespace_path = serde_json::to_string(&namespace.name)?;
         sqlx::query("INSERT INTO namespaces (id, tenant_id, catalog_name, namespace_path, properties) VALUES (?, ?, ?, ?, ?)")
             .bind(Uuid::new_v4().to_string())
@@ -20,7 +25,12 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub async fn get_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<Option<Namespace>> {
+    pub async fn get_namespace(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+    ) -> Result<Option<Namespace>> {
         let namespace_path = serde_json::to_string(&namespace)?;
         let row = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ?")
             .bind(tenant_id.to_string())
@@ -39,9 +49,19 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_namespaces(&self, tenant_id: Uuid, catalog_name: &str, _parent: Option<String>, pagination: Option<crate::PaginationParams>) -> Result<Vec<Namespace>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_namespaces(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        _parent: Option<String>,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Namespace>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = ? AND catalog_name = ? LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
@@ -61,7 +81,12 @@ impl SqliteStore {
         Ok(namespaces)
     }
 
-    pub async fn delete_namespace(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>) -> Result<()> {
+    pub async fn delete_namespace(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+    ) -> Result<()> {
         let namespace_path = serde_json::to_string(&namespace)?;
         sqlx::query("DELETE FROM namespaces WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ?")
             .bind(tenant_id.to_string())
@@ -72,8 +97,16 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub async fn update_namespace_properties(&self, tenant_id: Uuid, catalog_name: &str, namespace: Vec<String>, properties: HashMap<String, String>) -> Result<()> {
-        let ns = self.get_namespace(tenant_id, catalog_name, namespace.clone()).await?;
+    pub async fn update_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: HashMap<String, String>,
+    ) -> Result<()> {
+        let ns = self
+            .get_namespace(tenant_id, catalog_name, namespace.clone())
+            .await?;
         if let Some(mut n) = ns {
             n.properties.extend(properties);
             let namespace_path = serde_json::to_string(&namespace)?;

@@ -1,28 +1,26 @@
+use crate::auth::TenantId;
+use crate::iceberg::AppState;
+use axum::Extension;
 use axum::{
-    extract::{Path, State, Query},
-    Json,
-    response::IntoResponse,
+    extract::{Path, Query, State},
     http::StatusCode,
+    response::IntoResponse,
+    Json,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use pangolin_store::CatalogStore;
-use crate::iceberg::AppState;
-use crate::auth::TenantId;
-use axum::Extension;
-use utoipa::{ToSchema, IntoParams};
 use std::collections::HashMap;
+use utoipa::{IntoParams, ToSchema};
 
 // Cloud provider SDK imports (conditional on features)
 #[cfg(feature = "aws-sts")]
-use aws_sdk_sts::Client as StsClient;
-#[cfg(feature = "aws-sts")]
 use aws_config;
+#[cfg(feature = "aws-sts")]
+use aws_sdk_sts::Client as StsClient;
 
 #[cfg(feature = "azure-oauth")]
-use azure_identity::ClientSecretCredential;
-#[cfg(feature = "azure-oauth")]
 use azure_core::auth::TokenCredential;
+#[cfg(feature = "azure-oauth")]
+use azure_identity::ClientSecretCredential;
 
 #[cfg(feature = "gcp-oauth")]
 use gcp_auth::{CustomServiceAccount, TokenProvider};
@@ -62,23 +60,26 @@ pub async fn assume_role_aws(
 ) -> Result<(String, String, String, String), String> {
     let config = aws_config::load_from_env().await;
     let sts_client = StsClient::new(&config);
-    
+
     let mut request = sts_client
         .assume_role()
         .role_arn(role_arn)
         .role_session_name(session_name)
         .duration_seconds(3600); // 1 hour
-    
+
     if let Some(ext_id) = external_id {
         request = request.external_id(ext_id);
     }
-    
-    let response = request.send().await
+
+    let response = request
+        .send()
+        .await
         .map_err(|e| format!("STS AssumeRole failed: {}", e))?;
-    
-    let creds = response.credentials()
+
+    let creds = response
+        .credentials()
         .ok_or_else(|| "No credentials returned from STS".to_string())?;
-    
+
     Ok((
         creds.access_key_id().to_string(),
         creds.secret_access_key().to_string(),
@@ -91,16 +92,18 @@ pub async fn assume_role_aws(
 #[cfg(not(feature = "aws-sts"))]
 pub async fn assume_role_aws(
     role_arn: &str,
-    external_id: Option<&str>,
-    session_name: &str,
+    _external_id: Option<&str>,
+    _session_name: &str,
 ) -> Result<(String, String, String, String), String> {
     tracing::warn!("AWS STS feature not enabled, returning placeholder credentials");
     Ok((
         format!("STS_ACCESS_KEY_FOR_{}", role_arn),
         "STS_SECRET_KEY_PLACEHOLDER".to_string(),
         "STS_SESSION_TOKEN_PLACEHOLDER".to_string(),
-        chrono::Utc::now().checked_add_signed(chrono::Duration::hours(1))
-            .unwrap().to_rfc3339(),
+        chrono::Utc::now()
+            .checked_add_signed(chrono::Duration::hours(1))
+            .unwrap()
+            .to_rfc3339(),
     ))
 }
 
@@ -117,7 +120,7 @@ pub async fn get_azure_token(
 ) -> Result<String, String> {
     let authority_host = azure_core::Url::parse("https://login.microsoftonline.com")
         .map_err(|e| format!("Failed to parse authority host: {}", e))?;
-    
+
     let credential = ClientSecretCredential::new(
         azure_core::new_http_client(),
         authority_host,
@@ -125,12 +128,12 @@ pub async fn get_azure_token(
         client_id.to_string(),
         client_secret.to_string(),
     );
-    
+
     let token = credential
         .get_token(&["https://storage.azure.com/.default"])
         .await
         .map_err(|e| format!("Azure token acquisition failed: {}", e))?;
-    
+
     Ok(token.token.secret().to_string())
 }
 
@@ -151,26 +154,22 @@ pub async fn get_azure_token(
 
 /// Get a GCP OAuth2 token using service account credentials
 #[cfg(feature = "gcp-oauth")]
-pub async fn get_gcp_token(
-    service_account_key_json: &str,
-) -> Result<String, String> {
+pub async fn get_gcp_token(service_account_key_json: &str) -> Result<String, String> {
     let service_account = CustomServiceAccount::from_json(service_account_key_json)
         .map_err(|e| format!("Failed to parse GCP service account key: {}", e))?;
-    
+
     let scopes = &["https://www.googleapis.com/auth/devstorage.read_write"];
     let token = service_account
         .token(scopes)
         .await
         .map_err(|e| format!("GCP token acquisition failed: {}", e))?;
-    
+
     Ok(token.as_str().to_string())
 }
 
 /// Fallback implementation when GCP OAuth feature is not enabled
 #[cfg(not(feature = "gcp-oauth"))]
-pub async fn get_gcp_token(
-    _service_account_key_json: &str,
-) -> Result<String, String> {
+pub async fn get_gcp_token(_service_account_key_json: &str) -> Result<String, String> {
     tracing::warn!("GCP OAuth feature not enabled, returning placeholder token");
     Ok("GCS_OAUTH_TOKEN_PLACEHOLDER".to_string())
 }
@@ -204,83 +203,111 @@ pub async fn get_table_credentials(
     Path((catalog_name, namespace, table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
-    
-    tracing::info!("🔑 Credential vending requested for catalog: {}, namespace: {}, table: {}", 
-        catalog_name, namespace, table);
-    
+
+    tracing::info!(
+        "🔑 Credential vending requested for catalog: {}, namespace: {}, table: {}",
+        catalog_name,
+        namespace,
+        table
+    );
+
     // 1. Get catalog to find associated warehouse
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(cat)) => cat,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
-    
+
     // 2. Check if catalog has a warehouse
     let warehouse_name = match catalog.warehouse_name {
         Some(name) => name,
         None => {
             // No warehouse configured - client must provide credentials
-            return (StatusCode::BAD_REQUEST, "Catalog has no warehouse configured. Client must provide storage credentials.").into_response();
+            return (
+                StatusCode::BAD_REQUEST,
+                "Catalog has no warehouse configured. Client must provide storage credentials.",
+            )
+                .into_response();
         }
     };
-    
+
     // 3. Get warehouse configuration
     let warehouse = match store.get_warehouse(tenant_id, warehouse_name).await {
         Ok(Some(wh)) => wh,
         Ok(None) => return (StatusCode::NOT_FOUND, "Warehouse not found").into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
-    
+
     // 4. Vend credentials using the credential signer infrastructure
     let resource_path = format!("{}/{}", namespace, table);
     let permissions = vec!["read".to_string(), "write".to_string()];
-    
-    match crate::credential_vending::vend_credentials_for_warehouse(&warehouse, &resource_path, &permissions).await {
+
+    match crate::credential_vending::vend_credentials_for_warehouse(
+        &warehouse,
+        &resource_path,
+        &permissions,
+    )
+    .await
+    {
         Ok(config) => {
             // Determine storage location prefix
-            let storage_type = warehouse.storage_config.get("type")
+            let storage_type = warehouse
+                .storage_config
+                .get("type")
                 .map(|s| s.as_str())
                 .unwrap_or("s3");
-            
+
             let storage_location = match storage_type {
                 "azure" => {
-                    let container = warehouse.storage_config.get("container")
+                    let container = warehouse
+                        .storage_config
+                        .get("container")
                         .cloned()
                         .unwrap_or_else(|| "warehouse".to_string());
-                    let account = warehouse.storage_config.get("account_name")
+                    let account = warehouse
+                        .storage_config
+                        .get("account_name")
                         .cloned()
                         .unwrap_or_else(|| "account".to_string());
                     format!("abfss://{}@{}.dfs.core.windows.net/", container, account)
-                },
+                }
                 "gcs" | "gcp" => {
-                    let bucket = warehouse.storage_config.get("bucket")
+                    let bucket = warehouse
+                        .storage_config
+                        .get("bucket")
                         .cloned()
                         .unwrap_or_else(|| "warehouse".to_string());
                     format!("gs://{}/", bucket)
-                },
+                }
                 _ => {
                     // Default to S3
-                    warehouse.storage_config.get("bucket")
+                    warehouse
+                        .storage_config
+                        .get("bucket")
                         .map(|bucket| format!("s3://{}/", bucket))
                         .unwrap_or_else(|| "s3://warehouse/".to_string())
                 }
             };
-            
+
             let storage_credential = StorageCredential {
                 prefix: storage_location,
                 config,
             };
-            
+
             let resp = LoadCredentialsResponse {
                 storage_credentials: vec![storage_credential],
             };
-            
+
             tracing::info!("✅ Successfully vended credentials for {}", storage_type);
             (StatusCode::OK, Json(resp)).into_response()
-        },
+        }
         Err(e) => {
             tracing::error!("Failed to vend credentials: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to vend credentials: {}", e)).into_response()
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to vend credentials: {}", e),
+            )
+                .into_response()
         }
     }
 }
@@ -306,7 +333,10 @@ pub async fn get_presigned_url(
 ) -> impl IntoResponse {
     // For MVP, return a placeholder
     // In production, this would use the S3 SDK to generate a presigned URL
-    let url = format!("https://presigned-url-placeholder.s3.amazonaws.com/{}?X-Amz-Expires=3600", params.location);
-    
+    let url = format!(
+        "https://presigned-url-placeholder.s3.amazonaws.com/{}?X-Amz-Expires=3600",
+        params.location
+    );
+
     (StatusCode::OK, Json(PresignResponse { url })).into_response()
 }

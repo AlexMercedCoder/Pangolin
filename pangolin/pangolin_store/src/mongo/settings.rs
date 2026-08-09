@@ -1,7 +1,7 @@
-use super::MongoStore;
 use super::main::to_bson_uuid;
+use super::MongoStore;
 use anyhow::Result;
-use mongodb::bson::{doc};
+use mongodb::bson::doc;
 use pangolin_core::model::SystemSettings;
 use uuid::Uuid;
 
@@ -9,9 +9,11 @@ impl MongoStore {
     pub async fn get_system_settings(&self, tenant_id: Uuid) -> Result<SystemSettings> {
         let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
         let doc = self.system_settings().find_one(filter).await?;
-        
+
         if let Some(d) = doc {
-            Ok(mongodb::bson::from_bson(d.get("settings").unwrap().clone())?)
+            Ok(mongodb::bson::from_bson(
+                d.get("settings").unwrap().clone(),
+            )?)
         } else {
             Ok(SystemSettings {
                 allow_public_signup: None,
@@ -25,16 +27,25 @@ impl MongoStore {
         }
     }
 
-    pub async fn update_system_settings(&self, tenant_id: Uuid, settings: SystemSettings) -> Result<SystemSettings> {
+    pub async fn update_system_settings(
+        &self,
+        tenant_id: Uuid,
+        settings: SystemSettings,
+    ) -> Result<SystemSettings> {
         let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
         let update = doc! {
             "$set": {
                 "settings": mongodb::bson::to_bson(&settings)?
             }
         };
-        
-        let options = mongodb::options::UpdateOptions::builder().upsert(true).build();
-        self.system_settings().update_one(filter, update).with_options(options).await?;
+
+        let options = mongodb::options::UpdateOptions::builder()
+            .upsert(true)
+            .build();
+        self.system_settings()
+            .update_one(filter, update)
+            .with_options(options)
+            .await?;
         Ok(settings)
     }
 }

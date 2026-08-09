@@ -1,6 +1,6 @@
+use anyhow::Result;
 use moka::future::Cache;
 use std::time::Duration;
-use anyhow::Result;
 
 /// LRU cache for Iceberg metadata files
 pub struct MetadataCache {
@@ -18,11 +18,7 @@ impl MetadataCache {
     }
 
     /// Get cached metadata or fetch using provided function
-    pub async fn get_or_fetch<F, Fut>(
-        &self,
-        location: &str,
-        fetch_fn: F,
-    ) -> Result<Vec<u8>>
+    pub async fn get_or_fetch<F, Fut>(&self, location: &str, fetch_fn: F) -> Result<Vec<u8>>
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = Result<Vec<u8>>>,
@@ -34,13 +30,13 @@ impl MetadataCache {
         }
 
         tracing::debug!("Metadata cache MISS for {}", location);
-        
+
         // Fetch from source
         let data = fetch_fn().await?;
-        
+
         // Store in cache
         self.cache.insert(location.to_string(), data.clone()).await;
-        
+
         Ok(data)
     }
 
@@ -54,9 +50,19 @@ impl MetadataCache {
         self.cache.invalidate_all();
     }
 
-    /// Get cache statistics
+    /// Number of entries currently held.
+    ///
+    /// `moka` applies writes asynchronously, so this is eventually consistent:
+    /// an entry inserted a moment ago may not be counted yet. Call
+    /// [`MetadataCache::sync`] first if an exact figure is needed.
     pub fn entry_count(&self) -> u64 {
         self.cache.entry_count()
+    }
+
+    /// Apply any pending cache maintenance so that [`MetadataCache::entry_count`]
+    /// reflects every completed insert and invalidation.
+    pub async fn sync(&self) {
+        self.cache.run_pending_tasks().await;
     }
 }
 
@@ -82,49 +88,62 @@ mod tests {
     #[tokio::test]
     async fn test_cache_hit_miss() {
         let cache = MetadataCache::new(100, 60);
-        
+
         let location = "s3://bucket/metadata.json";
         let data = b"test data".to_vec();
-        
+
         // First fetch - should be a miss
-        let result = cache.get_or_fetch(location, || async {
-            Ok(data.clone())
-        }).await.unwrap();
-        
+        let result = cache
+            .get_or_fetch(location, || async { Ok(data.clone()) })
+            .await
+            .unwrap();
+
         assert_eq!(result, data);
+        // entry_count is eventually consistent; settle pending writes first.
+        cache.sync().await;
         assert_eq!(cache.entry_count(), 1);
-        
+
         // Second fetch - should be a hit
-        let result2 = cache.get_or_fetch(location, || async {
-            panic!("Should not be called - cache hit expected");
-        }).await.unwrap();
-        
+        let result2 = cache
+            .get_or_fetch(location, || async {
+                panic!("Should not be called - cache hit expected");
+            })
+            .await
+            .unwrap();
+
         assert_eq!(result2, data);
     }
 
     #[tokio::test]
     async fn test_cache_invalidation() {
         let cache = MetadataCache::new(100, 60);
-        
+
         let location = "s3://bucket/metadata.json";
         let data = b"test data".to_vec();
-        
-        cache.get_or_fetch(location, || async {
-            Ok(data.clone())
-        }).await.unwrap();
-        
+
+        cache
+            .get_or_fetch(location, || async { Ok(data.clone()) })
+            .await
+            .unwrap();
+
+        cache.sync().await;
         assert_eq!(cache.entry_count(), 1);
-        
+
         cache.invalidate(location).await;
-        
+        cache.sync().await;
+        assert_eq!(cache.entry_count(), 0, "invalidate must drop the entry");
+
         // Entry count might not immediately reflect invalidation
         // but next fetch should miss
         let mut fetch_called = false;
-        cache.get_or_fetch(location, || async {
-            fetch_called = true;
-            Ok(data.clone())
-        }).await.unwrap();
-        
+        cache
+            .get_or_fetch(location, || async {
+                fetch_called = true;
+                Ok(data.clone())
+            })
+            .await
+            .unwrap();
+
         assert!(fetch_called, "Fetch should be called after invalidation");
     }
 }

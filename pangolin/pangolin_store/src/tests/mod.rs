@@ -1,22 +1,25 @@
 use crate::CatalogStore;
 use pangolin_core::model::*;
-use uuid::Uuid;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 pub async fn test_asset_update_consistency<S: CatalogStore>(store: &S) {
     let tenant_id = Uuid::new_v4();
     let catalog = "default";
     let namespace = vec!["ns1".to_string()];
     let table = "tbl1".to_string();
-    
+
     // 0. Create Tenant (Required for Postgres FKs)
     let tenant = Tenant {
         id: tenant_id,
         name: format!("tenant_consistency_{}", tenant_id),
         properties: HashMap::new(),
     };
-    store.create_tenant(tenant).await.expect("Failed to create tenant");
-    
+    store
+        .create_tenant(tenant)
+        .await
+        .expect("Failed to create tenant");
+
     // 1. Setup Hierarchy (Tenant -> Warehouse -> Catalog -> Namespace)
     // Some stores enforce referential integrity
     let warehouse = Warehouse {
@@ -45,67 +48,135 @@ pub async fn test_asset_update_consistency<S: CatalogStore>(store: &S) {
         properties: HashMap::new(),
     };
     let _ = store.create_namespace(tenant_id, catalog, ns_obj).await;
-    
+
     // 2. Create Asset
     let initial_loc = "s3://bucket/path/v1.json".to_string();
     let asset = Asset {
         id: Uuid::new_v4(),
         name: table.clone(),
         kind: AssetType::IcebergTable,
-        location: initial_loc.clone(), 
+        location: initial_loc.clone(),
         properties: HashMap::new(),
     };
-    
-    store.create_asset(tenant_id, catalog, None, namespace.clone(), asset.clone()).await.expect("Failed to create asset");
-    
+
+    store
+        .create_asset(tenant_id, catalog, None, namespace.clone(), asset.clone())
+        .await
+        .expect("Failed to create asset");
+
     // 3. Verify Initial State
     // Check get_metadata_location
-    let loc = store.get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone()).await.expect("Failed to get metadata location");
-    assert_eq!(loc, Some(initial_loc.clone()), "Initial metadata location mismatch");
-    
+    let loc = store
+        .get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone())
+        .await
+        .expect("Failed to get metadata location");
+    assert_eq!(
+        loc,
+        Some(initial_loc.clone()),
+        "Initial metadata location mismatch"
+    );
+
     // 4. Update Metadata Location (CAS Success)
     let new_loc = "s3://bucket/path/v2.json".to_string();
-    store.update_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone(), Some(initial_loc.clone()), new_loc.clone()).await.expect("Failed to update metadata location");
-    
+    store
+        .update_metadata_location(
+            tenant_id,
+            catalog,
+            None,
+            namespace.clone(),
+            table.clone(),
+            Some(initial_loc.clone()),
+            new_loc.clone(),
+        )
+        .await
+        .expect("Failed to update metadata location");
+
     // 5. Verify Updated State
-    let updated_loc = store.get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone()).await.expect("Failed to get updated metadata location");
-    assert_eq!(updated_loc, Some(new_loc.clone()), "Updated metadata location mismatch");
-    
+    let updated_loc = store
+        .get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone())
+        .await
+        .expect("Failed to get updated metadata location");
+    assert_eq!(
+        updated_loc,
+        Some(new_loc.clone()),
+        "Updated metadata location mismatch"
+    );
+
     // Verify Asset Properties also updated (Consistency Check)
-    let fetched_asset = store.get_asset(tenant_id, catalog, None, namespace.clone(), table.clone()).await.expect("Failed to get asset").expect("Asset not found");
+    let fetched_asset = store
+        .get_asset(tenant_id, catalog, None, namespace.clone(), table.clone())
+        .await
+        .expect("Failed to get asset")
+        .expect("Asset not found");
     // Some stores might not update .location field if they prioritize properties, checking both
     if fetched_asset.location != new_loc {
-         // If location field is not updated, ensure property IS
-         assert_eq!(fetched_asset.properties.get("metadata_location"), Some(&new_loc), "Asset property metadata_location not updated");
+        // If location field is not updated, ensure property IS
+        assert_eq!(
+            fetched_asset.properties.get("metadata_location"),
+            Some(&new_loc),
+            "Asset property metadata_location not updated"
+        );
     } else {
-         assert_eq!(fetched_asset.location, new_loc, "Asset location field not updated");
+        assert_eq!(
+            fetched_asset.location, new_loc,
+            "Asset location field not updated"
+        );
     }
 
     // 6. CAS Failure Check
     let wrong_expected = "s3://bucket/path/WRONG.json".to_string();
     let v3_loc = "s3://bucket/path/v3.json".to_string();
-    let result = store.update_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone(), Some(wrong_expected), v3_loc.clone()).await;
-    assert!(result.is_err(), "CAS should fail with wrong expected location");
-    
+    let result = store
+        .update_metadata_location(
+            tenant_id,
+            catalog,
+            None,
+            namespace.clone(),
+            table.clone(),
+            Some(wrong_expected),
+            v3_loc.clone(),
+        )
+        .await;
+    assert!(
+        result.is_err(),
+        "CAS should fail with wrong expected location"
+    );
+
     // Verify it didn't change
-    let current_loc = store.get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone()).await.unwrap();
-    assert_eq!(current_loc, Some(new_loc), "Location should not change on CAS failure");
+    let current_loc = store
+        .get_metadata_location(tenant_id, catalog, None, namespace.clone(), table.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        current_loc,
+        Some(new_loc),
+        "Location should not change on CAS failure"
+    );
 }
 
 pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
     let tenant_id = Uuid::new_v4();
-    
+
     // 0. Create Tenant (Required for Postgres FKs)
     let tenant = Tenant {
         id: tenant_id,
         name: format!("tenant_{}", tenant_id),
         properties: HashMap::new(),
     };
-    store.create_tenant(tenant).await.expect("Failed to create tenant");
+    store
+        .create_tenant(tenant)
+        .await
+        .expect("Failed to create tenant");
 
     // 1. Initial State
-    let ns_count = store.count_namespaces(tenant_id).await.expect("Failed to count namespaces");
-    let asset_count = store.count_assets(tenant_id).await.expect("Failed to count assets");
+    let ns_count = store
+        .count_namespaces(tenant_id)
+        .await
+        .expect("Failed to count namespaces");
+    let asset_count = store
+        .count_assets(tenant_id)
+        .await
+        .expect("Failed to count assets");
     assert_eq!(ns_count, 0, "Initial namespace count should be 0");
     assert_eq!(asset_count, 0, "Initial asset count should be 0");
 
@@ -135,15 +206,30 @@ pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
     // 3. Create Namespaces
     let ns1 = vec!["ns1".to_string()];
     let ns2 = vec!["ns2".to_string()];
-    
-    let ns_obj = Namespace { name: ns1.clone(), properties: HashMap::new() };
-    store.create_namespace(tenant_id, &catalog, ns_obj).await.expect("Failed ns1");
-    
-    let ns_obj2 = Namespace { name: ns2.clone(), properties: HashMap::new() };
-    store.create_namespace(tenant_id, &catalog, ns_obj2).await.expect("Failed ns2");
+
+    let ns_obj = Namespace {
+        name: ns1.clone(),
+        properties: HashMap::new(),
+    };
+    store
+        .create_namespace(tenant_id, &catalog, ns_obj)
+        .await
+        .expect("Failed ns1");
+
+    let ns_obj2 = Namespace {
+        name: ns2.clone(),
+        properties: HashMap::new(),
+    };
+    store
+        .create_namespace(tenant_id, &catalog, ns_obj2)
+        .await
+        .expect("Failed ns2");
 
     // Verify Namespace Count
-    let ns_count_after = store.count_namespaces(tenant_id).await.expect("Failed count ns");
+    let ns_count_after = store
+        .count_namespaces(tenant_id)
+        .await
+        .expect("Failed count ns");
     assert_eq!(ns_count_after, 2, "Namespace count should be 2");
 
     // 4. Create Assets
@@ -154,27 +240,51 @@ pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
         location: "s3://bucket/tbl1".to_string(),
         properties: HashMap::new(),
     };
-    store.create_asset(tenant_id, &catalog, None, ns1.clone(), asset1).await.expect("Failed asset1");
+    store
+        .create_asset(tenant_id, &catalog, None, ns1.clone(), asset1)
+        .await
+        .expect("Failed asset1");
 
     // Verify Asset Count
-    let asset_count_after = store.count_assets(tenant_id).await.expect("Failed count asset");
+    let asset_count_after = store
+        .count_assets(tenant_id)
+        .await
+        .expect("Failed count asset");
     assert_eq!(asset_count_after, 1, "Asset count should be 1");
 
     // 5. Delete Asset
-    store.delete_asset(tenant_id, &catalog, None, ns1.clone(), "tbl1".to_string()).await.expect("Failed delete asset");
-    let asset_count_final = store.count_assets(tenant_id).await.expect("Failed count asset final");
+    store
+        .delete_asset(tenant_id, &catalog, None, ns1.clone(), "tbl1".to_string())
+        .await
+        .expect("Failed delete asset");
+    let asset_count_final = store
+        .count_assets(tenant_id)
+        .await
+        .expect("Failed count asset final");
     assert_eq!(asset_count_final, 0, "Asset count should return to 0");
 }
 
-pub mod multi_cloud;
+// The suites below are `cfg(test)`-only. The shared assertion helpers above are
+// also reachable under the `test-support` feature, which the crate's own
+// integration targets enable; the suites are not, because their bodies are
+// `#[tokio::test]` functions that vanish outside `cfg(test)` and would leave
+// their imports looking unused.
+#[cfg(test)]
 pub mod audit_tests;
-pub mod s3_compatibility;
-pub mod postgres_parity_tests;
+#[cfg(test)]
+pub mod multi_cloud;
+#[cfg(test)]
 pub mod postgres_merge_tests;
+#[cfg(test)]
+pub mod postgres_parity_tests;
+#[cfg(test)]
+pub mod s3_compatibility;
 // pub mod mongo_parity_tests;
+#[cfg(test)]
 pub mod bulk_ops_tests;
-pub mod postgres_bulk_ops_tests;
+#[cfg(test)]
 pub mod mongo_bulk_ops_tests;
 #[cfg(test)]
 pub mod p1_optimizations_tests;
-
+#[cfg(test)]
+pub mod postgres_bulk_ops_tests;

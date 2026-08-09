@@ -1,8 +1,8 @@
 use super::PostgresStore;
 use anyhow::Result;
-use uuid::Uuid;
-use sqlx::Row;
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Access Request Operations
@@ -45,9 +45,17 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<AccessRequest>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_access_requests(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<AccessRequest>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query(
             "SELECT ar.id, ar.tenant_id, ar.user_id, ar.asset_id, ar.reason, ar.requested_at, ar.status, ar.reviewed_by, ar.reviewed_at, ar.review_comment FROM access_requests ar
@@ -86,7 +94,10 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub(crate) fn row_to_access_request(&self, row: sqlx::postgres::PgRow) -> Result<AccessRequest> {
+    pub(crate) fn row_to_access_request(
+        &self,
+        row: sqlx::postgres::PgRow,
+    ) -> Result<AccessRequest> {
         let status_str: String = row.get("status");
         let status = match status_str.as_str() {
             "Pending" => RequestStatus::Pending,

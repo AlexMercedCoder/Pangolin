@@ -1,9 +1,9 @@
-use pangolin_store::{CatalogStore, SqliteStore, PostgresStore, MongoStore};
-use pangolin_core::token::TokenInfo;
-use pangolin_core::model::{SystemSettings, SyncStats};
-use uuid::Uuid;
-use chrono::Utc;
 use anyhow::Result;
+use chrono::Utc;
+use pangolin_core::model::SystemSettings;
+use pangolin_core::token::TokenInfo;
+use pangolin_store::{CatalogStore, MongoStore, PostgresStore, SqliteStore};
+use uuid::Uuid;
 
 // Helper to create test token
 fn create_test_token(user_id: Uuid) -> TokenInfo {
@@ -23,18 +23,45 @@ fn create_test_token(user_id: Uuid) -> TokenInfo {
 mod sqlite_new_endpoints_tests {
     use super::*;
 
+    /// An in-memory SQLite store with the schema applied.
+    ///
+    /// These tests failed with "no such table" because SQLite had no migration
+    /// step at all: the schema was only ever applied by `main.rs` (A-27).
     async fn setup_sqlite() -> Result<SqliteStore> {
-        SqliteStore::new(":memory:").await
+        let store = SqliteStore::new(":memory:").await?;
+        store.run_migrations().await?;
+        Ok(store)
+    }
+
+    /// A store with the schema applied and one tenant row present.
+    ///
+    /// Tokens and system settings are foreign-keyed to `tenants`, so a test
+    /// that invents a tenant UUID without inserting the row hits a foreign-key
+    /// violation. These tests previously ran against a database with no tables
+    /// at all, which is why the constraint never fired.
+    async fn setup_sqlite_with_tenant() -> Result<(SqliteStore, Uuid)> {
+        let store = setup_sqlite().await?;
+        let tenant_id = Uuid::new_v4();
+        store
+            .create_tenant(pangolin_core::model::Tenant {
+                id: tenant_id,
+                name: format!("test_tenant_{tenant_id}"),
+                properties: std::collections::HashMap::new(),
+            })
+            .await?;
+        Ok((store, tenant_id))
     }
 
     #[tokio::test]
     async fn test_token_management() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
         let user_id = Uuid::new_v4();
 
-        // Test storing a token
-        let token = create_test_token(user_id);
+        // Test storing a token. The token must belong to the tenant we then
+        // list by: `create_test_token` used to invent its own tenant, so the
+        // listing was always empty.
+        let mut token = create_test_token(user_id);
+        token.tenant_id = tenant_id;
         store.store_token(token.clone()).await?;
 
         // Test listing tokens
@@ -43,7 +70,8 @@ mod sqlite_new_endpoints_tests {
         assert_eq!(tokens[0].user_id, user_id);
 
         // Store another token for the same user
-        let token2 = create_test_token(user_id);
+        let mut token2 = create_test_token(user_id);
+        token2.tenant_id = tenant_id;
         store.store_token(token2).await?;
 
         let tokens = store.list_active_tokens(tenant_id, None, None).await?;
@@ -54,8 +82,7 @@ mod sqlite_new_endpoints_tests {
 
     #[tokio::test]
     async fn test_system_settings() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
 
         // Test getting default settings
         let settings = store.get_system_settings(tenant_id).await?;
@@ -72,9 +99,14 @@ mod sqlite_new_endpoints_tests {
             smtp_password: Some("password".to_string()),
         };
 
-        let updated = store.update_system_settings(tenant_id, new_settings.clone()).await?;
+        let updated = store
+            .update_system_settings(tenant_id, new_settings.clone())
+            .await?;
         assert_eq!(updated.allow_public_signup, Some(true));
-        assert_eq!(updated.default_warehouse_bucket, Some("test-bucket".to_string()));
+        assert_eq!(
+            updated.default_warehouse_bucket,
+            Some("test-bucket".to_string())
+        );
 
         // Test retrieving updated settings
         let retrieved = store.get_system_settings(tenant_id).await?;
@@ -86,20 +118,25 @@ mod sqlite_new_endpoints_tests {
 
     #[tokio::test]
     async fn test_federated_catalog_stats() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
         let catalog_name = "test_catalog";
 
         // Test getting stats for non-existent catalog
-        let stats = store.get_federated_catalog_stats(tenant_id, catalog_name).await?;
+        let stats = store
+            .get_federated_catalog_stats(tenant_id, catalog_name)
+            .await?;
         assert_eq!(stats.sync_status, "Never Synced");
         assert!(stats.last_synced_at.is_none());
 
         // Test syncing catalog
-        store.sync_federated_catalog(tenant_id, catalog_name).await?;
+        store
+            .sync_federated_catalog(tenant_id, catalog_name)
+            .await?;
 
         // Test retrieving stats after sync
-        let stats = store.get_federated_catalog_stats(tenant_id, catalog_name).await?;
+        let stats = store
+            .get_federated_catalog_stats(tenant_id, catalog_name)
+            .await?;
         assert_eq!(stats.sync_status, "Success");
         assert!(stats.last_synced_at.is_some());
         assert_eq!(stats.tables_synced, 0);
@@ -110,17 +147,8 @@ mod sqlite_new_endpoints_tests {
 
     #[tokio::test]
     async fn test_merge_branch() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
         let catalog_name = "test_catalog";
-
-        // Create tenant and catalog first
-        let tenant = pangolin_core::model::Tenant {
-            id: tenant_id,
-            name: "Test Tenant".to_string(),
-            properties: std::collections::HashMap::new(),
-        };
-        store.create_tenant(tenant).await?;
 
         let catalog = pangolin_core::model::Catalog {
             id: Uuid::new_v4(),
@@ -140,7 +168,9 @@ mod sqlite_new_endpoints_tests {
             branch_type: pangolin_core::model::BranchType::Experimental,
             assets: vec![],
         };
-        store.create_branch(tenant_id, catalog_name, source_branch.clone()).await?;
+        store
+            .create_branch(tenant_id, catalog_name, source_branch.clone())
+            .await?;
 
         let target_branch = pangolin_core::model::Branch {
             name: "target".to_string(),
@@ -148,13 +178,26 @@ mod sqlite_new_endpoints_tests {
             branch_type: pangolin_core::model::BranchType::Experimental,
             assets: vec![],
         };
-        store.create_branch(tenant_id, catalog_name, target_branch).await?;
+        store
+            .create_branch(tenant_id, catalog_name, target_branch)
+            .await?;
 
-        // Test merge
-        store.merge_branch(tenant_id, catalog_name, "target".to_string(), "source".to_string()).await?;
+        // Test merge. `CatalogStore::merge_branch` takes (source, target); the
+        // arguments used to be the other way round here because the inherent
+        // SqliteStore method took the opposite order under the same name.
+        store
+            .merge_branch(
+                tenant_id,
+                catalog_name,
+                "source".to_string(),
+                "target".to_string(),
+            )
+            .await?;
 
         // Verify target branch now has source's head
-        let merged_target = store.get_branch(tenant_id, catalog_name, "target".to_string()).await?
+        let merged_target = store
+            .get_branch(tenant_id, catalog_name, "target".to_string())
+            .await?
             .expect("Target branch should exist");
         assert_eq!(merged_target.head_commit_id, source_branch.head_commit_id);
 
@@ -167,8 +210,9 @@ mod postgres_new_endpoints_tests {
     use super::*;
 
     async fn setup_postgres() -> Result<PostgresStore> {
-        let db_url = std::env::var("TEST_POSTGRES_URL")
-            .unwrap_or_else(|_| "postgres://pangolin:password@localhost:5433/pangolin_test".to_string());
+        let db_url = std::env::var("TEST_POSTGRES_URL").unwrap_or_else(|_| {
+            "postgres://pangolin:password@localhost:5433/pangolin_test".to_string()
+        });
         PostgresStore::new(&db_url).await
     }
 
@@ -182,7 +226,9 @@ mod postgres_new_endpoints_tests {
         let token = create_test_token(user_id);
         store.store_token(token.clone()).await?;
 
-        let tokens = store.list_active_tokens(tenant_id, Some(user_id), None).await?;
+        let tokens = store
+            .list_active_tokens(tenant_id, Some(user_id), None)
+            .await?;
         assert!(!tokens.is_empty());
 
         Ok(())
@@ -207,7 +253,9 @@ mod postgres_new_endpoints_tests {
             smtp_password: None,
         };
 
-        let updated = store.update_system_settings(tenant_id, new_settings).await?;
+        let updated = store
+            .update_system_settings(tenant_id, new_settings)
+            .await?;
         assert_eq!(updated.allow_public_signup, Some(true));
 
         Ok(())
@@ -219,9 +267,9 @@ mod mongo_new_endpoints_tests {
     use super::*;
 
     async fn setup_mongo() -> Result<MongoStore> {
-        let db_url = std::env::var("TEST_MONGO_URL")
-            .unwrap_or_else(|_| "mongodb://localhost:27017".to_string());
-        MongoStore::new(&db_url, "pangolin_test").await
+        let db_url = pangolin_store::test_support::mongo_url()
+            .ok_or_else(|| anyhow::anyhow!("PANGOLIN_TEST_MONGO_URL is not set"))?;
+        MongoStore::new(&db_url, &pangolin_store::test_support::mongo_db_name()).await
     }
 
     #[tokio::test]
@@ -234,7 +282,9 @@ mod mongo_new_endpoints_tests {
         let token = create_test_token(user_id);
         store.store_token(token.clone()).await?;
 
-        let tokens = store.list_active_tokens(tenant_id, Some(user_id), None).await?;
+        let tokens = store
+            .list_active_tokens(tenant_id, Some(user_id), None)
+            .await?;
         assert!(!tokens.is_empty());
 
         Ok(())
@@ -247,9 +297,13 @@ mod mongo_new_endpoints_tests {
         let tenant_id = Uuid::new_v4();
         let catalog_name = "test_catalog";
 
-        store.sync_federated_catalog(tenant_id, catalog_name).await?;
+        store
+            .sync_federated_catalog(tenant_id, catalog_name)
+            .await?;
 
-        let stats = store.get_federated_catalog_stats(tenant_id, catalog_name).await?;
+        let stats = store
+            .get_federated_catalog_stats(tenant_id, catalog_name)
+            .await?;
         assert_eq!(stats.sync_status, "Success");
 
         Ok(())

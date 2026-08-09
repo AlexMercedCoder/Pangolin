@@ -1,8 +1,8 @@
+use anyhow::Result;
 use pangolin_core::model::{Asset, ConflictType, MergeConflict, MergeOperation};
 use pangolin_store::CatalogStore;
 use std::sync::Arc;
 use uuid::Uuid;
-use anyhow::Result;
 
 /// Conflict detector for analyzing merge operations
 pub struct ConflictDetector {
@@ -15,30 +15,34 @@ impl ConflictDetector {
     }
 
     /// Detect all conflicts between source and target branches
-    pub async fn detect_conflicts(
-        &self,
-        operation: &MergeOperation,
-    ) -> Result<Vec<MergeConflict>> {
+    pub async fn detect_conflicts(&self, operation: &MergeOperation) -> Result<Vec<MergeConflict>> {
         let mut conflicts = Vec::new();
 
         // Get assets from both branches
-        let source_assets = self.get_branch_assets(
-            operation.tenant_id,
-            &operation.catalog_name,
-            &operation.source_branch,
-        ).await?;
+        let source_assets = self
+            .get_branch_assets(
+                operation.tenant_id,
+                &operation.catalog_name,
+                &operation.source_branch,
+            )
+            .await?;
 
-        let target_assets = self.get_branch_assets(
-            operation.tenant_id,
-            &operation.catalog_name,
-            &operation.target_branch,
-        ).await?;
+        let target_assets = self
+            .get_branch_assets(
+                operation.tenant_id,
+                &operation.catalog_name,
+                &operation.target_branch,
+            )
+            .await?;
 
         // Detect different types of conflicts
         // For MVP Fast-Forward merge support, we disable strict schema/metadata comparison
         // to allow Source to overwrite Target properties.
         // conflicts.extend(self.detect_schema_conflicts(operation, &source_assets, &target_assets).await?);
-        conflicts.extend(self.detect_deletion_conflicts(operation, &source_assets, &target_assets).await?);
+        conflicts.extend(
+            self.detect_deletion_conflicts(operation, &source_assets, &target_assets)
+                .await?,
+        );
         // conflicts.extend(self.detect_metadata_conflicts(operation, &source_assets, &target_assets).await?);
 
         Ok(conflicts)
@@ -52,20 +56,26 @@ impl ConflictDetector {
         branch_name: &str,
     ) -> Result<Vec<Asset>> {
         // Get all namespaces in the catalog
-        let namespaces = self.store.list_namespaces(tenant_id, catalog_name, None, None).await?;
-        
+        let namespaces = self
+            .store
+            .list_namespaces(tenant_id, catalog_name, None, None)
+            .await?;
+
         let mut all_assets = Vec::new();
         for namespace in namespaces {
-            let assets = self.store.list_assets(
-                tenant_id,
-                catalog_name,
-                Some(branch_name.to_string()),
-                namespace.name.clone(),
-                None,
-            ).await?;
+            let assets = self
+                .store
+                .list_assets(
+                    tenant_id,
+                    catalog_name,
+                    Some(branch_name.to_string()),
+                    namespace.name.clone(),
+                    None,
+                )
+                .await?;
             all_assets.extend(assets);
         }
-        
+
         Ok(all_assets)
     }
 
@@ -137,7 +147,7 @@ impl ConflictDetector {
         }
 
         // Check for assets deleted in target but present in source
-        // In a true 3-way merge, we would check if it was in Base. 
+        // In a true 3-way merge, we would check if it was in Base.
         // Lacking Base, we assume "Present in Source, Missing in Target" is an ADDITION, not a conflict.
         // So we skip flagging this as a conflict.
         /*
@@ -177,7 +187,7 @@ impl ConflictDetector {
             if let Some(target_asset) = target_assets.iter().find(|a| a.name == source_asset.name) {
                 // Check for conflicting properties
                 let mut conflicting_props = Vec::new();
-                
+
                 for (key, source_value) in &source_asset.properties {
                     if let Some(target_value) = target_asset.properties.get(key) {
                         if source_value != target_value {
@@ -212,11 +222,14 @@ impl ConflictDetector {
     pub fn can_auto_resolve(&self, conflict: &MergeConflict) -> bool {
         match &conflict.conflict_type {
             // Metadata conflicts with non-critical properties can be auto-resolved
-            ConflictType::MetadataConflict { conflicting_properties, .. } => {
+            ConflictType::MetadataConflict {
+                conflicting_properties,
+                ..
+            } => {
                 // Only auto-resolve if conflicts are in non-critical properties
-                conflicting_properties.iter().all(|prop| {
-                    !prop.starts_with("schema") && !prop.starts_with("partition")
-                })
+                conflicting_properties
+                    .iter()
+                    .all(|prop| !prop.starts_with("schema") && !prop.starts_with("partition"))
             }
             // Schema and deletion conflicts require manual resolution
             ConflictType::SchemaChange { .. } => false,
@@ -229,15 +242,14 @@ impl ConflictDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pangolin_core::model::{AssetType, MergeStatus};
+
     use pangolin_store::MemoryStore;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_detect_no_conflicts() {
         let store = Arc::new(MemoryStore::new());
         let detector = ConflictDetector::new(store.clone());
-        
+
         let tenant_id = Uuid::new_v4();
         let operation = MergeOperation::new(
             tenant_id,
@@ -256,9 +268,9 @@ mod tests {
     async fn test_can_auto_resolve() {
         let store = Arc::new(MemoryStore::new());
         let detector = ConflictDetector::new(store);
-        
+
         let operation_id = Uuid::new_v4();
-        
+
         // Metadata conflict with non-critical property
         let metadata_conflict = MergeConflict::new(
             operation_id,
@@ -270,7 +282,7 @@ mod tests {
             "Test conflict".to_string(),
         );
         assert!(detector.can_auto_resolve(&metadata_conflict));
-        
+
         // Schema conflict cannot be auto-resolved
         let schema_conflict = MergeConflict::new(
             operation_id,

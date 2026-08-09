@@ -1,22 +1,23 @@
-use pangolin_store::{PostgresStore, CatalogStore};
-use pangolin_core::model::{Tenant, Catalog, Namespace, Asset, AssetType};
-use uuid::Uuid;
-use std::collections::HashMap;
-use std::env;
-use pangolin_core::user::{User, UserRole};
 use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
+use pangolin_core::model::{Asset, AssetType, Catalog, Namespace, Tenant};
+use pangolin_core::user::{User, UserRole};
+use pangolin_store::PostgresStore;
+use std::collections::HashMap;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn test_postgres_store_flow() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_postgres_store_flow: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_postgres_store_flow: set PANGOLIN_TEST_POSTGRES_URL to run it");
             return;
         }
     };
 
-    let store = PostgresStore::new(&connection_string).await.expect("Failed to create PostgresStore");
+    let store = PostgresStore::new(&connection_string)
+        .await
+        .expect("Failed to create PostgresStore");
 
     // 1. Create Tenant
     let tenant_id = Uuid::new_v4();
@@ -25,9 +26,15 @@ async fn test_postgres_store_flow() {
         name: "test_tenant".to_string(),
         properties: HashMap::new(),
     };
-    store.create_tenant(tenant.clone()).await.expect("Failed to create tenant");
+    store
+        .create_tenant(tenant.clone())
+        .await
+        .expect("Failed to create tenant");
 
-    let fetched_tenant = store.get_tenant(tenant_id).await.expect("Failed to get tenant");
+    let fetched_tenant = store
+        .get_tenant(tenant_id)
+        .await
+        .expect("Failed to get tenant");
     assert_eq!(fetched_tenant.unwrap().name, "test_tenant");
 
     // 2. Create Catalog
@@ -40,14 +47,20 @@ async fn test_postgres_store_flow() {
         federated_config: None,
         properties: HashMap::new(),
     };
-    store.create_catalog(tenant_id, catalog.clone()).await.expect("Failed to create catalog");
+    store
+        .create_catalog(tenant_id, catalog.clone())
+        .await
+        .expect("Failed to create catalog");
 
     // 3. Create Namespace
     let namespace = Namespace {
         name: vec!["db".to_string(), "schema".to_string()],
         properties: HashMap::new(),
     };
-    store.create_namespace(tenant_id, "test_catalog", namespace.clone()).await.expect("Failed to create namespace");
+    store
+        .create_namespace(tenant_id, "test_catalog", namespace.clone())
+        .await
+        .expect("Failed to create namespace");
 
     // 4. Create Asset
     let asset = Asset {
@@ -57,13 +70,40 @@ async fn test_postgres_store_flow() {
         location: "s3://bucket/test".to_string(),
         properties: HashMap::new(),
     };
-    store.create_asset(tenant_id, "test_catalog", None, namespace.name.clone(), asset.clone()).await.expect("Failed to create asset");
+    store
+        .create_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            asset.clone(),
+        )
+        .await
+        .expect("Failed to create asset");
 
-    let fetched_asset = store.get_asset(tenant_id, "test_catalog", None, namespace.name.clone(), "test_table".to_string()).await.expect("Failed to get asset");
+    let fetched_asset = store
+        .get_asset(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            "test_table".to_string(),
+        )
+        .await
+        .expect("Failed to get asset");
     assert_eq!(fetched_asset.unwrap().name, "test_table");
 
     // 5. List Assets
-    let assets = store.list_assets(tenant_id, "test_catalog", None, namespace.name.clone(), None).await.expect("Failed to list assets");
+    let assets = store
+        .list_assets(
+            tenant_id,
+            "test_catalog",
+            None,
+            namespace.name.clone(),
+            None,
+        )
+        .await
+        .expect("Failed to list assets");
     assert_eq!(assets.len(), 1);
     assert_eq!(assets[0].name, "test_table");
     assert_eq!(assets[0].name, "test_table");
@@ -71,15 +111,19 @@ async fn test_postgres_store_flow() {
 
 #[tokio::test]
 async fn test_postgres_access_requests() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_postgres_access_requests: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!(
+                "Skipping test_postgres_access_requests: set PANGOLIN_TEST_POSTGRES_URL to run it"
+            );
             return;
         }
     };
 
-    let store = PostgresStore::new(&connection_string).await.expect("Failed to create PostgresStore");
+    let store = PostgresStore::new(&connection_string)
+        .await
+        .expect("Failed to create PostgresStore");
 
     // Setup: Tenant
     let tenant_id = Uuid::new_v4();
@@ -88,7 +132,10 @@ async fn test_postgres_access_requests() {
         name: "req_tenant".to_string(),
         properties: HashMap::new(),
     };
-    store.create_tenant(tenant.clone()).await.expect("Create tenant");
+    store
+        .create_tenant(tenant.clone())
+        .await
+        .expect("Create tenant");
 
     // Setup: User
     let user = User {
@@ -118,13 +165,19 @@ async fn test_postgres_access_requests() {
         federated_config: None,
         properties: HashMap::new(),
     };
-    store.create_catalog(tenant_id, catalog.clone()).await.expect("Create catalog");
+    store
+        .create_catalog(tenant_id, catalog.clone())
+        .await
+        .expect("Create catalog");
 
     let namespace = Namespace {
         name: vec!["default".to_string()],
         properties: HashMap::new(),
     };
-    store.create_namespace(tenant_id, "req_catalog", namespace.clone()).await.expect("Create namespace");
+    store
+        .create_namespace(tenant_id, "req_catalog", namespace.clone())
+        .await
+        .expect("Create namespace");
 
     let asset = Asset {
         id: Uuid::new_v4(),
@@ -133,42 +186,73 @@ async fn test_postgres_access_requests() {
         location: "s3://bucket/sec".to_string(),
         properties: HashMap::new(),
     };
-    store.create_asset(tenant_id, "req_catalog", None, vec!["default".to_string()], asset.clone()).await.expect("Create asset");
-    
+    store
+        .create_asset(
+            tenant_id,
+            "req_catalog",
+            None,
+            vec!["default".to_string()],
+            asset.clone(),
+        )
+        .await
+        .expect("Create asset");
+
     // 1. Create Request
-    let mut request = AccessRequest::new(user.tenant_id.expect("tenant_id"), user.id, asset.id, Some("Access please".to_string()));
-    store.create_access_request(request.clone()).await.expect("Create request");
+    let mut request = AccessRequest::new(
+        user.tenant_id.expect("tenant_id"),
+        user.id,
+        asset.id,
+        Some("Access please".to_string()),
+    );
+    store
+        .create_access_request(request.clone())
+        .await
+        .expect("Create request");
 
     // 2. Get Request
-    let fetched = store.get_access_request(request.id).await.expect("Get request");
+    let fetched = store
+        .get_access_request(request.id)
+        .await
+        .expect("Get request");
     assert!(fetched.is_some());
     assert_eq!(fetched.unwrap().status, RequestStatus::Pending);
 
     // 3. List
-    let list = store.list_access_requests(tenant_id, None).await.expect("List requests");
+    let list = store
+        .list_access_requests(tenant_id, None)
+        .await
+        .expect("List requests");
     assert!(!list.is_empty());
 
     // 4. Update
     request.status = RequestStatus::Approved;
     request.reviewed_by = Some(Uuid::new_v4()); // Dummy reviewer
     request.reviewed_at = Some(chrono::Utc::now());
-    store.update_access_request(request.clone()).await.expect("Update request");
+    store
+        .update_access_request(request.clone())
+        .await
+        .expect("Update request");
 
-    let updated = store.get_access_request(request.id).await.expect("Get updated");
+    let updated = store
+        .get_access_request(request.id)
+        .await
+        .expect("Get updated");
     assert_eq!(updated.unwrap().status, RequestStatus::Approved);
 }
 
 #[tokio::test]
 async fn test_service_user_rbac() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_service_user_rbac: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_service_user_rbac: set PANGOLIN_TEST_POSTGRES_URL to run it");
             return;
         }
     };
 
-    let store = PostgresStore::new(&connection_string).await.expect("Failed to create PostgresStore");
+    let store = PostgresStore::new(&connection_string)
+        .await
+        .expect("Failed to create PostgresStore");
 
     // 1. Create Tenant
     let tenant_id = Uuid::new_v4();
@@ -177,7 +261,10 @@ async fn test_service_user_rbac() {
         name: format!("rbac_tenant_{}", Uuid::new_v4().simple()),
         properties: HashMap::new(),
     };
-    store.create_tenant(tenant.clone()).await.expect("Create tenant");
+    store
+        .create_tenant(tenant.clone())
+        .await
+        .expect("Create tenant");
 
     // 2. Create Service User
     let service_user = pangolin_core::user::ServiceUser {
@@ -189,10 +276,14 @@ async fn test_service_user_rbac() {
         role: UserRole::TenantUser,
         created_by: Uuid::new_v4(),
         created_at: chrono::Utc::now(),
+        last_used: None,
         expires_at: None,
         active: true,
     };
-    store.create_service_user(service_user.clone()).await.expect("Create service user");
+    store
+        .create_service_user(service_user.clone())
+        .await
+        .expect("Create service user");
 
     // 3. Create Role
     let role = pangolin_core::permission::Role {
@@ -201,15 +292,24 @@ async fn test_service_user_rbac() {
         description: None,
         tenant_id,
         permissions: vec![],
+        created_by: Uuid::new_v4(),
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };
     store.create_role(role.clone()).await.expect("Create role");
 
     // 4. Assign Role to Service User (Testing FK Relaxation on user_roles.user_id)
-    store.assign_role(service_user.id, role.id).await.expect("Assign role to service user");
+    let assignment =
+        pangolin_core::permission::UserRole::new(service_user.id, role.id, service_user.created_by);
+    store
+        .assign_role(assignment)
+        .await
+        .expect("Assign role to service user");
 
-    let user_roles = store.get_user_roles(service_user.id).await.expect("Get user roles");
+    let user_roles = store
+        .get_user_roles(service_user.id)
+        .await
+        .expect("Get user roles");
     assert_eq!(user_roles.len(), 1);
-    assert_eq!(user_roles[0].id, role.id);
+    assert_eq!(user_roles[0].role_id, role.id);
 }

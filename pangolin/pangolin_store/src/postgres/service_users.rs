@@ -1,10 +1,10 @@
 use super::PostgresStore;
 use anyhow::Result;
-use uuid::Uuid;
-use sqlx::Row;
-use pangolin_core::user::ServiceUser;
 use chrono::{DateTime, Utc};
+use pangolin_core::user::ServiceUser;
 use pangolin_core::user::UserRole;
+use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Service User Operations
@@ -52,7 +52,10 @@ impl PostgresStore {
         }
     }
 
-    pub async fn get_service_user_by_api_key_hash(&self, api_key_hash: &str) -> Result<Option<ServiceUser>> {
+    pub async fn get_service_user_by_api_key_hash(
+        &self,
+        api_key_hash: &str,
+    ) -> Result<Option<ServiceUser>> {
         let row = sqlx::query(
             "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active 
              FROM service_users WHERE api_key_hash = $1 AND active = true"
@@ -142,7 +145,11 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub async fn update_service_user_last_used(&self, id: Uuid, timestamp: DateTime<Utc>) -> Result<()> {
+    pub async fn update_service_user_last_used(
+        &self,
+        id: Uuid,
+        timestamp: DateTime<Utc>,
+    ) -> Result<()> {
         sqlx::query("UPDATE service_users SET last_used = $1 WHERE id = $2")
             .bind(timestamp)
             .bind(id)
@@ -152,7 +159,10 @@ impl PostgresStore {
     }
 
     // This helper is used internally by the service user methods
-    pub(crate) fn row_to_service_user(&self, row: sqlx::postgres::PgRow) -> Result<Option<ServiceUser>> {
+    pub(crate) fn row_to_service_user(
+        &self,
+        row: sqlx::postgres::PgRow,
+    ) -> Result<Option<ServiceUser>> {
         let role_str: String = row.get("role");
         let role = match role_str.as_str() {
             "Root" => UserRole::Root,

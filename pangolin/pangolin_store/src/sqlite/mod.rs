@@ -1,26 +1,26 @@
 // SQLite submodules
-mod main;
-pub mod tenants;
-pub mod warehouses;
-pub mod catalogs;
-pub mod namespaces;
-pub mod assets;
-pub mod branches;
-pub mod tags;
-pub mod commits;
-pub mod users;
-pub mod roles;
-pub mod permissions;
-pub mod tokens;
-pub mod audit_logs;
-pub mod system_settings;
-pub mod federated_catalogs;
-pub mod maintenance;
-pub mod io;
 pub mod access_requests;
-pub mod signer;
-pub mod service_users;
+pub mod assets;
+pub mod audit_logs;
+pub mod branches;
+pub mod catalogs;
+pub mod commits;
+pub mod federated_catalogs;
+pub mod io;
+mod main;
+pub mod maintenance;
 pub mod merge_operations;
+pub mod namespaces;
+pub mod permissions;
+pub mod roles;
+pub mod service_users;
+pub mod signer;
+pub mod system_settings;
+pub mod tags;
+pub mod tenants;
+pub mod tokens;
+pub mod users;
+pub mod warehouses;
 
 // Re-export SqliteStore
 pub use main::SqliteStore;

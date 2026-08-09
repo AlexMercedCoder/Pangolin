@@ -1,10 +1,10 @@
 /// Access Request operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
+use chrono::{DateTime, TimeZone, Utc};
+use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 use sqlx::Row;
 use uuid::Uuid;
-use chrono::{DateTime, Utc, TimeZone};
-use pangolin_core::business_metadata::{AccessRequest, RequestStatus};
 
 impl SqliteStore {
     pub async fn create_access_request(&self, request: AccessRequest) -> Result<()> {
@@ -40,19 +40,26 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_access_requests(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<AccessRequest>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_access_requests(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<AccessRequest>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
-        let rows = sqlx::query(
-            "SELECT * FROM access_requests WHERE tenant_id = ? LIMIT ? OFFSET ?"
-        )
-        .bind(tenant_id.to_string())
-        .bind(limit)
-        .bind(offset)
-        .fetch_all(&self.pool)
-        .await?;
-        
+        let rows =
+            sqlx::query("SELECT * FROM access_requests WHERE tenant_id = ? LIMIT ? OFFSET ?")
+                .bind(tenant_id.to_string())
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(&self.pool)
+                .await?;
+
         let mut requests = Vec::new();
         for row in rows {
             requests.push(self.row_to_access_request(row)?);
@@ -89,10 +96,18 @@ impl SqliteStore {
             user_id: Uuid::parse_str(&row.get::<String, _>("user_id"))?,
             asset_id: Uuid::parse_str(&row.get::<String, _>("asset_id"))?,
             reason: row.get("reason"),
-            requested_at: Utc.timestamp_millis_opt(row.get("requested_at")).single().unwrap_or_default(),
+            requested_at: Utc
+                .timestamp_millis_opt(row.get("requested_at"))
+                .single()
+                .unwrap_or_default(),
             status,
-            reviewed_by: row.get::<Option<String>, _>("reviewed_by").map(|s| Uuid::parse_str(&s)).transpose()?,
-            reviewed_at: row.get::<Option<i64>, _>("reviewed_at").map(|t| Utc.timestamp_millis_opt(t).single().unwrap_or_default()),
+            reviewed_by: row
+                .get::<Option<String>, _>("reviewed_by")
+                .map(|s| Uuid::parse_str(&s))
+                .transpose()?,
+            reviewed_at: row
+                .get::<Option<i64>, _>("reviewed_at")
+                .map(|t| Utc.timestamp_millis_opt(t).single().unwrap_or_default()),
             review_comment: row.get("review_comment"),
         })
     }

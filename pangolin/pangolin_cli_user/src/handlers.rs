@@ -1,50 +1,78 @@
-use pangolin_cli_common::client::PangolinClient;
-use pangolin_cli_common::utils::print_table;
-use pangolin_cli_common::error::CliError;
 use crate::commands::CodeLanguage;
 use dialoguer::{Input, Password};
+use pangolin_cli_common::client::PangolinClient;
+use pangolin_cli_common::error::CliError;
+use pangolin_cli_common::utils::print_table;
 use serde_json::Value;
 use syntect::easy::HighlightLines;
+use syntect::highlighting::{Style, ThemeSet};
 use syntect::parsing::SyntaxSet;
-use syntect::highlighting::{ThemeSet, Style};
 use syntect::util::{as_24_bit_terminal_escaped, LinesWithEndings};
 
-pub async fn handle_login(client: &mut PangolinClient, username_opt: Option<String>, password_opt: Option<String>, tenant_id: Option<String>) -> Result<(), CliError> {
+pub async fn handle_login(
+    client: &mut PangolinClient,
+    username_opt: Option<String>,
+    password_opt: Option<String>,
+    tenant_id: Option<String>,
+) -> Result<(), CliError> {
     let username = match username_opt {
         Some(u) => u,
-        None => Input::new().with_prompt("Username").interact_text()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+        None => Input::new()
+            .with_prompt("Username")
+            .interact_text()
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
     };
 
     let password = match password_opt {
         Some(p) => p,
-        None => Password::new().with_prompt("Password").interact()
-            .map_err(|e| CliError::IoError(std::io::Error::new(std::io::ErrorKind::Other, e)))?,
+        None => Password::new()
+            .with_prompt("Password")
+            .interact()
+            .map_err(|e| CliError::IoError(std::io::Error::other(e)))?,
     };
 
-    client.login_with_tenant(&username, &password, tenant_id.as_deref()).await?;
+    client
+        .login_with_tenant(&username, &password, tenant_id.as_deref())
+        .await?;
     println!("✅ Logged in successfully as {}", username);
     Ok(())
 }
 
-pub async fn handle_list_catalogs(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+pub async fn handle_list_catalogs(
+    client: &PangolinClient,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<(), CliError> {
     let q = pangolin_cli_common::utils::pagination_query(limit, offset);
-    let path = if q.is_empty() { "/api/v1/catalogs".to_string() } else { format!("/api/v1/catalogs?{}", q) };
+    let path = if q.is_empty() {
+        "/api/v1/catalogs".to_string()
+    } else {
+        format!("/api/v1/catalogs?{}", q)
+    };
     let res = client.get(&path).await?;
-    
+
     if !res.status().is_success() {
-        return Err(CliError::ApiError(format!("Failed to list catalogs: {}", res.status())));
+        return Err(CliError::ApiError(format!(
+            "Failed to list catalogs: {}",
+            res.status()
+        )));
     }
-    
-    let catalogs: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
-    
-    let rows: Vec<Vec<String>> = catalogs.iter().map(|c| {
-        vec![
-            c["name"].as_str().unwrap_or("-").to_string(),
-            c["catalog_type"].as_str().unwrap_or("-").to_string()
-        ]
-    }).collect();
-    
+
+    let catalogs: Vec<Value> = res
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+
+    let rows: Vec<Vec<String>> = catalogs
+        .iter()
+        .map(|c| {
+            vec![
+                c["name"].as_str().unwrap_or("-").to_string(),
+                c["catalog_type"].as_str().unwrap_or("-").to_string(),
+            ]
+        })
+        .collect();
+
     print_table(vec!["Name", "Type"], rows);
     Ok(())
 }
@@ -57,10 +85,18 @@ pub async fn handle_search(_client: &PangolinClient, query: String) -> Result<()
     Ok(())
 }
 
-pub async fn handle_generate_code(client: &PangolinClient, language: CodeLanguage, table: String) -> Result<(), CliError> {
+pub async fn handle_generate_code(
+    client: &PangolinClient,
+    language: CodeLanguage,
+    table: String,
+) -> Result<(), CliError> {
     let url = &client.config.base_url;
-    let token = client.config.auth_token.as_deref().unwrap_or("<YOUR_TOKEN>");
-    
+    let token = client
+        .config
+        .auth_token
+        .as_deref()
+        .unwrap_or("<YOUR_TOKEN>");
+
     let parts: Vec<&str> = table.split('.').collect();
     let (catalog, namespace, table_name) = if parts.len() == 3 {
         (parts[0], parts[1], parts[2])
@@ -69,7 +105,9 @@ pub async fn handle_generate_code(client: &PangolinClient, language: CodeLanguag
     };
 
     let (code, syntax) = match language {
-        CodeLanguage::Pyiceberg => (format!(r#"
+        CodeLanguage::Pyiceberg => (
+            format!(
+                r#"
 from pyiceberg.catalog import load_catalog
 
 catalog = load_catalog(
@@ -83,8 +121,14 @@ catalog = load_catalog(
 table = catalog.load_table("{}.{}.{}")
 print(table.schema())
 df = table.scan().to_arrow()
-"#, catalog, url, token, catalog, namespace, table_name), "py"),
-        CodeLanguage::Pyspark => (format!(r#"
+"#,
+                catalog, url, token, catalog, namespace, table_name
+            ),
+            "py",
+        ),
+        CodeLanguage::Pyspark => (
+            format!(
+                r#"
 spark = SparkSession.builder \
     .config("spark.sql.catalog.{}", "org.apache.iceberg.spark.SparkCatalog") \
     .config("spark.sql.catalog.{}.type", "rest") \
@@ -94,27 +138,45 @@ spark = SparkSession.builder \
 
 df = spark.table("{}.{}.{}")
 df.show()
-"#, catalog, catalog, catalog, url, catalog, token, catalog, namespace, table_name), "py"),
-        CodeLanguage::Dremio => (format!(r#"
+"#,
+                catalog, catalog, catalog, url, catalog, token, catalog, namespace, table_name
+            ),
+            "py",
+        ),
+        CodeLanguage::Dremio => (
+            format!(
+                r#"
 -- Add Source in Dremio
 SOURCE TYPE: Iceberg
 REST URL: {}
 CREDENTIAL: {}
-"#, url, token), "sql"),
-         CodeLanguage::Sql => (format!(r#"
+"#,
+                url, token
+            ),
+            "sql",
+        ),
+        CodeLanguage::Sql => (
+            format!(
+                r#"
 SELECT * FROM {}.{}.{} LIMIT 10;
-"#, catalog, namespace, table_name), "sql"),
+"#,
+                catalog, namespace, table_name
+            ),
+            "sql",
+        ),
     };
 
     println!("\n--- Generated {:?} Code ---\n", language);
-    
+
     // Syntax Highlighting
     let ps = SyntaxSet::load_defaults_newlines();
     let ts = ThemeSet::load_defaults();
-    
-    let syntax = ps.find_syntax_by_extension(syntax).unwrap_or(ps.find_syntax_plain_text());
+
+    let syntax = ps
+        .find_syntax_by_extension(syntax)
+        .unwrap_or(ps.find_syntax_plain_text());
     let mut h = HighlightLines::new(syntax, &ts.themes["base16-ocean.dark"]);
-    
+
     for line in LinesWithEndings::from(&code) {
         let ranges: Vec<(Style, &str)> = h.highlight_line(line, &ps).unwrap();
         let escaped = as_24_bit_terminal_escaped(&ranges[..], true);
@@ -126,18 +188,37 @@ SELECT * FROM {}.{}.{} LIMIT 10;
 }
 
 // --- Branches ---
-pub async fn handle_list_branches(client: &PangolinClient, catalog: String, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
-     // Expected API: GET /api/v1/catalogs/{name}/branches OR /api/v1/branches?catalog={name}
-     // Based on previous exploration: /api/v1/branches?catalog={name} via list_branches handler
+pub async fn handle_list_branches(
+    client: &PangolinClient,
+    catalog: String,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<(), CliError> {
+    // Expected API: GET /api/v1/catalogs/{name}/branches OR /api/v1/branches?catalog={name}
+    // Based on previous exploration: /api/v1/branches?catalog={name} via list_branches handler
     let mut q = pangolin_cli_common::utils::pagination_query(limit, offset);
-    if !q.is_empty() { q = format!("&{}", q); }
-    let res = client.get(&format!("/api/v1/branches?catalog={}{}", catalog, q)).await?;
-    if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
-    let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
-    let rows = items.iter().map(|i| vec![
-        i["name"].as_str().unwrap_or("").to_string(),
-        i["head"].as_str().unwrap_or("-").to_string()
-    ]).collect();
+    if !q.is_empty() {
+        q = format!("&{}", q);
+    }
+    let res = client
+        .get(&format!("/api/v1/branches?catalog={}{}", catalog, q))
+        .await?;
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Error: {}", res.status())));
+    }
+    let items: Vec<Value> = res
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+    let rows = items
+        .iter()
+        .map(|i| {
+            vec![
+                i["name"].as_str().unwrap_or("").to_string(),
+                i["head"].as_str().unwrap_or("-").to_string(),
+            ]
+        })
+        .collect();
     print_table(vec!["Name", "Head Commit"], rows);
     Ok(())
 }
@@ -155,12 +236,12 @@ pub async fn handle_create_branch(
         "name": name,
         "from_branch": from.unwrap_or("main".to_string())
     });
-    
+
     // Add branch_type if provided
     if let Some(bt) = &branch_type {
         body["branch_type"] = serde_json::json!(bt);
     }
-    
+
     // Add assets if provided (parse comma-separated list)
     if let Some(assets_str) = &assets {
         let asset_list: Vec<String> = assets_str
@@ -172,14 +253,14 @@ pub async fn handle_create_branch(
             body["assets"] = serde_json::json!(asset_list);
         }
     }
-    
+
     let res = client.post("/api/v1/branches", &body).await?;
-    if !res.status().is_success() { 
+    if !res.status().is_success() {
         let status = res.status();
         let t = res.text().await.unwrap_or_default();
-        return Err(CliError::ApiError(format!("{} - {}", status, t))); 
+        return Err(CliError::ApiError(format!("{} - {}", status, t)));
     }
-    
+
     println!("✅ Branch '{}' created.", name);
     if let Some(bt) = branch_type {
         println!("   Type: {}", bt);
@@ -190,75 +271,131 @@ pub async fn handle_create_branch(
     Ok(())
 }
 
-pub async fn handle_merge_branch(client: &PangolinClient, catalog: String, source: String, target: String) -> Result<(), CliError> {
+pub async fn handle_merge_branch(
+    client: &PangolinClient,
+    catalog: String,
+    source: String,
+    target: String,
+) -> Result<(), CliError> {
     let body = serde_json::json!({
         "catalog": catalog,
         "source": source,
         "target": target
     });
     let res = client.post("/api/v1/branches/merge", &body).await?;
-    if !res.status().is_success() { 
+    if !res.status().is_success() {
         let status = res.status();
         let t = res.text().await.unwrap_or_default();
-        return Err(CliError::ApiError(format!("{} - {}", status, t))); 
+        return Err(CliError::ApiError(format!("{} - {}", status, t)));
     }
     println!("✅ Branch '{}' merged into '{}'.", source, target);
     Ok(())
 }
 
 // --- Tags ---
-pub async fn handle_list_tags(client: &PangolinClient, catalog: String, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+pub async fn handle_list_tags(
+    client: &PangolinClient,
+    catalog: String,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<(), CliError> {
     let mut q = pangolin_cli_common::utils::pagination_query(limit, offset);
-    if !q.is_empty() { q = format!("&{}", q); }
-    let res = client.get(&format!("/api/v1/tags?catalog={}{}", catalog, q)).await?; // Assumption on endpoint
-    if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
-    let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
-     let rows = items.iter().map(|i| vec![
-        i["name"].as_str().unwrap_or("").to_string(),
-        i["commit_id"].as_str().unwrap_or("-").to_string()
-    ]).collect();
+    if !q.is_empty() {
+        q = format!("&{}", q);
+    }
+    let res = client
+        .get(&format!("/api/v1/tags?catalog={}{}", catalog, q))
+        .await?; // Assumption on endpoint
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Error: {}", res.status())));
+    }
+    let items: Vec<Value> = res
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+    let rows = items
+        .iter()
+        .map(|i| {
+            vec![
+                i["name"].as_str().unwrap_or("").to_string(),
+                i["commit_id"].as_str().unwrap_or("-").to_string(),
+            ]
+        })
+        .collect();
     print_table(vec!["Name", "Commit ID"], rows);
     Ok(())
 }
 
-pub async fn handle_create_tag(client: &PangolinClient, catalog: String, name: String, commit_id: String) -> Result<(), CliError> {
+pub async fn handle_create_tag(
+    client: &PangolinClient,
+    catalog: String,
+    name: String,
+    commit_id: String,
+) -> Result<(), CliError> {
     let body = serde_json::json!({
         "catalog": catalog,
         "name": name,
         "commit_id": commit_id
     });
     let res = client.post("/api/v1/tags", &body).await?;
-    if !res.status().is_success() { 
-         let status = res.status();
-         let t = res.text().await.unwrap_or_default();
-         return Err(CliError::ApiError(format!("{} - {}", status, t))); 
+    if !res.status().is_success() {
+        let status = res.status();
+        let t = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("{} - {}", status, t)));
     }
     println!("✅ Tag '{}' created.", name);
     Ok(())
 }
 
 // --- Access Requests ---
-pub async fn handle_list_requests(client: &PangolinClient, limit: Option<usize>, offset: Option<usize>) -> Result<(), CliError> {
+pub async fn handle_list_requests(
+    client: &PangolinClient,
+    limit: Option<usize>,
+    offset: Option<usize>,
+) -> Result<(), CliError> {
     let q = pangolin_cli_common::utils::pagination_query(limit, offset);
-    let path = if q.is_empty() { "/api/v1/access-requests".to_string() } else { format!("/api/v1/access-requests?{}", q) };
+    let path = if q.is_empty() {
+        "/api/v1/access-requests".to_string()
+    } else {
+        format!("/api/v1/access-requests?{}", q)
+    };
     let res = client.get(&path).await?;
-    if !res.status().is_success() { return Err(CliError::ApiError(format!("Error: {}", res.status()))); }
-    let items: Vec<Value> = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
-    let rows = items.iter().map(|i| vec![
-        i["id"].as_str().unwrap_or("").to_string(),
-        i["resource"].as_str().unwrap_or("").to_string(),
-        i["status"].as_str().unwrap_or("").to_string()
-    ]).collect();
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Error: {}", res.status())));
+    }
+    let items: Vec<Value> = res
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+    let rows = items
+        .iter()
+        .map(|i| {
+            vec![
+                i["id"].as_str().unwrap_or("").to_string(),
+                i["resource"].as_str().unwrap_or("").to_string(),
+                i["status"].as_str().unwrap_or("").to_string(),
+            ]
+        })
+        .collect();
     print_table(vec!["ID", "Resource", "Status"], rows);
     Ok(())
 }
 
-pub async fn handle_request_access(client: &PangolinClient, resource: String, role: String, reason: String) -> Result<(), CliError> {
+pub async fn handle_request_access(
+    _client: &PangolinClient,
+    _resource: String,
+    _role: String,
+    _reason: String,
+) -> Result<(), CliError> {
     Ok(())
 }
 
 // --- Token Generation ---
-pub async fn handle_get_token(client: &PangolinClient, description: String, expires_in: u32) -> Result<(), CliError> {
+pub async fn handle_get_token(
+    client: &PangolinClient,
+    description: String,
+    expires_in: u32,
+) -> Result<(), CliError> {
     let body = serde_json::json!({
         "description": description,
         "expires_in_hours": expires_in * 24, // Endpoint expects hours? Wait, previous code said expires_in_days but endpoint is hours?
@@ -268,25 +405,31 @@ pub async fn handle_get_token(client: &PangolinClient, description: String, expi
         "tenant_id": client.config.tenant_id,
         "username": client.config.username
     });
-    
+
     let res = client.post("/api/v1/tokens", &body).await?;
-    
+
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
         return Err(CliError::ApiError(format!("{} - {}", status, text)));
     }
-    
-    let response: Value = res.json().await.map_err(|e| CliError::ApiError(e.to_string()))?;
-    
+
+    let response: Value = res
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+
     println!("\n✅ Token generated successfully!");
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("Token: {}", response["token"].as_str().unwrap_or("N/A"));
-    println!("Expires: {}", response["expires_at"].as_str().unwrap_or("N/A"));
+    println!(
+        "Expires: {}",
+        response["expires_at"].as_str().unwrap_or("N/A")
+    );
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     println!("\n⚠️  Save this token securely. It will not be shown again.");
     println!("💡 Use this token with PyIceberg:");
     println!("   catalog = load_catalog('my_catalog', uri='...', token='<TOKEN>')");
-    
+
     Ok(())
 }

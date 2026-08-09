@@ -1,10 +1,10 @@
 use super::PostgresStore;
 use anyhow::Result;
-use pangolin_core::permission::{Permission, PermissionGrant, PermissionScope, Action};
-use uuid::Uuid;
-use sqlx::Row;
 use chrono::{DateTime, Utc};
+use pangolin_core::permission::{Action, Permission, PermissionGrant, PermissionScope};
+use sqlx::Row;
 use std::collections::HashSet;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Direct Permission Operations
@@ -30,13 +30,17 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
+    pub async fn list_user_permissions(
+        &self,
+        user_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Permission>> {
         // 1. Fetch direct permissions
         let rows = sqlx::query("SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = $1")
             .bind(user_id)
             .fetch_all(&self.pool)
             .await?;
-        
+
         let mut perms = Vec::new();
         for row in rows {
             perms.push(Permission {
@@ -54,7 +58,7 @@ impl PostgresStore {
         let role_rows = sqlx::query(
             "SELECT r.permissions, r.created_by, r.created_at, r.tenant_id FROM roles r \
              JOIN user_roles ur ON r.id = ur.role_id \
-             WHERE ur.user_id = $1"
+             WHERE ur.user_id = $1",
         )
         .bind(user_id)
         .fetch_all(&self.pool)
@@ -81,33 +85,41 @@ impl PostgresStore {
 
         // In-memory pagination
         if let Some(p) = pagination {
-             let limit = p.limit.unwrap_or(usize::MAX);
-             let offset = p.offset.unwrap_or(0);
-             if offset >= perms.len() {
-                 return Ok(Vec::new());
-             }
-             let end = std::cmp::min(offset + limit, perms.len());
-             Ok(perms[offset..end].to_vec())
+            let limit = p.limit.unwrap_or(usize::MAX);
+            let offset = p.offset.unwrap_or(0);
+            if offset >= perms.len() {
+                return Ok(Vec::new());
+            }
+            let end = std::cmp::min(offset + limit, perms.len());
+            Ok(perms[offset..end].to_vec())
         } else {
-             Ok(perms)
+            Ok(perms)
         }
     }
 
-    pub async fn list_permissions(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_permissions(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Permission>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query(
             "SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at 
              FROM permissions 
              WHERE tenant_id = $1
-             LIMIT $2 OFFSET $3"
+             LIMIT $2 OFFSET $3",
         )
-            .bind(tenant_id)
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&self.pool)
-            .await?;
+        .bind(tenant_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
 
         let mut perms = Vec::new();
         for row in rows {

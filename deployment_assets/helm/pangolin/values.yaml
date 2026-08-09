@@ -1,40 +1,55 @@
-# Default values for pangolin.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
+# Default values for the Pangolin chart.
+#
+# Two rules govern this file after the 0.6.0 hardening release:
+#
+#   1. No secret has a working default. `PANGOLIN_JWT_SECRET: "change-me-please"`
+#      and `PANGOLIN_ROOT_PASSWORD: "password"` used to be *functional*, so
+#      `helm install` with no overrides produced a running, publicly reachable
+#      deployment with a signing key published in this repository and a known
+#      root password (A-10). The server now refuses to start on either value.
+#   2. Every value here is backed by a template. `ingress:`, `autoscaling:` and
+#      `serviceAccount:` were all exposed with nothing behind them (A-34).
 
 replicaCount: 1
 
 image:
   repository: alexmerced/pangolin-api
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  # Pin to a released version. `latest` makes deployments non-reproducible and
+  # leaves no way to know what is running or to roll back (A-38).
+  tag: "0.6.0"
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
 serviceAccount:
-  # Specifies whether a service account should be created
   create: true
-  # Annotations to add to the service account
   annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
   name: ""
+  # Pangolin does not call the Kubernetes API.
+  automountToken: false
 
 podAnnotations: {}
 
-podSecurityContext: {}
-  # fsGroup: 2000
+# Hardened by default rather than commented out (A-35).
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+  capabilities:
+    drop:
+      - ALL
 
 service:
   type: ClusterIP
@@ -44,59 +59,83 @@ ingress:
   enabled: false
   className: ""
   annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
   hosts:
     - host: chart-example.local
       paths:
         - path: /
-          pathType: ImplementationSpecific
+          pathType: Prefix
   tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
 
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+# Real requests and limits. With `resources: {}` pods land in the BestEffort QoS
+# class and are the first evicted under node pressure (A-37).
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
 
 autoscaling:
   enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: ""
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: ""
+  maxUnavailable: 1
+
+serviceMonitor:
+  # Requires the Prometheus Operator CRDs.
+  enabled: false
+  interval: 30s
+  labels: {}
+
+# Give in-flight table commits time to finish. A commit writes a metadata file
+# to object storage before the compare-and-swap that publishes it; a SIGKILL in
+# that window leaks an orphaned file (A-19).
+terminationGracePeriodSeconds: 40
 
 nodeSelector: {}
-
 tolerations: []
-
 affinity: {}
 
-# Pangolin Specific Configuration
+# Pangolin configuration. Anything sensitive belongs in `secrets` (or an
+# external secret store), not here.
 env:
-  # RUST_LOG: info
-  # PANGOLIN_STORAGE_TYPE: postgres
-  # DATABASE_URL: postgresql://user:pass@host:5432/db
-  # AWS_REGION: us-east-1
-  # AWS_ACCESS_KEY_ID: needs-secret
-  # AWS_SECRET_ACCESS_KEY: needs-secret
-  # PANGOLIN_JWT_SECRET: needs-secret
+  RUST_LOG: "info"
+  # `LOG_FORMAT: json` emits structured logs for a log aggregator.
+  LOG_FORMAT: "json"
+  # Selects the metadata backend: memory, sqlite, postgres or mongodb.
+  # This is now honoured; it used to be read into a variable and ignored while
+  # the docs presented it as the way to choose a backend (A-30).
+  PANGOLIN_STORAGE_TYPE: "postgres"
+  # PANGOLIN_OAUTH_REDIRECT_URIS: "https://app.example.com/oauth/callback"
+  # FRONTEND_URL: "https://app.example.com"
+  # PANGOLIN_CORS_ALLOWED_ORIGINS: "https://app.example.com"
 
-# Secret Management
-# If true, creating a Secret resource with the values provided in `secrets`
+# Secret management.
+#
+# This chart base64-encodes values from `values.yaml` into a Secret, which
+# encourages committing production credentials to Git. Prefer
+# `createSecret: false` with `existingSecret` pointing at a Secret managed by
+# External Secrets, the CSI driver, or your secret store (C-10).
 createSecret: true
-secrets: 
+
+# Name of a pre-existing Secret to read credentials from. When set, no Secret is
+# created and `secrets` below is ignored.
+existingSecret: ""
+
+secrets:
   DATABASE_URL: ""
   AWS_ACCESS_KEY_ID: ""
   AWS_SECRET_ACCESS_KEY: ""
-  PANGOLIN_JWT_SECRET: "change-me-please"
-  PANGOLIN_ROOT_PASSWORD: "password"
+  # REQUIRED. Generate with: openssl rand -base64 48
+  # There is deliberately no default: a placeholder here is a placeholder in
+  # production.
+  PANGOLIN_JWT_SECRET: ""
+  # Optional. Leave empty to disable root basic authentication entirely.
+  PANGOLIN_ROOT_PASSWORD: ""

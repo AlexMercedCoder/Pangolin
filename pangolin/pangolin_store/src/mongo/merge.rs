@@ -1,10 +1,9 @@
 use super::MongoStore;
 // use super::main::to_bson_uuid; // Not used for this file anymore
 use anyhow::Result;
-use mongodb::bson::{doc, Document};
-use pangolin_core::model::{MergeOperation, MergeConflict, MergeStatus, ConflictResolution};
+use mongodb::bson::doc;
+use pangolin_core::model::{ConflictResolution, MergeConflict, MergeOperation, MergeStatus};
 use uuid::Uuid;
-use futures::stream::TryStreamExt;
 
 impl MongoStore {
     pub async fn create_merge_operation(&self, operation: MergeOperation) -> Result<()> {
@@ -22,12 +21,17 @@ impl MongoStore {
         }
     }
 
-    pub async fn list_merge_operations(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<MergeOperation>> {
+    pub async fn list_merge_operations(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<MergeOperation>> {
         let filter = doc! {
             "tenant_id": tenant_id.to_string(),
             "catalog_name": catalog_name
         };
-        
+
         let collection = self.merge_operations();
         let mut find = collection.find(filter);
         if let Some(p) = pagination {
@@ -60,7 +64,11 @@ impl MongoStore {
         Ok(())
     }
 
-    pub async fn update_merge_operation_status(&self, operation_id: Uuid, status: MergeStatus) -> Result<()> {
+    pub async fn update_merge_operation_status(
+        &self,
+        operation_id: Uuid,
+        status: MergeStatus,
+    ) -> Result<()> {
         let filter = doc! { "id": operation_id.to_string() };
         let status_str = format!("{:?}", status);
         let update = doc! { "$set": { "status": status_str } };
@@ -68,7 +76,11 @@ impl MongoStore {
         Ok(())
     }
 
-    pub async fn complete_merge_operation(&self, operation_id: Uuid, result_commit_id: Uuid) -> Result<()> {
+    pub async fn complete_merge_operation(
+        &self,
+        operation_id: Uuid,
+        result_commit_id: Uuid,
+    ) -> Result<()> {
         let filter = doc! { "id": operation_id.to_string() };
         let update = doc! {
             "$set": {
@@ -109,9 +121,13 @@ impl MongoStore {
         }
     }
 
-    pub async fn list_merge_conflicts(&self, operation_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<MergeConflict>> {
+    pub async fn list_merge_conflicts(
+        &self,
+        operation_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<MergeConflict>> {
         let filter = doc! { "merge_operation_id": operation_id.to_string() };
-        
+
         let collection = self.merge_conflicts();
         let mut find = collection.find(filter);
         if let Some(p) = pagination {
@@ -131,7 +147,11 @@ impl MongoStore {
         Ok(conflicts)
     }
 
-    pub async fn resolve_merge_conflict(&self, conflict_id: Uuid, resolution: ConflictResolution) -> Result<()> {
+    pub async fn resolve_merge_conflict(
+        &self,
+        conflict_id: Uuid,
+        resolution: ConflictResolution,
+    ) -> Result<()> {
         let filter = doc! { "id": conflict_id.to_string() };
         let resolution_doc = mongodb::bson::to_document(&resolution)?;
         let update = doc! { "$set": { "resolution": resolution_doc } };
@@ -145,7 +165,11 @@ impl MongoStore {
         Ok(())
     }
 
-    pub async fn add_conflict_to_operation(&self, operation_id: Uuid, conflict_id: Uuid) -> Result<()> {
+    pub async fn add_conflict_to_operation(
+        &self,
+        operation_id: Uuid,
+        conflict_id: Uuid,
+    ) -> Result<()> {
         let filter = doc! { "id": operation_id.to_string() };
         let update = doc! { "$addToSet": { "conflicts": conflict_id.to_string() } };
         self.merge_operations().update_one(filter, update).await?;

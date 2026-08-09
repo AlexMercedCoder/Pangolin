@@ -1,18 +1,18 @@
-use axum::{
-    extract::{State, Json, Query},
-    response::IntoResponse,
-    http::StatusCode,
-};
-use serde::{Deserialize, Serialize};
-use jsonwebtoken::{encode, EncodingKey, Header};
-use uuid::Uuid;
 use crate::auth::Claims;
 use crate::iceberg::AppState;
-use pangolin_core::user::UserRole;
+use axum::{
+    extract::{Json, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use pangolin_core::token::TokenInfo;
+use pangolin_core::user::UserRole;
 use pangolin_store::PaginationParams;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use chrono::{Utc, Duration};
+use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
 pub struct GenerateTokenRequest {
@@ -51,15 +51,15 @@ pub async fn generate_token(
         Ok(uuid) => uuid,
         Err(_) => return (StatusCode::BAD_REQUEST, "Invalid tenant_id format").into_response(),
     };
-    
-    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
+
+    let secret = crate::config::jwt_secret();
     let expires_in = payload.expires_in_hours.unwrap_or(24);
     let now = chrono::Utc::now();
     let exp = now
         .checked_add_signed(chrono::Duration::hours(expires_in as i64))
         .unwrap()
-        .timestamp() as i64;
-    
+        .timestamp();
+
     let username = payload.username.unwrap_or_else(|| "api-user".to_string());
 
     // Map role strings to UserRole
@@ -77,10 +77,18 @@ pub async fn generate_token(
     } else {
         // Try to lookup user
         if let Ok(Some(user)) = store.get_user_by_username(&username).await {
-            tracing::info!("generate_token: Found user '{}' with role {:?} ({})", username, user.role, user.id);
+            tracing::info!(
+                "generate_token: Found user '{}' with role {:?} ({})",
+                username,
+                user.role,
+                user.id
+            );
             user.role
         } else {
-            tracing::warn!("generate_token: User '{}' not found, defaulting to TenantUser", username);
+            tracing::warn!(
+                "generate_token: User '{}' not found, defaulting to TenantUser",
+                username
+            );
             UserRole::TenantUser
         }
     };
@@ -95,16 +103,20 @@ pub async fn generate_token(
 
     let token_id = Uuid::new_v4();
     let claims = Claims {
-        sub: user_id.to_string(), 
+        sub: user_id.to_string(),
         jti: Some(token_id.to_string()),
-        username: username.clone(), 
+        username: username.clone(),
         tenant_id: Some(payload.tenant_id.clone()),
         role,
         exp,
         iat: now.timestamp(),
     };
-    
-    match encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())) {
+
+    match encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    ) {
         Ok(token) => {
             // Store token info for listing
             let token_info = TokenInfo {
@@ -135,7 +147,11 @@ pub async fn generate_token(
             };
             (StatusCode::OK, Json(response)).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Token generation failed: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Token generation failed: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -176,11 +192,14 @@ pub async fn revoke_current_token(
 ) -> impl IntoResponse {
     // Generate an expiration time (tokens typically expire in 24 hours)
     let expires_at = Utc::now() + Duration::hours(24);
-    
+
     // Use the user_id as the token_id for revocation
     let token_id = session.user_id;
-    
-    match store.revoke_token(token_id, expires_at, payload.reason).await {
+
+    match store
+        .revoke_token(token_id, expires_at, payload.reason)
+        .await
+    {
         Ok(_) => {
             tracing::info!("Token revoked for user: {}", session.username);
             (
@@ -227,11 +246,14 @@ pub async fn revoke_token_by_id(
     if !matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
-    
+
     // Set a default expiration (tokens typically expire in 24h)
     let expires_at = Utc::now() + Duration::hours(24);
-    
-    match store.revoke_token(token_id, expires_at, payload.reason).await {
+
+    match store
+        .revoke_token(token_id, expires_at, payload.reason)
+        .await
+    {
         Ok(_) => {
             tracing::info!("Token {} revoked by admin: {}", token_id, session.username);
             (
@@ -274,10 +296,14 @@ pub async fn cleanup_expired_tokens(
     if !matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
-    
+
     match store.cleanup_expired_tokens().await {
         Ok(count) => {
-            tracing::info!("Cleaned up {} expired tokens by admin: {}", count, session.username);
+            tracing::info!(
+                "Cleaned up {} expired tokens by admin: {}",
+                count,
+                session.username
+            );
             (
                 StatusCode::OK,
                 Json(serde_json::json!({
@@ -317,9 +343,16 @@ pub async fn list_my_tokens(
     Query(pagination): Query<PaginationParams>,
 ) -> impl IntoResponse {
     let tenant_id = session.tenant_id.unwrap_or_default();
-    match store.list_active_tokens(tenant_id, Some(session.user_id), Some(pagination)).await {
+    match store
+        .list_active_tokens(tenant_id, Some(session.user_id), Some(pagination))
+        .await
+    {
         Ok(tokens) => (StatusCode::OK, Json(tokens)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list tokens: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list tokens: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -347,11 +380,18 @@ pub async fn list_user_tokens(
     if !matches!(session.role, UserRole::Root | UserRole::TenantAdmin) {
         return (StatusCode::FORBIDDEN, "Admin access required").into_response();
     }
-    
+
     let tenant_id = session.tenant_id.unwrap_or_default();
-    match store.list_active_tokens(tenant_id, Some(target_user_id), Some(pagination)).await {
+    match store
+        .list_active_tokens(tenant_id, Some(target_user_id), Some(pagination))
+        .await
+    {
         Ok(tokens) => (StatusCode::OK, Json(tokens)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list tokens: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list tokens: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -380,23 +420,34 @@ pub async fn delete_token(
     // Simplified: Admin only for DELETE /tokens/{id}, user uses /auth/revoke (logout).
     // OR: We try to list users tokens and see if it's there?
     // Let's enforce Admin for arbitrary ID revocation for safety, unless it's their own token.
-    
+
     let is_admin = matches!(session.role, UserRole::Root | UserRole::TenantAdmin);
-    
+
     // Ideally we should check if the token belongs to the user, but we don't have easy lookup from ID -> User without scanning active_tokens.
     // However, `revoke_token` just adds to blacklist.
-    
+
     // Let's stick to Admin check for now for this specific endpoint.
     if !is_admin {
         // Allow if it matches current session token?
-         // We can't easily check if token_id belongs to user without a lookup handler.
-         return (StatusCode::FORBIDDEN, "Admin access required to delete arbitrary token").into_response();
+        // We can't easily check if token_id belongs to user without a lookup handler.
+        return (
+            StatusCode::FORBIDDEN,
+            "Admin access required to delete arbitrary token",
+        )
+            .into_response();
     }
-    
+
     let expires_at = Utc::now() + Duration::hours(24);
-    match store.revoke_token(token_id, expires_at, Some("Deleted via API".to_string())).await {
+    match store
+        .revoke_token(token_id, expires_at, Some("Deleted via API".to_string()))
+        .await
+    {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to revoke token: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to revoke token: {}", e),
+        )
+            .into_response(),
     }
 }
 
@@ -420,31 +471,35 @@ pub async fn rotate_token(
     // Reusing logic is better to avoid duplication but `generate_token` takes a Json payload.
     // We'll reimplement specific logic here for rotation.
 
-    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
+    let secret = crate::config::jwt_secret();
     let now = chrono::Utc::now();
     let expires_in = 24; // Default rotation to 24h
     let exp = now
         .checked_add_signed(chrono::Duration::hours(expires_in))
         .unwrap()
-        .timestamp() as i64;
-    
+        .timestamp();
+
     let token_id = Uuid::new_v4();
     let tenant_id_str = session.tenant_id.map(|t| t.to_string()).unwrap_or_default();
-    
+
     let claims = Claims {
-        sub: session.user_id.to_string(), 
+        sub: session.user_id.to_string(),
         jti: Some(token_id.to_string()),
-        username: session.username.clone(), 
+        username: session.username.clone(),
         tenant_id: Some(tenant_id_str.clone()),
         role: session.role.clone(),
         exp,
         iat: now.timestamp(),
     };
-    
-    match encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes())) {
+
+    match encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    ) {
         Ok(token) => {
             // 2. Store new token
-             let token_info = TokenInfo {
+            let token_info = TokenInfo {
                 id: token_id,
                 tenant_id: session.tenant_id.unwrap_or_default(),
                 user_id: session.user_id,
@@ -469,7 +524,7 @@ pub async fn rotate_token(
             // I'll skip revocation of old token for now if I lack the ID, but assume the client will discard it.
             // Implementation: Just return new token.
             // Update: We can update UserSession to include token_id (jti) later.
-            
+
             let response = GenerateTokenResponse {
                 token,
                 expires_at: chrono::DateTime::from_timestamp(exp, 0)
@@ -479,6 +534,10 @@ pub async fn rotate_token(
             };
             (StatusCode::OK, Json(response)).into_response()
         }
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Token rotation failed: {}", e)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Token rotation failed: {}", e),
+        )
+            .into_response(),
     }
 }

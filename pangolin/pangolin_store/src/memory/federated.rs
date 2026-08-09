@@ -1,12 +1,18 @@
 use super::MemoryStore;
 use anyhow::Result;
-use uuid::Uuid;
 use pangolin_core::model::*;
-use async_trait::async_trait;
+use uuid::Uuid;
 
 impl MemoryStore {
-    pub(crate) async fn get_federated_catalog_stats_internal(&self, tenant_id: Uuid, catalog_name: &str) -> Result<SyncStats> {
-        if let Some(stats) = self.federated_stats.get(&(tenant_id, catalog_name.to_string())) {
+    pub(crate) async fn get_federated_catalog_stats_internal(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+    ) -> Result<SyncStats> {
+        if let Some(stats) = self
+            .federated_stats
+            .get(&(tenant_id, catalog_name.to_string()))
+        {
             Ok(stats.value().clone())
         } else {
             Ok(SyncStats {

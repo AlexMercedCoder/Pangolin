@@ -1,45 +1,80 @@
-use super::MongoStore;
 use super::main::to_bson_uuid;
+use super::MongoStore;
 use anyhow::Result;
-use mongodb::bson::{doc, Document, Bson};
+use futures::stream::TryStreamExt;
+use mongodb::bson::{doc, Bson, Document};
 use pangolin_core::audit::{AuditLogEntry, AuditLogFilter};
 use uuid::Uuid;
-use futures::stream::TryStreamExt;
 
 impl MongoStore {
     pub async fn log_audit_event(&self, entry: AuditLogEntry) -> Result<()> {
         let mut doc = mongodb::bson::to_document(&entry)?;
-        // Ensure UUIDs are stored as Binary
+        // Every UUID field has to be stored as BSON Binary, because that is
+        // what `Uuid`'s non-human-readable Deserialize expects on the way back.
+        // `resource_id` was left as whatever `to_document` produced, so reading
+        // an entry that had one failed with `invalid type: string ...,
+        // expected bytes` and took the whole listing down with it.
         doc.insert("id", to_bson_uuid(entry.id));
         doc.insert("tenant_id", to_bson_uuid(entry.tenant_id));
         let user_id = entry.user_id.unwrap_or(Uuid::nil());
         doc.insert("user_id", to_bson_uuid(user_id));
-        
+        match entry.resource_id {
+            Some(resource_id) => doc.insert("resource_id", to_bson_uuid(resource_id)),
+            None => doc.insert("resource_id", Bson::Null),
+        };
+
         // We use the raw collection to insert the document
-        self.db.collection::<Document>("audit_logs").insert_one(doc).await?;
+        self.db
+            .collection::<Document>("audit_logs")
+            .insert_one(doc)
+            .await?;
         Ok(())
     }
 
     pub async fn get_audit_event(&self, id: Uuid) -> Result<Option<AuditLogEntry>> {
         let filter = doc! { "id": to_bson_uuid(id) };
-        let doc = self.db.collection::<AuditLogEntry>("audit_logs").find_one(filter).await?;
+        let doc = self
+            .db
+            .collection::<AuditLogEntry>("audit_logs")
+            .find_one(filter)
+            .await?;
         Ok(doc)
     }
 
-    pub async fn count_audit_events(&self, tenant_id: Uuid, filter: Option<AuditLogFilter>) -> Result<usize> {
+    pub async fn count_audit_events(
+        &self,
+        tenant_id: Uuid,
+        filter: Option<AuditLogFilter>,
+    ) -> Result<usize> {
         let mongo_filter = self.build_audit_filter(tenant_id, filter)?;
-        let count = self.db.collection::<Document>("audit_logs").count_documents(mongo_filter).await?;
+        let count = self
+            .db
+            .collection::<Document>("audit_logs")
+            .count_documents(mongo_filter)
+            .await?;
         Ok(count as usize)
     }
 
-    pub async fn list_audit_events(&self, tenant_id: Uuid, filter: Option<AuditLogFilter>) -> Result<Vec<AuditLogEntry>> {
+    pub async fn list_audit_events(
+        &self,
+        tenant_id: Uuid,
+        filter: Option<AuditLogFilter>,
+    ) -> Result<Vec<AuditLogEntry>> {
         let mongo_filter = self.build_audit_filter(tenant_id, filter)?;
-        let cursor = self.db.collection::<AuditLogEntry>("audit_logs").find(mongo_filter).await?;
+        let cursor = self
+            .db
+            .collection::<AuditLogEntry>("audit_logs")
+            .find(mongo_filter)
+            .await?;
         let entries: Vec<AuditLogEntry> = cursor.try_collect().await?;
         Ok(entries)
     }
 
-    fn build_audit_filter(&self, tenant_id: Uuid, filter: Option<AuditLogFilter>) -> Result<Document> {
+    fn build_audit_filter(
+        &self,
+        tenant_id: Uuid,
+        filter: Option<AuditLogFilter>,
+    ) -> Result<Document> {
         let mut mongo_filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
         if let Some(f) = filter {
             if let Some(rt) = f.resource_type {
@@ -64,7 +99,7 @@ impl MongoStore {
                 }
             }
         }
-        
+
         Ok(mongo_filter)
     }
 }

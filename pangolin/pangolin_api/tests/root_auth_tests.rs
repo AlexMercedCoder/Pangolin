@@ -1,20 +1,19 @@
 use axum::{
     body::Body,
     http::{Request, StatusCode},
-    routing::{post, get},
+    routing::{get, post},
     Router,
-    middleware,
 };
-use tower::ServiceExt; 
-use std::sync::Arc;
-use pangolin_store::MemoryStore;
 use pangolin_store::CatalogStore;
+use pangolin_store::MemoryStore;
+use std::sync::Arc;
+use tower::ServiceExt;
 // Handlers
 // Handlers
-use pangolin_api::user_handlers::{login, LoginRequest, get_app_config};
-use pangolin_api::warehouse_handlers::create_warehouse;
 use pangolin_api::pangolin_handlers::create_catalog;
 use pangolin_api::tests_common::EnvGuard;
+use pangolin_api::user_handlers::{get_app_config, login, LoginRequest};
+use pangolin_api::warehouse_handlers::create_warehouse;
 
 use serial_test::serial;
 
@@ -25,7 +24,10 @@ fn setup_app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         .route("/api/v1/app-config", get(get_app_config))
         .route("/api/v1/warehouses", post(create_warehouse))
         .route("/api/v1/catalogs", post(create_catalog))
-        .layer(middleware::from_fn(pangolin_api::auth_middleware::auth_middleware_wrapper))
+        .layer(axum::middleware::from_fn_with_state(
+            store.clone() as std::sync::Arc<dyn pangolin_store::CatalogStore + Send + Sync>,
+            pangolin_api::auth_middleware::auth_middleware,
+        ))
         .with_state(store)
 }
 
@@ -42,7 +44,7 @@ async fn test_root_login_env_vars() {
     let login_req = LoginRequest {
         username: "superadmin".to_string(),
         password: "supersecret".to_string(),
-        tenant_id: None,  // Root login
+        tenant_id: None, // Root login
     };
 
     let req = Request::builder()
@@ -54,10 +56,12 @@ async fn test_root_login_env_vars() {
 
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK, "Login should succeed");
-    
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let login_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-    
+
     assert_eq!(login_res["user"]["role"], "root");
 }
 
@@ -72,12 +76,23 @@ async fn test_root_cannot_create_warehouse() {
     let app = setup_app(store);
 
     // 1. Login to get token
-    let login_req = LoginRequest { username: "admin".to_string(), password: "password".to_string(), tenant_id: None };
-    let req = Request::builder().method("POST").uri("/api/v1/users/login").header("content-type", "application/json").body(Body::from(serde_json::to_string(&login_req).unwrap())).unwrap();
+    let login_req = LoginRequest {
+        username: "admin".to_string(),
+        password: "password".to_string(),
+        tenant_id: None,
+    };
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/users/login")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_string(&login_req).unwrap()))
+        .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK, "Login should succeed");
 
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let login_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     let token = login_res["token"].as_str().unwrap();
 
@@ -112,12 +127,23 @@ async fn test_root_cannot_create_catalog() {
     let app = setup_app(store);
 
     // 1. Login to get token
-    let login_req = LoginRequest { username: "admin".to_string(), password: "password".to_string(), tenant_id: None };
-    let req = Request::builder().method("POST").uri("/api/v1/users/login").header("content-type", "application/json").body(Body::from(serde_json::to_string(&login_req).unwrap())).unwrap();
+    let login_req = LoginRequest {
+        username: "admin".to_string(),
+        password: "password".to_string(),
+        tenant_id: None,
+    };
+    let req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/users/login")
+        .header("content-type", "application/json")
+        .body(Body::from(serde_json::to_string(&login_req).unwrap()))
+        .unwrap();
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK, "Login should succeed");
 
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let login_res: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     let token = login_res["token"].as_str().unwrap();
 
@@ -144,7 +170,7 @@ async fn test_root_cannot_create_catalog() {
 async fn test_no_auth_mode_access() {
     // Enable No-Auth
     let _guard_no_auth = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
-    
+
     let store = Arc::new(MemoryStore::new());
     let app = setup_app(store);
 
@@ -154,17 +180,19 @@ async fn test_no_auth_mode_access() {
         .uri("/api/v1/app-config")
         .body(Body::empty())
         .unwrap();
-    
+
     let response = app.clone().oneshot(req).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let config: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     // In No-Auth mode, auth_enabled is false ( !no_auth )
     assert_eq!(config["auth_enabled"], false);
 
     // 2. Try a protected endpoint (create warehouse) WITHOUT token
     // In No-Auth mode, handler sees "TenantAdmin" (changed from Root). TenantAdmin CAN create warehouse -> 201 Created.
-    
+
     let wh_req_json = serde_json::json!({
         "name": "no_auth_wh",
         "storage_config": {

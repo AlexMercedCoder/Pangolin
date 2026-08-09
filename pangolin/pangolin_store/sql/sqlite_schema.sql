@@ -274,3 +274,21 @@ CREATE INDEX IF NOT EXISTS idx_merge_conflicts_operation ON merge_conflicts(oper
 
 -- Performance Indexes (Phase 3)
 CREATE INDEX IF NOT EXISTS idx_permissions_user_id ON permissions(user_id);
+
+-- Token revocation blacklist.
+--
+-- This table lived only in the orphaned migrations/sqlite/ tree, which no
+-- runner ever applied, so token revocation failed at runtime on SQLite with
+-- "no such table: revoked_tokens" (A-27). sqlite_schema.sql is now the single
+-- source of truth for the SQLite schema, versioned by SqliteStore::run_migrations.
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+    token_id TEXT PRIMARY KEY,
+    revoked_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000),
+    expires_at INTEGER NOT NULL,
+    reason TEXT,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_revoked_tokens_expires_at ON revoked_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_commits_parent_id ON commits(parent_id);
+CREATE INDEX IF NOT EXISTS idx_active_tokens_user_id ON active_tokens(user_id);

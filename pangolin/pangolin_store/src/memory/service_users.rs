@@ -1,54 +1,84 @@
 use super::MemoryStore;
 use anyhow::Result;
 use uuid::Uuid;
-use pangolin_core::user::*;
-use async_trait::async_trait;
 
 impl MemoryStore {
-    pub(crate) async fn create_service_user_internal(&self, service_user: pangolin_core::user::ServiceUser) -> Result<()> {
-            self.service_users.insert(service_user.id, service_user);
-            Ok(())
-        }
-    pub(crate) async fn get_service_user_internal(&self, id: Uuid) -> Result<Option<pangolin_core::user::ServiceUser>> {
-            Ok(self.service_users.get(&id).map(|r| r.value().clone()))
-        }
-    pub(crate) async fn list_service_users_internal(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<pangolin_core::user::ServiceUser>> {
-            let iter = self.service_users
-                .iter()
-                .filter(|entry| entry.value().tenant_id == tenant_id)
-                .map(|entry| entry.value().clone());
+    pub(crate) async fn create_service_user_internal(
+        &self,
+        service_user: pangolin_core::user::ServiceUser,
+    ) -> Result<()> {
+        self.service_users.insert(service_user.id, service_user);
+        Ok(())
+    }
+    pub(crate) async fn get_service_user_internal(
+        &self,
+        id: Uuid,
+    ) -> Result<Option<pangolin_core::user::ServiceUser>> {
+        Ok(self.service_users.get(&id).map(|r| r.value().clone()))
+    }
+    pub(crate) async fn list_service_users_internal(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<pangolin_core::user::ServiceUser>> {
+        let iter = self
+            .service_users
+            .iter()
+            .filter(|entry| entry.value().tenant_id == tenant_id)
+            .map(|entry| entry.value().clone());
 
-            let result = if let Some(p) = pagination {
-                iter.skip(p.offset.unwrap_or(0)).take(p.limit.unwrap_or(usize::MAX)).collect()
-            } else {
-                iter.collect()
-            };
-            Ok(result)
-        }
-    pub(crate) async fn update_service_user_internal(
-            &self,
-            id: Uuid,
-            name: Option<String>,
-            description: Option<String>,
-            active: Option<bool>,
-        ) -> Result<()> {
-            if let Some(mut service_user) = self.service_users.get_mut(&id) {
-                if let Some(n) = name {
-                    service_user.name = n;
-                }
-                if let Some(d) = description {
-                    service_user.description = Some(d);
-                }
-                if let Some(a) = active {
-                    service_user.active = a;
-                }
+        let result = if let Some(p) = pagination {
+            iter.skip(p.offset.unwrap_or(0))
+                .take(p.limit.unwrap_or(usize::MAX))
+                .collect()
+        } else {
+            iter.collect()
+        };
+        Ok(result)
+    }
+    /// Record that a service user's API key was just used.
+    ///
+    /// The trait's default implementation returns "Operation not supported by
+    /// this store", so this silently did nothing on MemoryStore (A-25) even
+    /// though the middleware calls it on every API-key request.
+    pub(crate) async fn update_service_user_last_used_internal(
+        &self,
+        id: Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        match self.service_users.get_mut(&id) {
+            Some(mut service_user) => {
+                service_user.last_used = Some(timestamp);
                 Ok(())
-            } else {
-                Err(anyhow::anyhow!("Service user not found"))
             }
+            None => Err(anyhow::anyhow!("Service user not found")),
         }
-    pub(crate) async fn delete_service_user_internal(&self, id: Uuid) -> Result<()> {
-            self.service_users.remove(&id);
+    }
+
+    pub(crate) async fn update_service_user_internal(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        active: Option<bool>,
+    ) -> Result<()> {
+        if let Some(mut service_user) = self.service_users.get_mut(&id) {
+            if let Some(n) = name {
+                service_user.name = n;
+            }
+            if let Some(d) = description {
+                service_user.description = Some(d);
+            }
+            if let Some(a) = active {
+                service_user.active = a;
+            }
             Ok(())
+        } else {
+            Err(anyhow::anyhow!("Service user not found"))
         }
+    }
+    pub(crate) async fn delete_service_user_internal(&self, id: Uuid) -> Result<()> {
+        self.service_users.remove(&id);
+        Ok(())
+    }
 }

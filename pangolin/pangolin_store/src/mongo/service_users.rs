@@ -1,10 +1,10 @@
-use super::MongoStore;
 use super::main::to_bson_uuid;
+use super::MongoStore;
 use anyhow::Result;
+use futures::stream::TryStreamExt;
 use mongodb::bson::{doc, Document};
 use pangolin_core::user::{ServiceUser, UserRole};
 use uuid::Uuid;
-use futures::stream::TryStreamExt;
 
 impl MongoStore {
     pub async fn create_service_user(&self, service_user: ServiceUser) -> Result<()> {
@@ -22,7 +22,10 @@ impl MongoStore {
         }
     }
 
-    pub async fn get_service_user_by_api_key_hash(&self, api_key_hash: &str) -> Result<Option<ServiceUser>> {
+    pub async fn get_service_user_by_api_key_hash(
+        &self,
+        api_key_hash: &str,
+    ) -> Result<Option<ServiceUser>> {
         let filter = doc! { "api_key_hash": api_key_hash };
         if let Some(doc) = self.service_users().find_one(filter).await? {
             Ok(Some(mongodb::bson::from_document(doc)?))
@@ -31,9 +34,13 @@ impl MongoStore {
         }
     }
 
-    pub async fn list_service_users(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<ServiceUser>> {
+    pub async fn list_service_users(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<ServiceUser>> {
         let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
-        
+
         let collection = self.service_users();
         let mut find = collection.find(filter);
         if let Some(p) = pagination {
@@ -54,21 +61,38 @@ impl MongoStore {
         Ok(users)
     }
 
-    pub async fn update_service_user(&self, id: Uuid, name: Option<String>, description: Option<String>, role: Option<UserRole>, active: Option<bool>) -> Result<ServiceUser> {
+    pub async fn update_service_user(
+        &self,
+        id: Uuid,
+        name: Option<String>,
+        description: Option<String>,
+        role: Option<UserRole>,
+        active: Option<bool>,
+    ) -> Result<ServiceUser> {
         let filter = doc! { "_id": id.to_string() };
         let mut update_doc = doc! {};
-        
-        if let Some(n) = name { update_doc.insert("name", n); }
-        if let Some(d) = description { update_doc.insert("description", d); }
-        if let Some(r) = role { update_doc.insert("role", format!("{:?}", r)); }
-        if let Some(a) = active { update_doc.insert("active", a); }
-        
+
+        if let Some(n) = name {
+            update_doc.insert("name", n);
+        }
+        if let Some(d) = description {
+            update_doc.insert("description", d);
+        }
+        if let Some(r) = role {
+            update_doc.insert("role", format!("{:?}", r));
+        }
+        if let Some(a) = active {
+            update_doc.insert("active", a);
+        }
+
         if !update_doc.is_empty() {
             let update = doc! { "$set": update_doc };
             self.service_users().update_one(filter, update).await?;
         }
-        
-        self.get_service_user(id).await?.ok_or_else(|| anyhow::anyhow!("Service user not found"))
+
+        self.get_service_user(id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Service user not found"))
     }
 
     pub async fn delete_service_user(&self, id: Uuid) -> Result<()> {

@@ -1,8 +1,8 @@
 use super::PostgresStore;
 use anyhow::Result;
 use pangolin_core::audit::AuditLogEntry;
-use uuid::Uuid;
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Audit Operations
@@ -12,7 +12,7 @@ impl PostgresStore {
                 id, tenant_id, user_id, username, action, resource_type,
                 resource_id, resource_name, timestamp, ip_address, user_agent,
                 result, error_message, metadata
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)",
         )
         .bind(event.id)
         .bind(tenant_id)
@@ -33,17 +33,21 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub async fn list_audit_events(&self, tenant_id: Uuid, filter: Option<pangolin_core::audit::AuditLogFilter>) -> Result<Vec<AuditLogEntry>> {
+    pub async fn list_audit_events(
+        &self,
+        tenant_id: Uuid,
+        filter: Option<pangolin_core::audit::AuditLogFilter>,
+    ) -> Result<Vec<AuditLogEntry>> {
         let mut query = String::from(
             "SELECT id, tenant_id, user_id, username, action, resource_type,
              resource_id, resource_name, timestamp, ip_address, user_agent,
              result, error_message, metadata
-             FROM audit_logs WHERE tenant_id = $1"
+             FROM audit_logs WHERE tenant_id = $1",
         );
-        
+
         let mut conditions = Vec::new();
         let mut param_count = 2;
-        
+
         // Build dynamic WHERE clause
         if let Some(ref f) = filter {
             if f.user_id.is_some() {
@@ -75,14 +79,14 @@ impl PostgresStore {
                 param_count += 1;
             }
         }
-        
+
         if !conditions.is_empty() {
             query.push_str(" AND ");
             query.push_str(&conditions.join(" AND "));
         }
-        
+
         query.push_str(" ORDER BY timestamp DESC");
-        
+
         // Add pagination
         if let Some(ref f) = filter {
             if let Some(limit) = f.limit {
@@ -96,10 +100,10 @@ impl PostgresStore {
         } else {
             query.push_str(" LIMIT 100");
         }
-        
+
         // Build and execute query with dynamic binding
         let mut query_builder = sqlx::query(&query).bind(tenant_id);
-        
+
         if let Some(f) = filter {
             if let Some(user_id) = f.user_id {
                 query_builder = query_builder.bind(user_id);
@@ -123,9 +127,9 @@ impl PostgresStore {
                 query_builder = query_builder.bind(result);
             }
         }
-        
+
         let rows = query_builder.fetch_all(&self.pool).await?;
-        
+
         let mut events = Vec::new();
         for row in rows {
             events.push(AuditLogEntry {
@@ -147,19 +151,23 @@ impl PostgresStore {
         }
         Ok(events)
     }
-    
-    pub async fn get_audit_event(&self, tenant_id: Uuid, event_id: Uuid) -> Result<Option<AuditLogEntry>> {
+
+    pub async fn get_audit_event(
+        &self,
+        tenant_id: Uuid,
+        event_id: Uuid,
+    ) -> Result<Option<AuditLogEntry>> {
         let row = sqlx::query(
             "SELECT id, tenant_id, user_id, username, action, resource_type,
              resource_id, resource_name, timestamp, ip_address, user_agent,
              result, error_message, metadata
-             FROM audit_logs WHERE tenant_id = $1 AND id = $2"
+             FROM audit_logs WHERE tenant_id = $1 AND id = $2",
         )
         .bind(tenant_id)
         .bind(event_id)
         .fetch_optional(&self.pool)
         .await?;
-        
+
         if let Some(row) = row {
             Ok(Some(AuditLogEntry {
                 id: row.get("id"),
@@ -181,13 +189,18 @@ impl PostgresStore {
             Ok(None)
         }
     }
-    
-    pub async fn count_audit_events(&self, tenant_id: Uuid, filter: Option<pangolin_core::audit::AuditLogFilter>) -> Result<usize> {
-        let mut query = String::from("SELECT COUNT(*) as count FROM audit_logs WHERE tenant_id = $1");
-        
+
+    pub async fn count_audit_events(
+        &self,
+        tenant_id: Uuid,
+        filter: Option<pangolin_core::audit::AuditLogFilter>,
+    ) -> Result<usize> {
+        let mut query =
+            String::from("SELECT COUNT(*) as count FROM audit_logs WHERE tenant_id = $1");
+
         let mut conditions = Vec::new();
         let mut param_count = 2;
-        
+
         // Build same WHERE clause as list_audit_events
         if let Some(ref f) = filter {
             if f.user_id.is_some() {
@@ -219,14 +232,14 @@ impl PostgresStore {
                 param_count += 1;
             }
         }
-        
+
         if !conditions.is_empty() {
             query.push_str(" AND ");
             query.push_str(&conditions.join(" AND "));
         }
-        
+
         let mut query_builder = sqlx::query_scalar::<_, i64>(&query).bind(tenant_id);
-        
+
         if let Some(f) = filter {
             if let Some(user_id) = f.user_id {
                 query_builder = query_builder.bind(user_id);
@@ -250,7 +263,7 @@ impl PostgresStore {
                 query_builder = query_builder.bind(result);
             }
         }
-        
+
         let count = query_builder.fetch_one(&self.pool).await?;
         Ok(count as usize)
     }

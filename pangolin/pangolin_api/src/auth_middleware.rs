@@ -1,19 +1,16 @@
 use axum::{
-    body::Body,
     extract::{Request, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{header, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use std::sync::Arc;
-use pangolin_store::CatalogStore;
-use bcrypt::verify;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
+use pangolin_core::user::{UserRole, UserSession};
+use pangolin_store::CatalogStore;
+use std::sync::Arc;
 use uuid::Uuid;
-use chrono::{DateTime, Duration, Utc};
-use pangolin_core::user::{User, UserRole, UserSession};
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 
 use crate::auth::Claims;
 
@@ -22,7 +19,7 @@ use crate::auth::Claims;
 /// Generate JWT token for user session
 pub fn generate_token(session: UserSession, secret: &str) -> Result<String, String> {
     let claims = Claims::from(session);
-    
+
     encode(
         &Header::default(),
         &claims,
@@ -52,7 +49,7 @@ pub fn create_session(
 ) -> UserSession {
     let now = Utc::now();
     let expires_at = now + Duration::seconds(expiration_secs as i64);
-    
+
     UserSession {
         user_id,
         username,
@@ -70,39 +67,146 @@ fn apply_root_tenant_override(req: &mut Request, default_tenant: Uuid) {
         if let Ok(tenant_str) = tenant_header.to_str() {
             tracing::debug!("X-Pangolin-Tenant header value: {}", tenant_str);
             if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
-                tracing::info!("Root user overriding tenant context: {} -> {}", default_tenant, override_uuid);
-                req.extensions_mut().insert(crate::auth::TenantId(override_uuid));
+                tracing::info!(
+                    "Root user overriding tenant context: {} -> {}",
+                    default_tenant,
+                    override_uuid
+                );
+                req.extensions_mut()
+                    .insert(crate::auth::TenantId(override_uuid));
             } else {
-                tracing::warn!("Failed to parse X-Pangolin-Tenant header as UUID: {}", tenant_str);
+                tracing::warn!(
+                    "Failed to parse X-Pangolin-Tenant header as UUID: {}",
+                    tenant_str
+                );
             }
         }
     }
 }
 
-/// Axum middleware to extract and verify JWT token
+/// Record an authentication-related audit event.
+///
+/// Audit writes used to be discarded with `let _ = ...` throughout the
+/// codebase. Auth events in particular were never recorded at all (C-19), so an
+/// incident responder had nothing to look at. The write is awaited and a
+/// failure is logged at error level rather than being dropped silently.
+async fn audit_auth_event(
+    store: &Arc<dyn CatalogStore + Send + Sync>,
+    tenant_id: Uuid,
+    user_id: Option<Uuid>,
+    username: impl Into<String>,
+    action: pangolin_core::audit::AuditAction,
+    detail: serde_json::Value,
+) {
+    let entry = pangolin_core::audit::AuditLogEntry::success(
+        tenant_id,
+        user_id,
+        username.into(),
+        action,
+        pangolin_core::audit::ResourceType::Token,
+        None,
+        "auth".to_string(),
+    )
+    .with_metadata(detail);
+
+    if let Err(e) = store.log_audit_event(tenant_id, entry).await {
+        tracing::error!(error = %e, "failed to write authentication audit event");
+    }
+}
+
+/// Look up a service user by the key ID embedded in a presented API key.
+///
+/// This is the fix for A-12. The old code ran `bcrypt::verify` against *every*
+/// service user in *every* tenant until one matched — roughly 100-250 ms of CPU
+/// per candidate, before any rate limiting, reachable with a bogus key. Here the
+/// candidate set is narrowed by comparing public key IDs (a plain string
+/// compare), so exactly one bcrypt verification runs, or none at all.
+async fn authenticate_api_key(
+    store: &Arc<dyn CatalogStore + Send + Sync>,
+    presented: &str,
+) -> Option<pangolin_core::user::ServiceUser> {
+    let presented_key_id = crate::api_key::key_id_of(presented);
+
+    if presented_key_id.is_none() && !crate::config::allow_legacy_api_keys() {
+        tracing::warn!(
+            "rejected an API key in the pre-key-id format; rotate the key, or set \
+             PANGOLIN_ALLOW_LEGACY_API_KEYS=true to accept legacy keys during migration"
+        );
+        return None;
+    }
+
+    let tenants = store.list_tenants(None).await.ok()?;
+    for tenant in tenants {
+        let Ok(service_users) = store.list_service_users(tenant.id, None).await else {
+            continue;
+        };
+        for service_user in service_users {
+            let stored_key_id = crate::api_key::stored_key_id(&service_user.api_key_hash);
+            match (presented_key_id, stored_key_id) {
+                // Both keyed: cheap string compare selects the single candidate.
+                (Some(a), Some(b)) if a != b => continue,
+                // Presented key is keyed but this credential is legacy, or vice
+                // versa: cannot match, and must not cost a bcrypt round.
+                (Some(_), None) | (None, Some(_)) => continue,
+                _ => {}
+            }
+            if crate::api_key::verify_against(presented, &service_user.api_key_hash) {
+                return Some(service_user);
+            }
+        }
+    }
+    None
+}
+
+/// Bounded background updates of `service_user.last_used`.
+///
+/// The previous code spawned an unbounded fire-and-forget task per authenticated
+/// request (A-23). A small semaphore gives the work backpressure: when the
+/// budget is exhausted the update is skipped rather than queued without limit.
+fn spawn_last_used_update(store: Arc<dyn CatalogStore + Send + Sync>, service_user_id: Uuid) {
+    use std::sync::OnceLock;
+    use tokio::sync::Semaphore;
+
+    static BUDGET: OnceLock<Arc<Semaphore>> = OnceLock::new();
+    let budget = BUDGET.get_or_init(|| Arc::new(Semaphore::new(32))).clone();
+
+    let Ok(permit) = budget.try_acquire_owned() else {
+        tracing::debug!("skipping service-user last_used update: update budget exhausted");
+        return;
+    };
+
+    tokio::spawn(async move {
+        let _permit = permit;
+        if let Err(e) = store
+            .update_service_user_last_used(service_user_id, Utc::now())
+            .await
+        {
+            tracing::warn!(error = %e, "failed to update service user last_used");
+        }
+    });
+}
+
+/// Axum middleware: authenticate the request and attach session context.
+///
+/// Ordering matters. Public endpoints are resolved *before* any credential
+/// verification so that an unauthenticated request to `/health` never reaches
+/// bcrypt, and the public set is matched structurally (see [`crate::public_paths`])
+/// so a resource named `config` cannot widen it.
 pub async fn auth_middleware(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     mut req: Request,
     next: Next,
 ) -> Response {
-    // Check if NO_AUTH mode is enabled (must be exactly "true" for security)
-    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
-        .map(|v| v.to_lowercase() == "true")
-        .unwrap_or(false);
-    
-    if no_auth_enabled {
-        // If config request, allow through (UI needs this to check status)
-        if req.uri().path().contains("/config") {
-             return next.run(req).await;
-        }
+    let path = req.uri().path().to_string();
+    let default_tenant = Uuid::nil();
 
-        // If Authorization header is present, try to use it (allow testing specific users)
-        if req.headers().contains_key(header::AUTHORIZATION) {
-            // Let normal auth flow proceed, which will verify the token
-            // This works because user_handlers.rs bypasses password check to issue valid tokens
-        } else {
-            // No token provided? Default to TenantAdmin for easy dev access
-            // In NO_AUTH mode, create a default TenantAdmin user session
+    // NO_AUTH is a development affordance. `AppConfig::from_env_strict` refuses
+    // to start the server with it enabled on a non-loopback bind address.
+    if crate::config::no_auth_enabled() {
+        if crate::public_paths::is_public_path(&path) {
+            return next.run(req).await;
+        }
+        if !req.headers().contains_key(header::AUTHORIZATION) {
             let session = create_session(
                 Uuid::nil(),
                 "tenant_admin".to_string(),
@@ -111,343 +215,269 @@ pub async fn auth_middleware(
                 86400,
             );
             req.extensions_mut().insert(session);
-            // Also insert TenantId for NO_AUTH mode (default tenant)
-            let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
-            req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
+            req.extensions_mut()
+                .insert(crate::auth::TenantId(default_tenant));
             return next.run(req).await;
         }
+        // An Authorization header is present: fall through and verify it, so
+        // tests and tools can exercise a specific identity even in NO_AUTH mode.
     }
 
-    // Check for X-API-Key header (Service User authentication)
+    // Service-user API key.
     if let Some(api_key_header) = req.headers().get("X-API-Key") {
-        if let Ok(api_key) = api_key_header.to_str() {
-            // We need to iterate through all service users and verify the API key
-            // This is not ideal for performance but works for MVP
-            // In production, consider caching or indexing strategies
-            
-            // Get all tenants and check their service users
-            if let Ok(tenants) = store.list_tenants(None).await {
-                for tenant in tenants {
-                    if let Ok(service_users) = store.list_service_users(tenant.id, None).await {
-                        for service_user in service_users {
-                            // Verify the API key against the stored hash
-                            if let Ok(true) = verify(api_key, &service_user.api_key_hash) {
-                                // Check if service user is valid (active and not expired)
-                                if service_user.is_valid() {
-                                    // Create session from service user
-                                    let session = create_session(
-                                        service_user.id,
-                                        service_user.name.clone(),
-                                        Some(service_user.tenant_id),
-                                        service_user.role.clone(),
-                                        86400, // 24 hour session
-                                    );
-                                    req.extensions_mut().insert(session);
-                                    req.extensions_mut().insert(crate::auth::TenantId(service_user.tenant_id));
-                                    
-                                    // Update last_used timestamp (fire and forget)
-                                    let store_clone = store.clone();
-                                    let service_user_id = service_user.id;
-                                    tokio::spawn(async move {
-                                        let _ = store_clone.update_service_user_last_used(service_user_id, Utc::now()).await;
-                                    });
-                                    
-                                    return next.run(req).await;
-                                }
-                            }
-                        }
-                    }
-                }
+        let Ok(api_key) = api_key_header.to_str() else {
+            return (StatusCode::UNAUTHORIZED, "Malformed X-API-Key header").into_response();
+        };
+
+        match authenticate_api_key(&store, api_key).await {
+            Some(service_user) if service_user.is_valid() => {
+                let session = create_session(
+                    service_user.id,
+                    service_user.name.clone(),
+                    Some(service_user.tenant_id),
+                    service_user.role.clone(),
+                    86400,
+                );
+                req.extensions_mut().insert(session);
+                req.extensions_mut()
+                    .insert(crate::auth::TenantId(service_user.tenant_id));
+                spawn_last_used_update(store.clone(), service_user.id);
+                return next.run(req).await;
             }
-            
-            // If we get here, API key was invalid
-            return (StatusCode::UNAUTHORIZED, "Invalid or expired API key").into_response();
+            Some(service_user) => {
+                audit_auth_event(
+                    &store,
+                    service_user.tenant_id,
+                    Some(service_user.id),
+                    service_user.name.clone(),
+                    pangolin_core::audit::AuditAction::ApiKeyRejected,
+                    serde_json::json!({ "reason": "inactive or expired", "path": path }),
+                )
+                .await;
+                return (StatusCode::UNAUTHORIZED, "Invalid or expired API key").into_response();
+            }
+            None => {
+                audit_auth_event(
+                    &store,
+                    default_tenant,
+                    None,
+                    "unknown",
+                    pangolin_core::audit::AuditAction::ApiKeyRejected,
+                    serde_json::json!({ "reason": "no matching key", "path": path }),
+                )
+                .await;
+                return (StatusCode::UNAUTHORIZED, "Invalid or expired API key").into_response();
+            }
         }
     }
 
-    // Whitelist public endpoints
-    let path = req.uri().path();
-    if path == "/health" ||
-       path == "/api/v1/users/login" || 
-       path == "/api/v1/app-config" || 
-       path == "/v1/config" || 
-       path.ends_with("/config") ||
-       path.starts_with("/oauth/authorize/") ||
-       path.starts_with("/oauth/callback/") ||
-       path.contains("/oauth/tokens") {
-            return next.run(req).await;
+    // Public endpoints, matched structurally rather than by suffix (A-11).
+    if crate::public_paths::is_public_path(&path) {
+        return next.run(req).await;
     }
-    
-    // Extract token from Authorization header or check for Basic Auth
-    let auth_header = req.headers()
+
+    let auth_header = req
+        .headers()
         .get(header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok());
-    
-    // Check for Basic Auth first
-    if let Some(header_val) = auth_header {
-        if header_val.starts_with("Basic ") {
-            let token = &header_val[6..];
-            if let Ok(decoded) = STANDARD.decode(token) {
-                if let Ok(cred_str) = String::from_utf8(decoded) {
-                    if let Some((username, password)) = cred_str.split_once(':') {
-                        let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_default();
-                        let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_default();
-                        
-                        if !root_user.is_empty() && username == root_user && password == root_pass {
-                             // Create a root session
-                            let session = create_session(
-                                Uuid::nil(),
-                                "root".to_string(),
-                                None,
-                                UserRole::Root,
-                                3600, // 1 hour session for root ops
-                            );
-                            req.extensions_mut().insert(session);
-                            
-                            // Insert default tenant ID for root
-                            let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
-                            req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
-                            
-                            // Insert RootUser extension
-                            req.extensions_mut().insert(crate::auth::RootUser);
-                            
-                            // Allow Root to override tenant context via header
-                            apply_root_tenant_override(&mut req, default_tenant);
-                            
-                            return next.run(req).await;
-                        }
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string());
+
+    // Root basic auth.
+    if let Some(header_val) = auth_header.as_deref() {
+        if let Some(encoded) = header_val.strip_prefix("Basic ") {
+            if let Some((username, password)) = STANDARD
+                .decode(encoded)
+                .ok()
+                .and_then(|d| String::from_utf8(d).ok())
+                .and_then(|s| {
+                    s.split_once(':')
+                        .map(|(u, p)| (u.to_string(), p.to_string()))
+                })
+            {
+                if let Some((root_user, root_pass)) = crate::config::root_credentials() {
+                    // Constant-time comparison: `==` on &str leaks the length of
+                    // the matching prefix through timing (A-14).
+                    let user_ok = crate::config::constant_time_eq(&username, &root_user);
+                    let pass_ok = crate::config::constant_time_eq(&password, &root_pass);
+                    if user_ok && pass_ok {
+                        let session = create_session(
+                            Uuid::nil(),
+                            "root".to_string(),
+                            None,
+                            UserRole::Root,
+                            3600,
+                        );
+                        req.extensions_mut().insert(session);
+                        req.extensions_mut()
+                            .insert(crate::auth::TenantId(default_tenant));
+                        req.extensions_mut().insert(crate::auth::RootUser);
+                        apply_root_tenant_override(&mut req, default_tenant);
+                        // Read what the audit needs *before* awaiting: holding a
+                        // `&Request` across an await makes the middleware future
+                        // non-Send, because `Request<Body>` is not `Sync`.
+                        let assumed_tenant = req
+                            .headers()
+                            .get("X-Pangolin-Tenant")
+                            .and_then(|v| v.to_str().ok())
+                            .and_then(|v| Uuid::parse_str(v).ok());
+                        audit_root_impersonation(
+                            &store,
+                            assumed_tenant,
+                            default_tenant,
+                            "root",
+                            &path,
+                        )
+                        .await;
+                        return next.run(req).await;
                     }
+                    audit_auth_event(
+                        &store,
+                        default_tenant,
+                        None,
+                        username,
+                        pangolin_core::audit::AuditAction::LoginFailed,
+                        serde_json::json!({ "scheme": "basic", "path": path }),
+                    )
+                    .await;
+                    return (StatusCode::UNAUTHORIZED, "Invalid credentials").into_response();
                 }
             }
         }
     }
 
-    let token = match auth_header {
-        Some(header) if header.starts_with("Bearer ") => {
-            &header[7..]
-        }
-        _ => {
-            return (StatusCode::UNAUTHORIZED, "Missing or invalid authorization header").into_response();
-        }
+    let Some(token) = auth_header
+        .as_deref()
+        .and_then(|h| h.strip_prefix("Bearer "))
+    else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            "Missing or invalid authorization header",
+        )
+            .into_response();
     };
-    
-    // Get JWT secret from environment
-    // Get JWT secret from environment
-    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
-    
-    // Verify token
+
+    let secret = crate::config::jwt_secret();
+
     let claims = match verify_token(token, &secret) {
         Ok(c) => c,
         Err(e) => {
-            return (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e)).into_response();
+            tracing::debug!(error = %e, "rejected bearer token");
+            return (StatusCode::UNAUTHORIZED, "Invalid token").into_response();
         }
     };
-    
-    // Check if token has been revoked (if jti is present)
+
+    // Revocation must fail *closed*. Previously an error from the store was
+    // logged and ignored, so during a database blip every revoked token was
+    // accepted again (A-13).
     if let Some(ref jti_str) = claims.jti {
         if let Ok(token_id) = uuid::Uuid::parse_str(jti_str) {
             match store.is_token_revoked(token_id).await {
                 Ok(true) => {
-                    tracing::warn!("Revoked token attempted: {}", jti_str);
+                    tracing::warn!(jti = %jti_str, "revoked token presented");
                     return (StatusCode::UNAUTHORIZED, "Token has been revoked").into_response();
                 }
-                Ok(false) => {
-                    // Token is valid, continue
-                }
+                Ok(false) => {}
                 Err(e) => {
-                    tracing::error!("Error checking token revocation: {}", e);
-                    // Continue anyway - don't block on revocation check failure
+                    tracing::error!(
+                        error = %e,
+                        "token revocation check failed; rejecting the request (fail closed)"
+                    );
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "Unable to verify token status",
+                    )
+                        .into_response();
                 }
             }
         }
     }
-    
-    // Convert claims to session
+
     let session = match claims.to_session() {
         Ok(s) => s,
         Err(e) => {
-            return (StatusCode::UNAUTHORIZED, format!("Invalid session: {}", e)).into_response();
+            tracing::debug!(error = %e, "token claims could not be converted to a session");
+            return (StatusCode::UNAUTHORIZED, "Invalid session").into_response();
         }
     };
-    
-    // Check if token is expired
+
     if session.expires_at < Utc::now() {
         return (StatusCode::UNAUTHORIZED, "Token expired").into_response();
     }
-    
-    // Add session to request extensions
+
     req.extensions_mut().insert(session.clone());
 
-    // Inject TenantId for handlers that require it (like iceberg_handlers)
-    // If session has a tenant_id, use it. Otherwise default to the nil UUID (system/root)
-    let mut tenant_uuid = session.tenant_id.unwrap_or_else(|| {
-        Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
-    });
+    let mut tenant_uuid = session.tenant_id.unwrap_or(default_tenant);
 
-    // Allow Root to override tenant context via header
+    let mut impersonating = false;
     if session.role == UserRole::Root {
-        if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
-            if let Ok(tenant_str) = tenant_header.to_str() {
-                if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
-                    tenant_uuid = override_uuid;
-                }
+        if let Some(override_uuid) = req
+            .headers()
+            .get("X-Pangolin-Tenant")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| Uuid::parse_str(s).ok())
+        {
+            if override_uuid != tenant_uuid {
+                impersonating = true;
             }
+            tenant_uuid = override_uuid;
         }
     }
 
-    req.extensions_mut().insert(crate::auth::TenantId(tenant_uuid));
-    
-    // If role is Root, insert RootUser extension
+    req.extensions_mut()
+        .insert(crate::auth::TenantId(tenant_uuid));
+
     if session.role == UserRole::Root {
         req.extensions_mut().insert(crate::auth::RootUser);
     }
-    
+
+    if impersonating {
+        tracing::warn!(
+            user = %session.username,
+            tenant = %tenant_uuid,
+            "root session assumed another tenant's context"
+        );
+        audit_auth_event(
+            &store,
+            tenant_uuid,
+            Some(session.user_id),
+            session.username.clone(),
+            pangolin_core::audit::AuditAction::TenantImpersonation,
+            serde_json::json!({ "assumed_tenant": tenant_uuid.to_string(), "path": path }),
+        )
+        .await;
+    }
+
     next.run(req).await
 }
 
-/// Wrapper for middleware that doesn't require state (for backward compatibility)
-pub async fn auth_middleware_wrapper(
-    mut req: Request,
-    next: Next,
-) -> Response {
-    // For routes that don't have service user support, use the old middleware
-    // This is a temporary solution - ideally all routes should use the new middleware
-    
-    // Check if NO_AUTH mode is enabled
-    let no_auth_enabled = std::env::var("PANGOLIN_NO_AUTH")
-        .map(|v| v.to_lowercase() == "true")
-        .unwrap_or(false);
-    
-    if no_auth_enabled {
-        // In NO_AUTH mode, create a default TenantAdmin user session
-        let session = create_session(
-            Uuid::nil(),
-            "tenant_admin".to_string(),
-            None,
-            UserRole::TenantAdmin,
-            86400,
-        );
-        req.extensions_mut().insert(session);
-        // Insert default TenantId
-        let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
-        req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
-        return next.run(req).await;
-    }
-
-    // Whitelist public endpoints
-    let path = req.uri().path();
-    tracing::error!("AUTH CHECK: Checking path '{}'", path);
-
-    if path == "/health" ||
-       path == "/api/v1/users/login" || 
-       path == "/api/v1/app-config" || 
-       path == "/v1/config" || 
-       path.ends_with("/config") ||
-       path.starts_with("/oauth/authorize/") ||
-       path.starts_with("/oauth/callback/") ||
-       path.contains("/oauth/tokens") {
-            return next.run(req).await;
-    }
-    
-    // Extract token from Authorization header or check for Basic Auth
-    let auth_header = req.headers()
-        .get(header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok());
-    
-    // Check for Basic Auth first
-    if let Some(header_val) = auth_header {
-        if header_val.starts_with("Basic ") {
-            let token = &header_val[6..];
-            if let Ok(decoded) = STANDARD.decode(token) {
-                if let Ok(cred_str) = String::from_utf8(decoded) {
-                    if let Some((username, password)) = cred_str.split_once(':') {
-                        let root_user = std::env::var("PANGOLIN_ROOT_USER").unwrap_or_default();
-                        let root_pass = std::env::var("PANGOLIN_ROOT_PASSWORD").unwrap_or_default();
-                        
-                        if !root_user.is_empty() && username == root_user && password == root_pass {
-                            let session = create_session(
-                                Uuid::nil(),
-                                "root".to_string(),
-                                None,
-                                UserRole::Root,
-                                3600,
-                            );
-                            req.extensions_mut().insert(session);
-                            let default_tenant = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
-                            req.extensions_mut().insert(crate::auth::TenantId(default_tenant));
-                            req.extensions_mut().insert(crate::auth::RootUser);
-                            
-                            // Allow Root to override tenant context via header
-                            apply_root_tenant_override(&mut req, default_tenant);
-
-                            return next.run(req).await;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    let token = match auth_header {
-        Some(header) if header.starts_with("Bearer ") => {
-            &header[7..]
-        }
-        _ => {
-            return (StatusCode::UNAUTHORIZED, "Missing or invalid authorization header").into_response();
-        }
+/// Audit a root basic-auth session that assumed a specific tenant context.
+async fn audit_root_impersonation(
+    store: &Arc<dyn CatalogStore + Send + Sync>,
+    assumed: Option<Uuid>,
+    default_tenant: Uuid,
+    username: &str,
+    path: &str,
+) {
+    let Some(assumed) = assumed else {
+        return;
     };
-    
-    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
-    
-    let claims = match verify_token(token, &secret) {
-        Ok(c) => c,
-        Err(e) => {
-            return (StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e)).into_response();
-        }
-    };
-    
-    let session = match claims.to_session() {
-        Ok(s) => s,
-        Err(e) => {
-            return (StatusCode::UNAUTHORIZED, format!("Invalid session: {}", e)).into_response();
-        }
-    };
-    
-    if session.expires_at < Utc::now() {
-        return (StatusCode::UNAUTHORIZED, "Token expired").into_response();
+    if assumed == default_tenant {
+        return;
     }
-    
-    req.extensions_mut().insert(session.clone());
-    let mut tenant_uuid = session.tenant_id.unwrap_or_else(|| {
-        Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap()
-    });
-
-    // Allow Root to override tenant context via header
-    if session.role == UserRole::Root {
-        tracing::debug!("Root user detected, checking for X-Pangolin-Tenant header");
-        if let Some(tenant_header) = req.headers().get("X-Pangolin-Tenant") {
-            if let Ok(tenant_str) = tenant_header.to_str() {
-                tracing::debug!("X-Pangolin-Tenant header value: {}", tenant_str);
-                if let Ok(override_uuid) = Uuid::parse_str(tenant_str) {
-                    tracing::info!("Root user overriding tenant context: {} -> {}", tenant_uuid, override_uuid);
-                    tenant_uuid = override_uuid;
-                } else {
-                    tracing::warn!("Failed to parse X-Pangolin-Tenant header as UUID: {}", tenant_str);
-                }
-            }
-        } else {
-            tracing::debug!("No X-Pangolin-Tenant header found for Root user");
-        }
-    }
-
-    tracing::info!("Setting TenantId extension to: {}", tenant_uuid);
-    req.extensions_mut().insert(crate::auth::TenantId(tenant_uuid));
-    
-    if session.role == UserRole::Root {
-        req.extensions_mut().insert(crate::auth::RootUser);
-    }
-    
-    next.run(req).await
+    tracing::warn!(tenant = %assumed, "root basic-auth session assumed another tenant's context");
+    audit_auth_event(
+        store,
+        assumed,
+        None,
+        username,
+        pangolin_core::audit::AuditAction::TenantImpersonation,
+        serde_json::json!({
+            "assumed_tenant": assumed.to_string(),
+            "scheme": "basic",
+            "path": path,
+        }),
+    )
+    .await;
 }
 
 /// Hash password using bcrypt
@@ -458,8 +488,18 @@ pub fn hash_password(password: &str) -> Result<String, String> {
 
 /// Verify password against hash
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
-    bcrypt::verify(password, hash)
-        .map_err(|e| format!("Failed to verify password: {}", e))
+    bcrypt::verify(password, hash).map_err(|e| format!("Failed to verify password: {}", e))
+}
+
+/// Compile-time guard: axum requires the middleware future to be `Send`, and
+/// the failure mode without this assertion is an opaque `Service` trait-bound
+/// error pointing at the router rather than at the offending `.await`.
+#[allow(dead_code)]
+fn _assert_middleware_future_is_send() {
+    fn require_send<T: Send>(_: T) {}
+    let _ = |s: State<Arc<dyn CatalogStore + Send + Sync>>, r: Request, n: Next| {
+        require_send(auth_middleware(s, r, n));
+    };
 }
 
 #[cfg(test)]
@@ -470,7 +510,7 @@ mod tests {
     fn test_password_hashing() {
         let password = "test_password_123";
         let hash = hash_password(password).unwrap();
-        
+
         assert!(verify_password(password, &hash).unwrap());
         assert!(!verify_password("wrong_password", &hash).unwrap());
     }
@@ -485,11 +525,11 @@ mod tests {
             UserRole::Root,
             3600,
         );
-        
+
         let token = generate_token(session.clone(), secret).unwrap();
         let claims = verify_token(&token, secret).unwrap();
         let decoded_session = claims.to_session().unwrap();
-        
+
         assert_eq!(decoded_session.user_id, session.user_id);
         assert_eq!(decoded_session.username, session.username);
         assert_eq!(decoded_session.role, session.role);
@@ -506,7 +546,7 @@ mod tests {
             UserRole::Root,
             3600,
         );
-        
+
         let token = generate_token(session, secret).unwrap();
         assert!(verify_token(&token, wrong_secret).is_err());
     }
@@ -520,11 +560,11 @@ mod tests {
             UserRole::TenantAdmin,
             7200,
         );
-        
+
         assert_eq!(session.username, "testuser");
         assert_eq!(session.role, UserRole::TenantAdmin);
         assert!(session.tenant_id.is_some());
-        
+
         let duration = session.expires_at - session.issued_at;
         assert_eq!(duration.num_seconds(), 7200);
     }

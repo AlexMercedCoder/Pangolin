@@ -1,12 +1,17 @@
 /// Branch operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
+use pangolin_core::model::{Branch, BranchType};
 use sqlx::Row;
 use uuid::Uuid;
-use pangolin_core::model::{Branch, BranchType};
 
 impl SqliteStore {
-    pub async fn create_branch(&self, tenant_id: Uuid, catalog_name: &str, branch: Branch) -> Result<()> {
+    pub async fn create_branch(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: Branch,
+    ) -> Result<()> {
         sqlx::query("INSERT INTO branches (tenant_id, catalog_name, name, head_commit_id, branch_type, assets) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
@@ -19,7 +24,12 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub async fn get_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<Option<Branch>> {
+    pub async fn get_branch(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        name: String,
+    ) -> Result<Option<Branch>> {
         let row = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
@@ -36,7 +46,10 @@ impl SqliteStore {
 
             Ok(Some(Branch {
                 name: row.get("name"),
-                head_commit_id: row.get::<Option<String>, _>("head_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                head_commit_id: row
+                    .get::<Option<String>, _>("head_commit_id")
+                    .map(|s| Uuid::parse_str(&s))
+                    .transpose()?,
                 branch_type,
                 assets: serde_json::from_str(&row.get::<String, _>("assets")).unwrap_or_default(),
             }))
@@ -45,9 +58,18 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_branches(&self, tenant_id: Uuid, catalog_name: &str, pagination: Option<crate::PaginationParams>) -> Result<Vec<Branch>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_branches(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Branch>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND catalog_name = ? LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
@@ -67,7 +89,10 @@ impl SqliteStore {
 
             branches.push(Branch {
                 name: row.get("name"),
-                head_commit_id: row.get::<Option<String>, _>("head_commit_id").map(|s| Uuid::parse_str(&s)).transpose()?,
+                head_commit_id: row
+                    .get::<Option<String>, _>("head_commit_id")
+                    .map(|s| Uuid::parse_str(&s))
+                    .transpose()?,
                 branch_type,
                 assets: serde_json::from_str(&row.get::<String, _>("assets")).unwrap_or_default(),
             });
@@ -75,18 +100,25 @@ impl SqliteStore {
         Ok(branches)
     }
 
-    pub async fn delete_branch(&self, tenant_id: Uuid, catalog_name: &str, name: String) -> Result<()> {
-        let result = sqlx::query("DELETE FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?")
-            .bind(tenant_id.to_string())
-            .bind(catalog_name)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
-        
+    pub async fn delete_branch(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        name: String,
+    ) -> Result<()> {
+        let result = sqlx::query(
+            "DELETE FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?",
+        )
+        .bind(tenant_id.to_string())
+        .bind(catalog_name)
+        .bind(&name)
+        .execute(&self.pool)
+        .await?;
+
         if result.rows_affected() == 0 {
             return Err(anyhow::anyhow!("Branch '{}' not found", name));
         }
-        
+
         // Also delete assets associated with this branch
         sqlx::query("DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ? AND branch = ?")
             .bind(tenant_id.to_string())
@@ -94,12 +126,27 @@ impl SqliteStore {
             .bind(&name)
             .execute(&self.pool)
             .await?;
-        
+
         Ok(())
     }
 
-    pub async fn merge_branch(&self, tenant_id: Uuid, catalog_name: &str, target_branch: String, source_branch: String) -> Result<()> {
-         // 1. Get Source Branch
+    /// Fast-forward `target_branch` to `source_branch`.
+    ///
+    /// Named differently from `CatalogStore::merge_branch`, and taking the same
+    /// (source, target) order, on purpose. There used to be an inherent
+    /// `merge_branch` taking (target, source) alongside a trait `merge_branch`
+    /// taking (source, target): Rust resolves the inherent method first, so any
+    /// caller holding a concrete backend silently merged in the opposite
+    /// direction. Two names cannot be confused; two argument orders under one
+    /// name can.
+    pub async fn merge_branch_into(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        source_branch: String,
+        target_branch: String,
+    ) -> Result<()> {
+        // 1. Get Source Branch
         let source_row = sqlx::query("SELECT head_commit_id FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
@@ -107,7 +154,7 @@ impl SqliteStore {
             .fetch_optional(&self.pool)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Source branch not found"))?;
-            
+
         let source_head: Option<String> = source_row.get("head_commit_id");
 
         // 2. Update Target Branch

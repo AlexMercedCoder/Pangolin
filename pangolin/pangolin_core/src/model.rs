@@ -1,8 +1,8 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 use utoipa::ToSchema;
-use chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Tenant {
@@ -50,8 +50,8 @@ pub struct Warehouse {
 // Federated Catalog Support
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum CatalogType {
-    Local,      // Native Pangolin catalog
-    Federated,  // External Iceberg REST catalog (proxy)
+    Local,     // Native Pangolin catalog
+    Federated, // External Iceberg REST catalog (proxy)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -63,7 +63,7 @@ pub struct FederatedCatalogConfig {
 pub struct Catalog {
     pub id: Uuid, // Added ID for permission scoping
     pub name: String,
-    pub catalog_type: CatalogType, // Local or Federated
+    pub catalog_type: CatalogType,        // Local or Federated
     pub warehouse_name: Option<String>, // Reference to warehouse for credential vending (Local only)
     pub storage_location: Option<String>, // Base path for this catalog in the warehouse (Local only)
     pub federated_config: Option<FederatedCatalogConfig>, // Configuration for federated catalogs
@@ -83,7 +83,7 @@ impl Namespace {
             properties: HashMap::new(),
         }
     }
-    
+
     pub fn to_string(&self) -> String {
         self.name.join(".")
     }
@@ -175,18 +175,18 @@ pub enum ConflictType {
     },
     DeletionConflict {
         asset_name: String,
-        deleted_in: String, // "source" or "target"
+        deleted_in: String,  // "source" or "target"
         modified_in: String, // "source" or "target"
     },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub enum ResolutionStrategy {
-    AutoMerge,          // Automatically merge non-conflicting changes
-    TakeSource,         // Use source branch version
-    TakeTarget,         // Use target branch version
-    Manual,             // Requires manual resolution
-    ThreeWayMerge,      // Merge using base commit as reference
+    AutoMerge,     // Automatically merge non-conflicting changes
+    TakeSource,    // Use source branch version
+    TakeTarget,    // Use target branch version
+    Manual,        // Requires manual resolution
+    ThreeWayMerge, // Merge using base commit as reference
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -234,12 +234,12 @@ impl MergeConflict {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum MergeStatus {
-    Pending,        // Merge initiated, conflicts being detected
-    Conflicted,     // Conflicts detected, awaiting resolution
-    Resolving,      // Manual resolution in progress
-    Ready,          // All conflicts resolved, ready to complete
-    Completed,      // Merge successfully completed
-    Aborted,        // Merge aborted by user
+    Pending,    // Merge initiated, conflicts being detected
+    Conflicted, // Conflicts detected, awaiting resolution
+    Resolving,  // Manual resolution in progress
+    Ready,      // All conflicts resolved, ready to complete
+    Completed,  // Merge successfully completed
+    Aborted,    // Merge aborted by user
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -288,7 +288,8 @@ impl MergeOperation {
     }
 
     pub fn can_complete(&self) -> bool {
-        self.status == MergeStatus::Ready || (self.status == MergeStatus::Pending && !self.has_conflicts())
+        self.status == MergeStatus::Ready
+            || (self.status == MergeStatus::Pending && !self.has_conflicts())
     }
 }
 

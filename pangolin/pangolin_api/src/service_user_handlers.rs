@@ -1,19 +1,18 @@
+use crate::auth::TenantId;
 use axum::{
-    extract::{Path, State, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    Extension,
-    Json,
+    Extension, Json,
 };
-use pangolin_core::user::{ServiceUser, ApiKeyResponse, UserRole};
-use pangolin_store::{CatalogStore, PaginationParams};
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use chrono::{Utc, Duration};
 use bcrypt::{hash, DEFAULT_COST};
-use crate::auth::TenantId;
+use chrono::{Duration, Utc};
+use pangolin_core::user::{ApiKeyResponse, ServiceUser, UserRole};
+use pangolin_store::{CatalogStore, PaginationParams};
+use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
@@ -79,7 +78,8 @@ pub async fn create_service_user(
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Only admins can create service users"})),
-        ).into_response();
+        )
+            .into_response();
     }
 
     // Generate API key
@@ -90,12 +90,15 @@ pub async fn create_service_user(
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("Failed to hash API key: {}", e)})),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
     // Calculate expiration
-    let expires_at = payload.expires_in_days.map(|days| Utc::now() + Duration::days(days));
+    let expires_at = payload
+        .expires_in_days
+        .map(|days| Utc::now() + Duration::days(days));
 
     // Create service user
     let service_user = ServiceUser::new(
@@ -108,7 +111,7 @@ pub async fn create_service_user(
         expires_at,
     );
 
-    let service_user_id = service_user.id;
+    let _service_user_id = service_user.id;
 
     match store.create_service_user(service_user.clone()).await {
         Ok(_) => {
@@ -118,7 +121,7 @@ pub async fn create_service_user(
                 description: service_user.description,
                 tenant_id: service_user.tenant_id,
                 role: service_user.role,
-                api_key,  // Only shown once!
+                api_key, // Only shown once!
                 created_at: service_user.created_at,
                 created_by: service_user.created_by,
                 expires_at: service_user.expires_at,
@@ -129,7 +132,8 @@ pub async fn create_service_user(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to create service user: {}", e)})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -159,7 +163,8 @@ pub async fn list_service_users(
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Only admins can list service users"})),
-        ).into_response();
+        )
+            .into_response();
     }
 
     match store.list_service_users(tenant_id, Some(pagination)).await {
@@ -167,7 +172,8 @@ pub async fn list_service_users(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to list service users: {}", e)})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -198,7 +204,8 @@ pub async fn get_service_user(
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Only admins can view service users"})),
-        ).into_response();
+        )
+            .into_response();
     }
 
     match store.get_service_user(id).await {
@@ -206,11 +213,13 @@ pub async fn get_service_user(
         Ok(None) => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({"error": "Service user not found"})),
-        ).into_response(),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to get service user: {}", e)})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -242,18 +251,24 @@ pub async fn update_service_user(
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Only admins can update service users"})),
-        ).into_response();
+        )
+            .into_response();
     }
 
-    match store.update_service_user(id, payload.name, payload.description, payload.active).await {
+    match store
+        .update_service_user(id, payload.name, payload.description, payload.active)
+        .await
+    {
         Ok(_) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "updated"})),
-        ).into_response(),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to update service user: {}", e)})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -283,18 +298,21 @@ pub async fn delete_service_user(
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Only admins can delete service users"})),
-        ).into_response();
+        )
+            .into_response();
     }
 
     match store.delete_service_user(id).await {
         Ok(_) => (
             StatusCode::OK,
             Json(serde_json::json!({"status": "deleted"})),
-        ).into_response(),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to delete service user: {}", e)})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }
 
@@ -325,7 +343,8 @@ pub async fn rotate_api_key(
         return (
             StatusCode::FORBIDDEN,
             Json(serde_json::json!({"error": "Only admins can rotate API keys"})),
-        ).into_response();
+        )
+            .into_response();
     }
 
     // Get existing service user
@@ -335,13 +354,15 @@ pub async fn rotate_api_key(
             return (
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({"error": "Service user not found"})),
-            ).into_response();
+            )
+                .into_response();
         }
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("Failed to get service user: {}", e)})),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
@@ -353,7 +374,8 @@ pub async fn rotate_api_key(
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("Failed to hash API key: {}", e)})),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
@@ -361,7 +383,10 @@ pub async fn rotate_api_key(
     let mut updated_service_user = service_user.clone();
     updated_service_user.api_key_hash = new_api_key_hash;
 
-    match store.create_service_user(updated_service_user.clone()).await {
+    match store
+        .create_service_user(updated_service_user.clone())
+        .await
+    {
         Ok(_) => {
             let response = ApiKeyResponse {
                 id: updated_service_user.id,
@@ -369,7 +394,7 @@ pub async fn rotate_api_key(
                 description: updated_service_user.description,
                 tenant_id: updated_service_user.tenant_id,
                 role: updated_service_user.role,
-                api_key: new_api_key,  // Only shown once!
+                api_key: new_api_key, // Only shown once!
                 created_at: updated_service_user.created_at,
                 created_by: updated_service_user.created_by,
                 expires_at: updated_service_user.expires_at,
@@ -380,6 +405,7 @@ pub async fn rotate_api_key(
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": format!("Failed to rotate API key: {}", e)})),
-        ).into_response(),
+        )
+            .into_response(),
     }
 }

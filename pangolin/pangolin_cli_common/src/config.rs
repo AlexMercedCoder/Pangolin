@@ -1,8 +1,8 @@
+use crate::error::CliError;
+use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use directories::ProjectDirs;
-use crate::error::CliError;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CliConfig {
@@ -31,9 +31,10 @@ pub struct ConfigManager {
 
 impl ConfigManager {
     pub fn new(profile: Option<&str>) -> Result<Self, CliError> {
-        let dirs = ProjectDirs::from("com", "pangolin", "cli")
-            .ok_or(CliError::ConfigError("Could not determine config directory".to_string()))?;
-        
+        let dirs = ProjectDirs::from("com", "pangolin", "cli").ok_or(CliError::ConfigError(
+            "Could not determine config directory".to_string(),
+        ))?;
+
         let filename = if let Some(p) = profile {
             format!("config-{}.json", p)
         } else {
@@ -41,7 +42,7 @@ impl ConfigManager {
         };
 
         let config_path = dirs.config_dir().join(filename);
-        
+
         Ok(Self { config_path })
     }
 

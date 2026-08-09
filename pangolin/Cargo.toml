@@ -9,6 +9,43 @@ members = [
     "pangolin_cli_user",
 ]
 
+# One version for the whole workspace.
+#
+# Versions had drifted across five artifacts - pangolin_api 0.5.1,
+# pangolin_core/pangolin_store 0.2.0, the CLIs 0.5.0, the Python SDK 0.5.1, the
+# UI 0.5.0 and the Helm chart 0.1.0 - with no way to tell which combination was
+# ever tested together (C-23). Every crate now inherits from here.
+[workspace.package]
+version = "0.6.0"
+edition = "2021"
+rust-version = "1.92"
+license = "MIT"
+repository = "https://github.com/AlexMercedCoder/pangolin"
+authors = ["Alex Merced"]
+
+# Workspace-wide lint configuration.
+#
+# `unsafe_code` is forbidden to lock in a property the codebase already has:
+# there is zero `unsafe` anywhere in the workspace, and it should stay that way.
+#
+# The three allowed clippy lints are deliberate design points rather than
+# defects, and each is tracked for a structural fix in Phase 2.10 of
+# AUDIT_EXECUTION_PLAN.md:
+#   * too_many_arguments  - the CatalogStore trait threads (tenant, catalog,
+#     branch, namespace, name, pagination) through most methods on purpose, so
+#     the tenant scope is impossible to forget.
+#   * module_inception    - e.g. `postgres::postgres`; renaming is a breaking
+#     change to the public module path.
+#   * type_complexity     - the search result tuple; factoring it into a named
+#     type is part of the typed-error work.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+module_inception = "allow"
+type_complexity = "allow"
+
 [workspace.dependencies]
 axum = "0.7"
 tokio = { version = "1.0", features = ["full"] }
@@ -20,13 +57,13 @@ object_store = { version = "0.11", features = ["aws", "azure", "gcp"] }
 thiserror = "1.0"
 anyhow = "1.0"
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
 dotenvy = "0.15"
 async-trait = "0.1"
 dashmap = "6.0"
 futures = "0.3"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+tower = { version = "0.4", features = ["limit", "util"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit"] }
 reqwest = { version = "0.11", features = ["json"] }
 url = "2.5"
 bytes = "1.5"

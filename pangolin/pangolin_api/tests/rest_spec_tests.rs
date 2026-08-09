@@ -2,15 +2,15 @@
 mod tests {
     use axum::{
         body::Body,
-        http::{Request, StatusCode, header},
+        http::{header, Request, StatusCode},
     };
-    use tower::ServiceExt;
-    use pangolin_store::memory::MemoryStore;
-    use pangolin_api::app;
-    use std::sync::Arc;
     use base64::Engine;
+    use pangolin_api::app;
     use pangolin_api::tests_common::EnvGuard;
+    use pangolin_store::memory::MemoryStore;
     use serial_test::serial;
+    use std::sync::Arc;
+    use tower::ServiceExt;
 
     #[tokio::test]
     #[serial]
@@ -18,8 +18,9 @@ mod tests {
         // Test that /v1/config is accessible without authentication
         // We explicitly enable NO_AUTH for this test
         let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
-        
-        let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
+
+        let store =
+            Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
         let response = app
@@ -41,7 +42,8 @@ mod tests {
         // Test that /v1/:prefix/config is accessible without authentication
         let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
-        let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
+        let store =
+            Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
         let response = app
@@ -64,15 +66,19 @@ mod tests {
         // Use NO_AUTH to bypass login, but verify tenant header is accepted
         let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
-        let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
-        
+        let store =
+            Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
+
         // Create a test tenant first
         let tenant_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
-        store.create_tenant(pangolin_core::model::Tenant {
-            id: tenant_id,
-            name: "test_tenant".to_string(),
-            properties: std::collections::HashMap::new(),
-        }).await.unwrap();
+        store
+            .create_tenant(pangolin_core::model::Tenant {
+                id: tenant_id,
+                name: "test_tenant".to_string(),
+                properties: std::collections::HashMap::new(),
+            })
+            .await
+            .unwrap();
 
         let app = app(store);
 
@@ -98,7 +104,8 @@ mod tests {
         // This is current behavior - auth middleware allows nil tenant as fallback
         let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
-        let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
+        let store =
+            Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
         let response = app
@@ -121,7 +128,8 @@ mod tests {
         // Test that config endpoint returns valid JSON
         let _guard = EnvGuard::new("PANGOLIN_NO_AUTH", "true");
 
-        let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
+        let store =
+            Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
         let response = app
@@ -135,10 +143,12 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
-        
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        
+
         // Should have defaults and overrides keys
         assert!(json.get("defaults").is_some());
         assert!(json.get("overrides").is_some());
@@ -160,7 +170,8 @@ mod tests {
         // If previous was unset, it unsets.
         // Since we run serial, and other tests UNSET it on drop, it should be unset here.
 
-        let store = Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
+        let store =
+            Arc::new(MemoryStore::new()) as Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
         let app = app(store);
 
         let credentials = base64::engine::general_purpose::STANDARD.encode("admin:password");

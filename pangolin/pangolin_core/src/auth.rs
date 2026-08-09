@@ -52,8 +52,9 @@ impl OAuthConfig {
                     .unwrap_or_else(|_| "https://accounts.google.com/o/oauth2/v2/auth".to_string()),
                 token_url: std::env::var("OAUTH_GOOGLE_TOKEN_URL")
                     .unwrap_or_else(|_| "https://oauth2.googleapis.com/token".to_string()),
-                userinfo_url: std::env::var("OAUTH_GOOGLE_USERINFO_URL")
-                    .unwrap_or_else(|_| "https://www.googleapis.com/oauth2/v2/userinfo".to_string()),
+                userinfo_url: std::env::var("OAUTH_GOOGLE_USERINFO_URL").unwrap_or_else(|_| {
+                    "https://www.googleapis.com/oauth2/v2/userinfo".to_string()
+                }),
             },
             client_id,
             client_secret,
@@ -76,10 +77,18 @@ impl OAuthConfig {
         Self {
             provider: OAuthProviderConfig::Microsoft {
                 tenant_id: tenant_id.clone(),
-                auth_url: std::env::var("OAUTH_MICROSOFT_AUTH_URL")
-                    .unwrap_or_else(|_| format!("https://login.microsoftonline.com/{}/oauth2/v2.0/authorize", tenant_id)),
-                token_url: std::env::var("OAUTH_MICROSOFT_TOKEN_URL")
-                    .unwrap_or_else(|_| format!("https://login.microsoftonline.com/{}/oauth2/v2.0/token", tenant_id)),
+                auth_url: std::env::var("OAUTH_MICROSOFT_AUTH_URL").unwrap_or_else(|_| {
+                    format!(
+                        "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize",
+                        tenant_id
+                    )
+                }),
+                token_url: std::env::var("OAUTH_MICROSOFT_TOKEN_URL").unwrap_or_else(|_| {
+                    format!(
+                        "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
+                        tenant_id
+                    )
+                }),
                 userinfo_url: std::env::var("OAUTH_MICROSOFT_USERINFO_URL")
                     .unwrap_or_else(|_| "https://graph.microsoft.com/oidc/userinfo".to_string()),
             },

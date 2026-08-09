@@ -1,20 +1,24 @@
-use pangolin_store::{CatalogStore, MongoStore};
-use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
-use uuid::Uuid;
 use chrono::Utc;
+use pangolin_core::audit::{AuditAction, AuditLogEntry, AuditLogFilter, AuditResult, ResourceType};
+use pangolin_store::MongoStore;
 use std::env;
+use uuid::Uuid;
 
 #[tokio::test]
 async fn test_mongo_audit_log_filtering() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) if url.starts_with("mongodb://") => url,
-        _ => {
-            println!("Skipping test_mongo_audit_log_filtering: DATABASE_URL not set to mongodb://");
+    let connection_string = match pangolin_store::test_support::mongo_url() {
+        Some(url) => url,
+        None => {
+            println!(
+                "Skipping test_mongo_audit_log_filtering: set PANGOLIN_TEST_MONGO_URL to run it"
+            );
             return;
         }
     };
 
-    let store: MongoStore = MongoStore::new(&connection_string, "pangolin_test").await.expect("Failed to create MongoStore");
+    let store: MongoStore = MongoStore::new(&connection_string, "pangolin_test")
+        .await
+        .expect("Failed to create MongoStore");
     let tenant_id = Uuid::new_v4();
     let user1_id = Uuid::new_v4();
     let user2_id = Uuid::new_v4();
@@ -76,7 +80,10 @@ async fn test_mongo_audit_log_filtering() {
         user_id: Some(user1_id),
         ..Default::default()
     };
-    let user1_logs = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let user1_logs = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(user1_logs.len(), 2, "User1 should have 2 logs");
     assert!(user1_logs.iter().all(|l| l.user_id == Some(user1_id)));
     println!("✓ Test 2 passed: Filter by user_id");
@@ -86,7 +93,10 @@ async fn test_mongo_audit_log_filtering() {
         action: Some(AuditAction::CreateTable),
         ..Default::default()
     };
-    let create_table_logs = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let create_table_logs = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(create_table_logs.len(), 1, "Should have 1 CreateTable log");
     assert_eq!(create_table_logs[0].action, AuditAction::CreateTable);
     println!("✓ Test 3 passed: Filter by action");
@@ -96,7 +106,10 @@ async fn test_mongo_audit_log_filtering() {
         resource_type: Some(ResourceType::Table),
         ..Default::default()
     };
-    let table_logs = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let table_logs = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(table_logs.len(), 2, "Should have 2 Table logs");
     println!("✓ Test 4 passed: Filter by resource_type");
 
@@ -105,7 +118,10 @@ async fn test_mongo_audit_log_filtering() {
         result: Some(AuditResult::Success),
         ..Default::default()
     };
-    let success_logs = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let success_logs = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(success_logs.len(), 3, "Should have 3 success logs");
     println!("✓ Test 5 passed: Filter by result (success)");
 
@@ -114,7 +130,10 @@ async fn test_mongo_audit_log_filtering() {
         result: Some(AuditResult::Failure),
         ..Default::default()
     };
-    let failure_logs = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let failure_logs = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(failure_logs.len(), 1, "Should have 1 failure log");
     assert_eq!(failure_logs[0].result, AuditResult::Failure);
     println!("✓ Test 6 passed: Filter by result (failure)");
@@ -125,8 +144,15 @@ async fn test_mongo_audit_log_filtering() {
         result: Some(AuditResult::Success),
         ..Default::default()
     };
-    let combined_logs = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
-    assert_eq!(combined_logs.len(), 2, "Should have 2 logs matching combined filter");
+    let combined_logs = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
+    assert_eq!(
+        combined_logs.len(),
+        2,
+        "Should have 2 logs matching combined filter"
+    );
     println!("✓ Test 7 passed: Combined filters");
 
     // Test 8: Pagination
@@ -135,7 +161,10 @@ async fn test_mongo_audit_log_filtering() {
         offset: Some(0),
         ..Default::default()
     };
-    let page1 = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let page1 = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(page1.len(), 2, "First page should have 2 logs");
 
     let filter = AuditLogFilter {
@@ -143,7 +172,10 @@ async fn test_mongo_audit_log_filtering() {
         offset: Some(2),
         ..Default::default()
     };
-    let page2 = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let page2 = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert!(page2.len() >= 2, "Second page should have at least 2 logs");
     println!("✓ Test 8 passed: Pagination");
 
@@ -155,7 +187,10 @@ async fn test_mongo_audit_log_filtering() {
         user_id: Some(user1_id),
         ..Default::default()
     };
-    let user1_count = store.count_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let user1_count = store
+        .count_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(user1_count, 2, "User1 should have 2 events");
     println!("✓ Test 9 passed: Count events");
 
@@ -174,12 +209,16 @@ async fn test_mongo_audit_log_time_filtering() {
     let connection_string = match env::var("DATABASE_URL") {
         Ok(url) if url.starts_with("mongodb://") => url,
         _ => {
-            println!("Skipping test_mongo_audit_log_time_filtering: DATABASE_URL not set to mongodb://");
+            println!(
+                "Skipping test_mongo_audit_log_time_filtering: DATABASE_URL not set to mongodb://"
+            );
             return;
         }
     };
 
-    let store: MongoStore = MongoStore::new(&connection_string, "pangolin_test").await.expect("Failed to create MongoStore");
+    let store: MongoStore = MongoStore::new(&connection_string, "pangolin_test")
+        .await
+        .expect("Failed to create MongoStore");
     let tenant_id = Uuid::new_v4();
     let user_id = Uuid::new_v4();
 
@@ -229,7 +268,10 @@ async fn test_mongo_audit_log_time_filtering() {
         start_time: Some(one_hour_ago - chrono::Duration::minutes(1)),
         ..Default::default()
     };
-    let recent_logs: Vec<AuditLogEntry> = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let recent_logs: Vec<AuditLogEntry> = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(recent_logs.len(), 2, "Should have 2 logs from last hour");
 
     // Test: Filter by end_time
@@ -237,7 +279,10 @@ async fn test_mongo_audit_log_time_filtering() {
         end_time: Some(one_hour_ago + chrono::Duration::minutes(1)),
         ..Default::default()
     };
-    let old_logs: Vec<AuditLogEntry> = store.list_audit_events(tenant_id, Some(filter)).await.unwrap();
+    let old_logs: Vec<AuditLogEntry> = store
+        .list_audit_events(tenant_id, Some(filter))
+        .await
+        .unwrap();
     assert_eq!(old_logs.len(), 2, "Should have 2 logs before one hour ago");
 
     println!("✓ MongoDB time filtering test passed");

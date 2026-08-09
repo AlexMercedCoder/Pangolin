@@ -13,10 +13,14 @@ spec:
       {{- include "pangolin.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- with .Values.podAnnotations }}
       annotations:
+        {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
+        {{/* Roll pods when the Secret's contents change. */}}
+        {{- if .Values.createSecret }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
       labels:
         {{- include "pangolin.selectorLabels" . | nindent 8 }}
     spec:
@@ -25,6 +29,12 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "pangolin.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
+      {{/*
+        Long enough for in-flight table commits to drain. The server installs a
+        SIGTERM handler and stops reporting ready before it finishes serving.
+      */}}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -42,39 +52,86 @@ spec:
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
-            {{- if .Values.createSecret }}
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "pangolin.fullname" . }}-secret
-                  key: DATABASE_URL
-            - name: AWS_ACCESS_KEY_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "pangolin.fullname" . }}-secret
-                  key: AWS_ACCESS_KEY_ID
-            - name: AWS_SECRET_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "pangolin.fullname" . }}-secret
-                  key: AWS_SECRET_ACCESS_KEY
+            {{- $secretName := .Values.existingSecret | default (printf "%s-secret" (include "pangolin.fullname" .)) }}
+            {{- if or .Values.createSecret .Values.existingSecret }}
+            {{/*
+              `optional: true` on everything except the signing secret: a
+              deployment may legitimately have no AWS credentials or no root
+              password. PANGOLIN_JWT_SECRET is required, and the server refuses
+              to start without it rather than falling back to a published
+              default (A-10).
+            */}}
             - name: PANGOLIN_JWT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "pangolin.fullname" . }}-secret
+                  name: {{ $secretName }}
                   key: PANGOLIN_JWT_SECRET
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: DATABASE_URL
+                  optional: true
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: AWS_ACCESS_KEY_ID
+                  optional: true
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: AWS_SECRET_ACCESS_KEY
+                  optional: true
             - name: PANGOLIN_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "pangolin.fullname" . }}-secret
+                  name: {{ $secretName }}
                   key: PANGOLIN_ROOT_PASSWORD
+                  optional: true
             {{- end }}
+          {{/*
+            Liveness and readiness are distinct. Liveness must not depend on the
+            database: a database outage would otherwise restart every pod in a
+            loop. Readiness does a real store round-trip, so a pod whose
+            database connection is dead leaves the Service instead of continuing
+            to receive traffic (A-21).
+          */}}
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{/*
+            readOnlyRootFilesystem is on, so anything that needs to write needs
+            an explicit volume.
+          */}}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

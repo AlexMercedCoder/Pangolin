@@ -3005,6 +3005,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "matchers"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
+dependencies = [
+ "regex-automata",
+]
+
+[[package]]
 name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3445,7 +3454,7 @@ dependencies = [
 
 [[package]]
 name = "pangolin_api"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3462,9 +3471,11 @@ dependencies = [
  "chrono",
  "dotenvy",
  "gcp_auth",
+ "hmac",
  "hyper 1.8.1",
  "jsonwebtoken",
  "moka",
+ "pangolin_api",
  "pangolin_core",
  "pangolin_store",
  "rand 0.8.5",
@@ -3473,6 +3484,8 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "serial_test",
+ "sha2",
+ "thiserror 1.0.69",
  "tokio",
  "tower 0.4.13",
  "tower-http 0.5.2",
@@ -3487,7 +3500,7 @@ dependencies = [
 
 [[package]]
 name = "pangolin_cli_admin"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3509,7 +3522,7 @@ dependencies = [
 
 [[package]]
 name = "pangolin_cli_common"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3527,7 +3540,7 @@ dependencies = [
 
 [[package]]
 name = "pangolin_cli_user"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -3545,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "pangolin_core"
-version = "0.2.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3560,7 +3573,7 @@ dependencies = [
 
 [[package]]
 name = "pangolin_store"
-version = "0.2.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3581,6 +3594,7 @@ dependencies = [
  "mongodb",
  "object_store",
  "pangolin_core",
+ "pangolin_store",
  "regex",
  "reqwest 0.12.26",
  "serde",
@@ -5477,6 +5491,8 @@ dependencies = [
  "futures-util",
  "pin-project",
  "pin-project-lite",
+ "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -5510,6 +5526,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "pin-project-lite",
+ "tokio",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -5600,17 +5617,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-serde"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "704b1aeb7be0d0a84fc9828cae51dab5970fee5088f83d1dd7ee6f6246fc6ff1"
+dependencies = [
+ "serde",
+ "tracing-core",
+]
+
+[[package]]
 name = "tracing-subscriber"
 version = "0.3.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
 dependencies = [
+ "matchers",
  "nu-ansi-term",
+ "once_cell",
+ "regex-automata",
+ "serde",
+ "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
+ "tracing",
  "tracing-core",
  "tracing-log",
+ "tracing-serde",
 ]
 
 [[package]]

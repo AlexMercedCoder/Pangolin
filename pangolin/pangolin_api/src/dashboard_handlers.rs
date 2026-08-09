@@ -1,14 +1,13 @@
-use axum::{
-    extract::{State, Extension},
-    Json,
-    response::IntoResponse,
-    http::StatusCode,
-};
-use serde::{Deserialize, Serialize};
-use pangolin_store::CatalogStore;
-use pangolin_core::user::{UserSession, UserRole};
-use crate::iceberg::AppState;
 use crate::error::ApiError;
+use crate::iceberg::AppState;
+use axum::{
+    extract::{Extension, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use pangolin_core::user::{UserRole, UserSession};
+use serde::Serialize;
 use utoipa::ToSchema;
 
 #[derive(Serialize, ToSchema)]
@@ -34,7 +33,7 @@ pub struct CatalogSummary {
 }
 
 /// Get dashboard statistics based on user role
-/// 
+///
 /// Returns different scopes based on user role:
 /// - Root: system-wide statistics
 /// - Tenant Admin: tenant-wide statistics
@@ -56,42 +55,51 @@ pub async fn get_dashboard_stats(
     match session.role {
         UserRole::Root => {
             // Aggregate statistics across ALL tenants
-            let tenants = store.list_tenants(None).await
-                .map_err(ApiError::from)?;
+            let tenants = store.list_tenants(None).await.map_err(ApiError::from)?;
             let tenants_count = tenants.len();
-            
+
             let mut catalogs_count = 0;
             let mut warehouses_count = 0;
-            
+
             for tenant in &tenants {
-                catalogs_count += store.list_catalogs(tenant.id, None).await
-                    .map_err(ApiError::from)?.len();
-                warehouses_count += store.list_warehouses(tenant.id, None).await
-                    .map_err(ApiError::from)?.len();
+                catalogs_count += store
+                    .list_catalogs(tenant.id, None)
+                    .await
+                    .map_err(ApiError::from)?
+                    .len();
+                warehouses_count += store
+                    .list_warehouses(tenant.id, None)
+                    .await
+                    .map_err(ApiError::from)?
+                    .len();
             }
-            
+
             let stats = DashboardStats {
                 catalogs_count,
                 warehouses_count,
                 tenants_count,
-                tables_count: 0,  // Expensive to compute across all tenants
-                namespaces_count: 0,  // Expensive to compute across all tenants
-                users_count: 0,  // Expensive to compute across all tenants
-                branches_count: 0,  // Expensive to compute across all tenants
+                tables_count: 0,     // Expensive to compute across all tenants
+                namespaces_count: 0, // Expensive to compute across all tenants
+                users_count: 0,      // Expensive to compute across all tenants
+                branches_count: 0,   // Expensive to compute across all tenants
                 scope: "system".to_string(),
             };
-            
+
             Ok((StatusCode::OK, Json(stats)))
-        },
+        }
 
         UserRole::TenantAdmin => {
             let tenant_id = session.tenant_id.unwrap_or_default();
-            
-            let catalogs = store.list_catalogs(tenant_id, None).await
+
+            let catalogs = store
+                .list_catalogs(tenant_id, None)
+                .await
                 .map_err(ApiError::from)?;
-            let warehouses = store.list_warehouses(tenant_id, None).await
+            let warehouses = store
+                .list_warehouses(tenant_id, None)
+                .await
                 .map_err(ApiError::from)?;
-            
+
             // Use efficient count methods
             let namespaces_count = store.count_namespaces(tenant_id).await.unwrap_or(0);
             let tables_count = store.count_assets(tenant_id).await.unwrap_or(0);
@@ -100,35 +108,41 @@ pub async fn get_dashboard_stats(
                 catalogs_count: catalogs.len(),
                 tables_count,
                 namespaces_count,
-                users_count: 0, 
+                users_count: 0,
                 warehouses_count: warehouses.len(),
                 branches_count: 0,
-                tenants_count: 0,  // Not applicable for tenant scope
+                tenants_count: 0, // Not applicable for tenant scope
                 scope: "tenant".to_string(),
             };
-            
+
             Ok((StatusCode::OK, Json(stats)))
-        },
+        }
         UserRole::TenantUser => {
             let tenant_id = session.tenant_id.unwrap_or_default();
-            
+
             // Fetch user permissions for filtering
-            let permissions = store.list_user_permissions(session.user_id, None).await
+            let permissions = store
+                .list_user_permissions(session.user_id, None)
+                .await
                 .map_err(ApiError::from)?;
-            
+
             // Get all catalogs and filter by permissions
-            let all_catalogs = store.list_catalogs(tenant_id, None).await
+            let all_catalogs = store
+                .list_catalogs(tenant_id, None)
+                .await
                 .map_err(ApiError::from)?;
             let accessible_catalogs = crate::authz_utils::filter_catalogs(
                 all_catalogs,
                 &permissions,
-                session.role.clone()
+                session.role.clone(),
             );
-            
+
             // Get all warehouses and filter by permissions
             // Note: Warehouses don't have direct permission scopes, so we show warehouses
             // associated with accessible catalogs
-            let all_warehouses = store.list_warehouses(tenant_id, None).await
+            let all_warehouses = store
+                .list_warehouses(tenant_id, None)
+                .await
                 .map_err(ApiError::from)?;
             let accessible_warehouse_names: std::collections::HashSet<_> = accessible_catalogs
                 .iter()
@@ -138,32 +152,35 @@ pub async fn get_dashboard_stats(
                 .iter()
                 .filter(|w| accessible_warehouse_names.contains(&w.name))
                 .count();
-            
+
             // Count accessible namespaces
             // Fetch all namespaces and filter by permissions
             let catalog_id_map: std::collections::HashMap<_, _> = accessible_catalogs
                 .iter()
                 .map(|c| (c.name.clone(), c.id))
                 .collect();
-            
+
             let mut accessible_namespaces_count = 0;
             for catalog in &accessible_catalogs {
-                if let Ok(namespaces) = store.list_namespaces(tenant_id, &catalog.name, None, None).await {
+                if let Ok(namespaces) = store
+                    .list_namespaces(tenant_id, &catalog.name, None, None)
+                    .await
+                {
                     let namespace_tuples: Vec<_> = namespaces
                         .into_iter()
                         .map(|ns| (ns, catalog.name.clone()))
                         .collect();
-                    
+
                     let filtered = crate::authz_utils::filter_namespaces(
                         namespace_tuples,
                         &permissions,
                         session.role.clone(),
-                        &catalog_id_map
+                        &catalog_id_map,
                     );
                     accessible_namespaces_count += filtered.len();
                 }
             }
-            
+
             // Count accessible tables/assets
             // This is more expensive but necessary for accurate counts
             let mut accessible_tables_count = 0;
@@ -172,7 +189,7 @@ pub async fn get_dashboard_stats(
                     all_assets,
                     &permissions,
                     session.role.clone(),
-                    &catalog_id_map
+                    &catalog_id_map,
                 );
                 accessible_tables_count = filtered_assets.len();
             }
@@ -184,12 +201,12 @@ pub async fn get_dashboard_stats(
                 users_count: 0,
                 warehouses_count: accessible_warehouses_count,
                 branches_count: 0,
-                tenants_count: 0,  // Not applicable for user scope
+                tenants_count: 0, // Not applicable for user scope
                 scope: "user".to_string(),
             };
-            
+
             Ok((StatusCode::OK, Json(stats)))
-        },
+        }
     }
 }
 
@@ -214,17 +231,23 @@ pub async fn get_catalog_summary(
     axum::extract::Path(name): axum::extract::Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
     let tenant_id = session.tenant_id.unwrap_or_default();
-    
-    let catalog = store.get_catalog(tenant_id, name.clone()).await
+
+    let catalog = store
+        .get_catalog(tenant_id, name.clone())
+        .await
         .map_err(ApiError::from)?
         .ok_or_else(|| ApiError::not_found("Catalog not found"))?;
-    
-    let branches = store.list_branches(tenant_id, &name, None).await
+
+    let branches = store
+        .list_branches(tenant_id, &name, None)
+        .await
         .map_err(ApiError::from)?;
-    
-    let namespaces = store.list_namespaces(tenant_id, &name, None, None).await
+
+    let namespaces = store
+        .list_namespaces(tenant_id, &name, None, None)
+        .await
         .map_err(ApiError::from)?;
-    
+
     let summary = CatalogSummary {
         name: catalog.name,
         table_count: 0,
@@ -232,6 +255,6 @@ pub async fn get_catalog_summary(
         branch_count: branches.len(),
         storage_location: catalog.storage_location,
     };
-    
+
     Ok((StatusCode::OK, Json(summary)))
 }

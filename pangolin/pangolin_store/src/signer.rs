@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
@@ -50,10 +50,14 @@ impl SignerImpl {
 #[async_trait]
 impl Signer for SignerImpl {
     async fn get_table_credentials(&self, _location: &str) -> Result<Credentials> {
-        Err(anyhow::anyhow!("Credential vending not supported by bare SignerImpl"))
+        Err(anyhow::anyhow!(
+            "Credential vending not supported by bare SignerImpl"
+        ))
     }
 
     async fn presign_get(&self, _location: &str) -> Result<String> {
-        Err(anyhow::anyhow!("Presigning not supported by bare SignerImpl"))
+        Err(anyhow::anyhow!(
+            "Presigning not supported by bare SignerImpl"
+        ))
     }
 }

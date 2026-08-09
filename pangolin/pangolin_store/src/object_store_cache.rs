@@ -1,8 +1,8 @@
 use dashmap::DashMap;
 use object_store::ObjectStore;
-use std::sync::Arc;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
 
 /// Thread-safe cache for ObjectStore instances
 pub struct ObjectStoreCache {
@@ -17,12 +17,7 @@ impl ObjectStoreCache {
     }
 
     /// Generate cache key from warehouse configuration
-    pub fn cache_key(
-        endpoint: &str,
-        bucket: &str,
-        access_key: &str,
-        region: &str,
-    ) -> String {
+    pub fn cache_key(endpoint: &str, bucket: &str, access_key: &str, region: &str) -> String {
         let mut hasher = DefaultHasher::new();
         endpoint.hash(&mut hasher);
         bucket.hash(&mut hasher);
@@ -36,14 +31,15 @@ impl ObjectStoreCache {
     where
         F: FnOnce() -> Arc<dyn ObjectStore>,
     {
-        self.cache
-            .entry(key)
-            .or_insert_with(factory)
-            .clone()
+        self.cache.entry(key).or_insert_with(factory).clone()
     }
 
     /// Try to get or insert ObjectStore instance with a Result-returning factory
-    pub fn try_get_or_insert<F, E>(&self, key: String, factory: F) -> std::result::Result<Arc<dyn ObjectStore>, E>
+    pub fn try_get_or_insert<F, E>(
+        &self,
+        key: String,
+        factory: F,
+    ) -> std::result::Result<Arc<dyn ObjectStore>, E>
     where
         F: FnOnce() -> std::result::Result<Arc<dyn ObjectStore>, E>,
     {

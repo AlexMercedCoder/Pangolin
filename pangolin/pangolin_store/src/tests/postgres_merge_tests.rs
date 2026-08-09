@@ -2,25 +2,28 @@
 /// Ensures all 11 trait methods remain fully implemented
 use crate::postgres::PostgresStore;
 use crate::CatalogStore;
+use chrono::Utc;
 use pangolin_core::model::{
     ConflictResolution, ConflictType, MergeConflict, MergeOperation, MergeStatus,
     ResolutionStrategy, Tenant,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
-use chrono::Utc;
 
 #[cfg(test)]
 mod postgres_merge_tests {
     use super::*;
 
-    async fn setup_postgres_store() -> PostgresStore {
-        let database_url = std::env::var("TEST_DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://admin:password@localhost:5432/pangolin_test".to_string());
-        
-        PostgresStore::new(&database_url)
-            .await
-            .expect("Failed to create PostgresStore")
+    /// Connect to the Postgres test database, or `None` when none is
+    /// configured so the caller can skip rather than fail. There used to be a
+    /// hardcoded default URL and an `.expect()`, which turned "no database
+    /// running" into a wall of failures indistinguishable from real defects.
+    async fn setup_postgres_store() -> Option<PostgresStore> {
+        let database_url = crate::test_support::postgres_url()?;
+        match PostgresStore::new(&database_url).await {
+            Ok(store) => Some(store),
+            Err(e) => panic!("PANGOLIN_TEST_POSTGRES_URL is set but unusable: {e}"),
+        }
     }
 
     async fn setup_tenant(store: &PostgresStore) -> Uuid {
@@ -30,13 +33,19 @@ mod postgres_merge_tests {
             name: format!("test_tenant_{}", tenant_id),
             properties: HashMap::new(),
         };
-        store.create_tenant(tenant).await.expect("Failed to create tenant");
+        store
+            .create_tenant(tenant)
+            .await
+            .expect("Failed to create tenant");
         tenant_id
     }
 
     #[tokio::test]
     async fn test_merge_operation_create() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -49,12 +58,19 @@ mod postgres_merge_tests {
         );
 
         let result = store.create_merge_operation(operation.clone()).await;
-        assert!(result.is_ok(), "Failed to create merge operation: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to create merge operation: {:?}",
+            result.err()
+        );
     }
 
     #[tokio::test]
     async fn test_merge_operation_get() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -76,7 +92,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_list() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
         let catalog_name = format!("test_catalog_{}", Uuid::new_v4());
 
@@ -93,13 +112,19 @@ mod postgres_merge_tests {
             store.create_merge_operation(operation).await.unwrap();
         }
 
-        let list = store.list_merge_operations(tenant_id, &catalog_name, None).await.unwrap();
+        let list = store
+            .list_merge_operations(tenant_id, &catalog_name, None)
+            .await
+            .unwrap();
         assert!(list.len() >= 3, "Should have at least 3 merge operations");
     }
 
     #[tokio::test]
     async fn test_merge_operation_update_status() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -115,17 +140,26 @@ mod postgres_merge_tests {
         store.create_merge_operation(operation).await.unwrap();
 
         // Update status
-        let result = store.update_merge_operation_status(operation_id, MergeStatus::Conflicted).await;
+        let result = store
+            .update_merge_operation_status(operation_id, MergeStatus::Conflicted)
+            .await;
         assert!(result.is_ok(), "Failed to update status");
 
         // Verify
-        let updated = store.get_merge_operation(operation_id).await.unwrap().unwrap();
+        let updated = store
+            .get_merge_operation(operation_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(updated.status, MergeStatus::Conflicted);
     }
 
     #[tokio::test]
     async fn test_merge_operation_complete() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -142,11 +176,17 @@ mod postgres_merge_tests {
 
         // Complete
         let commit_id = Uuid::new_v4();
-        let result = store.complete_merge_operation(operation_id, commit_id).await;
+        let result = store
+            .complete_merge_operation(operation_id, commit_id)
+            .await;
         assert!(result.is_ok(), "Failed to complete merge operation");
 
         // Verify
-        let completed = store.get_merge_operation(operation_id).await.unwrap().unwrap();
+        let completed = store
+            .get_merge_operation(operation_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(completed.status, MergeStatus::Completed);
         assert_eq!(completed.result_commit_id, Some(commit_id));
         assert!(completed.completed_at.is_some());
@@ -154,7 +194,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_abort() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -174,14 +217,21 @@ mod postgres_merge_tests {
         assert!(result.is_ok(), "Failed to abort merge operation");
 
         // Verify
-        let aborted = store.get_merge_operation(operation_id).await.unwrap().unwrap();
+        let aborted = store
+            .get_merge_operation(operation_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(aborted.status, MergeStatus::Aborted);
         assert!(aborted.completed_at.is_some());
     }
 
     #[tokio::test]
     async fn test_merge_conflict_create() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -192,7 +242,10 @@ mod postgres_merge_tests {
             None,
             Uuid::new_v4(),
         );
-        store.create_merge_operation(operation.clone()).await.unwrap();
+        store
+            .create_merge_operation(operation.clone())
+            .await
+            .unwrap();
 
         let conflict = MergeConflict::new(
             operation.id,
@@ -206,12 +259,19 @@ mod postgres_merge_tests {
         );
 
         let result = store.create_merge_conflict(conflict).await;
-        assert!(result.is_ok(), "Failed to create merge conflict: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Failed to create merge conflict: {:?}",
+            result.err()
+        );
     }
 
     #[tokio::test]
     async fn test_merge_conflict_get() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -222,7 +282,10 @@ mod postgres_merge_tests {
             None,
             Uuid::new_v4(),
         );
-        store.create_merge_operation(operation.clone()).await.unwrap();
+        store
+            .create_merge_operation(operation.clone())
+            .await
+            .unwrap();
 
         let conflict = MergeConflict::new(
             operation.id,
@@ -245,7 +308,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_conflict_list() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -273,13 +339,19 @@ mod postgres_merge_tests {
             store.create_merge_conflict(conflict).await.unwrap();
         }
 
-        let list = store.list_merge_conflicts(operation_id, None).await.unwrap();
+        let list = store
+            .list_merge_conflicts(operation_id, None)
+            .await
+            .unwrap();
         assert!(list.len() >= 3, "Should have at least 3 merge conflicts");
     }
 
     #[tokio::test]
     async fn test_merge_conflict_resolve() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -290,7 +362,10 @@ mod postgres_merge_tests {
             None,
             Uuid::new_v4(),
         );
-        store.create_merge_operation(operation.clone()).await.unwrap();
+        store
+            .create_merge_operation(operation.clone())
+            .await
+            .unwrap();
 
         let conflict = MergeConflict::new(
             operation.id,
@@ -318,13 +393,20 @@ mod postgres_merge_tests {
         assert!(result.is_ok(), "Failed to resolve conflict");
 
         // Verify
-        let resolved = store.get_merge_conflict(conflict_id).await.unwrap().unwrap();
+        let resolved = store
+            .get_merge_conflict(conflict_id)
+            .await
+            .unwrap()
+            .unwrap();
         assert!(resolved.is_resolved(), "Conflict should be resolved");
     }
 
     #[tokio::test]
     async fn test_add_conflict_to_operation() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -352,11 +434,20 @@ mod postgres_merge_tests {
         store.create_merge_conflict(conflict).await.unwrap();
 
         // Add conflict to operation
-        let result = store.add_conflict_to_operation(operation_id, conflict_id).await;
+        let result = store
+            .add_conflict_to_operation(operation_id, conflict_id)
+            .await;
         assert!(result.is_ok(), "Failed to add conflict to operation");
 
         // Verify
-        let updated_op = store.get_merge_operation(operation_id).await.unwrap().unwrap();
-        assert!(updated_op.conflicts.contains(&conflict_id), "Operation should contain conflict");
+        let updated_op = store
+            .get_merge_operation(operation_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            updated_op.conflicts.contains(&conflict_id),
+            "Operation should contain conflict"
+        );
     }
 }

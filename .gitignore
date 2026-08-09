@@ -43,3 +43,13 @@ tmp_*
 debug_*
 pangolin_server_bin
 pangolin_server_bin
+
+# Debug / scratch output (see AUDIT_EXECUTION_PLAN.md B-5)
+check_output*.txt
+check_tokens*.txt
+api_check_errors*.txt
+check_errors.txt
+check_log.txt
+test_results.txt
+debug_output*.txt
+:memory:

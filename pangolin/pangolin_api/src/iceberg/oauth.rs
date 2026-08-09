@@ -1,19 +1,15 @@
 use axum::{
-    extract::{State, Form},
+    extract::{Form, State},
     response::{IntoResponse, Json},
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use pangolin_store::CatalogStore;
 // Removed Signer import as we implement signing locally
-use pangolin_core::user::{User, UserRole, UserSession, ServiceUser};
-use chrono::{Utc, Duration};
-use anyhow::Context;
-use uuid::Uuid;
-use bcrypt::verify;
-use jsonwebtoken::{encode, EncodingKey, Header};
 use crate::auth::Claims;
+use bcrypt::verify;
+use chrono::{Duration, Utc};
+use jsonwebtoken::{encode, EncodingKey, Header};
+use pangolin_core::user::ServiceUser;
+use uuid::Uuid;
 
 // Internal imports
 use crate::error::ApiError;
@@ -46,14 +42,14 @@ pub struct OAuthTokenResponse {
 }
 
 /// Handler for the standard OAuth2 client_credentials flow
-/// 
+///
 /// This endpoint accepts `application/x-www-form-urlencoded` data
 /// to support standard libraries like PyIceberg/REST Catalog.
-/// 
+///
 /// It maps:
 /// - `client_id` -> Service User ID (UUID)
 /// - `client_secret` -> Service User API Key
-/// 
+///
 /// If valid, it returns a standard Pangolin JWT signed by the server key.
 #[utoipa::path(
     post,
@@ -73,7 +69,9 @@ pub async fn handle_oauth_token(
 ) -> Result<impl IntoResponse, ApiError> {
     // 1. Validate Grant Type
     if payload.grant_type != "client_credentials" {
-        return Err(ApiError::bad_request("Unsupported grant_type. exact 'client_credentials' required."));
+        return Err(ApiError::bad_request(
+            "Unsupported grant_type. exact 'client_credentials' required.",
+        ));
     }
 
     // 2. Parse Client ID as UUID
@@ -82,9 +80,10 @@ pub async fn handle_oauth_token(
 
     // 3. Retrieve Service User
     let store_ref = &*store;
-    let service_user_result: anyhow::Result<Option<ServiceUser>> = store_ref.get_service_user(service_user_id).await;
+    let service_user_result: anyhow::Result<Option<ServiceUser>> =
+        store_ref.get_service_user(service_user_id).await;
     let service_user = service_user_result
-        .map_err(|e| ApiError::InternalError(e))?
+        .map_err(ApiError::InternalError)?
         .ok_or_else(|| ApiError::unauthorized("Invalid client_id"))?;
 
     // 4. Verify Active Status
@@ -100,7 +99,7 @@ pub async fn handle_oauth_token(
     if !valid_secret {
         return Err(ApiError::unauthorized("Invalid client_secret"));
     }
-    
+
     // 6. Generate Session/Token
     // We reuse the standard JWT generation logic used for users
     let now = Utc::now();
@@ -108,25 +107,31 @@ pub async fn handle_oauth_token(
     let expires_at = now + Duration::seconds(expires_in_seconds as i64);
 
     let token_id = Uuid::new_v4();
-    let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
-    
+    let secret = crate::config::jwt_secret();
+
     let claims = Claims {
-        sub: service_user.id.to_string(), 
+        sub: service_user.id.to_string(),
         jti: Some(token_id.to_string()),
-        username: service_user.name.clone(), 
+        username: service_user.name.clone(),
         tenant_id: Some(service_user.tenant_id.to_string()),
-        role: service_user.role.clone(), 
+        role: service_user.role.clone(),
         exp: expires_at.timestamp(),
         iat: now.timestamp(),
     };
 
-    // We need to sign this. 
-    let token = encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))
-        .map_err(|e| ApiError::InternalError(anyhow::anyhow!("Token generation failed: {}", e)))?;
-        
+    // We need to sign this.
+    let token = encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .map_err(|e| ApiError::InternalError(anyhow::anyhow!("Token generation failed: {}", e)))?;
+
     // 7. Update Last Used
     // Best effort - don't fail auth if this fails
-    let _ = store_ref.update_service_user_last_used(service_user.id, now).await;
+    let _ = store_ref
+        .update_service_user_last_used(service_user.id, now)
+        .await;
 
     // 8. Return Response
     Ok(Json(OAuthTokenResponse {

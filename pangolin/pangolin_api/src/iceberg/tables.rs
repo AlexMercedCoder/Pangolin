@@ -1,23 +1,25 @@
-use axum::{
-    extract::{Path, State, Query, Extension},
-    Json,
-    response::IntoResponse,
-    http::{StatusCode, HeaderMap, Method},
-};
-use bytes::Bytes;
-use pangolin_core::model::{Asset, AssetType};
-use pangolin_core::permission::{PermissionScope, Action};
-use pangolin_core::user::UserSession;
-use pangolin_core::iceberg_metadata::{TableMetadata, Schema, PartitionSpec, SortOrder, Snapshot, NestedField, Type};
+use super::types::*;
+use super::{check_and_forward_if_federated, commit, iceberg_error, AppState};
 use crate::auth::TenantId;
 use crate::authz::check_permission;
-use super::{check_and_forward_if_federated, AppState};
-use super::types::*;
+use axum::{
+    extract::{Extension, Path, Query, State},
+    http::{HeaderMap, Method, StatusCode},
+    response::IntoResponse,
+    Json,
+};
+use bytes::Bytes;
+use chrono::Utc;
+use pangolin_core::iceberg_metadata::{
+    NestedField, PartitionSpec, Schema, SortOrder, TableMetadata, Type,
+};
+use pangolin_core::model::{Asset, AssetType};
+use pangolin_core::permission::{Action, PermissionScope};
+use pangolin_core::user::UserSession;
 use pangolin_store::PaginationParams;
 use std::collections::HashMap;
-use chrono::Utc;
-use uuid::Uuid;
 use std::sync::Arc;
+use uuid::Uuid;
 
 /// List tables in a namespace
 #[utoipa::path(
@@ -45,7 +47,7 @@ pub async fn list_tables(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix.clone();
-    
+
     // Federated check
     let path = format!("/namespaces/{}/tables", namespace);
     if let Some(response) = check_and_forward_if_federated(
@@ -56,42 +58,65 @@ pub async fn list_tables(
         &path,
         None,
         HeaderMap::new(),
-    ).await {
-         return response;
+    )
+    .await
+    {
+        return response;
     }
-    
+
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
-    
+
     let (ns_name, branch) = parse_table_identifier(&namespace);
-    
+
     // Check Permissions
-    let scope = PermissionScope::Namespace { catalog_id: catalog.id, namespace: ns_name.clone() };
+    let scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: ns_name.clone(),
+    };
     match check_permission(&store, &session, &Action::List, &scope).await {
         Ok(true) => (),
         Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Permission check failed: {}", e),
+            )
+                .into_response()
+        }
     }
-    
+
     let ns_vec = vec![ns_name];
 
-    match store.list_assets(tenant_id, &catalog_name, branch, ns_vec.clone(), Some(pagination)).await {
+    match store
+        .list_assets(
+            tenant_id,
+            &catalog_name,
+            branch,
+            ns_vec.clone(),
+            Some(pagination),
+        )
+        .await
+    {
         Ok(assets) => {
-            let identifiers: Vec<TableIdentifier> = assets.into_iter()
+            let identifiers: Vec<TableIdentifier> = assets
+                .into_iter()
                 .filter(|a| a.kind == AssetType::IcebergTable)
                 .map(|a| TableIdentifier {
                     namespace: ns_vec.clone(),
                     name: a.name,
-                }).collect();
+                })
+                .collect();
             (StatusCode::OK, Json(ListTablesResponse { identifiers })).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
-
 
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct MaintenanceRequest {
@@ -135,20 +160,38 @@ pub async fn perform_maintenance(
     match payload.job_type.as_str() {
         "expire_snapshots" => {
             let retention = payload.retention_ms.unwrap_or(86400000); // Default 1 day
-            store.expire_snapshots(tenant_id.0, "default", branch_name, namespace_parts, table_name, retention).await
+            store
+                .expire_snapshots(
+                    tenant_id.0,
+                    "default",
+                    branch_name,
+                    namespace_parts,
+                    table_name,
+                    retention,
+                )
+                .await
                 .map_err(|e| {
                     tracing::error!("Maintenance failed: {}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
-        },
+        }
         "remove_orphan_files" => {
-             let older_than = payload.older_than_ms.unwrap_or(86400000); // Default 1 day
-             store.remove_orphan_files(tenant_id.0, "default", branch_name, namespace_parts, table_name, older_than).await
+            let older_than = payload.older_than_ms.unwrap_or(86400000); // Default 1 day
+            store
+                .remove_orphan_files(
+                    tenant_id.0,
+                    "default",
+                    branch_name,
+                    namespace_parts,
+                    table_name,
+                    older_than,
+                )
+                .await
                 .map_err(|e| {
                     tracing::error!("Maintenance failed: {}", e);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
-        },
+        }
         _ => return Err(StatusCode::BAD_REQUEST),
     }
 
@@ -183,14 +226,15 @@ pub async fn create_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let mut path = format!("/namespaces/{}/tables", namespace);
     if !params.is_empty() {
-        let query_string: String = params.iter()
+        let query_string: String = params
+            .iter()
             .map(|(k, v)| format!("{}={}", k, v))
             .collect::<Vec<_>>()
             .join("&");
-        path.push_str("?");
+        path.push('?');
         path.push_str(&query_string);
     }
 
@@ -204,91 +248,128 @@ pub async fn create_table(
         &path,
         body_bytes,
         HeaderMap::new(),
-    ).await {
-         return response;
+    )
+    .await
+    {
+        return response;
     }
-    
+
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
-    
+
     let (tbl_name, branch_from_name) = parse_table_identifier(&payload.name);
     let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
     let branch_from_query = params.get("branch").cloned();
     let branch = branch_from_name.or(branch_from_ns).or(branch_from_query);
-    
-    let scope = PermissionScope::Namespace { catalog_id: catalog.id, namespace: ns_name.clone() };
+
+    let scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: ns_name.clone(),
+    };
     match check_permission(&store, &session, &Action::Create, &scope).await {
         Ok(true) => (),
         Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Permission check failed: {}", e),
+            )
+                .into_response()
+        }
     }
-    
+
     let ns_vec = vec![ns_name.clone()];
 
     let table_uuid = Uuid::new_v4();
     let location = if let Some(loc) = payload.location {
         loc
     } else if let Some(base_loc) = &catalog.storage_location {
-         format!("{}/{}/{}", base_loc.trim_end_matches('/'), ns_vec.join("/"), tbl_name)
+        format!(
+            "{}/{}/{}",
+            base_loc.trim_end_matches('/'),
+            ns_vec.join("/"),
+            tbl_name
+        )
     } else {
         let (bucket_name, scheme) = if let Some(warehouse_name) = &catalog.warehouse_name {
             if let Ok(Some(wh)) = store.get_warehouse(tenant_id, warehouse_name.clone()).await {
-                 let b = wh.storage_config.get("s3.bucket").or(wh.storage_config.get("bucket")).cloned().unwrap_or_else(|| "warehouse".to_string());
-                 let s = if wh.storage_config.contains_key("azure.container") { "abfss" }
-                        else if wh.storage_config.contains_key("gcp.bucket") { "gs" }
-                        else { "s3" };
-                 (b, s)
+                let b = wh
+                    .storage_config
+                    .get("s3.bucket")
+                    .or(wh.storage_config.get("bucket"))
+                    .cloned()
+                    .unwrap_or_else(|| "warehouse".to_string());
+                let s = if wh.storage_config.contains_key("azure.container") {
+                    "abfss"
+                } else if wh.storage_config.contains_key("gcp.bucket") {
+                    "gs"
+                } else {
+                    "s3"
+                };
+                (b, s)
             } else {
                 ("warehouse".to_string(), "s3")
             }
         } else {
             ("warehouse".to_string(), "s3")
         };
-        format!("{}://{}/{}/{}/{}", scheme, bucket_name, catalog_name, ns_vec.join("/"), tbl_name)
+        format!(
+            "{}://{}/{}/{}/{}",
+            scheme,
+            bucket_name,
+            catalog_name,
+            ns_vec.join("/"),
+            tbl_name
+        )
     };
 
     let schema_fields = if let Some(schema_value) = &payload.schema {
         if let Some(fields) = schema_value.get("fields").and_then(|f| f.as_array()) {
-            fields.iter().filter_map(|field| {
-                let id = field.get("id")?.as_i64()? as i32;
-                let name = field.get("name")?.as_str()?.to_string();
-                let required = false;
-                let field_type_str = field.get("type")?.as_str()?;
-                
-                let field_type = match field_type_str {
-                    "int" | "integer" => Type::Primitive("long".to_string()),
-                    "long" => Type::Primitive("long".to_string()),
-                    "string" => Type::Primitive("string".to_string()),
-                    "boolean" => Type::Primitive("boolean".to_string()),
-                    "float" => Type::Primitive("float".to_string()),
-                    "double" => Type::Primitive("double".to_string()),
-                    "date" => Type::Primitive("date".to_string()),
-                    "time" => Type::Primitive("time".to_string()),
-                    "timestamp" => Type::Primitive("timestamp".to_string()),
-                    "timestamptz" => Type::Primitive("timestamptz".to_string()),
-                    "binary" => Type::Primitive("binary".to_string()),
-                    "uuid" => Type::Primitive("uuid".to_string()),
-                    _ => Type::Primitive(field_type_str.to_string()),
-                };
-                
-                Some(NestedField {
-                    id,
-                    name,
-                    required,
-                    field_type,
-                    doc: None,
+            fields
+                .iter()
+                .filter_map(|field| {
+                    let id = field.get("id")?.as_i64()? as i32;
+                    let name = field.get("name")?.as_str()?.to_string();
+                    let required = false;
+                    let field_type_str = field.get("type")?.as_str()?;
+
+                    let field_type = match field_type_str {
+                        "int" | "integer" => Type::Primitive("long".to_string()),
+                        "long" => Type::Primitive("long".to_string()),
+                        "string" => Type::Primitive("string".to_string()),
+                        "boolean" => Type::Primitive("boolean".to_string()),
+                        "float" => Type::Primitive("float".to_string()),
+                        "double" => Type::Primitive("double".to_string()),
+                        "date" => Type::Primitive("date".to_string()),
+                        "time" => Type::Primitive("time".to_string()),
+                        "timestamp" => Type::Primitive("timestamp".to_string()),
+                        "timestamptz" => Type::Primitive("timestamptz".to_string()),
+                        "binary" => Type::Primitive("binary".to_string()),
+                        "uuid" => Type::Primitive("uuid".to_string()),
+                        _ => Type::Primitive(field_type_str.to_string()),
+                    };
+
+                    Some(NestedField {
+                        id,
+                        name,
+                        required,
+                        field_type,
+                        doc: None,
+                    })
                 })
-            }).collect()
+                .collect()
         } else {
             vec![]
         }
     } else {
         vec![]
     };
-    
+
     let metadata = TableMetadata {
         format_version: 2,
         table_uuid,
@@ -303,19 +384,30 @@ pub async fn create_table(
         }],
         current_schema_id: 0,
         current_partition_spec_id: 0,
-        partition_specs: vec![PartitionSpec { spec_id: 0, fields: vec![] }],
+        partition_specs: vec![PartitionSpec {
+            spec_id: 0,
+            fields: vec![],
+        }],
         default_sort_order_id: 0,
-        sort_orders: vec![SortOrder { order_id: 0, fields: vec![] }],
+        sort_orders: vec![SortOrder {
+            order_id: 0,
+            fields: vec![],
+        }],
         properties: payload.properties.clone(),
         current_snapshot_id: None,
         snapshots: Some(vec![]),
         snapshot_log: Some(vec![]),
         metadata_log: Some(vec![]),
+        refs: None,
     };
 
     let metadata_json = serde_json::to_string(&metadata).unwrap();
-    let metadata_location = format!("{}/metadata/00000-{}.metadata.json", location, Uuid::new_v4());
-    
+    let metadata_location = format!(
+        "{}/metadata/00000-{}.metadata.json",
+        location,
+        Uuid::new_v4()
+    );
+
     let mut properties = payload.properties.unwrap_or_default();
     properties.insert("metadata_location".to_string(), metadata_location.clone());
 
@@ -331,22 +423,38 @@ pub async fn create_table(
         },
     };
 
-    match store.create_asset(tenant_id, &catalog_name, branch, ns_vec, asset.clone()).await {
+    match store
+        .create_asset(tenant_id, &catalog_name, branch, ns_vec, asset.clone())
+        .await
+    {
         Ok(_) => {
-            if let Err(e) = store.write_file(&metadata_location, metadata_json.into_bytes()).await {
-                 tracing::error!("Failed to write metadata file: {}", e);
-                 return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write metadata").into_response();
+            if let Err(e) = store
+                .write_file(&metadata_location, metadata_json.into_bytes())
+                .await
+            {
+                tracing::error!("Failed to write metadata file: {}", e);
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to write metadata",
+                )
+                    .into_response();
             }
 
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::success(
-                tenant_id,
-                Some(session.user_id),
-                session.username.clone(),
-                pangolin_core::audit::AuditAction::CreateTable,
-                pangolin_core::audit::ResourceType::Table,
-                Some(asset.id),
-                format!("{}/{}/{}", catalog_name, ns_name, tbl_name),
-            ).with_metadata(serde_json::json!({ "location": location.clone() }))).await;
+            let _ = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::success(
+                        tenant_id,
+                        Some(session.user_id),
+                        session.username.clone(),
+                        pangolin_core::audit::AuditAction::CreateTable,
+                        pangolin_core::audit::ResourceType::Table,
+                        Some(asset.id),
+                        format!("{}/{}/{}", catalog_name, ns_name, tbl_name),
+                    )
+                    .with_metadata(serde_json::json!({ "location": location.clone() })),
+                )
+                .await;
 
             let credentials = match store.get_catalog(tenant_id, catalog_name.clone()).await {
                 Ok(Some(c)) => {
@@ -354,25 +462,45 @@ pub async fn create_table(
                         match store.get_warehouse(tenant_id, warehouse_name).await {
                             Ok(Some(warehouse)) => {
                                 let mut creds = HashMap::new();
-                                if let Some(ak) = warehouse.storage_config.get("s3.access-key-id") { creds.insert("s3.access-key-id".to_string(), ak.clone()); }
-                                if let Some(sk) = warehouse.storage_config.get("s3.secret-access-key") { creds.insert("s3.secret-access-key".to_string(), sk.clone()); }
-                                if let Some(token) = warehouse.storage_config.get("s3.session-token") { creds.insert("s3.session-token".to_string(), token.clone()); }
-                                if !creds.is_empty() { Some(creds) } else { None }
-                            },
-                            _ => None
+                                if let Some(ak) = warehouse.storage_config.get("s3.access-key-id") {
+                                    creds.insert("s3.access-key-id".to_string(), ak.clone());
+                                }
+                                if let Some(sk) =
+                                    warehouse.storage_config.get("s3.secret-access-key")
+                                {
+                                    creds.insert("s3.secret-access-key".to_string(), sk.clone());
+                                }
+                                if let Some(token) =
+                                    warehouse.storage_config.get("s3.session-token")
+                                {
+                                    creds.insert("s3.session-token".to_string(), token.clone());
+                                }
+                                if !creds.is_empty() {
+                                    Some(creds)
+                                } else {
+                                    None
+                                }
+                            }
+                            _ => None,
                         }
-                    } else { None }
-                },
-                _ => None
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
             };
 
-            (StatusCode::OK, Json(TableResponse::with_credentials(
-                Some(location.clone()),
-                metadata,
-                credentials,
-                Some(table_uuid),
-            ))).into_response()
-        },
+            (
+                StatusCode::OK,
+                Json(TableResponse::with_credentials(
+                    Some(location.clone()),
+                    metadata,
+                    credentials,
+                    Some(table_uuid),
+                )),
+            )
+                .into_response()
+        }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
@@ -404,17 +532,18 @@ pub async fn load_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let mut path = format!("/namespaces/{}/tables/{}", namespace, table);
     if !params.is_empty() {
-        let query_string: String = params.iter()
+        let query_string: String = params
+            .iter()
             .map(|(k, v)| format!("{}={}", k, v))
             .collect::<Vec<_>>()
             .join("&");
-        path.push_str("?");
+        path.push('?');
         path.push_str(&query_string);
     }
-    
+
     if let Some(response) = check_and_forward_if_federated(
         &store,
         tenant_id,
@@ -423,38 +552,59 @@ pub async fn load_table(
         &path,
         None,
         HeaderMap::new(),
-    ).await {
-         return response;
+    )
+    .await
+    {
+        return response;
     }
-    
+
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
-    
+
     let (tbl_name, branch_from_name) = parse_table_identifier(&table);
     let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
     let branch = branch_from_name.or(branch_from_ns);
-    
+
     let ns_vec = vec![ns_name];
 
-    let asset = match store.get_asset(tenant_id, &catalog_name, branch.clone(), ns_vec.clone(), tbl_name.clone()).await {
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch.clone(),
+            ns_vec.clone(),
+            tbl_name.clone(),
+        )
+        .await
+    {
         Ok(Some(a)) => a,
         Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
-    
-    let scope = PermissionScope::Asset { 
-        catalog_id: catalog.id, 
-        namespace: ns_vec.join("."), 
-        asset_id: asset.id 
+
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: ns_vec.join("."),
+        asset_id: asset.id,
     };
-    
+
     match check_permission(&store, &session, &Action::Read, &scope).await {
         Ok(true) => (),
         Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Permission check failed: {}", e),
+            )
+                .into_response()
+        }
     }
 
     let current_metadata_location = asset.properties.get("metadata_location").cloned();
@@ -462,17 +612,33 @@ pub async fn load_table(
     if let Some(location) = current_metadata_location {
         let metadata_bytes = match store.read_file(&location).await {
             Ok(bytes) => bytes,
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read metadata file").into_response(),
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to read metadata file",
+                )
+                    .into_response()
+            }
         };
-        
+
         // Parse metadata in blocking task
         let metadata_vec = metadata_bytes.to_vec();
         let metadata: TableMetadata = match tokio::task::spawn_blocking(move || {
             serde_json::from_slice(&metadata_vec)
-        }).await {
+        })
+        .await
+        {
             Ok(Ok(m)) => m,
-            Ok(Err(_)) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response(),
+            Ok(Err(_)) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to parse metadata",
+                )
+                    .into_response()
+            }
+            Err(_) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response()
+            }
         };
 
         // Credential vending logic...
@@ -482,24 +648,40 @@ pub async fn load_table(
                     match store.get_warehouse(tenant_id, warehouse_name).await {
                         Ok(Some(warehouse)) => {
                             let mut creds = HashMap::new();
-                            if let Some(ak) = warehouse.storage_config.get("s3.access-key-id") { creds.insert("s3.access-key-id".to_string(), ak.clone()); }
-                            if let Some(sk) = warehouse.storage_config.get("s3.secret-access-key") { creds.insert("s3.secret-access-key".to_string(), sk.clone()); }
-                            if let Some(token) = warehouse.storage_config.get("s3.session-token") { creds.insert("s3.session-token".to_string(), token.clone()); }
-                            if !creds.is_empty() { Some(creds) } else { None }
-                        },
-                        _ => None
+                            if let Some(ak) = warehouse.storage_config.get("s3.access-key-id") {
+                                creds.insert("s3.access-key-id".to_string(), ak.clone());
+                            }
+                            if let Some(sk) = warehouse.storage_config.get("s3.secret-access-key") {
+                                creds.insert("s3.secret-access-key".to_string(), sk.clone());
+                            }
+                            if let Some(token) = warehouse.storage_config.get("s3.session-token") {
+                                creds.insert("s3.session-token".to_string(), token.clone());
+                            }
+                            if !creds.is_empty() {
+                                Some(creds)
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None,
                     }
-                } else { None }
-            },
-            _ => None
+                } else {
+                    None
+                }
+            }
+            _ => None,
         };
 
-        (StatusCode::OK, Json(TableResponse::with_credentials(
-            Some(location),
-            metadata,
-            credentials,
-            Some(asset.id),
-        ))).into_response()
+        (
+            StatusCode::OK,
+            Json(TableResponse::with_credentials(
+                Some(location),
+                metadata,
+                credentials,
+                Some(asset.id),
+            )),
+        )
+            .into_response()
     } else {
         (StatusCode::NOT_FOUND, "Metadata location not found").into_response()
     }
@@ -534,10 +716,10 @@ pub async fn update_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let path = format!("/namespaces/{}/tables/{}", namespace, table);
     let body_bytes = serde_json::to_vec(&payload).ok().map(Bytes::from);
-    
+
     if let Some(response) = check_and_forward_if_federated(
         &store,
         tenant_id,
@@ -546,166 +728,249 @@ pub async fn update_table(
         &path,
         body_bytes,
         HeaderMap::new(),
-    ).await {
-         return response;
+    )
+    .await
+    {
+        return response;
     }
-    
+
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
 
     let (table_name, branch_from_name) = parse_table_identifier(&table);
     let branch = branch_from_name.unwrap_or("main".to_string());
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
-    
-    let asset = match store.get_asset(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone()).await {
+
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            Some(branch.clone()),
+            namespace_parts.clone(),
+            table_name.clone(),
+        )
+        .await
+    {
         Ok(Some(a)) => a,
         Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
-    
-    let scope = PermissionScope::Asset { 
-        catalog_id: catalog.id, 
-        namespace: namespace_parts.join("."), 
-        asset_id: asset.id 
+
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+        asset_id: asset.id,
     };
-    
+
     match check_permission(&store, &session, &Action::Write, &scope).await {
         Ok(true) => (),
         Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Permission check failed: {}", e),
+            )
+                .into_response()
+        }
     }
-    
+
+    crate::metrics::inc(&crate::metrics::COMMITS_TOTAL);
+
     let mut retries = 0;
     const MAX_RETRIES: i32 = 5;
 
     while retries < MAX_RETRIES {
-        let current_asset = match store.get_asset(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone()).await {
+        let current_asset = match store
+            .get_asset(
+                tenant_id,
+                &catalog_name,
+                Some(branch.clone()),
+                namespace_parts.clone(),
+                table_name.clone(),
+            )
+            .await
+        {
             Ok(Some(a)) => a,
             Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+            Err(_) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            }
         };
-        
+
         let current_metadata_location = current_asset.properties.get("metadata_location").cloned();
-        
+
         let metadata_bytes = if let Some(loc) = &current_metadata_location {
-             match store.read_file(loc).await {
-                 Ok(bytes) => bytes,
-                 Err(_) => return (StatusCode::NOT_FOUND, "Failed to read metadata file").into_response()
-             }
+            match store.read_file(loc).await {
+                Ok(bytes) => bytes,
+                Err(_) => {
+                    return (StatusCode::NOT_FOUND, "Failed to read metadata file").into_response()
+                }
+            }
         } else {
-             return (StatusCode::INTERNAL_SERVER_ERROR, "Table corrupted (no metadata)").into_response()
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Table corrupted (no metadata)",
+            )
+                .into_response();
         };
-        
-        // Parse metadata in blocking task to avoid stalling the executor
-        // Parse metadata in blocking task to avoid stalling the executor
+
+        // Parse metadata in a blocking task to avoid stalling the executor
         let metadata_vec = metadata_bytes.to_vec();
         let mut metadata: TableMetadata = match tokio::task::spawn_blocking(move || {
             serde_json::from_slice(&metadata_vec)
-        }).await {
+        })
+        .await
+        {
             Ok(Ok(m)) => m,
-            Ok(Err(_)) => return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to parse metadata").into_response(),
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response(),
+            Ok(Err(_)) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to parse metadata",
+                )
+                    .into_response()
+            }
+            Err(_) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response()
+            }
         };
 
-        // Requirements check
-        for requirement in &payload.requirements {
-            match requirement {
-                CommitRequirement::AssertCurrentSchemaId { current_schema_id } => {
-                    if let Some(req_id) = current_schema_id {
-                        if metadata.current_schema_id != *req_id {
-                            return (StatusCode::CONFLICT, "Current schema ID mismatch").into_response();
-                        }
-                    }
-                },
-                CommitRequirement::AssertTableUuid { uuid } => {
-                     if metadata.table_uuid.to_string() != *uuid {
-                         return (StatusCode::CONFLICT, "Table UUID mismatch").into_response();
-                     }
-                },
-                 _ => {}
+        // Requirements are evaluated against the metadata we just read, on
+        // every attempt. This is what makes the compare-and-swap retry below
+        // safe: a writer whose view is stale is rejected instead of having its
+        // update replayed onto a branch that moved on (A-1).
+        if let Err(e) = commit::check_requirements(&metadata, &payload.requirements, true) {
+            crate::metrics::inc(&crate::metrics::COMMITS_CONFLICTED);
+            return commit_error_response(e);
+        }
+
+        if let Err(e) = commit::apply_updates(&mut metadata, &payload.updates, &branch) {
+            return commit_error_response(e);
+        }
+
+        let new_metadata_location = format!(
+            "{}/metadata/00000-{}.metadata.json",
+            metadata.location,
+            Uuid::new_v4()
+        );
+        let metadata_json = match serde_json::to_string(&metadata) {
+            Ok(json) => json,
+            Err(e) => {
+                tracing::error!(error = %e, "could not serialise table metadata");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to serialise table metadata",
+                )
+                    .into_response();
             }
+        };
+
+        if let Err(_) = store
+            .write_file(&new_metadata_location, metadata_json.into_bytes())
+            .await
+        {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to write new metadata",
+            )
+                .into_response();
         }
 
-        // Apply updates
-        for update in &payload.updates {
-            match update {
-                CommitUpdate::AddSnapshot { snapshot } => {
-                    match serde_json::from_value::<Snapshot>(snapshot.clone()) {
-                        Ok(snapshot_obj) => {
-                            if let Some(ref mut snapshots) = metadata.snapshots {
-                                snapshots.push(snapshot_obj.clone());
-                            } else {
-                                metadata.snapshots = Some(vec![snapshot_obj.clone()]);
-                            }
-                            metadata.current_snapshot_id = Some(snapshot_obj.snapshot_id);
-                            metadata.last_updated_ms = Utc::now().timestamp_millis();
-                            metadata.last_sequence_number = snapshot_obj.snapshot_id;
-                        },
-                        Err(_) => {
-                            if let Some(snapshot_id) = snapshot.get("snapshot-id").and_then(|v| v.as_i64()) {
-                                metadata.current_snapshot_id = Some(snapshot_id);
-                                metadata.last_updated_ms = Utc::now().timestamp_millis();
-                                metadata.last_sequence_number = snapshot_id;
-                            }
-                        }
-                    }
-                },
-                CommitUpdate::AddSchema { schema } => {
-                    if let Ok(new_schema) = serde_json::from_value::<pangolin_core::iceberg_metadata::Schema>(schema.clone()) {
-                         metadata.schemas.push(new_schema);
-                    }
-                },
-                CommitUpdate::SetCurrentSchema { schema_id } => {
-                    if *schema_id == -1 {
-                        if let Some(last) = metadata.schemas.last() {
-                            metadata.current_schema_id = last.schema_id;
-                        } else {
-                             metadata.current_schema_id = *schema_id;
-                        }
-                    } else {
-                        metadata.current_schema_id = *schema_id;
-                    }
-                },
-                _ => {}
-            }
-        }
-
-        let new_metadata_location = format!("{}/metadata/00000-{}.metadata.json", metadata.location, Uuid::new_v4());
-        let metadata_json = serde_json::to_string(&metadata).unwrap();
-
-        if let Err(_) = store.write_file(&new_metadata_location, metadata_json.into_bytes()).await {
-             return (StatusCode::INTERNAL_SERVER_ERROR, "Failed to write new metadata").into_response();
-        }
-
-        match store.update_metadata_location(tenant_id, &catalog_name, Some(branch.clone()), namespace_parts.clone(), table_name.clone(), current_metadata_location.clone(), new_metadata_location.clone()).await {
+        match store
+            .update_metadata_location(
+                tenant_id,
+                &catalog_name,
+                Some(branch.clone()),
+                namespace_parts.clone(),
+                table_name.clone(),
+                current_metadata_location.clone(),
+                new_metadata_location.clone(),
+            )
+            .await
+        {
             Ok(_) => {
-                let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::success(
-                    tenant_id,
-                    Some(session.user_id),
-                    session.username.clone(),
-                    pangolin_core::audit::AuditAction::UpdateTable,
-                    pangolin_core::audit::ResourceType::Table,
-                    Some(asset.id),
-                    format!("{}/{}/{}", catalog_name, namespace, table_name),
-                ).with_metadata(serde_json::json!({ "new_metadata_location": new_metadata_location.clone() }))).await;
+                crate::metrics::inc(&crate::metrics::COMMITS_SUCCEEDED);
+                // The audit write is no longer discarded with `let _ = ...`: a
+                // dropped record means the commit happened with no trace of who
+                // made it (C-18).
+                if let Err(e) = store
+                    .log_audit_event(
+                        tenant_id,
+                        pangolin_core::audit::AuditLogEntry::success(
+                            tenant_id,
+                            Some(session.user_id),
+                            session.username.clone(),
+                            pangolin_core::audit::AuditAction::CommitTable,
+                            pangolin_core::audit::ResourceType::Table,
+                            Some(asset.id),
+                            format!("{}/{}/{}", catalog_name, namespace, table_name),
+                        )
+                        .with_metadata(serde_json::json!({
+                            "new_metadata_location": new_metadata_location.clone(),
+                            "snapshot_id": metadata.current_snapshot_id,
+                            "sequence_number": metadata.last_sequence_number,
+                        })),
+                    )
+                    .await
+                {
+                    crate::metrics::inc(&crate::metrics::AUDIT_WRITE_FAILURES);
+                    tracing::error!(error = %e, "failed to write the table-commit audit record");
+                }
 
-                return (StatusCode::OK, Json(TableResponse::new(
-                    Some(new_metadata_location.clone()),
-                    metadata,
-                    Some(asset.id),
-                ))).into_response();
-            },
-            Err(_) => {
+                return (
+                    StatusCode::OK,
+                    Json(TableResponse::new(
+                        Some(new_metadata_location.clone()),
+                        metadata,
+                        Some(asset.id),
+                    )),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                // The compare-and-swap lost: another writer published first.
+                // Re-read and re-check requirements on the next pass.
+                tracing::debug!(error = %e, attempt = retries, "metadata CAS lost, retrying");
+                crate::metrics::inc(&crate::metrics::COMMIT_CAS_RETRIES);
                 retries += 1;
                 continue;
             }
         }
     }
 
-    (StatusCode::CONFLICT, "Failed to commit after retries").into_response()
+    crate::metrics::inc(&crate::metrics::COMMITS_CONFLICTED);
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "CommitFailedException",
+        "Failed to commit after the maximum number of retries",
+    )
+}
+
+/// Map a commit failure onto the Iceberg REST error envelope.
+fn commit_error_response(error: commit::CommitError) -> axum::response::Response {
+    match error {
+        commit::CommitError::RequirementFailed { .. } => iceberg_error(
+            StatusCode::CONFLICT,
+            "CommitFailedException",
+            &error.to_string(),
+        ),
+        commit::CommitError::Unsupported { .. } => iceberg_error(
+            StatusCode::NOT_IMPLEMENTED,
+            "UnsupportedOperationException",
+            &error.to_string(),
+        ),
+        commit::CommitError::Invalid { .. } => iceberg_error(
+            StatusCode::BAD_REQUEST,
+            "BadRequestException",
+            &error.to_string(),
+        ),
+    }
 }
 
 /// Rename a table
@@ -733,10 +998,10 @@ pub async fn rename_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let path = "/tables/rename".to_string();
     let body_bytes = serde_json::to_vec(&payload).ok().map(Bytes::from);
-    
+
     if let Some(response) = check_and_forward_if_federated(
         &store,
         tenant_id,
@@ -745,30 +1010,55 @@ pub async fn rename_table(
         &path,
         body_bytes,
         HeaderMap::new(),
-    ).await {
-         return response;
+    )
+    .await
+    {
+        return response;
     }
-    
+
     let source_ns = payload.source.namespace;
     let source_name = payload.source.name;
     let dest_ns = payload.destination.namespace;
     let dest_name = payload.destination.name;
     let branch = Some("main".to_string());
 
-    match store.rename_asset(tenant_id, &catalog_name, branch, source_ns.clone(), source_name.clone(), dest_ns.clone(), dest_name.clone()).await {
+    match store
+        .rename_asset(
+            tenant_id,
+            &catalog_name,
+            branch,
+            source_ns.clone(),
+            source_name.clone(),
+            dest_ns.clone(),
+            dest_name.clone(),
+        )
+        .await
+    {
         Ok(_) => {
-            let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::success(
-                tenant_id,
-                Some(session.user_id),
-                session.username.clone(),
-                pangolin_core::audit::AuditAction::RenameTable,
-                pangolin_core::audit::ResourceType::Table,
-                None, // Cannot determine asset ID easily without lookup
-                format!("{}/{}.{} -> {}.{}", catalog_name, source_ns.join("."), source_name, dest_ns.join("."), dest_name),
-            )).await;
-            
+            let _ = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::success(
+                        tenant_id,
+                        Some(session.user_id),
+                        session.username.clone(),
+                        pangolin_core::audit::AuditAction::RenameTable,
+                        pangolin_core::audit::ResourceType::Table,
+                        None, // Cannot determine asset ID easily without lookup
+                        format!(
+                            "{}/{}.{} -> {}.{}",
+                            catalog_name,
+                            source_ns.join("."),
+                            source_name,
+                            dest_ns.join("."),
+                            dest_name
+                        ),
+                    ),
+                )
+                .await;
+
             StatusCode::NO_CONTENT.into_response()
-        },
+        }
         Err(_) => (StatusCode::NOT_FOUND, "Table not found").into_response(),
     }
 }
@@ -799,7 +1089,7 @@ pub async fn delete_table(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let path = format!("/namespaces/{}/tables/{}", namespace, table);
     if let Some(response) = check_and_forward_if_federated(
         &store,
@@ -809,50 +1099,87 @@ pub async fn delete_table(
         &path,
         None,
         HeaderMap::new(),
-    ).await {
-         return response;
+    )
+    .await
+    {
+        return response;
     }
-    
+
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+        }
     };
-    
+
     let (table_name, branch_from_name) = parse_table_identifier(&table);
     let branch = branch_from_name.or(Some("main".to_string()));
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
-    
-    let asset = match store.get_asset(tenant_id, &catalog_name, branch.clone(), namespace_parts.clone(), table_name.clone()).await {
+
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch.clone(),
+            namespace_parts.clone(),
+            table_name.clone(),
+        )
+        .await
+    {
         Ok(Some(a)) => a,
         Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(_) => {
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     };
-    
-    let scope = PermissionScope::Asset { 
-        catalog_id: catalog.id, 
-        namespace: namespace_parts.join("."), 
-        asset_id: asset.id 
+
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+        asset_id: asset.id,
     };
-    
+
     match check_permission(&store, &session, &Action::Delete, &scope).await {
         Ok(true) => (),
         Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("Permission check failed: {}", e)).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Permission check failed: {}", e),
+            )
+                .into_response()
+        }
     }
 
-    match store.delete_asset(tenant_id, &catalog_name, branch, namespace_parts, table_name).await {
+    match store
+        .delete_asset(
+            tenant_id,
+            &catalog_name,
+            branch,
+            namespace_parts,
+            table_name,
+        )
+        .await
+    {
         Ok(_) => {
-             let _ = store.log_audit_event(tenant_id, pangolin_core::audit::AuditLogEntry::legacy_new(
-                tenant_id,
-                session.username.clone(),
-                "delete_table".to_string(),
-                format!("{}/{}/{}", catalog_name, namespace, table),
-                None
-            )).await;
-            
+            let _ = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::success(
+                        tenant_id,
+                        Some(session.user_id),
+                        session.username.clone(),
+                        pangolin_core::audit::AuditAction::DropTable,
+                        pangolin_core::audit::ResourceType::Table,
+                        None,
+                        format!("{}/{}/{}", catalog_name, namespace, table),
+                    ),
+                )
+                .await;
+
             StatusCode::NO_CONTENT.into_response()
-        },
+        }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
@@ -880,7 +1207,7 @@ pub async fn table_exists(
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
-    
+
     let path = format!("/namespaces/{}/tables/{}", namespace, table);
     if let Some(response) = check_and_forward_if_federated(
         &store,
@@ -890,10 +1217,12 @@ pub async fn table_exists(
         &path,
         None,
         HeaderMap::new(),
-    ).await {
-         return response;
+    )
+    .await
+    {
+        return response;
     }
-    
+
     let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
     let (table_name, branch_name) = if let Some((t, b)) = table.split_once('@') {
         (t.to_string(), Some(b.to_string()))
@@ -901,7 +1230,16 @@ pub async fn table_exists(
         (table.to_string(), None)
     };
 
-    match store.get_asset(tenant_id, &catalog_name, branch_name, namespace_parts, table_name).await {
+    match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch_name,
+            namespace_parts,
+            table_name,
+        )
+        .await
+    {
         Ok(Some(_)) => StatusCode::OK.into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),

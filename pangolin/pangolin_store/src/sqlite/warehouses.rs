@@ -1,9 +1,9 @@
 /// Warehouse operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
+use pangolin_core::model::{Warehouse, WarehouseUpdate};
 use sqlx::Row;
 use uuid::Uuid;
-use pangolin_core::model::{Warehouse, WarehouseUpdate};
 
 impl SqliteStore {
     pub async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
@@ -28,8 +28,7 @@ impl SqliteStore {
 
         if let Some(row) = row {
             let vending_strategy_str: Option<String> = row.get("vending_strategy");
-            let vending_strategy = vending_strategy_str
-                .and_then(|s| serde_json::from_str(&s).ok());
+            let vending_strategy = vending_strategy_str.and_then(|s| serde_json::from_str(&s).ok());
 
             Ok(Some(Warehouse {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -44,9 +43,17 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_warehouses(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Warehouse>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_warehouses(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Warehouse>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT id, name, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = ? LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
@@ -58,8 +65,7 @@ impl SqliteStore {
         let mut warehouses = Vec::new();
         for row in rows {
             let vending_strategy_str: Option<String> = row.get("vending_strategy");
-            let vending_strategy = vending_strategy_str
-                .and_then(|s| serde_json::from_str(&s).ok());
+            let vending_strategy = vending_strategy_str.and_then(|s| serde_json::from_str(&s).ok());
 
             warehouses.push(Warehouse {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -73,10 +79,15 @@ impl SqliteStore {
         Ok(warehouses)
     }
 
-    pub async fn update_warehouse(&self, tenant_id: Uuid, name: String, updates: WarehouseUpdate) -> Result<Warehouse> {
+    pub async fn update_warehouse(
+        &self,
+        tenant_id: Uuid,
+        name: String,
+        updates: WarehouseUpdate,
+    ) -> Result<Warehouse> {
         let mut query = String::from("UPDATE warehouses SET ");
         let mut set_clauses = Vec::new();
-        
+
         if updates.name.is_some() {
             set_clauses.push("name = ?");
         }
@@ -89,15 +100,17 @@ impl SqliteStore {
         if updates.vending_strategy.is_some() {
             set_clauses.push("vending_strategy = ?");
         }
-        
+
         if set_clauses.is_empty() {
-            return self.get_warehouse(tenant_id, name).await?
+            return self
+                .get_warehouse(tenant_id, name)
+                .await?
                 .ok_or_else(|| anyhow::anyhow!("Warehouse not found"));
         }
-        
+
         query.push_str(&set_clauses.join(", "));
         query.push_str(" WHERE tenant_id = ? AND name = ?");
-        
+
         let mut q = sqlx::query(&query);
         if let Some(new_name) = &updates.name {
             q = q.bind(new_name);
@@ -112,11 +125,12 @@ impl SqliteStore {
             q = q.bind(serde_json::to_string(vending_strategy)?);
         }
         q = q.bind(tenant_id.to_string()).bind(&name);
-        
+
         q.execute(&self.pool).await?;
 
         let new_name = updates.name.unwrap_or(name);
-        self.get_warehouse(tenant_id, new_name).await?
+        self.get_warehouse(tenant_id, new_name)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Warehouse not found"))
     }
 
@@ -126,7 +140,7 @@ impl SqliteStore {
             .bind(&name)
             .execute(&self.pool)
             .await?;
-        
+
         if result.rows_affected() == 0 {
             return Err(anyhow::anyhow!("Warehouse '{}' not found", name));
         }

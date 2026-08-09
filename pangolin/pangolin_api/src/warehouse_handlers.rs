@@ -1,19 +1,16 @@
-use axum::{
-    extract::{Path, State, Extension, Query},
-    Json,
-    response::IntoResponse,
-    http::StatusCode,
-};
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use pangolin_store::{CatalogStore, PaginationParams};
-use pangolin_core::model::{Warehouse, VendingStrategy};
-use uuid::Uuid;
 use crate::auth::TenantId;
 use crate::iceberg::AppState;
-use pangolin_core::user::UserRole;
+use axum::{
+    extract::{Extension, Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
+use pangolin_core::model::{VendingStrategy, Warehouse};
+use pangolin_store::PaginationParams;
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
-use pangolin_store::signer::Credentials;
+use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct GetCredentialsParams {
@@ -76,9 +73,12 @@ pub async fn list_warehouses(
 ) -> impl IntoResponse {
     match store.list_warehouses(tenant.0, Some(pagination)).await {
         Ok(warehouses) => {
-            let response: Vec<WarehouseResponse> = warehouses.into_iter().map(|w: Warehouse| WarehouseResponse::from(w)).collect();
+            let response: Vec<WarehouseResponse> = warehouses
+                .into_iter()
+                .map(|w: Warehouse| WarehouseResponse::from(w))
+                .collect();
             (StatusCode::OK, Json(response)).into_response()
-        },
+        }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
@@ -102,11 +102,19 @@ pub async fn create_warehouse(
     Json(payload): Json<CreateWarehouseRequest>,
 ) -> impl IntoResponse {
     if session.role == pangolin_core::user::UserRole::Root {
-        return (StatusCode::FORBIDDEN, "Root user cannot create warehouses. Please login as Tenant Admin.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Root user cannot create warehouses. Please login as Tenant Admin.",
+        )
+            .into_response();
     }
-    
+
     if session.role == pangolin_core::user::UserRole::TenantUser {
-        return (StatusCode::FORBIDDEN, "Tenant users cannot create warehouses.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Tenant users cannot create warehouses.",
+        )
+            .into_response();
     }
 
     let warehouse = Warehouse {
@@ -119,11 +127,19 @@ pub async fn create_warehouse(
     };
 
     match store.create_warehouse(tenant.0, warehouse.clone()).await {
-        Ok(_) => (StatusCode::CREATED, Json(WarehouseResponse::from(warehouse))).into_response(),
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(WarehouseResponse::from(warehouse)),
+        )
+            .into_response(),
         Err(e) => {
             tracing::error!("Failed to create warehouse: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Internal Server Error: {}", e)).into_response()
-        },
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Internal Server Error: {}", e),
+            )
+                .into_response()
+        }
     }
 }
 
@@ -147,7 +163,9 @@ pub async fn get_warehouse(
     Path(name): Path<String>,
 ) -> impl IntoResponse {
     match store.get_warehouse(tenant.0, name).await {
-        Ok(Some(warehouse)) => (StatusCode::OK, Json(WarehouseResponse::from(warehouse))).into_response(),
+        Ok(Some(warehouse)) => {
+            (StatusCode::OK, Json(WarehouseResponse::from(warehouse))).into_response()
+        }
         Ok(None) => (StatusCode::NOT_FOUND, "Warehouse not found").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
@@ -174,13 +192,21 @@ pub async fn delete_warehouse(
     Path(name): Path<String>,
 ) -> impl IntoResponse {
     if session.role != pangolin_core::user::UserRole::TenantAdmin {
-        return (StatusCode::FORBIDDEN, "Only Tenant Admins can delete warehouses.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Only Tenant Admins can delete warehouses.",
+        )
+            .into_response();
     }
     match store.delete_warehouse(tenant.0, name.clone()).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => {
             if e.to_string().contains("not found") {
-                (StatusCode::NOT_FOUND, format!("Warehouse '{}' not found", name)).into_response()
+                (
+                    StatusCode::NOT_FOUND,
+                    format!("Warehouse '{}' not found", name),
+                )
+                    .into_response()
             } else {
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
             }
@@ -211,7 +237,11 @@ pub async fn update_warehouse(
     Json(payload): Json<UpdateWarehouseRequest>,
 ) -> impl IntoResponse {
     if session.role != pangolin_core::user::UserRole::TenantAdmin {
-        return (StatusCode::FORBIDDEN, "Only Tenant Admins can update warehouses.").into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            "Only Tenant Admins can update warehouses.",
+        )
+            .into_response();
     }
     let updates = pangolin_core::model::WarehouseUpdate {
         name: payload.name,
@@ -219,7 +249,7 @@ pub async fn update_warehouse(
         storage_config: payload.storage_config,
         vending_strategy: payload.vending_strategy,
     };
-    
+
     match store.update_warehouse(tenant.0, name, updates).await {
         Ok(warehouse) => (StatusCode::OK, Json(WarehouseResponse::from(warehouse))).into_response(),
         Err(e) => {
@@ -231,7 +261,6 @@ pub async fn update_warehouse(
         }
     }
 }
-
 
 #[utoipa::path(
     get,

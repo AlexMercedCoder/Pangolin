@@ -1,8 +1,8 @@
 use super::PostgresStore;
 use anyhow::Result;
 use pangolin_core::model::{Tenant, TenantUpdate};
-use uuid::Uuid;
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Tenant Operations
@@ -17,10 +17,11 @@ impl PostgresStore {
     }
 
     pub async fn get_tenant(&self, id: Uuid) -> Result<Option<Tenant>> {
-        let row: Option<sqlx::postgres::PgRow> = sqlx::query("SELECT id, name, properties FROM tenants WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await?;
+        let row: Option<sqlx::postgres::PgRow> =
+            sqlx::query("SELECT id, name, properties FROM tenants WHERE id = $1")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
 
         if let Some(row) = row {
             Ok(Some(Tenant {
@@ -33,9 +34,16 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_tenants(&self, pagination: Option<crate::PaginationParams>) -> Result<Vec<Tenant>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_tenants(
+        &self,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Tenant>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT id, name, properties FROM tenants LIMIT $1 OFFSET $2")
             .bind(limit)
@@ -69,12 +77,17 @@ impl PostgresStore {
         }
 
         if set_clauses.is_empty() {
-             return self.get_tenant(tenant_id).await?
+            return self
+                .get_tenant(tenant_id)
+                .await?
                 .ok_or_else(|| anyhow::anyhow!("Tenant not found"));
         }
 
         query.push_str(&set_clauses.join(", "));
-        query.push_str(&format!(" WHERE id = ${} RETURNING id, name, properties", bind_count));
+        query.push_str(&format!(
+            " WHERE id = ${} RETURNING id, name, properties",
+            bind_count
+        ));
 
         let mut q = sqlx::query(&query);
         if let Some(name) = &updates.name {
@@ -99,9 +112,9 @@ impl PostgresStore {
             .bind(tenant_id)
             .execute(&self.pool)
             .await?;
-        
+
         if result.rows_affected() == 0 {
-             return Err(anyhow::anyhow!("Tenant not found"));
+            return Err(anyhow::anyhow!("Tenant not found"));
         }
         Ok(())
     }

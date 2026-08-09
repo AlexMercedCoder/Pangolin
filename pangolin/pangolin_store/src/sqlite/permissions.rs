@@ -1,10 +1,9 @@
 /// Permission operations for SqliteStore
 use super::SqliteStore;
 use anyhow::Result;
+use pangolin_core::permission::{Permission, PermissionGrant};
 use sqlx::Row;
 use uuid::Uuid;
-use chrono::Utc;
-use pangolin_core::permission::{Permission, PermissionGrant};
 
 impl SqliteStore {
     pub async fn create_permission(&self, permission: Permission) -> Result<()> {
@@ -22,17 +21,24 @@ impl SqliteStore {
     }
 
     pub async fn revoke_permission(&self, permission_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM permissions WHERE id = ?").bind(permission_id.to_string()).execute(&self.pool).await?;
+        sqlx::query("DELETE FROM permissions WHERE id = ?")
+            .bind(permission_id.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
-    pub async fn list_user_permissions(&self, user_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
+    pub async fn list_user_permissions(
+        &self,
+        user_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Permission>> {
         // 1. Fetch direct permissions
         let rows = sqlx::query("SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at FROM permissions WHERE user_id = ?")
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
             .await?;
-            
+
         let mut perms = Vec::new();
         for row in rows {
             perms.push(Permission {
@@ -42,7 +48,8 @@ impl SqliteStore {
                 scope: serde_json::from_str(&row.get::<String, _>("scope"))?,
                 actions: serde_json::from_str(&row.get::<String, _>("actions"))?,
                 granted_by: Uuid::parse_str(&row.get::<String, _>("granted_by"))?,
-                granted_at: chrono::DateTime::from_timestamp_millis(row.get("granted_at")).unwrap_or_default(),
+                granted_at: chrono::DateTime::from_timestamp_millis(row.get("granted_at"))
+                    .unwrap_or_default(),
             });
         }
 
@@ -50,7 +57,7 @@ impl SqliteStore {
         let role_rows = sqlx::query(
             "SELECT r.permissions, r.created_by, r.created_at, r.tenant_id FROM roles r \
              JOIN user_roles ur ON r.id = ur.role_id \
-             WHERE ur.user_id = ?"
+             WHERE ur.user_id = ?",
         )
         .bind(user_id.to_string())
         .fetch_all(&self.pool)
@@ -60,7 +67,8 @@ impl SqliteStore {
             let grants_json: String = row.get("permissions");
             let grants: Vec<PermissionGrant> = serde_json::from_str(&grants_json)?;
             let created_by = Uuid::parse_str(&row.get::<String, _>("created_by"))?;
-            let created_at = chrono::DateTime::from_timestamp_millis(row.get("created_at")).unwrap_or_default();
+            let created_at =
+                chrono::DateTime::from_timestamp_millis(row.get("created_at")).unwrap_or_default();
             let tenant_id = Uuid::parse_str(&row.get::<String, _>("tenant_id"))?;
 
             for grant in grants {
@@ -90,15 +98,23 @@ impl SqliteStore {
         }
     }
 
-    pub async fn list_permissions(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Permission>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(-1);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_permissions(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Permission>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(-1);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query(
             "SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at 
              FROM permissions 
              WHERE tenant_id = ?
-             LIMIT ? OFFSET ?"
+             LIMIT ? OFFSET ?",
         )
         .bind(tenant_id.to_string())
         .bind(limit)
@@ -115,7 +131,8 @@ impl SqliteStore {
                 scope: serde_json::from_str(&row.get::<String, _>("scope"))?,
                 actions: serde_json::from_str(&row.get::<String, _>("actions"))?,
                 granted_by: Uuid::parse_str(&row.get::<String, _>("granted_by"))?,
-                granted_at: chrono::DateTime::from_timestamp_millis(row.get("granted_at")).unwrap_or_default(),
+                granted_at: chrono::DateTime::from_timestamp_millis(row.get("granted_at"))
+                    .unwrap_or_default(),
             });
         }
         Ok(perms)

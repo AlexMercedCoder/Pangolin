@@ -1,7 +1,14 @@
 [package]
 name = "pangolin_store"
-version = "0.2.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
 pangolin_core = { path = "../pangolin_core", features = ["sqlx"] }
@@ -37,11 +44,14 @@ regex = "1.10"
 
 [features]
 default = ["aws", "azure", "gcp"]
-aws = [] # AWS is currently hard-required by code structure unless refactored, but deps are here? 
-         # Wait, if I make deps optional, code using them must be conditional.
-         # For now, let's keep AWS deps required in code (implied) or just add Azure/GCP support.
-         # The plan said "aws = []" but AWS SDK deps above act as required if not marked optional.
-         # I will NOT mark AWS deps optional yet to avoid massive refactor of existing AWS code.
-         # I will only mark new deps optional.
+# The AWS SDK is a non-optional dependency: AWS-specific code paths are not
+# behind `cfg(feature = "aws")` yet, so this feature is a no-op marker kept for
+# forward compatibility. Azure and GCP support is genuinely optional.
+aws = []
 azure = ["dep:azure_storage_blobs", "dep:azure_core"]
 gcp = ["dep:google-cloud-storage", "dep:google-cloud-auth"]
+# Compiles `test_support` into the library for integration tests only.
+test-support = []
+
+[dev-dependencies]
+pangolin_store = { path = ".", features = ["test-support"] }

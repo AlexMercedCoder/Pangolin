@@ -1,23 +1,24 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     use axum::{
-        body::Body,
         body::to_bytes,
+        body::Body,
         http::{Request, StatusCode},
     };
-    use tower::ServiceExt;
+
+    use jsonwebtoken::{encode, EncodingKey, Header};
+    use pangolin_api::auth::Claims;
     use pangolin_store::memory::MemoryStore;
     use pangolin_store::CatalogStore;
-    use uuid::Uuid;
-    use pangolin_api::auth::Claims;
-    use std::sync::Arc;
-    use jsonwebtoken::{encode, EncodingKey, Header};
-    use chrono::Utc;
     use std::collections::HashMap;
+    use std::sync::Arc;
+    use tower::ServiceExt;
+    use uuid::Uuid;
 
     fn create_test_token(tenant_id: &str) -> String {
-        let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
+        let secret = std::env::var("PANGOLIN_JWT_SECRET")
+            .unwrap_or_else(|_| "default_secret_for_dev".to_string());
         let claims = Claims {
             sub: uuid::Uuid::new_v4().to_string(),
             jti: Some(uuid::Uuid::new_v4().to_string()),
@@ -39,7 +40,7 @@ mod tests {
     #[tokio::test]
     async fn test_create_table_returns_metadata() {
         let store = Arc::new(MemoryStore::new());
-        
+
         // Setup tenant and catalog
         let tenant_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
         let tenant = pangolin_core::model::Tenant {
@@ -51,7 +52,7 @@ mod tests {
 
         let mut storage_config = HashMap::new();
         storage_config.insert("type".to_string(), "memory".to_string());
-        
+
         let warehouse = pangolin_core::model::Warehouse {
             id: uuid::Uuid::new_v4(),
             tenant_id,
@@ -60,7 +61,10 @@ mod tests {
             storage_config,
             vending_strategy: None,
         };
-        store.create_warehouse(tenant_id, warehouse.clone()).await.unwrap();
+        store
+            .create_warehouse(tenant_id, warehouse.clone())
+            .await
+            .unwrap();
 
         let catalog = pangolin_core::model::Catalog {
             id: Uuid::new_v4(),
@@ -102,7 +106,10 @@ mod tests {
             let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
             // Verify metadata field exists
-            assert!(json["metadata"].is_object(), "TableResponse should contain metadata field");
+            assert!(
+                json["metadata"].is_object(),
+                "TableResponse should contain metadata field"
+            );
             assert!(json["name"].is_string());
             assert!(json["location"].is_string());
         }
@@ -113,7 +120,7 @@ mod tests {
         std::env::set_var("PANGOLIN_NO_AUTH", "1");
 
         let store = Arc::new(MemoryStore::new());
-        
+
         // Setup default tenant
         let tenant_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
         let tenant = pangolin_core::model::Tenant {
@@ -159,7 +166,10 @@ mod tests {
             let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
             // Verify metadata field exists
-            assert!(json["metadata"].is_object(), "TableResponse should contain metadata field");
+            assert!(
+                json["metadata"].is_object(),
+                "TableResponse should contain metadata field"
+            );
         }
 
         std::env::remove_var("PANGOLIN_NO_AUTH");
@@ -170,7 +180,7 @@ mod tests {
         std::env::set_var("PANGOLIN_NO_AUTH", "1");
 
         let store = Arc::new(MemoryStore::new());
-        
+
         let tenant_id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
         let tenant = pangolin_core::model::Tenant {
             id: tenant_id,
@@ -205,7 +215,7 @@ mod tests {
             let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
             let metadata = &json["metadata"];
-            
+
             // Check required Iceberg metadata fields
             assert!(metadata["format-version"].is_number());
             assert!(metadata["table-uuid"].is_string());

@@ -1,15 +1,18 @@
 use super::PostgresStore;
 use anyhow::Result;
-use pangolin_core::model::Commit;
-use uuid::Uuid;
-use sqlx::Row;
 use chrono::{TimeZone, Utc};
+use pangolin_core::model::Commit;
+use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Commit Operations
     pub async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()> {
-        let timestamp_dt = Utc.timestamp_millis_opt(commit.timestamp).single().unwrap_or(Utc::now());
-        
+        let timestamp_dt = Utc
+            .timestamp_millis_opt(commit.timestamp)
+            .single()
+            .unwrap_or(Utc::now());
+
         sqlx::query("INSERT INTO commits (tenant_id, id, parent_id, timestamp, author, message, operations) VALUES ($1, $2, $3, $4, $5, $6, $7)")
             .bind(tenant_id)
             .bind(commit.id)
@@ -32,7 +35,7 @@ impl PostgresStore {
 
         if let Some(row) = row {
             let ts: chrono::DateTime<Utc> = row.get("timestamp");
-            
+
             Ok(Some(Commit {
                 id: row.get("id"),
                 parent_id: row.get("parent_id"),
@@ -45,7 +48,12 @@ impl PostgresStore {
             Ok(None)
         }
     }
-    pub async fn get_commit_ancestry(&self, tenant_id: Uuid, commit_id: Uuid, limit: usize) -> Result<Vec<Commit>> {
+    pub async fn get_commit_ancestry(
+        &self,
+        tenant_id: Uuid,
+        commit_id: Uuid,
+        limit: usize,
+    ) -> Result<Vec<Commit>> {
         let query = "
         WITH RECURSIVE ancestry AS (
             SELECT id, tenant_id, parent_id, timestamp, author, message, operations
@@ -71,7 +79,7 @@ impl PostgresStore {
         let mut commits = Vec::new();
         for row in rows {
             let ts: chrono::DateTime<Utc> = row.get("timestamp");
-            
+
             commits.push(Commit {
                 id: row.get("id"),
                 parent_id: row.get("parent_id"),

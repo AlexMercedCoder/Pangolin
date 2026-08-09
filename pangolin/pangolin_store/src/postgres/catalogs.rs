@@ -1,8 +1,8 @@
 use super::PostgresStore;
 use anyhow::Result;
 use pangolin_core::model::{Catalog, CatalogUpdate};
-use uuid::Uuid;
 use sqlx::Row;
+use uuid::Uuid;
 
 impl PostgresStore {
     // Catalog Operations
@@ -35,7 +35,7 @@ impl PostgresStore {
                 "Federated" => pangolin_core::model::CatalogType::Federated,
                 _ => pangolin_core::model::CatalogType::Local,
             };
-            
+
             Ok(Some(Catalog {
                 id: row.get("id"),
                 name: row.get("name"),
@@ -50,9 +50,17 @@ impl PostgresStore {
         }
     }
 
-    pub async fn list_catalogs(&self, tenant_id: Uuid, pagination: Option<crate::PaginationParams>) -> Result<Vec<Catalog>> {
-        let limit = pagination.map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64).unwrap_or(i64::MAX);
-        let offset = pagination.map(|p| p.offset.unwrap_or(0) as i64).unwrap_or(0);
+    pub async fn list_catalogs(
+        &self,
+        tenant_id: Uuid,
+        pagination: Option<crate::PaginationParams>,
+    ) -> Result<Vec<Catalog>> {
+        let limit = pagination
+            .map(|p| p.limit.unwrap_or(i64::MAX as usize) as i64)
+            .unwrap_or(i64::MAX);
+        let offset = pagination
+            .map(|p| p.offset.unwrap_or(0) as i64)
+            .unwrap_or(0);
 
         let rows = sqlx::query("SELECT id, name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
             .bind(tenant_id)
@@ -76,7 +84,12 @@ impl PostgresStore {
         Ok(catalogs)
     }
 
-    pub async fn update_catalog(&self, tenant_id: Uuid, name: String, updates: CatalogUpdate) -> Result<Catalog> {
+    pub async fn update_catalog(
+        &self,
+        tenant_id: Uuid,
+        name: String,
+        updates: CatalogUpdate,
+    ) -> Result<Catalog> {
         let mut query = String::from("UPDATE catalogs SET ");
         let mut set_clauses = Vec::new();
         let mut bind_count = 1;
@@ -95,7 +108,9 @@ impl PostgresStore {
         }
 
         if set_clauses.is_empty() {
-            return self.get_catalog(tenant_id, name).await?
+            return self
+                .get_catalog(tenant_id, name)
+                .await?
                 .ok_or_else(|| anyhow::anyhow!("Catalog not found"));
         }
 
@@ -133,46 +148,59 @@ impl PostgresStore {
         })
     }
 
+    /// Delete a catalog and everything under it.
+    ///
+    /// Transactional. This is five statements cascading by hand; a failure or
+    /// process death partway through used to leave the catalog half-deleted —
+    /// for instance tags and branches gone but assets and namespaces still
+    /// present, referencing a catalog that no longer exists — with no rollback
+    /// and no repair tooling (A-24).
     pub async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
         // Manually cascade delete dependent resources
         // 1. Tags
         sqlx::query("DELETE FROM tags WHERE tenant_id = $1 AND catalog_name = $2")
             .bind(tenant_id)
             .bind(&name)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         // 2. Branches
         sqlx::query("DELETE FROM branches WHERE tenant_id = $1 AND catalog_name = $2")
             .bind(tenant_id)
             .bind(&name)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         // 3. Assets
         sqlx::query("DELETE FROM assets WHERE tenant_id = $1 AND catalog_name = $2")
             .bind(tenant_id)
             .bind(&name)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         // 4. Namespaces
         sqlx::query("DELETE FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2")
             .bind(tenant_id)
             .bind(&name)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
 
         // 5. Catalog
-        let result: sqlx::postgres::PgQueryResult = sqlx::query("DELETE FROM catalogs WHERE tenant_id = $1 AND name = $2")
-            .bind(tenant_id)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
-        
+        let result: sqlx::postgres::PgQueryResult =
+            sqlx::query("DELETE FROM catalogs WHERE tenant_id = $1 AND name = $2")
+                .bind(tenant_id)
+                .bind(&name)
+                .execute(&mut *tx)
+                .await?;
+
         if result.rows_affected() == 0 {
+            // Rolls back on drop, so the cascade above is undone.
             return Err(anyhow::anyhow!("Catalog '{}' not found", name));
         }
+
+        tx.commit().await?;
         Ok(())
     }
 }
