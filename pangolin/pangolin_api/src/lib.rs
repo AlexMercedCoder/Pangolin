@@ -181,7 +181,6 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // User Role Assignment
         .route("/api/v1/users/:id/roles", post(permission_handlers::assign_role).get(permission_handlers::get_user_roles))
         .route("/api/v1/users/:id/roles/:role_id", delete(permission_handlers::revoke_role))
-        // .route("/api/v1/users/:user_id/permissions", get(permission_handlers::list_user_permissions))
         // Service User Management
         .route("/api/v1/service-users", get(service_user_handlers::list_service_users).post(service_user_handlers::create_service_user))
         .route("/api/v1/service-users/:id", get(service_user_handlers::get_service_user).put(service_user_handlers::update_service_user).delete(service_user_handlers::delete_service_user))
@@ -191,13 +190,8 @@ pub fn app(store: Arc<dyn CatalogStore + Send + Sync>) -> Router {
         // OAuth
         .route("/oauth/authorize/:provider", get(oauth_handlers::oauth_authorize))
         .route("/oauth/callback/:provider", get(oauth_handlers::oauth_callback))
-        // Business Metadata (commented out - handlers not yet fully implemented)
+        // Business Metadata (by asset id)
         .route("/api/v1/business-metadata/:asset_id", get(business_metadata_handlers::get_business_metadata).delete(business_metadata_handlers::delete_business_metadata))
-        // .route("/api/v1/business-metadata/:asset_id", put(business_metadata_handlers::upsert_business_metadata))
-        // Access Requests - DUPLICATE REMOVED (already defined on line 107-108)
-        // .route("/api/v1/access-requests", get(business_metadata_handlers::list_access_requests))
-        // .route("/api/v1/access-requests", post(business_metadata_handlers::create_access_request))
-        // .route("/api/v1/access-requests/:id", get(business_metadata_handlers::get_access_request).put(business_metadata_handlers::update_access_request))
         // Dashboard & Statistics
         .route("/api/v1/dashboard/stats", get(dashboard_handlers::get_dashboard_stats))
         .route("/api/v1/catalogs/:name/summary", get(dashboard_handlers::get_catalog_summary))

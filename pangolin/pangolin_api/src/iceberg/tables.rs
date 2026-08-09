@@ -599,8 +599,7 @@ pub async fn update_table(
              return (StatusCode::INTERNAL_SERVER_ERROR, "Table corrupted (no metadata)").into_response()
         };
         
-        // Parse metadata in blocking task to avoid stalling the executor
-        // Parse metadata in blocking task to avoid stalling the executor
+        // Parse metadata in a blocking task to avoid stalling the executor
         let metadata_vec = metadata_bytes.to_vec();
         let mut metadata: TableMetadata = match tokio::task::spawn_blocking(move || {
             serde_json::from_slice(&metadata_vec)

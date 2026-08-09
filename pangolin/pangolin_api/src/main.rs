@@ -129,18 +129,9 @@ async fn main() {
         println!("========================================================\n");
     }
 
-    // Build our application with a route
-    // The instruction seems to imply adding routes directly here, but the `app` function
-    // from `pangolin_api` is responsible for defining routes.
-    // To faithfully apply the change, we assume the user intends for the `app` function
-    // to be modified to include the new route. However, since we only have this file,
-    // and the instruction's snippet is syntactically incorrect for this location,
-    // I will make no change to this file based on the provided snippet.
-    // If the `app` function was defined in this file, I would insert the route there.
-    // As it stands, the provided snippet cannot be correctly applied to this file.
+    // Build the application router (all routes live in `pangolin_api::app`).
     let app = app(store);
 
-    // Run it
     // Run it
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string()).parse::<u16>().unwrap_or(8080);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

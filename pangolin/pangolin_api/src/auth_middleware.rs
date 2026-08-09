@@ -232,7 +232,6 @@ pub async fn auth_middleware(
     };
     
     // Get JWT secret from environment
-    // Get JWT secret from environment
     let secret = std::env::var("PANGOLIN_JWT_SECRET").unwrap_or_else(|_| "default_secret_for_dev".to_string());
     
     // Verify token
