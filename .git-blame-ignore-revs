@@ -1,0 +1,5 @@
+# Run: git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Workspace-wide "cargo fmt --all" pass (Phase 2.1 of AUDIT_EXECUTION_PLAN.md).
+# Mechanical formatting only, no behaviour change.
+333a787bc91694cd47fb3a044296bc337d366feb
