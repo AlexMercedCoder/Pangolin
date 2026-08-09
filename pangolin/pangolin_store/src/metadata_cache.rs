@@ -50,9 +50,19 @@ impl MetadataCache {
         self.cache.invalidate_all();
     }
 
-    /// Get cache statistics
+    /// Number of entries currently held.
+    ///
+    /// `moka` applies writes asynchronously, so this is eventually consistent:
+    /// an entry inserted a moment ago may not be counted yet. Call
+    /// [`MetadataCache::sync`] first if an exact figure is needed.
     pub fn entry_count(&self) -> u64 {
         self.cache.entry_count()
+    }
+
+    /// Apply any pending cache maintenance so that [`MetadataCache::entry_count`]
+    /// reflects every completed insert and invalidation.
+    pub async fn sync(&self) {
+        self.cache.run_pending_tasks().await;
     }
 }
 
@@ -89,6 +99,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(result, data);
+        // entry_count is eventually consistent; settle pending writes first.
+        cache.sync().await;
         assert_eq!(cache.entry_count(), 1);
 
         // Second fetch - should be a hit
@@ -114,9 +126,12 @@ mod tests {
             .await
             .unwrap();
 
+        cache.sync().await;
         assert_eq!(cache.entry_count(), 1);
 
         cache.invalidate(location).await;
+        cache.sync().await;
+        assert_eq!(cache.entry_count(), 0, "invalidate must drop the entry");
 
         // Entry count might not immediately reflect invalidation
         // but next fetch should miss

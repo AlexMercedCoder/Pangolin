@@ -219,5 +219,14 @@ async fn test_business_metadata_flow() {
         .unwrap();
 
     let response = app.clone().oneshot(req).await.unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
+    let status = response.status();
+    if status != StatusCode::OK {
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        panic!(
+            "approve failed: {status} {}",
+            String::from_utf8_lossy(&body)
+        );
+    }
 }

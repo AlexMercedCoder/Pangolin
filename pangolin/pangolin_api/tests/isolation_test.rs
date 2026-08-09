@@ -19,28 +19,6 @@ mod tests {
     use tower::ServiceExt; // for `oneshot`
     use uuid::Uuid;
 
-    // Helper to get app router
-    fn setup_app() -> Router {
-        let store = Arc::new(MemoryStore::new());
-        // We cast to AppState type equivalent
-        let state: Arc<dyn CatalogStore + Send + Sync> = store;
-
-        Router::new()
-            .route("/api/v1/users/login", post(user_handlers::login))
-            .route(
-                "/api/v1/warehouses",
-                get(list_warehouses).post(create_warehouse),
-            )
-            // Exercise the *production* middleware, not a test-only wrapper:
-            // the wrapper had already drifted and did not cover service-user
-            // API keys or token revocation (A-15).
-            .layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                pangolin_api::auth_middleware::auth_middleware,
-            ))
-            .with_state(state)
-    }
-
     #[tokio::test]
     async fn test_warehouse_isolation() {
         std::env::set_var("PANGOLIN_JWT_SECRET", "test_secret_for_isolation");
@@ -118,11 +96,16 @@ mod tests {
             .method("POST")
             .uri("/api/v1/users/login")
             .header("Content-Type", "application/json")
-            .body(Body::from(
-                r#"{"username":"user_a","password":"password_a"}"#,
-            ))
+            .body(Body::from(format!(
+                r#"{{"username":"user_a","password":"password_a","tenant_id":"{tenant_a_id}"}}"#
+            )))
             .unwrap();
         let login_a_res: Response = app.clone().oneshot(login_a_req).await.unwrap();
+        assert_eq!(
+            login_a_res.status(),
+            axum::http::StatusCode::OK,
+            "login must succeed; a non-JSON body here means the request was rejected"
+        );
         let body_bytes_a = axum::body::to_bytes(login_a_res.into_body(), usize::MAX)
             .await
             .unwrap();
@@ -158,11 +141,16 @@ mod tests {
             .method("POST")
             .uri("/api/v1/users/login")
             .header("Content-Type", "application/json")
-            .body(Body::from(
-                r#"{"username":"user_b","password":"password_b"}"#,
-            ))
+            .body(Body::from(format!(
+                r#"{{"username":"user_b","password":"password_b","tenant_id":"{tenant_b_id}"}}"#
+            )))
             .unwrap();
         let login_b_res: Response = app.clone().oneshot(login_b_req).await.unwrap();
+        assert_eq!(
+            login_b_res.status(),
+            axum::http::StatusCode::OK,
+            "login must succeed; a non-JSON body here means the request was rejected"
+        );
         let body_bytes_b = axum::body::to_bytes(login_b_res.into_body(), usize::MAX)
             .await
             .unwrap();
@@ -272,9 +260,9 @@ mod tests {
             .method("POST")
             .uri("/api/v1/users/login")
             .header("Content-Type", "application/json")
-            .body(Body::from(
-                r#"{"username":"user_a","password":"password_a"}"#,
-            ))
+            .body(Body::from(format!(
+                r#"{{"username":"user_a","password":"password_a","tenant_id":"{tenant_a_id}"}}"#
+            )))
             .unwrap();
         let login_a_res = app.clone().oneshot(login_a_req).await.unwrap();
         let body_bytes_a = axum::body::to_bytes(login_a_res.into_body(), usize::MAX)
@@ -301,9 +289,9 @@ mod tests {
             .method("POST")
             .uri("/api/v1/users/login")
             .header("Content-Type", "application/json")
-            .body(Body::from(
-                r#"{"username":"user_b","password":"password_b"}"#,
-            ))
+            .body(Body::from(format!(
+                r#"{{"username":"user_b","password":"password_b","tenant_id":"{tenant_b_id}"}}"#
+            )))
             .unwrap();
         let login_b_res = app.clone().oneshot(login_b_req).await.unwrap();
         let body_bytes_b = axum::body::to_bytes(login_b_res.into_body(), usize::MAX)

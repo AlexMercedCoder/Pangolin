@@ -59,14 +59,62 @@ impl PostgresStore {
             .connect(connection_string)
             .await?;
 
-        // Run migrations
-        sqlx::migrate!("./migrations").run(&pool).await?;
+        Self::prepare_schema(&pool).await?;
 
         Ok(Self {
             pool,
             object_store_cache: crate::ObjectStoreCache::new(),
             metadata_cache: crate::MetadataCache::default(),
         })
+    }
+
+    /// Bring the database schema up to date, serialised across processes.
+    ///
+    /// Two things happen here, both under a session-level advisory lock:
+    ///
+    /// 1. `sql/postgres_bootstrap.sql` creates the two tables the migration
+    ///    chain assumes but never defines. Without them
+    ///    `20251227000000_add_perf_indexes.sql` fails on a fresh database and
+    ///    the server cannot start at all.
+    /// 2. The `sqlx` migration chain runs.
+    ///
+    /// The advisory lock matters because concurrent `CREATE TABLE IF NOT
+    /// EXISTS` and concurrent migration runs both race in PostgreSQL — the
+    /// former on `pg_type`, producing a confusing "duplicate key value violates
+    /// unique constraint pg_type_typname_nsp_index". Every replica of a
+    /// scaled-out deployment starts by doing exactly this, so the race is not
+    /// hypothetical.
+    async fn prepare_schema(pool: &PgPool) -> Result<()> {
+        /// Arbitrary but fixed key identifying Pangolin's schema lock.
+        const SCHEMA_LOCK_KEY: i64 = 0x7061_6e67_6f6c_69;
+
+        let mut conn = pool.acquire().await?;
+        sqlx::query("SELECT pg_advisory_lock($1)")
+            .bind(SCHEMA_LOCK_KEY)
+            .execute(&mut *conn)
+            .await?;
+
+        let result = async {
+            for statement in include_str!("../../sql/postgres_bootstrap.sql")
+                .split(';')
+                .map(str::trim)
+                .filter(|s| !s.is_empty() && !s.lines().all(|l| l.trim_start().starts_with("--")))
+            {
+                sqlx::query(statement).execute(&mut *conn).await?;
+            }
+            sqlx::migrate!("./migrations").run(pool).await?;
+            Ok::<(), anyhow::Error>(())
+        }
+        .await;
+
+        // Release the lock whether or not the schema work succeeded, so a
+        // failed start does not wedge every other replica.
+        let _ = sqlx::query("SELECT pg_advisory_unlock($1)")
+            .bind(SCHEMA_LOCK_KEY)
+            .execute(&mut *conn)
+            .await;
+
+        result
     }
 }
 
@@ -334,9 +382,10 @@ impl CatalogStore for PostgresStore {
         &self,
         tenant_id: Uuid,
         catalog_name: &str,
-        target_branch: String,
         source_branch: String,
+        target_branch: String,
     ) -> Result<()> {
+        // The inherent implementation takes (target, source).
         self.merge_branch(tenant_id, catalog_name, target_branch, source_branch)
             .await
     }

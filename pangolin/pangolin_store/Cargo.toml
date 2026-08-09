@@ -43,3 +43,8 @@ default = ["aws", "azure", "gcp"]
 aws = []
 azure = ["dep:azure_storage_blobs", "dep:azure_core"]
 gcp = ["dep:google-cloud-storage", "dep:google-cloud-auth"]
+# Compiles `test_support` into the library for integration tests only.
+test-support = []
+
+[dev-dependencies]
+pangolin_store = { path = ".", features = ["test-support"] }

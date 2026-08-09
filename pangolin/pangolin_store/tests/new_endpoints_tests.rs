@@ -23,18 +23,45 @@ fn create_test_token(user_id: Uuid) -> TokenInfo {
 mod sqlite_new_endpoints_tests {
     use super::*;
 
+    /// An in-memory SQLite store with the schema applied.
+    ///
+    /// These tests failed with "no such table" because SQLite had no migration
+    /// step at all: the schema was only ever applied by `main.rs` (A-27).
     async fn setup_sqlite() -> Result<SqliteStore> {
-        SqliteStore::new(":memory:").await
+        let store = SqliteStore::new(":memory:").await?;
+        store.run_migrations().await?;
+        Ok(store)
+    }
+
+    /// A store with the schema applied and one tenant row present.
+    ///
+    /// Tokens and system settings are foreign-keyed to `tenants`, so a test
+    /// that invents a tenant UUID without inserting the row hits a foreign-key
+    /// violation. These tests previously ran against a database with no tables
+    /// at all, which is why the constraint never fired.
+    async fn setup_sqlite_with_tenant() -> Result<(SqliteStore, Uuid)> {
+        let store = setup_sqlite().await?;
+        let tenant_id = Uuid::new_v4();
+        store
+            .create_tenant(pangolin_core::model::Tenant {
+                id: tenant_id,
+                name: format!("test_tenant_{tenant_id}"),
+                properties: std::collections::HashMap::new(),
+            })
+            .await?;
+        Ok((store, tenant_id))
     }
 
     #[tokio::test]
     async fn test_token_management() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
         let user_id = Uuid::new_v4();
 
-        // Test storing a token
-        let token = create_test_token(user_id);
+        // Test storing a token. The token must belong to the tenant we then
+        // list by: `create_test_token` used to invent its own tenant, so the
+        // listing was always empty.
+        let mut token = create_test_token(user_id);
+        token.tenant_id = tenant_id;
         store.store_token(token.clone()).await?;
 
         // Test listing tokens
@@ -43,7 +70,8 @@ mod sqlite_new_endpoints_tests {
         assert_eq!(tokens[0].user_id, user_id);
 
         // Store another token for the same user
-        let token2 = create_test_token(user_id);
+        let mut token2 = create_test_token(user_id);
+        token2.tenant_id = tenant_id;
         store.store_token(token2).await?;
 
         let tokens = store.list_active_tokens(tenant_id, None, None).await?;
@@ -54,8 +82,7 @@ mod sqlite_new_endpoints_tests {
 
     #[tokio::test]
     async fn test_system_settings() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
 
         // Test getting default settings
         let settings = store.get_system_settings(tenant_id).await?;
@@ -91,8 +118,7 @@ mod sqlite_new_endpoints_tests {
 
     #[tokio::test]
     async fn test_federated_catalog_stats() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
         let catalog_name = "test_catalog";
 
         // Test getting stats for non-existent catalog
@@ -121,17 +147,8 @@ mod sqlite_new_endpoints_tests {
 
     #[tokio::test]
     async fn test_merge_branch() -> Result<()> {
-        let store = setup_sqlite().await?;
-        let tenant_id = Uuid::new_v4();
+        let (store, tenant_id) = setup_sqlite_with_tenant().await?;
         let catalog_name = "test_catalog";
-
-        // Create tenant and catalog first
-        let tenant = pangolin_core::model::Tenant {
-            id: tenant_id,
-            name: "Test Tenant".to_string(),
-            properties: std::collections::HashMap::new(),
-        };
-        store.create_tenant(tenant).await?;
 
         let catalog = pangolin_core::model::Catalog {
             id: Uuid::new_v4(),
@@ -248,9 +265,9 @@ mod mongo_new_endpoints_tests {
     use super::*;
 
     async fn setup_mongo() -> Result<MongoStore> {
-        let db_url = std::env::var("TEST_MONGO_URL")
-            .unwrap_or_else(|_| "mongodb://localhost:27017".to_string());
-        MongoStore::new(&db_url, "pangolin_test").await
+        let db_url = pangolin_store::test_support::mongo_url()
+            .ok_or_else(|| anyhow::anyhow!("PANGOLIN_TEST_MONGO_URL is not set"))?;
+        MongoStore::new(&db_url, &pangolin_store::test_support::mongo_db_name()).await
     }
 
     #[tokio::test]

@@ -6,10 +6,12 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn test_mongo_audit_log_filtering() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) if url.starts_with("mongodb://") => url,
-        _ => {
-            println!("Skipping test_mongo_audit_log_filtering: DATABASE_URL not set to mongodb://");
+    let connection_string = match pangolin_store::test_support::mongo_url() {
+        Some(url) => url,
+        None => {
+            println!(
+                "Skipping test_mongo_audit_log_filtering: set PANGOLIN_TEST_MONGO_URL to run it"
+            );
             return;
         }
     };

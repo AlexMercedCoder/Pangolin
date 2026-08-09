@@ -9,11 +9,19 @@ use uuid::Uuid;
 impl MongoStore {
     pub async fn log_audit_event(&self, entry: AuditLogEntry) -> Result<()> {
         let mut doc = mongodb::bson::to_document(&entry)?;
-        // Ensure UUIDs are stored as Binary
+        // Every UUID field has to be stored as BSON Binary, because that is
+        // what `Uuid`'s non-human-readable Deserialize expects on the way back.
+        // `resource_id` was left as whatever `to_document` produced, so reading
+        // an entry that had one failed with `invalid type: string ...,
+        // expected bytes` and took the whole listing down with it.
         doc.insert("id", to_bson_uuid(entry.id));
         doc.insert("tenant_id", to_bson_uuid(entry.tenant_id));
         let user_id = entry.user_id.unwrap_or(Uuid::nil());
         doc.insert("user_id", to_bson_uuid(user_id));
+        match entry.resource_id {
+            Some(resource_id) => doc.insert("resource_id", to_bson_uuid(resource_id)),
+            None => doc.insert("resource_id", Bson::Null),
+        };
 
         // We use the raw collection to insert the document
         self.db

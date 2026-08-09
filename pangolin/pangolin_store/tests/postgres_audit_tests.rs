@@ -6,10 +6,10 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn test_postgres_audit_log_filtering() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_postgres_audit_log_filtering: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_postgres_audit_log_filtering: set PANGOLIN_TEST_POSTGRES_URL to run it");
             return;
         }
     };
@@ -204,10 +204,10 @@ async fn test_postgres_audit_log_filtering() {
 
 #[tokio::test]
 async fn test_postgres_audit_log_time_filtering() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_postgres_audit_log_time_filtering: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_postgres_audit_log_time_filtering: set PANGOLIN_TEST_POSTGRES_URL to run it");
             return;
         }
     };

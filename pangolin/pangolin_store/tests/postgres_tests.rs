@@ -8,10 +8,10 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn test_postgres_store_flow() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_postgres_store_flow: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_postgres_store_flow: set PANGOLIN_TEST_POSTGRES_URL to run it");
             return;
         }
     };
@@ -112,10 +112,12 @@ async fn test_postgres_store_flow() {
 
 #[tokio::test]
 async fn test_postgres_access_requests() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_postgres_access_requests: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!(
+                "Skipping test_postgres_access_requests: set PANGOLIN_TEST_POSTGRES_URL to run it"
+            );
             return;
         }
     };
@@ -241,10 +243,10 @@ async fn test_postgres_access_requests() {
 
 #[tokio::test]
 async fn test_service_user_rbac() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_service_user_rbac: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::postgres_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_service_user_rbac: set PANGOLIN_TEST_POSTGRES_URL to run it");
             return;
         }
     };

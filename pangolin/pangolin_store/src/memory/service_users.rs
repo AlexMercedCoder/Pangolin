@@ -38,6 +38,25 @@ impl MemoryStore {
         };
         Ok(result)
     }
+    /// Record that a service user's API key was just used.
+    ///
+    /// The trait's default implementation returns "Operation not supported by
+    /// this store", so this silently did nothing on MemoryStore (A-25) even
+    /// though the middleware calls it on every API-key request.
+    pub(crate) async fn update_service_user_last_used_internal(
+        &self,
+        id: Uuid,
+        timestamp: chrono::DateTime<chrono::Utc>,
+    ) -> Result<()> {
+        match self.service_users.get_mut(&id) {
+            Some(mut service_user) => {
+                service_user.last_used = Some(timestamp);
+                Ok(())
+            }
+            None => Err(anyhow::anyhow!("Service user not found")),
+        }
+    }
+
     pub(crate) async fn update_service_user_internal(
         &self,
         id: Uuid,

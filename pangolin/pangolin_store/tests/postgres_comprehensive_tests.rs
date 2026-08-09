@@ -9,14 +9,24 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use uuid::Uuid;
 
-const TEST_DB_URL: &str =
-    "postgresql://pangolin:pangolin_dev_password@localhost:5433/pangolin_test";
+/// Connect to the Postgres test database, or `None` when none is configured.
+///
+/// A hardcoded URL and `.expect()` used to turn "no database running" into a
+/// wall of failures indistinguishable from real defects (B-15).
+async fn connect() -> Option<PostgresStore> {
+    let url = pangolin_store::test_support::postgres_url()?;
+    match PostgresStore::new(&url).await {
+        Ok(store) => Some(store),
+        Err(e) => panic!("PANGOLIN_TEST_POSTGRES_URL is set but unusable: {e}"),
+    }
+}
 
 #[tokio::test]
 async fn test_postgres_tenant_crud() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
 
     // Create tenant
     let tenant_id = Uuid::new_v4();
@@ -49,9 +59,10 @@ async fn test_postgres_tenant_crud() {
 
 #[tokio::test]
 async fn test_postgres_warehouse_crud() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
 
     // Create tenant first
     let tenant_id = Uuid::new_v4();
@@ -70,7 +81,9 @@ async fn test_postgres_warehouse_crud() {
     let warehouse = Warehouse {
         id: Uuid::new_v4(),
         tenant_id,
-        name: "test_wh".to_string(),
+        // The lookup below uses `warehouse_name`; this used to be the literal
+        // "test_wh", so the test could never have passed.
+        name: warehouse_name.clone(),
         use_sts: false,
         storage_config: From::from([("s3.bucket".to_string(), "b".to_string())]),
         vending_strategy: None,
@@ -113,9 +126,10 @@ async fn test_postgres_warehouse_crud() {
 
 #[tokio::test]
 async fn test_postgres_catalog_crud() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
 
     // Create tenant
     let tenant_id = Uuid::new_v4();
@@ -177,9 +191,10 @@ async fn test_postgres_catalog_crud() {
 
 #[tokio::test]
 async fn test_postgres_namespace_operations() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
 
     // Setup tenant and catalog
     let tenant_id = Uuid::new_v4();
@@ -251,9 +266,10 @@ async fn test_postgres_namespace_operations() {
 
 #[tokio::test]
 async fn test_postgres_asset_operations() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
 
     // Setup
     let tenant_id = Uuid::new_v4();
@@ -355,9 +371,10 @@ async fn test_postgres_asset_operations() {
 
 #[tokio::test]
 async fn test_postgres_multi_tenant_isolation() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
 
     // Create two tenants
     let tenant1_id = Uuid::new_v4();
@@ -404,9 +421,10 @@ async fn test_postgres_multi_tenant_isolation() {
 
 #[tokio::test]
 async fn test_postgres_catalog_delete_cascade() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
     let tenant_id = Uuid::new_v4();
     let tenant = Tenant {
         id: tenant_id,
@@ -503,9 +521,10 @@ async fn test_postgres_catalog_delete_cascade() {
 
 #[tokio::test]
 async fn test_postgres_rbac_operations() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
     let tenant_id = Uuid::new_v4();
     let tenant = Tenant {
         id: tenant_id,
@@ -599,9 +618,10 @@ async fn test_postgres_rbac_operations() {
 
 #[tokio::test]
 async fn test_postgres_list_user_permissions_aggregation() {
-    let store = PostgresStore::new(TEST_DB_URL)
-        .await
-        .expect("Failed to create PostgresStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+        return;
+    };
     let tenant_id = Uuid::new_v4();
     let user_id = Uuid::new_v4();
     let admin_id = Uuid::new_v4();

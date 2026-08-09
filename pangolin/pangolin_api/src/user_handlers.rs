@@ -37,6 +37,13 @@ pub struct LoginRequest {
     pub username: String,
     pub password: String,
     /// Optional tenant ID for tenant-scoped login. If null/omitted, authenticates as Root user.
+    ///
+    /// The struct is `rename_all = "kebab-case"`, so the wire name is
+    /// `tenant-id`. The snake_case spelling is accepted as an alias because
+    /// every other field in the API is snake_case and the mismatch has been a
+    /// documented wart; sending `tenant_id` used to be silently treated as a
+    /// root login, producing a confusing 401.
+    #[serde(alias = "tenant_id")]
     pub tenant_id: Option<Uuid>,
 }
 

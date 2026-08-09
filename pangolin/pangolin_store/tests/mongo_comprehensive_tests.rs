@@ -7,14 +7,22 @@ use pangolin_store::{CatalogStore, MongoStore};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-const TEST_DB_URL: &str = "mongodb://localhost:27017";
-const TEST_DB_NAME: &str = "pangolin_test";
+/// Connect to the MongoDB test deployment, or `None` when none is configured.
+async fn connect() -> Option<MongoStore> {
+    let url = pangolin_store::test_support::mongo_url()?;
+    let db = pangolin_store::test_support::mongo_db_name();
+    match MongoStore::new(&url, &db).await {
+        Ok(store) => Some(store),
+        Err(e) => panic!("PANGOLIN_TEST_MONGO_URL is set but unusable: {e}"),
+    }
+}
 
 #[tokio::test]
 async fn test_mongo_tenant_crud() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
 
     // Create tenant
     let tenant_id = Uuid::new_v4();
@@ -47,9 +55,10 @@ async fn test_mongo_tenant_crud() {
 
 #[tokio::test]
 async fn test_mongo_warehouse_crud() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
 
     // Create tenant first
     let tenant_id = Uuid::new_v4();
@@ -113,9 +122,10 @@ async fn test_mongo_warehouse_crud() {
 
 #[tokio::test]
 async fn test_mongo_catalog_crud() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
 
     // Create tenant
     let tenant_id = Uuid::new_v4();
@@ -177,9 +187,10 @@ async fn test_mongo_catalog_crud() {
 
 #[tokio::test]
 async fn test_mongo_namespace_operations() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
 
     // Setup
     let tenant_id = Uuid::new_v4();
@@ -251,9 +262,10 @@ async fn test_mongo_namespace_operations() {
 
 #[tokio::test]
 async fn test_mongo_multi_tenant_isolation() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
 
     // Create two tenants
     let tenant1_id = Uuid::new_v4();
@@ -300,9 +312,10 @@ async fn test_mongo_multi_tenant_isolation() {
 
 #[tokio::test]
 async fn test_mongo_catalog_delete_cascade() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
     let tenant_id = Uuid::new_v4();
     let tenant = Tenant {
         id: tenant_id,
@@ -399,9 +412,10 @@ async fn test_mongo_catalog_delete_cascade() {
 
 #[tokio::test]
 async fn test_mongo_rbac_operations() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
     let tenant_id = Uuid::new_v4();
     let tenant = Tenant {
         id: tenant_id,
@@ -495,9 +509,10 @@ async fn test_mongo_rbac_operations() {
 
 #[tokio::test]
 async fn test_mongo_list_user_permissions_aggregation() {
-    let store = MongoStore::new(TEST_DB_URL, TEST_DB_NAME)
-        .await
-        .expect("Failed to create MongoStore");
+    let Some(store) = connect().await else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
     let tenant_id = Uuid::new_v4();
     let user_id = Uuid::new_v4();
     let admin_id = Uuid::new_v4();

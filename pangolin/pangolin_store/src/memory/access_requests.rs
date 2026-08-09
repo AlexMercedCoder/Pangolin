@@ -18,6 +18,22 @@ impl MemoryStore {
     ) -> Result<Option<AccessRequest>> {
         Ok(self.access_requests.get(&id).map(|r| r.value().clone()))
     }
+    /// Replace a stored access request.
+    ///
+    /// MemoryStore had no implementation, so the trait default fired and
+    /// approving a request returned "Operation not supported by this store"
+    /// as a 500 (A-25).
+    pub(crate) async fn update_access_request_internal(
+        &self,
+        request: AccessRequest,
+    ) -> Result<()> {
+        if !self.access_requests.contains_key(&request.id) {
+            return Err(anyhow::anyhow!("Access request {} not found", request.id));
+        }
+        self.access_requests.insert(request.id, request);
+        Ok(())
+    }
+
     pub(crate) async fn list_access_requests_internal(
         &self,
         tenant_id: Uuid,

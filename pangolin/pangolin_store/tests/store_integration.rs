@@ -54,16 +54,18 @@ async fn test_postgres_store_regression() {
 
 #[tokio::test]
 async fn test_mongo_store_regression() {
-    let conn_str =
-        env::var("MONGO_TEST_URL").unwrap_or_else(|_| "mongodb://localhost:27017".to_string());
+    // `MongoStore::new` succeeds without contacting the server, so an
+    // unreachable or unauthenticated deployment used to surface as a failure
+    // deep inside the assertions rather than as a skip.
+    let Some(conn_str) = pangolin_store::test_support::mongo_url() else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
     let db_name = format!("pangolin_test_{}", Uuid::new_v4()); // Unique DB per test run
 
     let store = match MongoStore::new(&conn_str, &db_name).await {
         Ok(s) => s,
-        Err(e) => {
-            eprintln!("Skipping Mongo test: {}", e);
-            return;
-        }
+        Err(e) => panic!("PANGOLIN_TEST_MONGO_URL is set but unusable: {e}"),
     };
 
     test_asset_update_consistency(&store).await;

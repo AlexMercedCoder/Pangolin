@@ -13,14 +13,16 @@ use uuid::Uuid;
 mod postgres_parity_tests {
     use super::*;
 
-    async fn setup_postgres_store() -> PostgresStore {
-        let database_url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://admin:password@localhost:5432/pangolin_test".to_string()
-        });
-
-        PostgresStore::new(&database_url)
-            .await
-            .expect("Failed to create PostgresStore")
+    /// Connect to the Postgres test database, or `None` when none is
+    /// configured so the caller can skip rather than fail. There used to be a
+    /// hardcoded default URL and an `.expect()`, which turned "no database
+    /// running" into a wall of failures indistinguishable from real defects.
+    async fn setup_postgres_store() -> Option<PostgresStore> {
+        let database_url = crate::test_support::postgres_url()?;
+        match PostgresStore::new(&database_url).await {
+            Ok(store) => Some(store),
+            Err(e) => panic!("PANGOLIN_TEST_POSTGRES_URL is set but unusable: {e}"),
+        }
     }
 
     async fn setup_tenant(store: &PostgresStore) -> Uuid {
@@ -39,7 +41,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_service_user_create() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let service_user = ServiceUser {
@@ -66,7 +71,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_service_user_get() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let service_user_id = Uuid::new_v4();
@@ -96,7 +104,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_service_user_get_by_api_key_hash() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let api_key_hash = format!("$2b$12$unique_hash_{}", Uuid::new_v4());
@@ -132,7 +143,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_service_user_list() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         // Create multiple service users
@@ -159,7 +173,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_service_user_update() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let service_user_id = Uuid::new_v4();
@@ -203,7 +220,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_service_user_delete() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let service_user_id = Uuid::new_v4();
@@ -234,7 +254,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_service_user_update_last_used() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let service_user_id = Uuid::new_v4();
@@ -272,7 +295,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_system_settings_get_default() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let settings = store.get_system_settings(tenant_id).await.unwrap();
@@ -285,7 +311,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_system_settings_update() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let new_settings = SystemSettings {
@@ -315,7 +344,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_system_settings_upsert() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         // First update
@@ -360,7 +392,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_audit_log_enhanced_schema() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let audit_entry = AuditLogEntry {
@@ -393,7 +428,10 @@ mod postgres_parity_tests {
 
     #[tokio::test]
     async fn test_audit_log_filtering() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
         let user_id = Uuid::new_v4();
 

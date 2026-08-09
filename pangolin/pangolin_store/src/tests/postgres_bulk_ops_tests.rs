@@ -6,20 +6,24 @@ mod postgres_bulk_ops_tests {
     use super::*;
     use crate::tests::bulk_ops_tests::test_bulk_ops_and_ancestry;
 
-    async fn setup_postgres_store() -> PostgresStore {
-        let database_url = std::env::var("TEST_DATABASE_URL")
-            // Default to the docker container used in development if var not set
-            // matches docker-compose.db-test.yml
-            .unwrap_or_else(|_| "postgres://testuser:testpass@localhost:5432/testdb".to_string());
-
-        PostgresStore::new(&database_url)
-            .await
-            .expect("Failed to create PostgresStore")
+    /// Connect to the Postgres test database, or `None` when none is
+    /// configured so the caller can skip rather than fail. There used to be a
+    /// hardcoded default URL and an `.expect()`, which turned "no database
+    /// running" into a wall of failures indistinguishable from real defects.
+    async fn setup_postgres_store() -> Option<PostgresStore> {
+        let database_url = crate::test_support::postgres_url()?;
+        match PostgresStore::new(&database_url).await {
+            Ok(store) => Some(store),
+            Err(e) => panic!("PANGOLIN_TEST_POSTGRES_URL is set but unusable: {e}"),
+        }
     }
 
     #[tokio::test]
     async fn test_postgres_store_bulk_ops() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         test_bulk_ops_and_ancestry(&store).await;
     }
 }

@@ -8,13 +8,15 @@ async fn test_mongo_store_bulk_ops() {
 
     // Only run if TEST_DATABASE_URL is set or use default
     // We assume the docker container is running as per instructions
-    let connection_string = env::var("MONGO_TEST_URL")
-        .unwrap_or_else(|_| "mongodb://testuser:testpass@localhost:27017".to_string());
+    let Some(connection_string) = crate::test_support::mongo_url() else {
+        println!("skipping: set PANGOLIN_TEST_MONGO_URL to run this test");
+        return;
+    };
     let db_name = "testdb_bulk_ops";
 
     let store = MongoStore::new(&connection_string, db_name)
         .await
-        .expect("Failed to connect to Mongo");
+        .expect("PANGOLIN_TEST_MONGO_URL is set but unusable");
 
     // Cleanup before test (drop db)
     let _ = store.db.drop().await;

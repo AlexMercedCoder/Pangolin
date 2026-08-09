@@ -14,14 +14,16 @@ use uuid::Uuid;
 mod postgres_merge_tests {
     use super::*;
 
-    async fn setup_postgres_store() -> PostgresStore {
-        let database_url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://admin:password@localhost:5432/pangolin_test".to_string()
-        });
-
-        PostgresStore::new(&database_url)
-            .await
-            .expect("Failed to create PostgresStore")
+    /// Connect to the Postgres test database, or `None` when none is
+    /// configured so the caller can skip rather than fail. There used to be a
+    /// hardcoded default URL and an `.expect()`, which turned "no database
+    /// running" into a wall of failures indistinguishable from real defects.
+    async fn setup_postgres_store() -> Option<PostgresStore> {
+        let database_url = crate::test_support::postgres_url()?;
+        match PostgresStore::new(&database_url).await {
+            Ok(store) => Some(store),
+            Err(e) => panic!("PANGOLIN_TEST_POSTGRES_URL is set but unusable: {e}"),
+        }
     }
 
     async fn setup_tenant(store: &PostgresStore) -> Uuid {
@@ -40,7 +42,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_create() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -62,7 +67,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_get() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -84,7 +92,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_list() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
         let catalog_name = format!("test_catalog_{}", Uuid::new_v4());
 
@@ -110,7 +121,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_update_status() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -142,7 +156,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_complete() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -177,7 +194,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_operation_abort() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -208,7 +228,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_conflict_create() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -245,7 +268,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_conflict_get() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -282,7 +308,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_conflict_list() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -319,7 +348,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_merge_conflict_resolve() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(
@@ -371,7 +403,10 @@ mod postgres_merge_tests {
 
     #[tokio::test]
     async fn test_add_conflict_to_operation() {
-        let store = setup_postgres_store().await;
+        let Some(store) = setup_postgres_store().await else {
+            println!("skipping: set PANGOLIN_TEST_POSTGRES_URL to run this test");
+            return;
+        };
         let tenant_id = setup_tenant(&store).await;
 
         let operation = MergeOperation::new(

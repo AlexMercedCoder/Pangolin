@@ -557,6 +557,15 @@ impl CatalogStore for MemoryStore {
         self.delete_service_user_internal(service_user_id).await
     }
 
+    async fn update_service_user_last_used(
+        &self,
+        id: Uuid,
+        timestamp: DateTime<Utc>,
+    ) -> Result<()> {
+        self.update_service_user_last_used_internal(id, timestamp)
+            .await
+    }
+
     // Role operations
     async fn create_role(&self, role: pangolin_core::permission::Role) -> Result<()> {
         self.create_role_internal(role).await
@@ -732,6 +741,13 @@ impl CatalogStore for MemoryStore {
     ) -> Result<Vec<pangolin_core::business_metadata::AccessRequest>> {
         self.list_access_requests_internal(tenant_id, pagination)
             .await
+    }
+
+    async fn update_access_request(
+        &self,
+        request: pangolin_core::business_metadata::AccessRequest,
+    ) -> Result<()> {
+        self.update_access_request_internal(request).await
     }
 
     // Merge operations

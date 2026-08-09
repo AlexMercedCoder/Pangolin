@@ -96,13 +96,56 @@ async fn test_mock_signer_error_handling() {
     assert_eq!(error.to_string(), "Mock signer configured to fail");
 }
 
+/// An account key works whether or not the `azure-oauth` feature is compiled
+/// in, and vends PyIceberg-compatible `adls.*` properties.
+///
+/// This test used to assert a `credential-type: azure-sas` placeholder, a
+/// shape the signer has not produced for some time; nothing recompiled it.
 #[tokio::test]
-async fn test_azure_signer_without_feature() {
-    // Test Azure signer when azure-oauth feature is not enabled
-    // This should return placeholder credentials
+async fn test_azure_signer_with_account_key() {
     let signer = AzureSasSigner::new(
         "testaccount".to_string(),
         Some("testkey".to_string()),
+        None,
+        None,
+        None,
+        "testcontainer".to_string(),
+    );
+
+    let creds = signer
+        .generate_credentials("container/path", &["read".to_string()], Duration::hours(1))
+        .await
+        .expect("an account key is sufficient");
+
+    assert_eq!(
+        creds.config.get("adls.account-name").map(String::as_str),
+        Some("testaccount")
+    );
+    assert_eq!(
+        creds.config.get("adls.account-key").map(String::as_str),
+        Some("testkey")
+    );
+    assert_eq!(
+        creds.config.get("adls.container").map(String::as_str),
+        Some("testcontainer")
+    );
+    assert_eq!(
+        creds.prefix,
+        "abfss://testcontainer@testaccount.dfs.core.windows.net/"
+    );
+    // Account keys do not expire.
+    assert!(creds.expires_at.is_none());
+}
+
+/// With neither an account key nor OAuth credentials the signer must fail.
+///
+/// Vending a placeholder here would hand a client credentials that cannot work
+/// and turn a configuration error into an opaque storage failure much later.
+#[tokio::test]
+async fn test_azure_signer_without_any_credentials_fails() {
+    let signer = AzureSasSigner::new(
+        "testaccount".to_string(),
+        None,
         None,
         None,
         None,
@@ -113,10 +156,10 @@ async fn test_azure_signer_without_feature() {
         .generate_credentials("container/path", &["read".to_string()], Duration::hours(1))
         .await;
 
-    // Should succeed with placeholder credentials when feature is disabled
-    assert!(result.is_ok());
-    let creds = result.unwrap();
-    assert_eq!(creds.config.get("credential-type").unwrap(), "azure-sas");
+    assert!(
+        result.is_err(),
+        "unconfigured Azure signer must not vend credentials"
+    );
 }
 
 #[tokio::test]

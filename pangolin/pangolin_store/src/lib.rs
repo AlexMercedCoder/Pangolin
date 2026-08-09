@@ -6,6 +6,19 @@ pub mod mongo;
 pub mod postgres;
 pub mod signer;
 pub mod sqlite;
+/// Helpers for locating the databases backend integration tests need.
+///
+/// Compiled only for tests: the crate's own integration targets enable the
+/// `test-support` feature through the dev-dependency on itself, so these
+/// helpers never reach a release build (B-7).
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
+/// In-crate backend test suites and shared assertions.
+///
+/// Compiled only for tests: the crate's integration targets reach the shared
+/// assertion helpers through the `test-support` feature, which the
+/// dev-dependency on this crate enables.
+#[cfg(any(test, feature = "test-support"))]
 pub mod tests;
 
 pub use memory::MemoryStore;
@@ -474,11 +487,17 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn delete_business_metadata(&self, _asset_id: Uuid) -> Result<()> {
         Err(anyhow::anyhow!("Operation not supported by this store"))
     }
+    /// Search assets by name and tags.
+    ///
+    /// The default used to be `Ok(vec![])`, so a backend that had not
+    /// implemented search reported "no results found" rather than "not
+    /// supported" and users concluded their data was missing (A-26). It now
+    /// matches every other unimplemented method and returns an error.
     async fn search_assets(
         &self,
-        tenant_id: Uuid,
-        query: &str,
-        tags: Option<Vec<String>>,
+        _tenant_id: Uuid,
+        _query: &str,
+        _tags: Option<Vec<String>>,
     ) -> Result<
         Vec<(
             Asset,
@@ -487,7 +506,9 @@ pub trait CatalogStore: Send + Sync + Signer {
             Vec<String>,
         )>,
     > {
-        Ok(vec![])
+        Err(anyhow::anyhow!(
+            "Asset search is not supported by this store backend"
+        ))
     }
 
     async fn search_catalogs(&self, _tenant_id: Uuid, _query: &str) -> Result<Vec<Catalog>> {

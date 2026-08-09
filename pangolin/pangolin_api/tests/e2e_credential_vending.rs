@@ -84,10 +84,23 @@ async fn test_e2e_azure_warehouse_credential_vending() {
         creds.prefix,
         "abfss://testcontainer@testazureaccount.dfs.core.windows.net/"
     );
-    // When azure-oauth feature is disabled, it returns placeholder credentials
-    assert!(creds.config.contains_key("credential-type"));
-    assert!(creds.config.contains_key("azure-account-name"));
-    assert!(creds.expires_at.is_some() || creds.expires_at.is_none()); // May or may not expire depending on mode
+    // The warehouse carries an account key, so the signer vends PyIceberg's
+    // `adls.*` properties. (The old assertions looked for `credential-type` and
+    // `azure-account-name`, a shape this signer has not produced for some time.)
+    assert_eq!(
+        creds.config.get("adls.account-name").map(String::as_str),
+        Some("testazureaccount")
+    );
+    assert_eq!(
+        creds.config.get("adls.account-key").map(String::as_str),
+        Some("testaccountkey123")
+    );
+    assert_eq!(
+        creds.config.get("adls.container").map(String::as_str),
+        Some("testcontainer")
+    );
+    // Account keys do not expire.
+    assert!(creds.expires_at.is_none());
 }
 
 #[tokio::test]

@@ -3594,6 +3594,7 @@ dependencies = [
  "mongodb",
  "object_store",
  "pangolin_core",
+ "pangolin_store",
  "regex",
  "reqwest 0.12.26",
  "serde",

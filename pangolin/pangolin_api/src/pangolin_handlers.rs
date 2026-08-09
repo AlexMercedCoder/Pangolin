@@ -408,12 +408,16 @@ pub async fn merge_branch(
     }
 
     // No conflicts - proceed with merge
+    // `CatalogStore::merge_branch` is declared (source, target). The arguments
+    // used to be passed the other way round, so a merge of dev into main was
+    // executed as main into dev on any backend that honoured the declared
+    // order.
     match store
         .merge_branch(
             tenant_id,
             catalog_name,
-            payload.target_branch.clone(),
             payload.source_branch.clone(),
+            payload.target_branch.clone(),
         )
         .await
     {

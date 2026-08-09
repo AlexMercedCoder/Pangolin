@@ -9,10 +9,10 @@ use pangolin_core::user::{User, UserRole};
 
 #[tokio::test]
 async fn test_mongo_store_flow() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_mongo_store_flow: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::mongo_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_mongo_store_flow: set PANGOLIN_TEST_MONGO_URL to run it");
             return;
         }
     };
@@ -238,10 +238,10 @@ async fn test_mongo_store_flow() {
 
 #[tokio::test]
 async fn test_mongo_access_requests() {
-    let connection_string = match env::var("DATABASE_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            println!("Skipping test_mongo_access_requests: DATABASE_URL not set");
+    let connection_string = match pangolin_store::test_support::mongo_url() {
+        Some(url) => url,
+        None => {
+            println!("Skipping test_mongo_access_requests: set PANGOLIN_TEST_MONGO_URL to run it");
             return;
         }
     };
