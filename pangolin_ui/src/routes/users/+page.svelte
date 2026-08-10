@@ -33,11 +33,9 @@
 	const roleColors: Record<string, string> = {
 		root: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
 		'tenant-admin': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-		'tenant-user': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-        // Add robust fallbacks if needed, or normalize before access
-        'Root': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-        'TenantAdmin': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-        'TenantUser': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+		'tenant-user': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+		// The PascalCase duplicates that used to sit here were dead: the API
+		// returns kebab-case, so nothing ever matched them.
 	};
 
 	const columns = [
@@ -86,8 +84,8 @@
 		}
 	}
     
-    function handlePageChange(event: CustomEvent<number>) {
-        page = event.detail;
+    function handlePageChange(newPage: number) {
+        page = newPage;
         loadUsers();
     }
     
@@ -186,7 +184,7 @@
 	</div>
 
 	<!-- Users Table -->
-	<DataTable {columns} data={tableData} {loading} on:rowClick={(e) => handleView(e.detail)}>
+	<DataTable {columns} data={tableData} {loading} onRowClick={(row) => handleView(row)}>
 		<svelte:fragment slot="cell" let:row let:column>
 			{#if column.key === 'role'}
 				<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {roleColors[row.role_badge] || 'bg-gray-100 text-gray-800'}">
@@ -215,7 +213,10 @@
 						</svg>
 					</button>
 
-					{#if $isRoot || ($isTenantAdmin && row.role !== 'Root')}
+					<!-- `root`, not `Root`: the comparison never matched, so a tenant
+					     admin was shown an Edit control for root users that the server
+					     would reject. -->
+					{#if $isRoot || ($isTenantAdmin && row.role !== 'root')}
 						<button
 							on:click={() => goto(`/users/${row.id}/edit`)}
 							class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"

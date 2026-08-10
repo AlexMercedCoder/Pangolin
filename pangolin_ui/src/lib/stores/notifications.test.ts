@@ -1,8 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { notifications } from '$lib/stores/notifications';
 
+// The global test setup (`src/tests/setup.ts`) replaces this module with a stub
+// so that *component* tests get a predictable API. This file is the unit test
+// for the real thing, so it has to opt out - without this it silently asserts
+// against the stub and fails on values it never set.
+vi.unmock('$lib/stores/notifications');
+
 describe('Notifications Store', () => {
+	// The store is module-level state shared by every test in this file, so
+	// each one starts with whatever the last left behind unless it is reset.
+	beforeEach(() => {
+		notifications.clear();
+	});
+
 	it('adds success notification', () => {
 		notifications.success('Test success');
 		

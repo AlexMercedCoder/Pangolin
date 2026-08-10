@@ -22,8 +22,8 @@
     let error: string | null = null;
     let hasNextPage = false;
     
-    function handlePageChange(event: CustomEvent<number>) {
-        page = event.detail;
+    function handlePageChange(newPage: number) {
+        page = newPage;
         loadWarehouses();
     }
 
@@ -31,7 +31,9 @@
 		{ key: 'name', label: 'Name', sortable: true },
 		{ key: 'storage_config.type', label: 'Type', sortable: true, width: '120px' },
 		{ key: 'storage_config.bucket', label: 'Bucket/Container', sortable: false },
-		{ key: 'storage_config.type', label: 'Type', sortable: true },
+		// `storage_config.type` was listed twice, so the table rendered two
+		// identical Type columns.
+		{ key: 'storage_config.region', label: 'Region', sortable: false },
 		{ key: 'vending_strategy.type', label: 'Vending', sortable: true }
 	];
 
@@ -54,23 +56,38 @@
 		}
 	}
 
-	function handleRowClick(event: CustomEvent) {
-		const warehouse = event.detail;
+	function handleRowClick(warehouse: any) {
 		goto(`/warehouses/${encodeURIComponent(warehouse.name)}`);
 	}
 	function getStorageType(warehouse: any): string {
 		return warehouse.storage_config?.type || 's3';
 	}
 
+	/**
+	 * The bucket or container, under either key convention.
+	 *
+	 * This read only the dotted `s3.bucket` / `azure.container` / `gcs.bucket`
+	 * forms, while the create-warehouse form in this same UI writes plain
+	 * `bucket` and `container` - so every warehouse created through Pangolin
+	 * showed "-" in Pangolin's own warehouse list. The server reads both
+	 * conventions too (see `memory/io.rs`, which tries `s3.bucket` and falls
+	 * back to `bucket`), so neither is wrong and both have to be accepted.
+	 */
 	function getBucketOrContainer(warehouse: any): string {
-		return warehouse.storage_config?.['s3.bucket']
-			|| warehouse.storage_config?.['azure.container']
-			|| warehouse.storage_config?.['gcs.bucket'] 
-			|| '-';
+		const config = warehouse.storage_config ?? {};
+		return (
+			config['s3.bucket'] ||
+			config['azure.container'] ||
+			config['gcs.bucket'] ||
+			config.bucket ||
+			config.container ||
+			'-'
+		);
 	}
 
 	function getRegion(warehouse: any): string {
-		return warehouse.storage_config?.['s3.region'] || '-';
+		const config = warehouse.storage_config ?? {};
+		return config['s3.region'] || config.region || '-';
 	}
 </script>
 
@@ -99,7 +116,7 @@
 			{loading}
 			emptyMessage="No warehouses found. Create your first warehouse to get started."
 			searchPlaceholder="Search warehouses..."
-			on:rowClick={handleRowClick}
+			onRowClick={handleRowClick}
 		>
 			<svelte:fragment slot="cell" let:row let:column>
 				{#if column.key === 'storage_config.type'}

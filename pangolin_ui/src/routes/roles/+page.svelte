@@ -31,8 +31,7 @@
 		loading = false;
 	}
 
-	function handleRowClick(event: CustomEvent) {
-		const role = event.detail;
+	function handleRowClick(role: any) {
 		goto(`/roles/${role.id}`);
 	}
 </script>
@@ -62,7 +61,7 @@
 			{loading}
 			emptyMessage="No roles found. Create your first role to manage user permissions."
 			searchPlaceholder="Search roles..."
-			on:rowClick={handleRowClick}
+			onRowClick={handleRowClick}
 		>
 			<svelte:fragment slot="cell" let:row let:column>
 				{#if column.key === 'created_at'}

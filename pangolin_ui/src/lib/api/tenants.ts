@@ -26,7 +26,10 @@ export const tenantsApi = {
 		if (limit) params.append('limit', limit.toString());
 		if (offset) params.append('offset', offset.toString());
 		
-		const response = await apiClient.get<Tenant[]>(`/api/v1/tenants?${params.toString()}`);
+		// An empty `params` used to leave a bare `?` on the end of every
+		// unparameterised list call.
+		const query = params.toString();
+		const response = await apiClient.get<Tenant[]>(`/api/v1/tenants${query ? `?${query}` : ''}`);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

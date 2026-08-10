@@ -45,13 +45,12 @@
 		}
 	}
 
-    function handlePageChange(event: CustomEvent<number>) {
-        page = event.detail;
+    function handlePageChange(newPage: number) {
+        page = newPage;
         loadTenants();
     }
 
-	function handleRowClick(event: CustomEvent) {
-		const tenant = event.detail;
+	function handleRowClick(tenant: any) {
 		goto(`/tenants/${tenant.id}`);
 	}
 
@@ -103,7 +102,7 @@
 			{loading}
 			emptyMessage="No tenants found. Create your first tenant to get started."
 			searchPlaceholder="Search tenants..."
-			on:rowClick={handleRowClick}
+			onRowClick={handleRowClick}
 		>
 			<svelte:fragment slot="cell" let:row let:column>
 				{#if column.key === 'id'}

@@ -535,6 +535,31 @@ jobs:
       - run: npm ci
       - name: The UI must build
         run: npm run build
+
+      # This job built the UI and never ran its tests, so the suite drifted to
+      # 40 failures across 14 files without anything noticing - including tests
+      # that could not pass at all because the global setup mocked the very
+      # module they were testing.
+      - name: The UI test suite must pass
+        run: npm test
+
+      # `svelte-check` reports a backlog inherited from before this job
+      # existed, so it is a ratchet rather than a gate - the same arrangement as
+      # `clippy-ratchet` above, and it flips to blocking once the backlog is
+      # cleared.
+      - name: Count type errors and compare against the budget
+        run: |
+          count=$(npm run check 2>&1 | grep -cE "^Error:" || true)
+          budget=$(cat svelte-check-budget.txt)
+          echo "svelte-check errors: $count (budget: $budget)"
+          if [ "$count" -gt "$budget" ]; then
+            echo "::error::svelte-check errors rose from $budget to $count."
+            exit 1
+          fi
+          if [ "$count" -lt "$budget" ]; then
+            echo "::notice::svelte-check errors fell to $count; lower svelte-check-budget.txt."
+          fi
+
       - name: No raw /api/v1 fetches may reappear
         run: |
           # B32: a relative `fetch('/api/v1/...')` works under the dev proxy and

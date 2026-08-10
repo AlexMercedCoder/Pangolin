@@ -25,7 +25,7 @@ describe('Tenant Edit Page', () => {
 	};
 
 	beforeEach(() => {
-		vi.resetAllMocks();
+		vi.clearAllMocks();
 		vi.mocked(tenantsApi.get).mockResolvedValue(mockTenant);
 		vi.mocked(tenantsApi.update).mockResolvedValue(mockTenant);
 	});

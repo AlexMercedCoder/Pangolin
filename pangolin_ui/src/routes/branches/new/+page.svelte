@@ -16,7 +16,7 @@
 	let name = '';
 	let catalog = '';
 	let fromBranch = 'main';
-	let branchType: 'experimental' | 'production' = 'experimental';
+	let branchType: 'experimental' | 'ingest' = 'experimental';
 	let assets: string = '';
 	let errors: Record<string, string> = {};
 

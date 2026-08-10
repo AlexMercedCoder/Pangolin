@@ -20,6 +20,13 @@ export interface StorageConfig {
 	client_secret?: string;
 	// GCP
 	project_id?: string;
+
+	// The server models `storage_config` as a free-form `HashMap<String,
+	// String>`, and both this UI and the backend use dotted keys that are not
+	// listed above (`s3.bucket`, `adls.account-name`, `s3.path-style-access`).
+	// Without this index signature every one of those reads is a type error,
+	// which is most of what `svelte-check` reports for the warehouse pages.
+	[key: string]: string | undefined;
 }
 
 export type VendingStrategy = 
@@ -56,7 +63,10 @@ export const warehousesApi = {
 		if (limit) params.append('limit', limit.toString());
 		if (offset) params.append('offset', offset.toString());
 
-		const response = await apiClient.get<Warehouse[]>(`/api/v1/warehouses?${params.toString()}`);
+		// An empty `params` used to leave a bare `?` on the end of every
+		// unparameterised list call.
+		const query = params.toString();
+		const response = await apiClient.get<Warehouse[]>(`/api/v1/warehouses${query ? `?${query}` : ''}`);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

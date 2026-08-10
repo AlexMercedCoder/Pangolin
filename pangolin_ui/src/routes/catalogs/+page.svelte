@@ -23,8 +23,8 @@
     let error: string | null = null;
     let hasNextPage = false;
     
-    function handlePageChange(event: CustomEvent<number>) {
-        page = event.detail;
+    function handlePageChange(newPage: number) {
+        page = newPage;
         loadCatalogs();
     }
 
@@ -74,8 +74,7 @@
 		}
 	}
 
-	function handleRowClick(event: CustomEvent) {
-		const catalog = event.detail;
+	function handleRowClick(catalog: any) {
 		goto(`/catalogs/${encodeURIComponent(catalog.name)}`);
 	}
 
@@ -135,13 +134,13 @@
 			{loading}
 			emptyMessage="No catalogs found"
 			searchPlaceholder="Search catalogs..."
-			on:rowClick={handleRowClick}
+			onRowClick={handleRowClick}
 			searchable={false}
 			serverSide={true}
 			{page}
 			{pageSize}
 			{hasNextPage}
-			on:pageChange={handlePageChange}
+			onPageChange={handlePageChange}
 		>
 			<!--
 				B36: the comments that used to sit between these attributes were

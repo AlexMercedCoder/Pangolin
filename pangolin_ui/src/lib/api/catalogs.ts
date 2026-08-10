@@ -41,7 +41,10 @@ export const catalogsApi = {
 		if (limit) params.append('limit', limit.toString());
 		if (offset) params.append('offset', offset.toString());
 
-		const response = await apiClient.get<Catalog[]>(`/api/v1/catalogs?${params.toString()}`);
+		// An empty `params` used to leave a bare `?` on the end of every
+		// unparameterised list call.
+		const query = params.toString();
+		const response = await apiClient.get<Catalog[]>(`/api/v1/catalogs${query ? `?${query}` : ''}`);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

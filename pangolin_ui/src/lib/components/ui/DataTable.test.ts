@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, fireEvent } from '@testing-library/svelte';
 import DataTable from '$lib/components/ui/DataTable.svelte';
 
 describe('DataTable Component', () => {
@@ -69,19 +69,34 @@ describe('DataTable Component', () => {
 		expect(searchInput).toBeInTheDocument();
 	});
 
-	it('emits rowClick event when row is clicked', async () => {
-		const { component } = render(DataTable, {
+	// This was a stub: it subscribed with `component.$on('rowClick', ...)`,
+	// which Svelte 5 removed, and then asserted nothing at all - so it neither
+	// passed nor tested anything. `onRowClick` is a plain prop, so the spy goes
+	// in with the rest of them and the click can actually be made.
+	it('calls onRowClick with the row that was clicked', async () => {
+		const onRowClick = vi.fn();
+		render(DataTable, {
 			props: {
 				columns: mockColumns,
 				data: mockData,
-				loading: false
+				loading: false,
+				onRowClick
 			}
 		});
 
-		const rowClickHandler = vi.fn();
-		(component as any).$on('rowClick', rowClickHandler);
+		await fireEvent.click(screen.getByText('Item 1'));
 
-		// Click would need user-event library for proper testing
-		// This is a basic structure
+		expect(onRowClick).toHaveBeenCalledTimes(1);
+		expect(onRowClick).toHaveBeenCalledWith(mockData[0]);
+	});
+
+	it('does not fail when no onRowClick is supplied', async () => {
+		render(DataTable, {
+			props: { columns: mockColumns, data: mockData, loading: false }
+		});
+
+		// The callback is optional; clicking without one must be a no-op rather
+		// than a TypeError.
+		await fireEvent.click(screen.getByText('Item 1'));
 	});
 });

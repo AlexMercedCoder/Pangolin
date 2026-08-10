@@ -211,6 +211,60 @@ MongoDB topologies in CI.
   `warehouse` for the application, `bucket` and `test-bucket` for the compliance
   tests, whose absence surfaces as `NoSuchBucket`.
 
+### Fixed — the management UI
+
+The UI job in CI built the app and never ran its tests, so the suite had drifted
+to **40 failures across 14 files**. Most could not have passed: the global test
+setup replaces `$lib/api/catalogs`, `$lib/api/warehouses`, `$lib/stores/auth`,
+`$lib/stores/tenant` and `$lib/stores/notifications` with stubs, so the unit
+tests *for those modules* were asserting against the stub rather than the code.
+Others were asserting behaviour the app no longer had. Running them turned up
+real defects underneath:
+
+- **A root user could not create another root user.** The role option's value
+  was `Root`; the server's `UserRole` is kebab-case, so the request was
+  rejected. The same PascalCase leftovers meant a tenant admin was shown an Edit
+  control for root users (`row.role !== 'Root'` never matched), and the role
+  badge colours on the users page keyed off `Root`/`TenantAdmin`, which the API
+  never returns.
+- **A warehouse created in the UI showed no bucket in the UI.** The list page
+  read `s3.bucket`/`azure.container`; the create form writes plain
+  `bucket`/`container`. Both conventions are now accepted on read, as the server
+  already does. The warehouse table also rendered its Type column twice, in
+  place of the Region column its own template already had a branch for.
+- **`production` is not a branch type.** The API knows exactly `ingest` and
+  `experimental`, but the UI's types declared `'experimental' | 'production'`
+  and the green badge keyed off `production` - so every branch rendered as
+  though it were experimental, and `ingest`, the type that carries a distinct
+  permission, had no representation at all.
+- **A branch with no recorded parent was displayed as branching from `main`**,
+  claiming a lineage the data does not contain.
+- **A local catalog could be created with no storage location and no
+  warehouse**, leaving it with nowhere to write its tables. The server accepts
+  it (the field is optional there, for federated catalogs), so nothing rejected
+  it.
+- **The role select on the user edit page had no accessible name** - the label
+  named nothing - and its fallback value, `TenantUser`, matched none of the
+  options, so a user record without a role showed an empty select.
+- **`logout()` could throw**, skipping the caller's redirect and stranding the
+  user on a page they were no longer authenticated for, if the token-revocation
+  call misbehaved. Its `void`/`.catch` pair only covered a rejected promise.
+- Every unparameterised list call left a bare `?` on the end of its URL.
+
+`DataTable` moved from `createEventDispatcher` to callback props, with its six
+consumers. That is the Svelte 5 idiom, and it is what makes the component
+testable at all: `component.$on(...)` was removed in Svelte 5, so the row-click
+test had been left as a stub that asserted nothing.
+
+CI now runs `npm test`, and carries a `svelte-check` error budget on the same
+ratchet as the clippy one. `svelte-check` errors fell from 166 to 150 - mostly by
+giving `StorageConfig` the index signature the server's free-form
+`HashMap<String, String>` always implied.
+
+Note that the app runs in Svelte 5's **legacy mode**: none of its 90 components
+use runes. That is supported and works; converting them is a separate piece of
+work and has not been done here.
+
 ### Added
 
 - **A permission matrix test (improvement #0).** Drives each sensitive route as

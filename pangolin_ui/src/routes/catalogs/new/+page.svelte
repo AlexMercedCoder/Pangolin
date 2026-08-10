@@ -88,6 +88,24 @@
 
 	let manualLocation = false;
 
+	/**
+	 * Whether the form is complete enough to send.
+	 *
+	 * The storage-location clause is new: the button used to require only a
+	 * name, so a local catalog could be created with neither a warehouse nor a
+	 * location - which leaves it with nowhere to write its tables. The server
+	 * accepts it (`storage_location` is optional there, because a federated
+	 * catalog has no use for one), so nothing rejected it and the catalog was
+	 * simply unusable. Selecting a warehouse auto-fills the field, so in
+	 * practice this only blocks the case the warning above already calls out.
+	 */
+	$: canSubmit =
+		!!name &&
+		(isFederated
+			? properties.some(p => p.key && p.value)
+			: !!storageLocation) &&
+		!(validationResult !== null && !validationResult.available);
+
 	// Auto-fill storage location logic (only for Local)
 	$: if (!isFederated && warehouseName && !manualLocation) {
 		const selected = warehouses.find(w => w.value === warehouseName);
@@ -356,7 +374,7 @@
 					variant="primary"
 					type="submit"
 					{loading}
-					disabled={loading || !name || (isFederated && properties.every(p => !p.key || !p.value)) || (validationResult !== null && !validationResult.available)}
+					disabled={loading || !canSubmit}
 				>
 					{loading ? 'Creating...' : 'Create Catalog'}
 				</Button>

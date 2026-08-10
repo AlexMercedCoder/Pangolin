@@ -63,6 +63,15 @@ vi.mock('$lib/stores/notifications', () => ({
 }));
 
 // Mock API modules
+//
+// These defaults are mock *implementations*, so a test file that calls
+// `vi.resetAllMocks()` discards them and every stub here starts returning
+// `undefined`. A page that does `warehouses = await warehousesApi.list()` then
+// fails inside a `.map` several frames from the cause. Use `vi.clearAllMocks()`
+// in a test file unless you intend to re-establish these yourself.
+//
+// A test for one of these modules must `vi.unmock()` it, or it will assert
+// against the stub below rather than the real thing.
 // B46: the warehouse and catalog mocks only declared `list` and `delete`, so an
 // edit page calling `get`/`create`/`update` hit "not a function". Kept in step
 // with the real clients.

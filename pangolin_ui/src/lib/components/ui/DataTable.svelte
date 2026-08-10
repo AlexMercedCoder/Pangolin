@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { createEventDispatcher } from 'svelte';
-
 	export let columns: Array<{
 		key: string;
 		label: string;
@@ -18,7 +16,19 @@
 	export let searchable = true;
 	export let searchPlaceholder = 'Search...';
 
-	const dispatch = createEventDispatcher();
+	/**
+	 * Row-click and page-change callbacks.
+	 *
+	 * These were `createEventDispatcher` events consumed with `on:rowClick`.
+	 * That still works - Svelte 5 runs a component with no runes in legacy mode
+	 * - but the dispatcher has no counterpart a test can subscribe to:
+	 * `component.$on(...)` was removed in Svelte 5, so this component's
+	 * interaction test could not be written at all and had been left as an
+	 * empty stub. Callback props are the Svelte 5 idiom and are just props, so
+	 * a test passes a spy like any other value.
+	 */
+	export let onRowClick: ((row: any) => void) | undefined = undefined;
+	export let onPageChange: ((page: number) => void) | undefined = undefined;
 
 	let searchQuery = '';
 	let sortKey = '';
@@ -60,11 +70,11 @@
 	}
 
 	function handleRowClick(row: any) {
-		dispatch('rowClick', row);
+		onRowClick?.(row);
 	}
 
 	function handlePageChange(newPage: number) {
-		dispatch('pageChange', newPage);
+		onPageChange?.(newPage);
 	}
 </script>
 

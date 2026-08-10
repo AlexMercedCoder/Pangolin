@@ -6,7 +6,10 @@ export interface Branch {
 	name: string;
 	catalog: string;
 	from_branch?: string;
-	branch_type: 'experimental' | 'production';
+	// The API accepts and returns exactly these two. `production` was
+	// never one of them - see `pangolin_handlers.rs`, which maps the wire
+	// string to `BranchType::{Ingest, Experimental}` and back.
+	branch_type: 'experimental' | 'ingest';
 	assets?: string[];
 	created_at: string;
 }
@@ -15,7 +18,10 @@ export interface CreateBranchRequest {
 	name: string;
 	catalog: string;
 	from_branch?: string;
-	branch_type: 'experimental' | 'production';
+	// The API accepts and returns exactly these two. `production` was
+	// never one of them - see `pangolin_handlers.rs`, which maps the wire
+	// string to `BranchType::{Ingest, Experimental}` and back.
+	branch_type: 'experimental' | 'ingest';
 	assets?: string[];
 }
 

@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { warehousesApi } from '$lib/api/warehouses';
 import { apiClient } from '$lib/api/client';
 
+// The global test setup (`src/tests/setup.ts`) replaces this module with a stub
+// so that *component* tests get a predictable API. This file is the unit test
+// for the real thing, so it has to opt out - without this it silently asserts
+// against the stub and fails on values it never set.
+vi.unmock('$lib/api/warehouses');
 vi.mock('$lib/api/client');
 
 describe('Warehouses API', () => {

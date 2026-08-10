@@ -4,6 +4,11 @@ import CatalogsPage from './+page.svelte';
 import { catalogsApi } from '$lib/api/catalogs';
 import { tenantStore } from '$lib/stores/tenant';
 
+// This suite is about the page *reacting* to a tenant change, so it needs the
+// real store: the global mock's `selectTenant` is a bare `vi.fn()` that never
+// notifies a subscriber, so the reactive reload under test could never fire.
+vi.unmock('$lib/stores/tenant');
+
 // Mock the API
 vi.mock('$lib/api/catalogs', () => ({
 	catalogsApi: {

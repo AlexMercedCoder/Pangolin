@@ -254,10 +254,21 @@ function createAuthStore() {
 			}));
 
 			// Real sessions only: the NO_AUTH sentinel has nothing to revoke.
+			//
+			// Local state is cleared first and this is best-effort: a logout
+			// that throws because the revocation call misbehaved would leave the
+			// caller's redirect unexecuted, stranding the user on a page they
+			// are no longer authenticated for. The `void`/`.catch` pair only
+			// covered a rejected promise, not a synchronous throw or a
+			// non-promise return.
 			if (browser && token && token !== 'no-auth-mode') {
-				void authApi
-					.revokeCurrentToken({ reason: 'logout' })
-					.catch((e) => console.warn('token revocation on logout failed', e));
+				try {
+					void Promise.resolve(authApi.revokeCurrentToken({ reason: 'logout' })).catch(
+						(e) => console.warn('token revocation on logout failed', e)
+					);
+				} catch (e) {
+					console.warn('token revocation on logout failed', e);
+				}
 			}
 		},
 

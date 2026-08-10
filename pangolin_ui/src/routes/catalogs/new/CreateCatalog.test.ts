@@ -20,7 +20,7 @@ vi.mock('$lib/api/catalogs', () => ({
 
 describe('CreateCatalogPage', () => {
     beforeEach(() => {
-        vi.resetAllMocks();
+        vi.clearAllMocks();
         // Default mock implementation
         vi.mocked(warehousesApi.list).mockResolvedValue([
             { id: '1', name: 'warehouse-1', use_sts: false, storage_config: { type: 's3' } },
@@ -78,7 +78,10 @@ describe('CreateCatalogPage', () => {
 
         await waitFor(() => expect(catalogsApi.create).toHaveBeenCalledWith({
             name: 'my-catalog',
-            warehouse_name: undefined, 
+            // The page sends the type explicitly rather than relying on the
+            // server's default.
+            catalog_type: 'Local',
+            warehouse_name: undefined,
             storage_location: 's3://bucket/path',
             properties: {}
         }));
