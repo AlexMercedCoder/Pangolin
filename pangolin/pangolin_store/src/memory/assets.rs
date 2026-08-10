@@ -29,6 +29,7 @@ impl MemoryStore {
         self.assets_by_id.insert(
             asset.id,
             (
+                tenant_id,
                 catalog_name.to_string(),
                 namespace.clone(),
                 Some(branch_name.clone()),
@@ -83,8 +84,12 @@ impl MemoryStore {
         asset_id: Uuid,
     ) -> Result<Option<(Asset, String, Vec<String>)>> {
         if let Some(entry) = self.assets_by_id.get(&asset_id) {
-            let (catalog_name, namespace, branch, name) = entry.value().clone();
-            // Verify tenant ownership (implicit via proper key lookup) purely for safety
+            let (owner_tenant, catalog_name, namespace, branch, name) = entry.value().clone();
+            // The index is global across tenants, so ownership is checked here
+            // rather than relying on the composite key lookup below to miss.
+            if owner_tenant != tenant_id {
+                return Ok(None);
+            }
             let branch_name = branch.unwrap_or_else(|| "main".to_string());
             let key = (
                 tenant_id,
@@ -120,13 +125,8 @@ impl MemoryStore {
             })
             .map(|entry| entry.value().clone());
 
-        let assets: Vec<Asset> = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let assets: Vec<Asset> =
+            crate::memory::main::paginate_sorted(iter, pagination, |a| a.name.clone());
         Ok(assets)
     }
     pub(crate) async fn delete_asset_internal(
@@ -184,6 +184,7 @@ impl MemoryStore {
             self.assets_by_id.insert(
                 asset.id,
                 (
+                    tenant_id,
                     catalog_name.to_string(),
                     dest_namespace,
                     Some(branch_val),
@@ -245,15 +246,17 @@ impl MemoryStore {
                     false
                 };
 
-                let tags_match = if let Some(ref search_tags) = tags {
-                    if let Some(ref meta) = metadata {
-                        search_tags.iter().any(|tag| meta.tags.contains(tag))
-                    } else {
-                        false
-                    }
-                } else {
-                    true
-                };
+                // B28: this was an ANY-match, while Postgres (`@>`) and Mongo
+                // (`$all`) required all requested tags - and an *empty* tag list
+                // returned nothing here but everything on the other three.
+                // `crate::search::tags_match` is the single definition of the
+                // chosen ALL-match semantic, with an empty list meaning "no tag
+                // filter".
+                let owned_tags = metadata
+                    .as_ref()
+                    .map(|m| m.tags.clone())
+                    .unwrap_or_default();
+                let tags_match = crate::search::tags_match(&owned_tags, tags.as_deref());
 
                 if (name_matches || description_matches) && tags_match {
                     let namespace: Vec<String> =
@@ -316,6 +319,7 @@ impl MemoryStore {
             self.assets_by_id.insert(
                 asset.id,
                 (
+                    tenant_id,
                     catalog_name.to_string(),
                     ns.clone(),
                     Some(dest_branch.to_string()),

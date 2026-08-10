@@ -58,7 +58,7 @@ impl SqliteStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = ? LIMIT ? OFFSET ?")
+        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = ? ORDER BY name LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
             .bind(limit)
             .bind(offset)

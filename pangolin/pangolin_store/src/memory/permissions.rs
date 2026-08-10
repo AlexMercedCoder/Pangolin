@@ -26,13 +26,7 @@ impl MemoryStore {
             })
             .map(|entry| entry.value().clone());
 
-        let permissions = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let permissions = crate::memory::main::paginate_sorted(iter, pagination, |p| p.id);
         Ok(permissions)
     }
 

@@ -471,10 +471,12 @@ impl CatalogStore for MongoStore {
     }
     async fn get_audit_event(
         &self,
-        _tenant_id: Uuid,
+        tenant_id: Uuid,
         id: Uuid,
     ) -> Result<Option<pangolin_core::audit::AuditLogEntry>> {
-        self.get_audit_event(id).await
+        // B1: `tenant_id` used to be discarded here (`_tenant_id`), which is
+        // where the cross-tenant audit read came from.
+        self.get_audit_event(tenant_id, id).await
     }
     async fn count_audit_events(
         &self,

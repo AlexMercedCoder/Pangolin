@@ -43,13 +43,7 @@ impl MemoryStore {
             })
             .map(|entry| entry.value().clone());
 
-        let users = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let users = crate::memory::main::paginate_sorted(iter, pagination, |u| u.username.clone());
         Ok(users)
     }
     pub(crate) async fn update_user_internal(&self, user: User) -> Result<()> {

@@ -118,10 +118,16 @@ impl MemoryStore {
             // Remove Tags
             self.tags.retain(|k, _| !(k.0 == tenant_id && k.1 == name));
 
-            // Clean up assets_by_id index
-            // This is expensive O(N) since we have to scan the whole index
-            // But deletion is rare.
-            self.assets_by_id.retain(|_, v| v.0 != name);
+            // Clean up assets_by_id index.
+            //
+            // B6: this filtered on the catalog *name* alone, so deleting
+            // tenant A's `sales` catalog also evicted tenant B's `sales` assets
+            // from the by-id index - `get_asset_by_id` then returned `None` for
+            // rows that were still perfectly present. The index value now
+            // carries the tenant, so the cascade matches on both.
+            // O(N) over the index, but catalog deletion is rare.
+            self.assets_by_id
+                .retain(|_, v| !(v.0 == tenant_id && v.1 == name));
 
             Ok(())
         } else {

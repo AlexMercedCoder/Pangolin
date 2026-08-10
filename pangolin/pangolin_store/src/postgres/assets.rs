@@ -22,7 +22,7 @@ impl PostgresStore {
             .bind(&branch_name)
             .bind(&namespace)
             .bind(&asset.name)
-            .bind(format!("{:?}", asset.kind))
+            .bind(asset.kind.as_stored_str())
             .bind(asset.properties.get("metadata_location").unwrap_or(&asset.location))
             .bind(serde_json::to_value(&asset.properties)?)
             .execute(&self.pool)
@@ -50,11 +50,9 @@ impl PostgresStore {
 
         if let Some(row) = row {
             let asset_type_str: String = row.get("asset_type");
-            let kind = match asset_type_str.as_str() {
-                "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
-                "View" => pangolin_core::model::AssetType::View,
-                _ => pangolin_core::model::AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind = pangolin_core::model::AssetType::from_stored_str(&asset_type_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let a = Asset {
                 id: row.get("id"),
@@ -86,11 +84,9 @@ impl PostgresStore {
             let catalog_name: String = row.get("catalog_name");
             let namespace_path: Vec<String> = row.get("namespace_path");
             let asset_type_str: String = row.get("asset_type");
-            let kind = match asset_type_str.as_str() {
-                "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
-                "View" => pangolin_core::model::AssetType::View,
-                _ => pangolin_core::model::AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind = pangolin_core::model::AssetType::from_stored_str(&asset_type_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let asset = Asset {
                 id: row.get("id"),
@@ -137,11 +133,9 @@ impl PostgresStore {
         let mut assets = Vec::new();
         for row in rows {
             let asset_type_str: String = row.get("asset_type");
-            let kind = match asset_type_str.as_str() {
-                "IcebergTable" => pangolin_core::model::AssetType::IcebergTable,
-                "View" => pangolin_core::model::AssetType::View,
-                _ => pangolin_core::model::AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind = pangolin_core::model::AssetType::from_stored_str(&asset_type_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let a = Asset {
                 id: row.get("id"),

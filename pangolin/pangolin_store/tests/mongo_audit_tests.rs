@@ -196,10 +196,20 @@ async fn test_mongo_audit_log_filtering() {
 
     // Test 10: Get individual event
     let event_id = logs[0].id;
-    let event = store.get_audit_event(event_id).await.unwrap();
+    let event = store.get_audit_event(tenant_id, event_id).await.unwrap();
     assert!(event.is_some(), "Should find the event");
     assert_eq!(event.unwrap().id, event_id);
     println!("✓ Test 10 passed: Get individual event");
+
+    // B1 regression: an event must not be readable from another tenant, even
+    // by someone who knows its UUID.
+    let other_tenant = Uuid::new_v4();
+    let leaked = store.get_audit_event(other_tenant, event_id).await.unwrap();
+    assert!(
+        leaked.is_none(),
+        "an audit event must not be readable across tenants (B1)"
+    );
+    println!("✓ Test 10b passed: Audit events are tenant-scoped");
 
     println!("\n✅ All MongoDB audit logging tests passed!");
 }

@@ -51,13 +51,8 @@ impl MemoryStore {
             })
             .map(|entry| entry.value().clone());
 
-        let namespaces: Vec<Namespace> = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let namespaces: Vec<Namespace> =
+            crate::memory::main::paginate_sorted(iter, pagination, |n| n.name.clone());
 
         tracing::info!("DEBUG_MEM: Found {} namespaces", namespaces.len());
         Ok(namespaces)

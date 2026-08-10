@@ -52,21 +52,38 @@ impl MemoryStore {
         );
 
         if let Some(mut asset) = self.assets.get_mut(&key) {
+            // Resolved exactly as `get_metadata_location_internal` resolves it -
+            // property first, then the asset's own location - so the CAS
+            // compares against the value a reader would have seen. This mirrors
+            // SQLite, where the fallback is the `metadata_location` column.
             let current_loc = asset
                 .properties
                 .get("metadata_location")
                 .cloned()
-                .unwrap_or(asset.location.clone());
+                .or_else(|| {
+                    if asset.location.is_empty() {
+                        None
+                    } else {
+                        Some(asset.location.clone())
+                    }
+                });
 
-            // CAS Check
-            if let Some(expected) = expected_location {
-                if current_loc != expected {
-                    return Err(anyhow::anyhow!(
-                        "CAS failure: expected {} but found {}",
-                        expected,
-                        current_loc
-                    ));
-                }
+            // CAS check.
+            //
+            // B26: this used to be `if let Some(expected) = expected_location`,
+            // which skipped the check entirely when the caller passed `None`.
+            // But `None` is not "don't check" - it is the *create-path*
+            // assertion "there must be no metadata location yet". Skipping it
+            // meant a create-table race that Postgres and SQLite correctly
+            // rejected silently succeeded in dev and in every memory-backed
+            // test, which is precisely where such a race would have been caught.
+            // The unconditional comparison matches the SQLite form.
+            if current_loc != expected_location {
+                return Err(anyhow::anyhow!(
+                    "CAS failure: expected {:?} but found {:?}",
+                    expected_location,
+                    current_loc
+                ));
             }
 
             asset.location = new_location.clone();

@@ -33,7 +33,7 @@ impl MongoStore {
             "namespace": namespace,
             "id": to_bson_uuid(asset.id),
             "name": &asset.name,
-            "kind": format!("{:?}", asset.kind),
+            "kind": asset.kind.as_stored_str(),
             "location": &asset.location,
             "properties": mongodb::bson::to_bson(&asset.properties)?
         };
@@ -72,11 +72,8 @@ impl MongoStore {
 
         if let Some(d) = doc {
             let kind_str = d.get_str("kind")?;
-            let kind = match kind_str {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind = AssetType::from_stored_str(kind_str).map_err(|e| anyhow::anyhow!(e))?;
 
             let properties: HashMap<String, String> =
                 mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;
@@ -128,11 +125,8 @@ impl MongoStore {
         let mut assets = Vec::new();
         for d in docs {
             let kind_str = d.get_str("kind")?;
-            let kind = match kind_str {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind = AssetType::from_stored_str(kind_str).map_err(|e| anyhow::anyhow!(e))?;
 
             let properties: HashMap<String, String> =
                 mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;
@@ -180,11 +174,8 @@ impl MongoStore {
                 .map(|v| v.as_str().unwrap().to_string())
                 .collect();
             let kind_str = d.get_str("kind")?;
-            let kind = match kind_str {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind = AssetType::from_stored_str(kind_str).map_err(|e| anyhow::anyhow!(e))?;
 
             let properties: HashMap<String, String> =
                 mongodb::bson::from_bson(d.get("properties").unwrap().clone())?;

@@ -97,7 +97,7 @@ impl SqliteStore {
 
         let rows = sqlx::query(
             "SELECT id, tenant_id, catalog_name, source_branch, target_branch, base_commit_id, status, initiated_by, initiated_at, result_commit_id, completed_at
-             FROM merge_operations WHERE tenant_id = ? AND catalog_name = ? LIMIT ? OFFSET ?"
+             FROM merge_operations WHERE tenant_id = ? AND catalog_name = ? ORDER BY id LIMIT ? OFFSET ?"
         )
         .bind(tenant_id.to_string())
         .bind(catalog_name)
@@ -259,7 +259,7 @@ impl SqliteStore {
 
         let rows = sqlx::query(
             "SELECT id, operation_id, conflict_type, asset_id, description, resolution, created_at
-             FROM merge_conflicts WHERE operation_id = ? LIMIT ? OFFSET ?",
+             FROM merge_conflicts WHERE operation_id = ? ORDER BY id LIMIT ? OFFSET ?",
         )
         .bind(operation_id.to_string())
         .bind(limit)

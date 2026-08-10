@@ -114,7 +114,7 @@ impl SqliteStore {
             "SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at 
              FROM permissions 
              WHERE tenant_id = ?
-             LIMIT ? OFFSET ?",
+             ORDER BY id LIMIT ? OFFSET ?",
         )
         .bind(tenant_id.to_string())
         .bind(limit)

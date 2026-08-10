@@ -203,6 +203,18 @@ impl MongoStore {
         }
     }
 
+    /// Publish a new metadata location, but only if the current one still
+    /// matches `expected_location`.
+    ///
+    /// B5: `expected_location` was ignored (`_expected_location`) and the update
+    /// was an unconditional `$set`. Memory, Postgres and SQLite all enforce the
+    /// compare-and-swap; on Mongo two concurrent Iceberg commits both
+    /// "succeeded" and one snapshot was silently lost - the exact failure class
+    /// the 0.6.0 work fixed at the API layer, still wide open one layer down.
+    ///
+    /// Folding the expectation into the *filter* keeps this a single-document
+    /// atomic update, so it works on a standalone `mongod` with no multi-document
+    /// transaction required.
     pub async fn update_metadata_location(
         &self,
         tenant_id: Uuid,
@@ -210,10 +222,10 @@ impl MongoStore {
         branch: Option<String>,
         namespace: Vec<String>,
         table: String,
-        _expected_location: Option<String>,
+        expected_location: Option<String>,
         new_location: String,
     ) -> Result<()> {
-        let filter = doc! {
+        let mut filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
             "branch": branch.unwrap_or_else(|| "main".to_string()),
@@ -221,16 +233,35 @@ impl MongoStore {
             "name": table
         };
 
+        match &expected_location {
+            Some(expected) => {
+                filter.insert("properties.metadata_location", expected.clone());
+            }
+            // `None` means "there must not be one yet" - the create-path CAS.
+            None => {
+                filter.insert("properties.metadata_location", doc! { "$exists": false });
+            }
+        }
+
         let update = doc! {
             "$set": {
-                "properties.metadata_location": new_location
+                "properties.metadata_location": &new_location,
+                "location": &new_location,
             }
         };
 
-        self.db
+        let result = self
+            .db
             .collection::<Document>("assets")
             .update_one(filter, update)
             .await?;
+
+        if result.matched_count == 0 {
+            return Err(anyhow::anyhow!(
+                "CAS failure: metadata location did not match {:?}",
+                expected_location
+            ));
+        }
         Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use pangolin_store::{
-    tests::{test_asset_update_consistency, test_dashboard_stats_consistency},
+    tests::{parity, test_asset_update_consistency, test_dashboard_stats_consistency},
     MemoryStore, MongoStore, PostgresStore, SqliteStore,
 };
 use std::env;
@@ -10,6 +10,7 @@ async fn test_memory_store_regression() {
     let store = MemoryStore::new();
     test_asset_update_consistency(&store).await;
     test_dashboard_stats_consistency(&store).await;
+    parity::run_all(&store).await;
 }
 
 #[tokio::test]
@@ -32,6 +33,7 @@ async fn test_sqlite_store_regression() {
 
     test_asset_update_consistency(&store).await;
     test_dashboard_stats_consistency(&store).await;
+    parity::run_all(&store).await;
 }
 
 #[tokio::test]
@@ -50,6 +52,7 @@ async fn test_postgres_store_regression() {
 
     test_asset_update_consistency(&store).await;
     test_dashboard_stats_consistency(&store).await;
+    parity::run_all(&store).await;
 }
 
 #[tokio::test]
@@ -70,4 +73,5 @@ async fn test_mongo_store_regression() {
 
     test_asset_update_consistency(&store).await;
     test_dashboard_stats_consistency(&store).await;
+    parity::run_all(&store).await;
 }

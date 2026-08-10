@@ -32,13 +32,9 @@ impl MemoryStore {
             })
             .map(|entry| entry.value().clone());
 
-        let tokens = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let tokens = crate::memory::main::paginate_sorted(iter, pagination, |t| {
+            (std::cmp::Reverse(t.expires_at), t.id)
+        });
         Ok(tokens)
     }
 

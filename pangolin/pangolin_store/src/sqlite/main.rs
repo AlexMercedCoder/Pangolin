@@ -9,12 +9,15 @@ use pangolin_core::model::{SyncStats, SystemSettings};
 use pangolin_core::permission::{Permission, Role, UserRole as UserRoleAssignment};
 use pangolin_core::token::TokenInfo;
 use pangolin_core::user::{OAuthProvider, User, UserRole};
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
 use uuid::Uuid;
 
 /// Version of `sql/sqlite_schema.sql` recorded after a successful migration.
-pub const SQLITE_SCHEMA_VERSION: i64 = 1;
+/// Bumped to 2: the `audit_logs` table was recreated with the columns the code
+/// actually writes. Databases created before this carry the old (actor,
+/// resource, details) shape, on which every audit write failed.
+pub const SQLITE_SCHEMA_VERSION: i64 = 2;
 
 #[derive(Clone)]
 pub struct SqliteStore {
@@ -49,14 +52,20 @@ impl SqliteStore {
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(5);
 
+        // B18: `PRAGMA foreign_keys` is *per connection*. Running it once via
+        // `execute(&pool)` configured exactly one arbitrary connection out of
+        // the pool, so `ON DELETE CASCADE` fired or did not fire depending on
+        // which connection happened to serve a request - nondeterministically,
+        // and differently between runs. Setting it through the connect options
+        // means every connection in the pool is configured, including ones
+        // created later to grow the pool.
+        let connect_options = database_url
+            .parse::<SqliteConnectOptions>()?
+            .foreign_keys(true);
+
         let pool = SqlitePoolOptions::new()
             .max_connections(max_connections)
-            .connect(database_url)
-            .await?;
-
-        // Enable foreign keys
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&pool)
+            .connect_with(connect_options)
             .await?;
 
         Ok(Self {
@@ -114,9 +123,16 @@ impl SqliteStore {
     }
 
     pub async fn apply_schema(&self, schema_sql: &str) -> Result<()> {
+        // Schema creation runs on a single dedicated connection so the
+        // foreign-key toggle below is scoped to *this* work rather than
+        // leaking onto whichever pooled connection happened to serve it
+        // (B18) - the old code could leave `OFF` stuck on a connection the
+        // matching `ON` never touched.
+        let mut conn = self.pool.acquire().await?;
+
         // Disable foreign keys during schema creation
         sqlx::query("PRAGMA foreign_keys = OFF")
-            .execute(&self.pool)
+            .execute(&mut *conn)
             .await?;
 
         // Parse statements
@@ -151,12 +167,13 @@ impl SqliteStore {
         }
 
         for statement in statements {
-            sqlx::query(&statement).execute(&self.pool).await?;
+            sqlx::query(&statement).execute(&mut *conn).await?;
         }
 
-        // Re-enable foreign keys
+        // Re-enable foreign keys on this connection before returning it to the
+        // pool.
         sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&self.pool)
+            .execute(&mut *conn)
             .await?;
         Ok(())
     }

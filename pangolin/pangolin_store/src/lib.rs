@@ -29,6 +29,7 @@ pub use sqlite::SqliteStore;
 pub mod metadata_cache;
 pub mod object_store_cache;
 pub mod object_store_factory;
+pub mod search;
 pub use metadata_cache::MetadataCache;
 pub use object_store_cache::ObjectStoreCache;
 pub use signer::SignerImpl;

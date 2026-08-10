@@ -31,7 +31,15 @@ pub struct MemoryStore {
     pub(crate) service_users: Arc<DashMap<Uuid, pangolin_core::user::ServiceUser>>,
     pub(crate) merge_operations: Arc<DashMap<Uuid, pangolin_core::model::MergeOperation>>,
     pub(crate) merge_conflicts: Arc<DashMap<Uuid, pangolin_core::model::MergeConflict>>,
-    pub(crate) assets_by_id: Arc<DashMap<Uuid, (String, Vec<String>, Option<String>, String)>>,
+    /// Asset id -> (tenant, catalog, namespace, branch, name).
+    ///
+    /// B6: the tenant used to be absent from the value, so `delete_catalog`'s
+    /// index cleanup could only filter on the catalog *name* - and tenant A
+    /// deleting a catalog called `sales` broke `get_asset_by_id` for tenant B's
+    /// unrelated catalog of the same name. Catalog names are per-tenant, so the
+    /// index key has to be too.
+    pub(crate) assets_by_id:
+        Arc<DashMap<Uuid, (Uuid, String, Vec<String>, Option<String>, String)>>,
     pub(crate) revoked_tokens: Arc<DashMap<Uuid, pangolin_core::token::RevokedToken>>,
     pub(crate) active_tokens: Arc<DashMap<Uuid, pangolin_core::token::TokenInfo>>,
     pub(crate) system_settings: Arc<DashMap<Uuid, SystemSettings>>,
@@ -77,5 +85,38 @@ impl MemoryStore {
             object_store_cache: crate::ObjectStoreCache::new(),
             metadata_cache: crate::MetadataCache::default(),
         }
+    }
+}
+
+/// Deterministically page an in-memory listing.
+///
+/// B27: every memory-backend listing paged straight over DashMap iteration
+/// order, which is a hash order that varies run to run and shifts as entries are
+/// inserted or removed. Two consecutive pages could therefore repeat a row or
+/// skip one entirely - the same defect the SQL backends had from `LIMIT/OFFSET`
+/// with no `ORDER BY`, and it makes the "two pages cover the set exactly once"
+/// property untestable.
+///
+/// Sorting by a stable key before slicing gives the memory backend the same
+/// observable ordering the SQL backends now get from `ORDER BY`.
+pub(crate) fn paginate_sorted<T, K, F>(
+    items: impl Iterator<Item = T>,
+    pagination: Option<crate::PaginationParams>,
+    key: F,
+) -> Vec<T>
+where
+    F: Fn(&T) -> K,
+    K: Ord,
+{
+    let mut all: Vec<T> = items.collect();
+    all.sort_by_key(&key);
+
+    match pagination {
+        Some(p) => all
+            .into_iter()
+            .skip(p.offset.unwrap_or(0))
+            .take(p.limit.unwrap_or(usize::MAX))
+            .collect(),
+        None => all,
     }
 }

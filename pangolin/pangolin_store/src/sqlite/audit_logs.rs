@@ -19,14 +19,16 @@ impl SqliteStore {
         .bind(tenant_id.to_string())
         .bind(event.user_id.map(|u| u.to_string()))
         .bind(&event.username)
-        .bind(format!("{:?}", event.action))
-        .bind(format!("{:?}", event.resource_type))
+        .bind(pangolin_core::audit::audit_enum_to_stored(&event.action))
+        .bind(pangolin_core::audit::audit_enum_to_stored(
+            &event.resource_type,
+        ))
         .bind(event.resource_id.map(|u| u.to_string()))
         .bind(&event.resource_name)
         .bind(event.timestamp.timestamp_millis())
         .bind(event.ip_address.as_deref().unwrap_or(""))
         .bind(event.user_agent.as_deref().unwrap_or(""))
-        .bind(format!("{:?}", event.result))
+        .bind(pangolin_core::audit::audit_enum_to_stored(&event.result))
         .bind(event.error_message.as_deref().unwrap_or(""))
         .bind(serde_json::to_string(&event.metadata)?)
         .execute(&self.pool)
@@ -103,18 +105,22 @@ impl SqliteStore {
             let ts_millis: i64 = row.get("timestamp");
 
             // Parse enums from strings
+            // B22: these used to lowercase the stored Debug spelling and
+            // deserialize against snake_case, which never matched, then swallow
+            // the failure with `.unwrap_or(CreateCatalog)`. Errors now
+            // propagate: a corrupt audit row is a loud failure, not a
+            // plausible-looking lie about what happened.
             let action_str: String = row.get("action");
-            let action = serde_json::from_str(&format!("\"{}\"", action_str.to_lowercase()))
-                .unwrap_or(pangolin_core::audit::AuditAction::CreateCatalog);
+            let action = pangolin_core::audit::audit_enum_from_stored(&action_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let resource_type_str: String = row.get("resource_type");
-            let resource_type =
-                serde_json::from_str(&format!("\"{}\"", resource_type_str.to_lowercase()))
-                    .unwrap_or(pangolin_core::audit::ResourceType::Catalog);
+            let resource_type = pangolin_core::audit::audit_enum_from_stored(&resource_type_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let result_str: String = row.get("result");
-            let result = serde_json::from_str(&format!("\"{}\"", result_str.to_lowercase()))
-                .unwrap_or(pangolin_core::audit::AuditResult::Success);
+            let result = pangolin_core::audit::audit_enum_from_stored(&result_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             events.push(AuditLogEntry {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -183,18 +189,22 @@ impl SqliteStore {
         if let Some(row) = row {
             let ts_millis: i64 = row.get("timestamp");
 
+            // B22: these used to lowercase the stored Debug spelling and
+            // deserialize against snake_case, which never matched, then swallow
+            // the failure with `.unwrap_or(CreateCatalog)`. Errors now
+            // propagate: a corrupt audit row is a loud failure, not a
+            // plausible-looking lie about what happened.
             let action_str: String = row.get("action");
-            let action = serde_json::from_str(&format!("\"{}\"", action_str.to_lowercase()))
-                .unwrap_or(pangolin_core::audit::AuditAction::CreateCatalog);
+            let action = pangolin_core::audit::audit_enum_from_stored(&action_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let resource_type_str: String = row.get("resource_type");
-            let resource_type =
-                serde_json::from_str(&format!("\"{}\"", resource_type_str.to_lowercase()))
-                    .unwrap_or(pangolin_core::audit::ResourceType::Catalog);
+            let resource_type = pangolin_core::audit::audit_enum_from_stored(&resource_type_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             let result_str: String = row.get("result");
-            let result = serde_json::from_str(&format!("\"{}\"", result_str.to_lowercase()))
-                .unwrap_or(pangolin_core::audit::AuditResult::Success);
+            let result = pangolin_core::audit::audit_enum_from_stored(&result_str)
+                .map_err(|e| anyhow::anyhow!(e))?;
 
             Ok(Some(AuditLogEntry {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,

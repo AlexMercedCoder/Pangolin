@@ -98,14 +98,14 @@ impl PostgresStore {
             .unwrap_or(0);
 
         let rows = if let Some(tid) = tenant_id {
-            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users WHERE tenant_id = $1 ORDER BY username LIMIT $2 OFFSET $3")
                 .bind(tid)
                 .bind(limit)
                 .bind(offset)
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users LIMIT $1 OFFSET $2")
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, active, created_at, updated_at, last_login FROM users ORDER BY username LIMIT $1 OFFSET $2")
                 .bind(limit)
                 .bind(offset)
                 .fetch_all(&self.pool)

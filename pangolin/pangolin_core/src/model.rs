@@ -111,6 +111,73 @@ pub enum AssetType {
     Other,
 }
 
+impl AssetType {
+    /// The canonical persisted spelling, e.g. `"DELTA_TABLE"`.
+    ///
+    /// B7: all three persistent backends wrote `format!("{:?}", asset.kind)` -
+    /// the *Debug* spelling - and read it back through a match that recognised
+    /// only `IcebergTable` and `View`, defaulting everything else to
+    /// `IcebergTable`. A `DeltaTable`, `MlModel`, `Lance` or any of the other
+    /// 13 variants round-tripped as an Iceberg table, silently defeating the
+    /// headline "tracks any lakehouse asset type" feature. Going through serde
+    /// means the enum's own rename policy is the single source of truth, and
+    /// adding a variant cannot reintroduce the drift.
+    pub fn as_stored_str(&self) -> String {
+        serde_json::to_value(self)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            // The enum is a plain unit-variant enum, so serialization cannot
+            // fail; the Debug spelling is a belt-and-braces fallback only.
+            .unwrap_or_else(|| format!("{:?}", self))
+    }
+
+    /// Parse a persisted asset type.
+    ///
+    /// Accepts the canonical serde spelling *and* the legacy Debug spelling, so
+    /// rows written before this fix keep loading. An unrecognised value is an
+    /// error rather than a silent downgrade - a wrong asset type is worse than a
+    /// loud failure, because it misroutes every reader downstream.
+    pub fn from_stored_str(value: &str) -> Result<Self, String> {
+        if let Ok(parsed) =
+            serde_json::from_value::<Self>(serde_json::Value::String(value.to_string()))
+        {
+            return Ok(parsed);
+        }
+
+        // Legacy Debug spellings, e.g. "IcebergTable".
+        for candidate in Self::all() {
+            if format!("{:?}", candidate) == value {
+                return Ok(candidate);
+            }
+        }
+
+        Err(format!("unknown asset type {value:?}"))
+    }
+
+    /// Every variant, for round-trip tests and legacy parsing.
+    pub fn all() -> Vec<Self> {
+        vec![
+            Self::IcebergTable,
+            Self::DeltaTable,
+            Self::HudiTable,
+            Self::ParquetTable,
+            Self::CsvTable,
+            Self::JsonTable,
+            Self::View,
+            Self::MlModel,
+            Self::ApachePaimon,
+            Self::Vortex,
+            Self::Lance,
+            Self::Nimble,
+            Self::Directory,
+            Self::VideoFile,
+            Self::ImageFile,
+            Self::DbConnString,
+            Self::Other,
+        ]
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset {
     pub id: Uuid,

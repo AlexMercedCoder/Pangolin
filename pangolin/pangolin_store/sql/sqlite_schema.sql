@@ -113,14 +113,29 @@ CREATE TABLE IF NOT EXISTS commits (
 CREATE INDEX IF NOT EXISTS idx_commits_tenant ON commits(tenant_id);
 
 -- Audit Logs
+-- The columns here had drifted out of step with the code that writes them.
+-- The table declared the original (actor, resource, details) shape while
+-- `sqlite/audit_logs.rs` inserted the full AuditLogEntry - user_id, username,
+-- resource_type, resource_id, resource_name, ip_address, user_agent, result,
+-- error_message, metadata. Every `log_audit_event` on SQLite therefore failed
+-- at runtime with "table audit_logs has no column named user_id", so the
+-- backend recorded *no* audit trail at all. Found by the cross-backend parity
+-- suite, which is the first thing to exercise audit logging on SQLite.
 CREATE TABLE IF NOT EXISTS audit_logs (
     id TEXT PRIMARY KEY,
     tenant_id TEXT NOT NULL,
-    timestamp INTEGER NOT NULL,
-    actor TEXT NOT NULL,
+    user_id TEXT,
+    username TEXT NOT NULL,
     action TEXT NOT NULL,
-    resource TEXT NOT NULL,
-    details TEXT, -- JSON
+    resource_type TEXT NOT NULL,
+    resource_id TEXT,
+    resource_name TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
+    ip_address TEXT,
+    user_agent TEXT,
+    result TEXT NOT NULL,
+    error_message TEXT,
+    metadata TEXT, -- JSON
     FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant_ts ON audit_logs(tenant_id, timestamp DESC);

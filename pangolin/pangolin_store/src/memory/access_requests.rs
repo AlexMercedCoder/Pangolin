@@ -44,13 +44,7 @@ impl MemoryStore {
             .filter(|req| req.value().tenant_id == tenant_id)
             .map(|req| req.value().clone());
 
-        let requests = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let requests = crate::memory::main::paginate_sorted(iter, pagination, |r| r.id);
         Ok(requests)
     }
 }

@@ -206,6 +206,55 @@ pub enum AuditResult {
     Failure,
 }
 
+/// Serialize an audit enum to the spelling that goes into storage.
+///
+/// B22: the SQLite backend persisted `format!("{:?}", action)` - the Debug
+/// spelling, `"CreateBranch"` - and then read it back by lowercasing to
+/// `"createbranch"` and deserializing against serde's snake_case
+/// (`"create_branch"`). Nothing matched, and the result was
+/// `.unwrap_or(AuditAction::CreateCatalog)`, so nearly every multi-word action
+/// in the SQLite audit trail was recorded as `CreateCatalog`. The audit log is
+/// the one artefact that has to be right after an incident.
+///
+/// Both directions now go through serde, so the write and read spellings cannot
+/// drift apart again.
+pub fn audit_enum_to_stored<T: Serialize + std::fmt::Debug>(value: &T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_owned))
+        .unwrap_or_else(|| format!("{:?}", value))
+}
+
+/// Parse an audit enum from its stored spelling.
+///
+/// Accepts the canonical serde name and, for rows written before B22 was fixed,
+/// the legacy Debug name. An unrecognised value is an error rather than a silent
+/// substitution.
+pub fn audit_enum_from_stored<T>(stored: &str) -> Result<T, String>
+where
+    T: serde::de::DeserializeOwned,
+{
+    // Canonical snake_case.
+    if let Ok(v) = serde_json::from_value::<T>(serde_json::Value::String(stored.to_string())) {
+        return Ok(v);
+    }
+
+    // Legacy Debug spelling: "CreateBranch" -> "create_branch".
+    let mut snake = String::with_capacity(stored.len() + 4);
+    for (i, ch) in stored.chars().enumerate() {
+        if ch.is_ascii_uppercase() {
+            if i != 0 {
+                snake.push('_');
+            }
+            snake.push(ch.to_ascii_lowercase());
+        } else {
+            snake.push(ch);
+        }
+    }
+    serde_json::from_value::<T>(serde_json::Value::String(snake))
+        .map_err(|_| format!("unknown audit enum value {stored:?}"))
+}
+
 /// Filter for querying audit logs
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(ToSchema))]

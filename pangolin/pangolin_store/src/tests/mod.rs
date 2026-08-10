@@ -273,6 +273,8 @@ pub async fn test_dashboard_stats_consistency<S: CatalogStore>(store: &S) {
 pub mod audit_tests;
 #[cfg(test)]
 pub mod multi_cloud;
+/// Cross-backend parity suite (roadmap improvement #1).
+pub mod parity;
 #[cfg(test)]
 pub mod postgres_merge_tests;
 #[cfg(test)]

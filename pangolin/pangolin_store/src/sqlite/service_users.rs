@@ -128,7 +128,7 @@ impl SqliteStore {
 
         let rows = sqlx::query(
             "SELECT id, name, description, tenant_id, api_key_hash, role, created_at, created_by, last_used, expires_at, active
-             FROM service_users WHERE tenant_id = ? LIMIT ? OFFSET ?"
+             FROM service_users WHERE tenant_id = ? ORDER BY name LIMIT ? OFFSET ?"
         )
         .bind(tenant_id.to_string())
         .bind(limit)

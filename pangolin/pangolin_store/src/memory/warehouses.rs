@@ -36,13 +36,8 @@ impl MemoryStore {
             .filter(|r| r.key().0 == tenant_id)
             .map(|r| r.value().clone());
 
-        let warehouses: Vec<Warehouse> = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let warehouses: Vec<Warehouse> =
+            crate::memory::main::paginate_sorted(iter, pagination, |w| w.name.clone());
         Ok(warehouses)
     }
     pub(crate) async fn update_warehouse_internal(

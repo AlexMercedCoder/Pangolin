@@ -56,14 +56,14 @@ impl SqliteStore {
             .unwrap_or(0);
 
         let rows = if let Some(tid) = tenant_id {
-            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE tenant_id = ? LIMIT ? OFFSET ?")
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users WHERE tenant_id = ? ORDER BY username LIMIT ? OFFSET ?")
                 .bind(tid.to_string())
                 .bind(limit)
                 .bind(offset)
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users LIMIT ? OFFSET ?")
+            sqlx::query("SELECT id, username, email, password_hash, oauth_provider, oauth_subject, tenant_id, role, created_at, updated_at, last_login, active FROM users ORDER BY username LIMIT ? OFFSET ?")
                 .bind(limit)
                 .bind(offset)
                 .fetch_all(&self.pool)

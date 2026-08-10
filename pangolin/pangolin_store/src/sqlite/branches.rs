@@ -71,7 +71,7 @@ impl SqliteStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND catalog_name = ? LIMIT ? OFFSET ?")
+        let rows = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND catalog_name = ? ORDER BY name LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(limit)
@@ -100,19 +100,32 @@ impl SqliteStore {
         Ok(branches)
     }
 
+    /// Delete a branch and the assets that live on it.
+    ///
+    /// B3: two defects, both fatal together. The asset cleanup referenced a
+    /// column named `branch`, but the schema column is `branch_name`
+    /// (`sql/sqlite_schema.sql:71`), so the statement failed with "no such
+    /// column". And because the branch delete had already been committed as its
+    /// own statement, the branch was gone while its assets survived - orphaned
+    /// permanently, with no branch to reach them through - and the caller got an
+    /// error suggesting nothing had happened. Postgres was fixed for exactly
+    /// this and wraps both statements in a transaction; SQLite was never
+    /// patched.
     pub async fn delete_branch(
         &self,
         tenant_id: Uuid,
         catalog_name: &str,
         name: String,
     ) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
         let result = sqlx::query(
             "DELETE FROM branches WHERE tenant_id = ? AND catalog_name = ? AND name = ?",
         )
         .bind(tenant_id.to_string())
         .bind(catalog_name)
         .bind(&name)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
         if result.rows_affected() == 0 {
@@ -120,13 +133,16 @@ impl SqliteStore {
         }
 
         // Also delete assets associated with this branch
-        sqlx::query("DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ? AND branch = ?")
-            .bind(tenant_id.to_string())
-            .bind(catalog_name)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
+        sqlx::query(
+            "DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ? AND branch_name = ?",
+        )
+        .bind(tenant_id.to_string())
+        .bind(catalog_name)
+        .bind(&name)
+        .execute(&mut *tx)
+        .await?;
 
+        tx.commit().await?;
         Ok(())
     }
 

@@ -63,7 +63,7 @@ impl SqliteStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = ? AND catalog_name = ? LIMIT ? OFFSET ?")
+        let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = ? AND catalog_name = ? ORDER BY namespace_path LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(limit)

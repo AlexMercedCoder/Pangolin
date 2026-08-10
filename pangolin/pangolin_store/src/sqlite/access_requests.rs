@@ -52,13 +52,14 @@ impl SqliteStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows =
-            sqlx::query("SELECT * FROM access_requests WHERE tenant_id = ? LIMIT ? OFFSET ?")
-                .bind(tenant_id.to_string())
-                .bind(limit)
-                .bind(offset)
-                .fetch_all(&self.pool)
-                .await?;
+        let rows = sqlx::query(
+            "SELECT * FROM access_requests WHERE tenant_id = ? ORDER BY id LIMIT ? OFFSET ?",
+        )
+        .bind(tenant_id.to_string())
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await?;
 
         let mut requests = Vec::new();
         for row in rows {
