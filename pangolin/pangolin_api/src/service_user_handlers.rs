@@ -18,6 +18,7 @@ type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 // Request/Response types
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateServiceUserRequest {
     pub name: String,
     pub description: Option<String>,
@@ -26,6 +27,7 @@ pub struct CreateServiceUserRequest {
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateServiceUserRequest {
     pub name: Option<String>,
     pub description: Option<String>,

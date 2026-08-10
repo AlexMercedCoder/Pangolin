@@ -17,6 +17,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateViewRequest {
     pub name: String,
     pub sql: String,
@@ -219,6 +220,7 @@ pub async fn get_view(
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RegisterAssetRequest {
     pub name: String,
     pub kind: AssetType,

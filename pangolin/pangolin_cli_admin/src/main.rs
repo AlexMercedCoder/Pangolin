@@ -33,7 +33,20 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Load saved config
-    let config_manager = ConfigManager::new(args.profile.as_deref()).unwrap();
+    // B_cli7: this was `.unwrap()`, so with neither $HOME nor $XDG_CONFIG_HOME
+    // set - a container, a systemd unit, a CI runner - the admin CLI panicked
+    // with a backtrace instead of saying what was wrong. The user CLI already
+    // used `?` here.
+    let config_manager = match ConfigManager::new(args.profile.as_deref()) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!(
+                "Could not locate a config directory: {e}\n\
+                 Set $HOME or $XDG_CONFIG_HOME, or pass --url and --token."
+            );
+            std::process::exit(1);
+        }
+    };
     let mut config = config_manager.load().unwrap_or_default();
 
     // Override URL if provided via Args or Env
@@ -307,6 +320,10 @@ async fn main() -> anyhow::Result<()> {
                 handlers::merge::handle_list_merge_conflicts(&client, merge_id, limit, offset)
                     .await?
             }
+            // B_cli6: `--merge-id` is accepted and discarded. The resolve
+            // route is keyed on the conflict alone (`/api/v1/conflicts/{id}/resolve`),
+            // so the flag is genuinely redundant rather than lost - noted here
+            // so the discard is deliberate rather than a silent drop.
             AdminCommand::ResolveConflict {
                 merge_id: _,
                 conflict_id,
@@ -429,7 +446,17 @@ async fn main() -> anyhow::Result<()> {
             AdminCommand::ListNamespaceTree { catalog } => {
                 handlers::explorer::handle_namespace_tree(&client, catalog).await?
             }
-            _ => println!("Command not available in non-interactive mode."),
+            // B_cli6/B_cli7: this printed a note and fell through to
+            // `return Ok(())`, so a command the non-interactive path cannot run
+            // exited 0 - indistinguishable from success to any script or CI job.
+            // (`assign-role` and `revoke-user-role` land here.)
+            other => {
+                eprintln!(
+                    "Command {:?} is only available in interactive mode.",
+                    std::mem::discriminant(&other)
+                );
+                std::process::exit(2);
+            }
         }
         return Ok(());
     }

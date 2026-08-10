@@ -15,12 +15,14 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateTenantRequest {
     name: String,
     properties: Option<std::collections::HashMap<String, String>>,
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateTenantRequest {
     name: Option<String>,
     properties: Option<std::collections::HashMap<String, String>>,

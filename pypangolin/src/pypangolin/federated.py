@@ -5,16 +5,24 @@ class FederatedCatalogClient:
     def __init__(self, client):
         self.client = client
 
-    def create(self, name: str, uri: str, warehouse: str = None, 
+    def create(self, name: str, uri: str, warehouse: str = None,
                credential: str = None, properties: Dict[str, str] = None) -> FederatedCatalog:
-        """Create a federated catalog."""
-        config = {
-            "uri": uri,
-            "warehouse": warehouse,
-            "credential": credential,
-            "properties": properties or {}
-        }
-        payload = {"name": name, "config": config}
+        """Create a federated catalog.
+
+        B_sdk2: ``uri``, ``warehouse`` and ``credential`` were sent as siblings
+        of ``properties``. ``FederatedCatalogConfig`` has exactly one field -
+        ``properties`` - so serde discarded all three, and the catalog was
+        created with no upstream URI at all. They belong *inside* ``properties``,
+        which is where the federated proxy reads them from.
+        """
+        merged = dict(properties or {})
+        merged["uri"] = uri
+        if warehouse is not None:
+            merged["warehouse"] = warehouse
+        if credential is not None:
+            merged["credential"] = credential
+
+        payload = {"name": name, "config": {"properties": merged}}
         data = self.client.post("/api/v1/federated-catalogs", json=payload)
         return FederatedCatalog(**data)
 

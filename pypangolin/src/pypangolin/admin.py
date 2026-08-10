@@ -59,9 +59,11 @@ class SearchClient:
         """Search for assets."""
         params = {"query": q}
         if tags:
-            # Axum/serde_urlencoded often requires array notation or repeated keys handling
-            # Trying tags[] for repeated keys
-            params["tags[]"] = tags 
+            # B35: repeated keys (`?tags=a&tags=b`) cannot be deserialized into a
+            # Vec by serde_urlencoded, which is what the server's `Query`
+            # extractor uses - it 400'd. `tags[]` did not work either. The server
+            # now takes one comma-separated value.
+            params["tags"] = ",".join(tags)
         
         data = self.client.get("/api/v1/assets/search", params=params)
         return [SearchResult(**r) for r in data]
@@ -76,13 +78,33 @@ class TokenClient:
         if offset is not None: params['offset'] = offset
         return self.client.get("/api/v1/users/me/tokens", params=params)
 
-    def generate(self, name: str, user_id: str = None, tenant_id: str = None, expires_in_days: int = 30) -> str:
+    def generate(
+        self,
+        username: str = None,
+        tenant_id: str = None,
+        roles: list = None,
+        expires_in_hours: int = 24,
+    ) -> dict:
+        """Mint a token.
+
+        B_sdk2: this sent ``name``, ``user_id`` and ``expires_in_days``. The
+        server's ``GenerateTokenRequest`` takes ``tenant_id``, ``username``,
+        ``roles`` and ``expires_in_hours``, so all three were ignored and every
+        token came back with the default 24-hour lifetime whatever the caller
+        asked for. ``expires_in_days`` in particular meant a caller requesting
+        30 days silently got one.
+
+        The server request struct now uses ``deny_unknown_fields``, so sending
+        the old shape is a loud 422 rather than a silent default.
+        """
         payload = {
-            "name": name, 
-            "expires_in_days": expires_in_days,
-            "user_id": user_id,
-            "tenant_id": tenant_id or self.client._current_tenant_id
+            "tenant_id": tenant_id or self.client._current_tenant_id,
+            "expires_in_hours": expires_in_hours,
         }
+        if username is not None:
+            payload["username"] = username
+        if roles is not None:
+            payload["roles"] = roles
         return self.client.post("/api/v1/tokens", json=payload)
 
     def revoke(self, token_id: str):

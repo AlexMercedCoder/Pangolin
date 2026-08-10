@@ -65,7 +65,7 @@ class BaseConnectionAsset:
     def register(cls, client, catalog: str, namespace: str, name: str,
                 connection_string: str, credentials: Dict[str, str],
                 encryption_key: Optional[str] = None,
-                store_key: bool = True,
+                store_key: bool = False,
                 description: str = None,
                 **extra_properties):
         """
@@ -97,8 +97,22 @@ class BaseConnectionAsset:
             **extra_properties
         }
         
-        # Store key if requested
+        # B_sdk4: `store_key` defaulted to True, so the encryption key was
+        # written into the asset's properties *next to the ciphertext it
+        # decrypts* - which reduces the encryption to obfuscation, since anyone
+        # who can read the asset can read both halves. It now defaults to False;
+        # callers who genuinely want the key co-located must ask for it, and get
+        # told what that means.
         if store_key:
+            import warnings
+
+            warnings.warn(
+                "store_key=True writes the encryption key into the same asset "
+                "properties as the ciphertext it decrypts, so anyone who can "
+                "read the asset can decrypt the credentials. Keep the key in a "
+                "secrets manager and pass it via encryption_key= instead.",
+                stacklevel=2,
+            )
             properties["encryption_key"] = key
         
         # Add description if provided

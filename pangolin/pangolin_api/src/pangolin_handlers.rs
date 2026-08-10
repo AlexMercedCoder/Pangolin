@@ -19,6 +19,7 @@ use uuid::Uuid;
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateBranchRequest {
     name: String,
     branch_type: Option<String>, // "ingest" or "experimental", defaults to experimental
@@ -36,6 +37,7 @@ pub struct ListBranchParams {
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct MergeBranchRequest {
     pub source_branch: String,
     pub target_branch: String,
@@ -617,6 +619,7 @@ pub async fn list_commits(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateTagRequest {
     name: String,
     catalog: Option<String>,
@@ -783,6 +786,7 @@ pub async fn rebase_branch(
 
 // Catalog Management
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateCatalogRequest {
     name: String,
     catalog_type: Option<pangolin_core::model::CatalogType>,
@@ -793,6 +797,7 @@ pub struct CreateCatalogRequest {
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateCatalogRequest {
     warehouse_name: Option<String>,
     storage_location: Option<String>,

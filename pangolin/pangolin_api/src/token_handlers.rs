@@ -254,6 +254,7 @@ use pangolin_store::CatalogStore;
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RevokeTokenRequest {
     pub reason: Option<String>,
 }

@@ -144,6 +144,7 @@ pub async fn list_tables(
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct MaintenanceRequest {
     pub job_type: String, // "expire_snapshots" or "remove_orphan_files"
     pub retention_ms: Option<i64>,

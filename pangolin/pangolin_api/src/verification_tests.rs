@@ -172,7 +172,10 @@ async fn test_verified_flow_regression() {
                 .body(Body::from(
                     json!({
                         "name": "test-tenant",
-                        "organization": "TestOrg"
+                        // `CreateTenantRequest` has no `organization` field.
+                        // With `deny_unknown_fields` this is now a 422 rather
+                        // than a silently dropped value (improvement #0).
+                        "properties": { "organization": "TestOrg" }
                     })
                     .to_string(),
                 ))
@@ -254,7 +257,10 @@ async fn test_verified_flow_regression() {
                     json!({
                         "name": "test-catalog",
                         "warehouse_name": "success-warehouse",
-                        "type": "pangolin"
+                        // `CreateCatalogRequest` takes `catalog_type`, not
+                        // `type` - the old spelling was silently dropped and
+                        // the catalog defaulted to Local anyway.
+                        "catalog_type": "Local"
                     })
                     .to_string(),
                 ))
@@ -304,7 +310,7 @@ async fn test_iceberg_namespace_creation() {
                 .header("Authorization", format!("Bearer {}", root_token))
                 .header("Content-Type", "application/json")
                 .body(Body::from(
-                    json!({"name":"t1", "organization":"o1"}).to_string(),
+                    json!({"name":"t1", "properties": {"organization":"o1"}}).to_string(),
                 ))
                 .unwrap(),
         )
@@ -339,7 +345,7 @@ async fn test_iceberg_namespace_creation() {
                 .header("Authorization", format!("Bearer {}", ta_token))
                 .header("Content-Type", "application/json")
                 .body(Body::from(
-                    json!({"name":"cat","warehouse_name":"wh","type":"pangolin"}).to_string(),
+                    json!({"name":"cat","warehouse_name":"wh","catalog_type":"Local"}).to_string(),
                 ))
                 .unwrap(),
         )

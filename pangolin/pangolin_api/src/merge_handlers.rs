@@ -17,6 +17,7 @@ type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 // Request/Response types
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ResolveConflictRequest {
     pub strategy: ResolutionStrategy,
     pub resolved_value: Option<serde_json::Value>,

@@ -31,9 +31,29 @@ def load_config() -> Dict[str, Any]:
         return DEFAULT_CONFIG
 
 def save_config(config: Dict[str, Any]) -> None:
+    """Write the config, which holds bearer tokens, with owner-only permissions.
+
+    B_sdk4: this wrote ``~/.pangolin/profiles.yaml`` at the process umask -
+    typically 0644 - so every local account could read the stored JWT. The
+    directory is created 0700 and the file chmod'd to 0600, and the mode is set
+    *before* the secret is written so there is no window where the file exists
+    world-readable.
+    """
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_FILE, "w") as f:
+    try:
+        os.chmod(CONFIG_DIR, 0o700)
+    except OSError:  # pragma: no cover - e.g. Windows
+        pass
+
+    # Create (or truncate) with the right mode before anything is written.
+    fd = os.open(CONFIG_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         yaml.safe_dump(config, f)
+
+    try:
+        os.chmod(CONFIG_FILE, 0o600)
+    except OSError:  # pragma: no cover - e.g. Windows
+        pass
 
 def get_active_profile(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     if config is None:

@@ -7,26 +7,39 @@ name = "pypangolin"
 version = "0.6.0"
 description = "Python client for Pangolin Data Catalog"
 readme = "README.md"
-requires-python = ">=3.8"
+# B40: this said ">=3.8", which is unsatisfiable with the declared
+# dependencies - pydantic>=2 and pyiceberg both require >=3.9 (current pyiceberg
+# wants 3.9/3.10), so a 3.8 install resolved to broken or ancient versions
+# rather than failing cleanly.
+requires-python = ">=3.9"
 license = "MIT"
 authors = [
     { name = "Alex Merced", email = "alex@alexmerced.com" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
     "requests>=2.28.0",
     "pydantic>=2.0.0",
-    "pyiceberg>=0.5.0",
     "cryptography>=41.0.0",
     "click>=8.1.0",
     "pyyaml>=6.0",
     "rich>=13.0.0",
 ]
 
+# B41: `pyiceberg` was a hard dependency, and `__init__.py` imported
+# `catalog.py`, which imported pyiceberg at module scope - so importing
+# *anything* from pypangolin, including the CLI and its config, required the
+# full Iceberg stack. `pytest tests/` could not even collect. It is now an
+# extra, and `catalog.py` imports it lazily inside the function that needs it.
 [project.optional-dependencies]
+iceberg = ["pyiceberg>=0.5.0"]
 s3 = ["pyiceberg[s3fs]>=0.5.0"]
 azure = ["pyiceberg[adlfs]>=0.5.0"]
 gcs = ["pyiceberg[gcsfs]>=0.5.0"]
@@ -66,8 +79,22 @@ all = [
     "dremioframe>=0.1.0"
 ]
 
+# B_sdk5: the docs describe the CLI as "installed automatically", but there was
+# no console script, so `pangolin` was not on PATH after `pip install`.
+[project.scripts]
+pangolin = "pypangolin.cli:main"
+
+[tool.pytest.ini_options]
+# B41: without this, `pytest tests/` could not import the src/ layout unless the
+# package happened to be installed editable.
+pythonpath = ["src"]
+testpaths = ["tests"]
+
 [project.urls]
 Homepage = "https://github.com/AlexMercedCoder/Pangolin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pypangolin"]
+# B_sdk5: without py.typed, type checkers treat the package as untyped and
+# ignore every annotation in it, so a consumer got no checking at all.
+artifacts = ["src/pypangolin/py.typed"]

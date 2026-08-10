@@ -77,11 +77,60 @@ pub async fn handle_list_catalogs(
     Ok(())
 }
 
-pub async fn handle_search(_client: &PangolinClient, query: String) -> Result<(), CliError> {
-    // Placeholder - Search API not fully implemented yet in handlers.rs of common?
-    // We will just mock it for now or hit the real endpoint if available
-    println!("Searching for '{}'...", query);
-    println!("(Search functionality pending backend index implementation)");
+/// Search assets.
+///
+/// B_cli8: this printed "(Search functionality pending backend index
+/// implementation)" and returned. Two search endpoints have existed the whole
+/// time; the placeholder simply told users the feature was missing.
+pub async fn handle_search(client: &PangolinClient, query: String) -> Result<(), CliError> {
+    let res = client
+        .get(&format!(
+            "/api/v1/assets/search?query={}",
+            // Percent-encode the term so a query containing & or = does not
+            // split into extra parameters.
+            query
+                .chars()
+                .map(|c| match c {
+                    'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
+                    other => other
+                        .to_string()
+                        .bytes()
+                        .map(|b| format!("%{:02X}", b))
+                        .collect::<String>(),
+                })
+                .collect::<String>()
+        ))
+        .await?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("{} - {}", status, text)));
+    }
+
+    let results: Vec<Value> = res
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+
+    if results.is_empty() {
+        println!("No assets matched '{}'.", query);
+        return Ok(());
+    }
+
+    let rows: Vec<Vec<String>> = results
+        .iter()
+        .map(|r| {
+            vec![
+                r["name"].as_str().unwrap_or("-").to_string(),
+                r["kind"].as_str().unwrap_or("-").to_string(),
+                r["catalog"].as_str().unwrap_or("-").to_string(),
+                r["namespace"].as_str().unwrap_or("-").to_string(),
+            ]
+        })
+        .collect();
+
+    print_table(vec!["Name", "Type", "Catalog", "Namespace"], rows);
     Ok(())
 }
 
@@ -91,11 +140,11 @@ pub async fn handle_generate_code(
     table: String,
 ) -> Result<(), CliError> {
     let url = &client.config.base_url;
-    let token = client
-        .config
-        .auth_token
-        .as_deref()
-        .unwrap_or("<YOUR_TOKEN>");
+    // B_cli8: this interpolated the *live* JWT into the generated snippet, which
+    // is explicitly copy-paste output - it went into scrollback, into whatever
+    // the user pasted it into, and often into a committed file. A placeholder is
+    // what a code sample should carry; the reader substitutes their own.
+    let token = "<YOUR_TOKEN>";
 
     let parts: Vec<&str> = table.split('.').collect();
     let (catalog, namespace, table_name) = if parts.len() == 3 {
@@ -277,10 +326,14 @@ pub async fn handle_merge_branch(
     source: String,
     target: String,
 ) -> Result<(), CliError> {
+    // B_cli8: this sent `source`/`target`. `MergeBranchRequest` takes
+    // `source_branch`/`target_branch`, so the request 422'd - and with
+    // `deny_unknown_fields` on the server it now says which field is wrong
+    // rather than reporting a missing one.
     let body = serde_json::json!({
         "catalog": catalog,
-        "source": source,
-        "target": target
+        "source_branch": source,
+        "target_branch": target
     });
     let res = client.post("/api/v1/branches/merge", &body).await?;
     if !res.status().is_success() {
@@ -381,12 +434,33 @@ pub async fn handle_list_requests(
     Ok(())
 }
 
+/// Request access to an asset.
+///
+/// B_cli8: the whole body was `Ok(())`. The command accepted its arguments,
+/// contacted nothing, and returned success - so a user could "request access",
+/// see no error, and wait indefinitely for a review of a request that was never
+/// created.
 pub async fn handle_request_access(
-    _client: &PangolinClient,
-    _resource: String,
+    client: &PangolinClient,
+    resource: String,
     _role: String,
-    _reason: String,
+    reason: String,
 ) -> Result<(), CliError> {
+    let body = serde_json::json!({ "reason": reason });
+    let res = client
+        .post(
+            &format!("/api/v1/assets/{}/access-requests", resource),
+            &body,
+        )
+        .await?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let text = res.text().await.unwrap_or_default();
+        return Err(CliError::ApiError(format!("{} - {}", status, text)));
+    }
+
+    println!("✅ Access request submitted for asset {}.", resource);
     Ok(())
 }
 
@@ -396,13 +470,23 @@ pub async fn handle_get_token(
     description: String,
     expires_in: u32,
 ) -> Result<(), CliError> {
+    // B_cli8: this sent `description`, which `GenerateTokenRequest` does not
+    // have (it was silently dropped), and passed `client.config.tenant_id`
+    // straight through - which is `None` when no tenant is configured, so the
+    // server received `"tenant_id": null` and rejected it with an unhelpful
+    // parse error. `tenant_id` is required, so say so up front.
+    let _ = description;
+
+    let Some(tenant_id) = client.config.tenant_id.clone() else {
+        return Err(CliError::ApiError(
+            "No tenant selected. Set one with `pangolin config set-tenant <id>`.".to_string(),
+        ));
+    };
+
     let body = serde_json::json!({
-        "description": description,
-        "expires_in_hours": expires_in * 24, // Endpoint expects hours? Wait, previous code said expires_in_days but endpoint is hours?
-        // token_handlers.rs uses `payload.expires_in_hours.unwrap_or(24)`.
-        // The CLI arg is `expires_in` (u32). The payload key in `handle_get_token` was `expires_in_days`.
-        // Let's check GenerateTokenRequest struct in `token_handlers.rs`.
-        "tenant_id": client.config.tenant_id,
+        // The server's field is `expires_in_hours`; the CLI flag is a day count.
+        "expires_in_hours": u64::from(expires_in) * 24,
+        "tenant_id": tenant_id,
         "username": client.config.username
     });
 

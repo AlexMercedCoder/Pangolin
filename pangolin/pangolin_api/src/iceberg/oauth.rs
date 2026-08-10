@@ -18,6 +18,7 @@ use crate::iceberg::AppState;
 use utoipa::ToSchema;
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct OAuthTokenRequest {
     #[schema(example = "client_credentials")]
     grant_type: String,

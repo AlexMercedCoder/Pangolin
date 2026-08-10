@@ -16,7 +16,6 @@ class BranchClient:
             "from_branch": from_branch,
             "catalog": catalog_name
         }
-        print(f"DEBUG CLIENT: Create branch {name} from {from_branch} in {catalog_name} via /api/v1/branches")
         data = self.client.post("/api/v1/branches", json=payload)
         return Branch(**data)
 
@@ -57,16 +56,21 @@ class BranchClient:
         data = self.client.post("/api/v1/branches/merge", json=payload)
         return MergeOperation(**data)
 
-    def rebase(self, branch_name: str, base_branch: str, catalog_name: str = None, catalog: str = None) -> Branch:
-        """Rebase a branch onto another base branch."""
+    def rebase(self, branch_name: str, catalog_name: str = None, catalog: str = None) -> None:
+        """Rebase a branch onto ``main``.
+
+        B_sdk2: three defects in one call. The payload omitted ``name``, which
+        the handler's ``CreateBranchRequest`` requires, so every rebase 422'd.
+        It sent ``base_branch``, which that struct does not have and the handler
+        ignores - the server always rebases onto ``main``, so the parameter was
+        a promise the API never made. And the handler returns an empty body on
+        success, so ``Branch(**data)`` raised ``TypeError`` even when the call
+        did go through.
+        """
         if catalog is not None and catalog_name is None:
             catalog_name = catalog
-        payload = {
-            "base_branch": base_branch,
-            "catalog": catalog_name
-        }
-        data = self.client.post(f"/api/v1/branches/{branch_name}/rebase", json=payload)
-        return Branch(**data)
+        payload = {"name": branch_name, "catalog": catalog_name}
+        self.client.post(f"/api/v1/branches/{branch_name}/rebase", json=payload)
 
 class TagClient:
     def __init__(self, client):

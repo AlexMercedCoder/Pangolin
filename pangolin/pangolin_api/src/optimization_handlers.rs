@@ -177,6 +177,7 @@ pub async fn search_assets_by_name(
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct BulkDeleteAssetsRequest {
     /// List of asset UUIDs to delete (maximum 100)
     pub asset_ids: Vec<String>,
@@ -267,6 +268,7 @@ pub async fn bulk_delete_assets(
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ValidateNamesRequest {
     /// Resource type: "catalog" or "warehouse"
     pub resource_type: String,

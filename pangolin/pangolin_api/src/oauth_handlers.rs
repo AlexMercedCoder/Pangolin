@@ -68,7 +68,7 @@ fn email_may_link(user_info: &OAuthUserInfo, allowlist: &[String]) -> bool {
     else {
         return false;
     };
-    allowlist.iter().any(|allowed| *allowed == domain)
+    allowlist.contains(&domain)
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -364,6 +364,7 @@ pub async fn oauth_callback(
 
 /// Request body for exchanging a one-time OAuth code for a session token.
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct OAuthExchangeRequest {
     pub code: String,
 }

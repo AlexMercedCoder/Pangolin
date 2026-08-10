@@ -47,10 +47,16 @@ pub async fn handle_create_catalog(
         ));
     }
 
+    // B_cli1: this sent `warehouse` and `type`. `CreateCatalogRequest` has
+    // neither - it takes `warehouse_name` and `catalog_type` - and serde
+    // ignored both unknown fields, so `warehouse_name` arrived as `None` (which
+    // *skips the warehouse existence check*) and `catalog_type` fell back to
+    // `Local`. The required `--warehouse` flag was thrown away and the CLI
+    // printed success for a catalog with no warehouse attached.
     let body = serde_json::json!({
         "name": name,
-        "warehouse": warehouse,
-        "type": "pangea" // defaulting to internal type
+        "warehouse_name": warehouse,
+        "catalog_type": "Local"
     });
 
     let res = client.post("/api/v1/catalogs", &body).await?;

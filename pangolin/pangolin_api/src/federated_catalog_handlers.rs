@@ -18,6 +18,7 @@ type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 // Request/Response types
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateFederatedCatalogRequest {
     pub name: String,
     pub config: FederatedCatalogConfig,

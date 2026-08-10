@@ -16,6 +16,7 @@ use uuid::Uuid;
 /// Request to create a new role
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct CreateRoleRequest {
     pub name: String,
     pub description: Option<String>,
@@ -25,6 +26,7 @@ pub struct CreateRoleRequest {
 /// Request to assign a role to a user
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct AssignRoleRequest {
     pub role_id: Uuid,
 }
@@ -32,6 +34,7 @@ pub struct AssignRoleRequest {
 /// Request to grant a permission
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct GrantPermissionRequest {
     pub user_id: Uuid,
     pub scope: PermissionScope,

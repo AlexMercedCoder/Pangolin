@@ -9,7 +9,7 @@ pub async fn handle_sync_federated_catalog(
 ) -> Result<(), CliError> {
     let res = client
         .post(
-            &format!("/api/v1/catalogs/{}/sync", name),
+            &format!("/api/v1/federated-catalogs/{}/sync", name),
             &serde_json::json!({}),
         )
         .await?;
@@ -25,7 +25,7 @@ pub async fn handle_get_federated_catalog_stats(
     name: String,
 ) -> Result<(), CliError> {
     let res = client
-        .get(&format!("/api/v1/catalogs/{}/stats", name))
+        .get(&format!("/api/v1/federated-catalogs/{}/stats", name))
         .await?;
     if !res.status().is_success() {
         return Err(CliError::ApiError(format!(
@@ -60,14 +60,20 @@ pub async fn handle_create_federated_catalog(
         }
     }
 
+    // B_cli3: this POSTed to `/api/v1/catalogs` with a `type` field that
+    // `CreateCatalogRequest` does not have, so serde dropped it and the command
+    // created an ordinary *Local* catalog while reporting a federated one. The
+    // dedicated endpoint takes the config the federated proxy actually reads.
+    props.insert(
+        "storage_location".to_string(),
+        serde_json::Value::String(storage_location.clone()),
+    );
     let body = serde_json::json!({
         "name": name,
-        "type": "federated",
-        "storage_location": storage_location,
-        "properties": props
+        "config": { "properties": props }
     });
 
-    let res = client.post("/api/v1/catalogs", &body).await?;
+    let res = client.post("/api/v1/federated-catalogs", &body).await?;
     if !res.status().is_success() {
         let s = res.status();
         let t = res.text().await.unwrap_or_default();
@@ -100,10 +106,13 @@ pub async fn handle_list_federated_catalogs(
         .await
         .map_err(|e| CliError::ApiError(e.to_string()))?;
 
-    // Filter client side just in case API doesn't support query param perfectly yet or to be safe
+    // B_cli3: this filtered on `i["type"] == "federated"`. The response key is
+    // `catalog_type` and its value is `"Federated"` - so the predicate never
+    // matched and `list-federated-catalogs` always printed an empty table, even
+    // with federated catalogs present.
     let fed_cats: Vec<Vec<String>> = items
         .iter()
-        .filter(|i| i["type"].as_str() == Some("federated"))
+        .filter(|i| i["catalog_type"].as_str() == Some("Federated"))
         .map(|i| {
             vec![
                 i["name"].as_str().unwrap_or("").to_string(),
@@ -139,7 +148,7 @@ pub async fn handle_test_federated_catalog(
 ) -> Result<(), CliError> {
     let res = client
         .post(
-            &format!("/api/v1/catalogs/{}/test", name),
+            &format!("/api/v1/federated-catalogs/{}/test", name),
             &serde_json::json!({}),
         )
         .await?;

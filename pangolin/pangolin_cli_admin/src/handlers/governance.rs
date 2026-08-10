@@ -132,7 +132,12 @@ async fn resolve_scope(
                 .await
                 .map_err(|e| CliError::ApiError(e.to_string()))?;
             if let Some(c) = catalogs.iter().find(|c| c["name"].as_str() == Some(path)) {
-                let id = c["id"].as_str().unwrap().to_string();
+                // B_cli5: `.unwrap()` here panicked the whole CLI whenever the
+                // server omitted `id` - a crash rather than an error message.
+                let id = c["id"]
+                    .as_str()
+                    .ok_or_else(|| CliError::ApiError(format!("Catalog '{}' has no id", path)))?
+                    .to_string();
                 Ok(serde_json::json!({
                     "type": "catalog",
                     "catalog_id": id
@@ -160,7 +165,12 @@ async fn resolve_scope(
                 .iter()
                 .find(|c| c["name"].as_str() == Some(cat_name))
             {
-                let id = c["id"].as_str().unwrap().to_string();
+                // B_cli5: `.unwrap()` here panicked the whole CLI whenever the
+                // server omitted `id` - a crash rather than an error message.
+                let id = c["id"]
+                    .as_str()
+                    .ok_or_else(|| CliError::ApiError(format!("Catalog '{}' has no id", path)))?
+                    .to_string();
                 Ok(serde_json::json!({
                     "type": "namespace",
                     "catalog_id": id,
@@ -185,7 +195,10 @@ async fn resolve_scope(
                         .iter()
                         .find(|c| c["name"].as_str() == Some(cat_name))
                     {
-                        c["id"].as_str().unwrap().to_string()
+                        c["id"]
+                            .as_str()
+                            .ok_or_else(|| CliError::ApiError("Catalog has no id".to_string()))?
+                            .to_string()
                     } else {
                         return Err(CliError::ApiError(format!(
                             "Catalog '{}' not found",
@@ -283,11 +296,46 @@ pub async fn handle_revoke_permission(
     action: String,
     resource: String,
 ) -> Result<(), CliError> {
-    let url = format!(
-        "/api/v1/permissions?role={}&action={}&resource={}",
-        role, action, resource
-    );
-    let res = client.delete(&url).await?;
+    // B_cli5: this issued `DELETE /api/v1/permissions?role=..&action=..&resource=..`.
+    // The only delete route is `DELETE /api/v1/permissions/{id}` - there is no
+    // filter form - so the request 405'd and no permission was ever revoked.
+    // The grant has to be located first.
+    let res = client.get("/api/v1/permissions").await?;
+    if !res.status().is_success() {
+        return Err(CliError::ApiError(format!("Error: {}", res.status())));
+    }
+    let permissions: Vec<Value> = res
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+
+    let target = permissions.iter().find(|p| {
+        let actions_match = p["actions"]
+            .as_array()
+            .map(|a| a.iter().any(|v| v.as_str() == Some(action.as_str())))
+            .unwrap_or(false);
+        let scope_matches = p["scope"]["type"].as_str() == Some(resource.as_str())
+            || p["scope"]["catalog_id"].as_str() == Some(resource.as_str())
+            || p["scope"]["namespace"].as_str() == Some(resource.as_str())
+            || p["scope"]["asset_id"].as_str() == Some(resource.as_str())
+            || p["scope"]["tag_name"].as_str() == Some(resource.as_str());
+        actions_match && scope_matches
+    });
+
+    let Some(permission) = target else {
+        return Err(CliError::ApiError(format!(
+            "No permission found granting '{}' on '{}' (role filter: {})",
+            action, resource, role
+        )));
+    };
+
+    let id = permission["id"]
+        .as_str()
+        .ok_or_else(|| CliError::ApiError("Permission has no id".to_string()))?;
+
+    let res = client
+        .delete(&format!("/api/v1/permissions/{}", id))
+        .await?;
     if !res.status().is_success() {
         return Err(CliError::ApiError(format!("Error: {}", res.status())));
     }
@@ -464,11 +512,17 @@ pub async fn handle_request_access(
                     // So permission arg is NOT in main.rs invocation for RequestAccess command.
                     // I should remove `permission` arg from here.
 ) -> Result<(), CliError> {
-    let payload = serde_json::json!({
-        "asset_id": asset_id,
-        "reason": reason
-    });
-    let res = client.post("/api/v1/access-requests", &payload).await?;
+    // B_cli5: this POSTed to `/api/v1/access-requests`, which is registered for
+    // GET only - creating a request lives under the asset
+    // (`POST /api/v1/assets/{id}/access-requests`), and the asset id belongs in
+    // the path rather than the body.
+    let payload = serde_json::json!({ "reason": reason });
+    let res = client
+        .post(
+            &format!("/api/v1/assets/{}/access-requests", asset_id),
+            &payload,
+        )
+        .await?;
     if !res.status().is_success() {
         return Err(CliError::ApiError(format!("Failed: {}", res.status())));
     }

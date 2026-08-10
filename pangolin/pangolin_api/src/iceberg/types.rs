@@ -35,6 +35,7 @@ pub struct ListNamespacesTreeResponse {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateNamespaceRequest {
     pub namespace: Vec<String>,
     pub properties: Option<HashMap<String, String>>,
@@ -47,6 +48,7 @@ pub struct CreateNamespaceResponse {
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateTableRequest {
     pub name: String,
     pub location: Option<String>,
@@ -134,6 +136,7 @@ pub struct PartitionField {
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CommitTableRequest {
     pub identifier: Option<TableIdentifier>,
     pub requirements: Vec<CommitRequirement>,
@@ -371,12 +374,14 @@ pub fn next_page_token(returned: usize, offset: u32, limit: u32) -> Option<Strin
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RenameTableRequest {
     pub source: TableIdentifier,
     pub destination: TableIdentifier,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateNamespacePropertiesRequest {
     pub removals: Option<Vec<String>>,
     pub updates: Option<std::collections::HashMap<String, String>>,

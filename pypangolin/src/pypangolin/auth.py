@@ -1,5 +1,10 @@
 import requests
+
 from .exceptions import AuthenticationError, PangolinError
+
+#: B39: login had no timeout either, so a hung server blocked the very first
+#: call a caller makes.
+LOGIN_TIMEOUT = (5, 30)
 
 def login(uri: str, username: str, password: str, tenant_id: str = None) -> str:
     """
@@ -11,7 +16,7 @@ def login(uri: str, username: str, password: str, tenant_id: str = None) -> str:
         payload["tenant-id"] = tenant_id
 
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(url, json=payload, timeout=LOGIN_TIMEOUT)
         
         if response.status_code == 200:
             data = response.json()
@@ -26,4 +31,4 @@ def login(uri: str, username: str, password: str, tenant_id: str = None) -> str:
             )
             
     except requests.RequestException as e:
-        raise PangolinError(f"Connection failed: {str(e)}")
+        raise PangolinError(f"Connection failed: {str(e)}") from e

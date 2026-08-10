@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 /// Request to create a new user
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateUserRequest {
     pub username: String,
     pub email: String,
@@ -24,6 +25,7 @@ pub struct CreateUserRequest {
 /// Request to update a user
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct UpdateUserRequest {
     pub email: Option<String>,
     pub password: Option<String>,
@@ -33,6 +35,7 @@ pub struct UpdateUserRequest {
 /// User login request
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,

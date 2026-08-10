@@ -1,3 +1,5 @@
+import sys
+
 import click
 from rich.console import Console
 from rich.table import Table
@@ -43,6 +45,11 @@ def login(ctx, username, password, tenant_id):
         console.print(f"[green]Successfully logged in as {username}[/green]")
     except Exception as e:
         console.print(f"[red]Login failed:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 @user.command()
 @click.pass_context
@@ -61,6 +68,11 @@ def list_catalogs(ctx):
         console.print(table)
     except Exception as e:
         console.print(f"[red]Error listing catalogs:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 @user.command()
 @click.argument('query')
@@ -71,16 +83,23 @@ def search(ctx, query):
     try:
         results = client.search.query(q=query)
         table = Table(title=f"Search Results: {query}")
-        table.add_column("Score", style="yellow")
         table.add_column("Name", style="green")
         table.add_column("Kind")
         table.add_column("Catalog")
+        table.add_column("Namespace")
         
         for r in results:
-            table.add_row(str(r.score), r.name, r.kind, r.catalog)
+            # B_sdk3: this rendered `r.score`, which neither `SearchResult` nor
+            # the server's response has - AttributeError on every hit.
+            table.add_row(r.name, r.kind, r.catalog, r.namespace)
         console.print(table)
     except Exception as e:
         console.print(f"[red]Search failed:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 @user.command()
 @click.option('--language', type=click.Choice(['pyiceberg', 'pyspark', 'dremio', 'sql'], case_sensitive=False), required=True)
@@ -157,6 +176,11 @@ def list_branches(ctx, catalog):
         console.print(table)
     except Exception as e:
         console.print(f"[red]Error listing branches:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 @user.command()
 @click.argument('catalog')
@@ -171,6 +195,11 @@ def create_branch(ctx, catalog, name, from_):
         console.print(f"[green]Branch created successfully:[/green] {name}")
     except Exception as e:
         console.print(f"[red]Error creating branch:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 @user.command()
 @click.option('--catalog', required=True)
@@ -181,17 +210,20 @@ def merge_branch(ctx, catalog, source, target):
     """Merge two branches"""
     client = get_client(ctx)
     try:
-        # Assuming merge_operations client has a create or similar method
-        # Or client.branches.merge
-        # Let's check if MergeOperationClient supports creating a merge op.
-        # If not, maybe it's client.branches.merge?
-        # Based on typical implementations, it's likely a POST to /api/v1/merge
-        # For now, let's try client.merge_operations.create/initiate
-        # If unknown, assume client.branches.merge(catalog, source, target) as a high-level helper
-        client.branches.merge(catalog_name=catalog, source=source, target=target)
+        # B_sdk3: this passed `source=`/`target=`, but `BranchClient.merge` takes
+        # `source_branch`/`target_branch` - a TypeError on every call, swallowed
+        # by the blanket except below and reported with a zero exit code.
+        client.branches.merge(
+            catalog_name=catalog, source_branch=source, target_branch=target
+        )
         console.print(f"[green]Merge operation initiated between {source} and {target}[/green]")
     except Exception as e:
         console.print(f"[red]Error merging branches:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 # --- Tags ---
 @user.command()
@@ -211,6 +243,11 @@ def list_tags(ctx, catalog):
         console.print(table)
     except Exception as e:
         console.print(f"[red]Error listing tags:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 @user.command()
 @click.argument('catalog')
@@ -225,6 +262,11 @@ def create_tag(ctx, catalog, name, commit_id):
         console.print(f"[green]Tag created successfully:[/green] {name}")
     except Exception as e:
         console.print(f"[red]Error creating tag:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)
 
 # --- Requests ---
 @user.command()
@@ -250,6 +292,16 @@ def get_token(ctx, description):
     client = get_client(ctx)
     try:
         token = client.tokens.generate(name=description)
-        console.print(f"[green]Token generated:[/green] {token}")
+        # B_sdk4: the raw token used to be printed into the terminal, where it
+        # lands in scrollback and shell-session transcripts. It now goes to
+        # stdout alone, so redirecting to a file still works, while the
+        # human-facing confirmation goes to stderr.
+        console.print("[green]Token generated.[/green]", file=sys.stderr)
+        click.echo(token)
     except Exception as e:
         console.print(f"[red]Error generating token:[/red] {e}")
+        # B_cli/B_sdk: a failed command must exit non-zero. These blanket
+        # handlers printed the error and returned 0, so a script or CI job
+        # could not tell a working command from a broken one - which is
+        # exactly why the TypeErrors above went unnoticed for so long.
+        raise SystemExit(1)

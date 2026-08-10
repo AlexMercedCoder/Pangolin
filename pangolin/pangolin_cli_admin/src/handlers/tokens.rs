@@ -5,7 +5,10 @@ use serde_json::Value;
 
 pub async fn handle_revoke_token(client: &PangolinClient) -> Result<(), CliError> {
     let res = client
-        .post("/api/v1/tokens/revoke", &serde_json::json!({}))
+        // B_cli4: `/api/v1/tokens/revoke` does not exist; the routes are under
+        // `/api/v1/auth/`. Both revocation commands 404'd, so the documented
+        // logout path never worked from the admin CLI.
+        .post("/api/v1/auth/revoke", &serde_json::json!({}))
         .await?;
 
     if !res.status().is_success() {
@@ -32,7 +35,7 @@ pub async fn handle_revoke_token_by_id(
 ) -> Result<(), CliError> {
     let res = client
         .post(
-            &format!("/api/v1/tokens/revoke/{}", id),
+            &format!("/api/v1/auth/revoke/{}", id),
             &serde_json::json!({}),
         )
         .await?;
