@@ -243,6 +243,7 @@ pub async fn search_assets(
 
             // Apply permission-based filtering
             let filtered_results = crate::authz_utils::filter_assets(
+                tenant_id,
                 results,
                 &permissions,
                 session.role.clone(),
@@ -262,6 +263,7 @@ pub async fn search_assets(
                             let ns_str = namespace.join(".");
                             let required_actions = vec![pangolin_core::permission::Action::Read];
                             crate::authz_utils::has_asset_access(
+                                tenant_id,
                                 catalog_id,
                                 &ns_str,
                                 asset.id,

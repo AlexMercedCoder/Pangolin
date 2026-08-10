@@ -106,8 +106,13 @@ pub async fn search_assets_by_name(
         catalogs.iter().map(|c| (c.name.clone(), c.id)).collect();
 
     // Apply permission-based filtering
-    let filtered_assets =
-        crate::authz_utils::filter_assets(assets, &permissions, session.role.clone(), &catalog_map);
+    let filtered_assets = crate::authz_utils::filter_assets(
+        tenant_id,
+        assets,
+        &permissions,
+        session.role.clone(),
+        &catalog_map,
+    );
 
     // Filter by catalog if specified
     let mut all_results = Vec::new();
@@ -128,6 +133,7 @@ pub async fn search_assets_by_name(
             let namespace_str = namespace.join(".");
             let required_actions = vec![pangolin_core::permission::Action::Read];
             crate::authz_utils::has_asset_access(
+                tenant_id,
                 catalog_id,
                 &namespace_str,
                 asset.id,
@@ -401,8 +407,12 @@ pub async fn unified_search(
         .search_catalogs(tenant_id, &query.q)
         .await
         .map_err(ApiError::from)?;
-    let filtered_catalogs =
-        crate::authz_utils::filter_catalogs(catalogs, &permissions, session.role.clone());
+    let filtered_catalogs = crate::authz_utils::filter_catalogs(
+        tenant_id,
+        catalogs,
+        &permissions,
+        session.role.clone(),
+    );
     for c in filtered_catalogs {
         results.push(UnifiedSearchResult {
             id: Some(c.id.to_string()),
@@ -430,6 +440,7 @@ pub async fn unified_search(
         .collect();
 
     let filtered_namespaces = crate::authz_utils::filter_namespaces(
+        tenant_id,
         namespaces,
         &permissions,
         session.role.clone(),
@@ -452,6 +463,7 @@ pub async fn unified_search(
         .await
         .map_err(ApiError::from)?;
     let filtered_assets = crate::authz_utils::filter_assets(
+        tenant_id,
         assets,
         &permissions,
         session.role.clone(),
@@ -481,6 +493,7 @@ pub async fn unified_search(
                 session.role,
                 pangolin_core::user::UserRole::Root | pangolin_core::user::UserRole::TenantAdmin
             ) || crate::authz_utils::has_catalog_access(
+                tenant_id,
                 catalog_id,
                 &permissions,
                 &[pangolin_core::permission::Action::Read],

@@ -769,8 +769,12 @@ pub async fn list_catalogs(
                 Vec::new() // Root/TenantAdmin bypass filtering
             };
 
-            let filtered_catalogs =
-                crate::authz_utils::filter_catalogs(catalogs, &permissions, session.role.clone());
+            let filtered_catalogs = crate::authz_utils::filter_catalogs(
+                tenant_id,
+                catalogs,
+                &permissions,
+                session.role.clone(),
+            );
 
             tracing::info!(
                 "list_catalogs returning {} catalogs for user {}",

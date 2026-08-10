@@ -47,6 +47,14 @@ impl Claims {
                 .ok_or("Invalid issued_at timestamp")?,
             expires_at: DateTime::from_timestamp(self.exp, 0)
                 .ok_or("Invalid expires_at timestamp")?,
+            // Carried through so logout can revoke the token that is actually
+            // presented rather than the user id (B0j).
+            token_id: self
+                .jti
+                .as_ref()
+                .map(|id| Uuid::parse_str(id))
+                .transpose()
+                .map_err(|e| e.to_string())?,
         })
     }
 }

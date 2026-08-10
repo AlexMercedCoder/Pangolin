@@ -80,6 +80,47 @@ pub fn forbidden(detail: &str) -> Response {
     iceberg_error(StatusCode::FORBIDDEN, "ForbiddenException", detail)
 }
 
+/// `404` for a view that does not exist.
+pub fn no_such_view(identifier: &str) -> Response {
+    iceberg_error(
+        StatusCode::NOT_FOUND,
+        "NoSuchViewException",
+        &format!("View does not exist: {identifier}"),
+    )
+}
+
+/// `400` for a malformed or unusable request.
+pub fn bad_request(detail: &str) -> Response {
+    iceberg_error(StatusCode::BAD_REQUEST, "BadRequestException", detail)
+}
+
+/// `409` for a table that already exists.
+pub fn table_already_exists(identifier: &str) -> Response {
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "AlreadyExistsException",
+        &format!("Table already exists: {identifier}"),
+    )
+}
+
+/// `409` for a namespace that already exists.
+pub fn namespace_already_exists(namespace: &str) -> Response {
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "AlreadyExistsException",
+        &format!("Namespace already exists: {namespace}"),
+    )
+}
+
+/// `409` for a namespace that still has children.
+pub fn namespace_not_empty(namespace: &str) -> Response {
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "NamespaceNotEmptyException",
+        &format!("Namespace is not empty: {namespace}"),
+    )
+}
+
 /// `500`, with the underlying cause logged rather than returned.
 pub fn internal(context: &str) -> Response {
     iceberg_error(

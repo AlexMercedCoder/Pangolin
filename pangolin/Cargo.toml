@@ -63,7 +63,7 @@ async-trait = "0.1"
 dashmap = "6.0"
 futures = "0.3"
 tower = { version = "0.4", features = ["limit", "util"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "limit", "catch-panic"] }
 reqwest = { version = "0.11", features = ["json"] }
 url = "2.5"
 bytes = "1.5"

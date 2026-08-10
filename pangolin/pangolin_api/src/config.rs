@@ -102,6 +102,13 @@ pub struct AppConfig {
     pub oauth_redirect_allowlist: Vec<String>,
     /// Whether API keys minted before the key-id format are still accepted.
     pub allow_legacy_api_keys: bool,
+    /// Whether JWTs carrying no `jti` are still accepted (off by default).
+    ///
+    /// `Claims.jti` is `Option<String>` "for compatibility", and the middleware
+    /// used to skip the revocation check for such tokens - making them
+    /// unrevocable for their full lifetime (B0o). They are now rejected unless
+    /// an operator opts in for a migration window.
+    pub allow_tokens_without_jti: bool,
     /// Bind address and port.
     pub bind_address: String,
     pub port: u16,
@@ -213,7 +220,14 @@ impl AppConfig {
 
         let bind_address =
             env_opt("PANGOLIN_BIND_ADDRESS").unwrap_or_else(|| "0.0.0.0".to_string());
-        if no_auth && !dev_mode && !is_loopback(&bind_address) {
+        // B0h: the guard used to read `no_auth && !dev_mode && !is_loopback(..)`.
+        // That `!dev_mode` term meant `PANGOLIN_NO_AUTH=true PANGOLIN_DEV_MODE=true`
+        // started happily on the default `0.0.0.0` bind and treated every
+        // anonymous request as `TenantAdmin` - and those two flags are routinely
+        // set together in compose and dev setups, so the escape hatch was the
+        // common case. Dev mode relaxes secret strength, never network exposure:
+        // if auth is off, the listener must be loopback, unconditionally.
+        if no_auth && !is_loopback(&bind_address) {
             return Err(ConfigError::NoAuthOnPublicBind(bind_address));
         }
 
@@ -250,6 +264,7 @@ impl AppConfig {
             frontend_url,
             oauth_redirect_allowlist,
             allow_legacy_api_keys: env_bool("PANGOLIN_ALLOW_LEGACY_API_KEYS"),
+            allow_tokens_without_jti: env_bool("PANGOLIN_ALLOW_TOKENS_WITHOUT_JTI"),
             bind_address,
             port: env_parsed("PORT", 8080u16)?,
             log_format,
@@ -340,6 +355,14 @@ pub fn allow_legacy_api_keys() -> bool {
         return cfg.allow_legacy_api_keys;
     }
     env_bool("PANGOLIN_ALLOW_LEGACY_API_KEYS")
+}
+
+/// Whether JWTs with no `jti` are still honoured (off by default, see B0o).
+pub fn allow_tokens_without_jti() -> bool {
+    if let Some(cfg) = CONFIG.get() {
+        return cfg.allow_tokens_without_jti;
+    }
+    env_bool("PANGOLIN_ALLOW_TOKENS_WITHOUT_JTI")
 }
 
 /// Constant-time string comparison, for credential checks.

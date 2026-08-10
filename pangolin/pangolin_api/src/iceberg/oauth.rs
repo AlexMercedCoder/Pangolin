@@ -86,9 +86,15 @@ pub async fn handle_oauth_token(
         .map_err(ApiError::InternalError)?
         .ok_or_else(|| ApiError::unauthorized("Invalid client_id"))?;
 
-    // 4. Verify Active Status
-    if !service_user.active {
-        return Err(ApiError::unauthorized("Client is inactive"));
+    // 4. Verify Active Status *and* expiry.
+    //
+    // B0g: this checked only `active`, not `is_valid()` (= `active &&
+    // !is_expired()`). The API-key path in `auth_middleware` uses `is_valid()`
+    // correctly, so an *expired* service user was refused there but could still
+    // exchange `client_credentials` here for a fresh 1-hour JWT - fully
+    // bypassing key expiry, and renewably.
+    if !service_user.is_valid() {
+        return Err(ApiError::unauthorized("Client is inactive or expired"));
     }
 
     // 5. Verify Secret (API Key)

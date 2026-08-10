@@ -120,6 +120,34 @@ impl MongoStore {
         Ok(())
     }
 
+    /// Replace a namespace's properties wholesale; see the SQLite twin for why
+    /// a merge-only method could not implement Iceberg property removals (B16h).
+    pub async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: HashMap<String, String>,
+    ) -> Result<()> {
+        let filter = doc! {
+            "tenant_id": to_bson_uuid(tenant_id),
+            "catalog_name": catalog_name,
+            "name": namespace
+        };
+
+        let props = bson::to_bson(&properties)?;
+        let update = doc! { "$set": { "properties": props } };
+        let result = self
+            .db
+            .collection::<Document>("namespaces")
+            .update_one(filter, update)
+            .await?;
+        if result.matched_count == 0 {
+            return Err(anyhow::anyhow!("Namespace not found"));
+        }
+        Ok(())
+    }
+
     pub async fn count_namespaces(&self, tenant_id: Uuid) -> Result<usize> {
         let filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
         let count = self.namespaces().count_documents(filter).await?;

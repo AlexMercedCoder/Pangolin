@@ -101,16 +101,25 @@ impl CatalogStore for CachedCatalogStore {
     }
 
     async fn delete_warehouse(&self, tenant_id: Uuid, name: String) -> Result<()> {
-        // Invalidate cache on delete
+        // B16m: delete first, *then* invalidate. Invalidating first opened a
+        // window in which a concurrent `get_warehouse` missed the cache, read the
+        // still-present row, and re-inserted it with a full TTL - so the deleted
+        // warehouse's cloud credentials kept being vended for up to the TTL after
+        // delete returned success. Deleting first means any racing read either
+        // sees the row (and the invalidate below clears it) or does not find it.
+        let key = (tenant_id, name.clone());
+        let result = self.inner.delete_warehouse(tenant_id, name.clone()).await;
+
         tracing::info!(
             "Cache INVALIDATE (Delete) for warehouse: {}/{}",
             tenant_id,
             name
         );
-        self.warehouse_cache
-            .invalidate(&(tenant_id, name.clone()))
-            .await;
-        self.inner.delete_warehouse(tenant_id, name).await
+        // Invalidate on the error path too: the delete may have partially
+        // applied, and a stale credential entry is the worse failure.
+        self.warehouse_cache.invalidate(&key).await;
+
+        result
     }
 
     // --- Passthrough Operations (Uncached) ---
@@ -221,6 +230,18 @@ impl CatalogStore for CachedCatalogStore {
     ) -> Result<()> {
         self.inner
             .update_namespace_properties(tenant_id, catalog_name, namespace, properties)
+            .await
+    }
+
+    async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        self.inner
+            .replace_namespace_properties(tenant_id, catalog_name, namespace, properties)
             .await
     }
 
@@ -475,6 +496,9 @@ impl CatalogStore for CachedCatalogStore {
     }
     async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()> {
         self.inner.write_file(location, content).await
+    }
+    async fn delete_file(&self, location: &str) -> Result<()> {
+        self.inner.delete_file(location).await
     }
 
     // Maintenance Operations

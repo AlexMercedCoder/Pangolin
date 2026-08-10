@@ -1,5 +1,6 @@
 use crate::auth::TenantId;
-use crate::iceberg::AppState;
+use crate::authz::check_permission;
+use crate::iceberg::{parse_namespace, parse_table_identifier, AppState};
 use axum::Extension;
 use axum::{
     extract::{Path, Query, State},
@@ -7,6 +8,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use pangolin_core::permission::{Action, PermissionScope};
+use pangolin_core::user::UserSession;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use utoipa::{IntoParams, ToSchema};
@@ -180,6 +183,17 @@ pub async fn get_gcp_token(_service_account_key_json: &str) -> Result<String, St
 
 /// Get credentials for accessing a table
 /// This endpoint vends credentials based on the catalog's warehouse configuration
+///
+/// Authorization (B0b): this is the highest-value endpoint in the API - it hands
+/// out real cloud-storage credentials for the warehouse - and it used to perform
+/// *no* authorization at all. It took no `UserSession`, called no
+/// `check_permission`, hardcoded `["read", "write"]`, and never looked the asset
+/// up: `namespace`/`table` were only string-concatenated into a resource path.
+/// Any authenticated tenant member could obtain read+write credentials for the
+/// whole warehouse, naming a table they had no rights to and that need not exist.
+///
+/// Now the asset must exist, the caller must hold `Read` on it, and `"write"` is
+/// added to the vended permission set only if the caller also holds `Write`.
 #[utoipa::path(
     get,
     path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}/credentials",
@@ -192,7 +206,7 @@ pub async fn get_gcp_token(_service_account_key_json: &str) -> Result<String, St
     responses(
         (status = 200, description = "Credentials vended", body = LoadCredentialsResponse),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "Catalog or Warehouse not found"),
+        (status = 404, description = "Catalog, table or warehouse not found"),
         (status = 500, description = "Internal server error")
     ),
     security(("bearer_auth" = []))
@@ -200,6 +214,7 @@ pub async fn get_gcp_token(_service_account_key_json: &str) -> Result<String, St
 pub async fn get_table_credentials(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((catalog_name, namespace, table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
@@ -218,7 +233,55 @@ pub async fn get_table_credentials(
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
 
-    // 2. Check if catalog has a warehouse
+    // 2. Resolve the asset the caller is asking for. Vending credentials for a
+    // table that does not exist is not a meaningful operation, and resolving it
+    // is what makes an asset-scoped permission check possible at all.
+    let (ns_levels, branch) = parse_namespace(&namespace);
+    let (table_name, branch_from_table) = parse_table_identifier(&table);
+    let branch = branch_from_table.or(branch);
+
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch,
+            ns_levels.clone(),
+            table_name.clone(),
+        )
+        .await
+    {
+        Ok(Some(a)) => a,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+    };
+
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: ns_levels.join("."),
+        asset_id: asset.id,
+    };
+
+    // 3. Read is the floor: without it, no credentials at all.
+    match check_permission(&store, &session, &Action::Read, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Permission check failed: {}", e),
+            )
+                .into_response()
+        }
+    }
+
+    // Write is vended only when actually held, so a read-only principal gets
+    // read-only cloud credentials.
+    let can_write = matches!(
+        check_permission(&store, &session, &Action::Write, &scope).await,
+        Ok(true)
+    );
+
+    // 4. Check if catalog has a warehouse
     let warehouse_name = match catalog.warehouse_name {
         Some(name) => name,
         None => {
@@ -231,16 +294,23 @@ pub async fn get_table_credentials(
         }
     };
 
-    // 3. Get warehouse configuration
+    // 5. Get warehouse configuration
     let warehouse = match store.get_warehouse(tenant_id, warehouse_name).await {
         Ok(Some(wh)) => wh,
         Ok(None) => return (StatusCode::NOT_FOUND, "Warehouse not found").into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     };
 
-    // 4. Vend credentials using the credential signer infrastructure
-    let resource_path = format!("{}/{}", namespace, table);
-    let permissions = vec!["read".to_string(), "write".to_string()];
+    // 6. Vend credentials using the credential signer infrastructure
+    let resource_path = if ns_levels.is_empty() {
+        table_name.clone()
+    } else {
+        format!("{}/{}", ns_levels.join("/"), table_name)
+    };
+    let mut permissions = vec!["read".to_string()];
+    if can_write {
+        permissions.push("write".to_string());
+    }
 
     match crate::credential_vending::vend_credentials_for_warehouse(
         &warehouse,

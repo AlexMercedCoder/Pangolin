@@ -120,4 +120,32 @@ impl SqliteStore {
         }
         Ok(())
     }
+
+    /// Replace a namespace's properties wholesale.
+    ///
+    /// `update_namespace_properties` merges, which cannot express a *removal*.
+    /// The Iceberg `updateProperties` endpoint takes both `updates` and
+    /// `removals`, and the handler used to ignore removals entirely while
+    /// reporting success (B16h); it now computes the resulting map and writes it
+    /// through here.
+    pub async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: HashMap<String, String>,
+    ) -> Result<()> {
+        let namespace_path = serde_json::to_string(&namespace)?;
+        let result = sqlx::query("UPDATE namespaces SET properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ?")
+            .bind(serde_json::to_string(&properties)?)
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(&namespace_path)
+            .execute(&self.pool)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Namespace not found"));
+        }
+        Ok(())
+    }
 }

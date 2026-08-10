@@ -15,11 +15,44 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct GenerateTokenRequest {
     pub tenant_id: String,
     pub username: Option<String>,
     pub roles: Option<Vec<String>>,
     pub expires_in_hours: Option<u64>,
+}
+
+/// Upper bound on a caller-requested token lifetime.
+///
+/// `expires_in_hours` is attacker-controlled and used to be fed straight into
+/// `chrono::Duration::hours`, which *panics* on a large enough value - before
+/// the `checked_add_signed().unwrap()` below it could even run (B0m). There is
+/// no `CatchPanicLayer` under the router, so that panic aborted the connection
+/// task. Clamping first makes the arithmetic total.
+const MAX_TOKEN_LIFETIME_HOURS: u64 = 24 * 365;
+
+/// Rank roles so a caller cannot mint a token more privileged than itself.
+fn role_rank(role: &UserRole) -> u8 {
+    match role {
+        UserRole::Root => 3,
+        UserRole::TenantAdmin => 2,
+        UserRole::TenantUser => 1,
+    }
+}
+
+/// Parse a role name from a token request.
+///
+/// Accepts both the Debug-ish spellings the old code matched and the kebab-case
+/// serde names, but unknown values are now an error rather than a silent
+/// downgrade to `TenantUser`.
+fn parse_role(name: &str) -> Option<UserRole> {
+    match name {
+        "Root" | "root" => Some(UserRole::Root),
+        "Admin" | "admin" | "TenantAdmin" | "tenant-admin" => Some(UserRole::TenantAdmin),
+        "TenantUser" | "tenant-user" | "user" => Some(UserRole::TenantUser),
+        _ => None,
+    }
 }
 
 #[derive(Serialize, ToSchema)]
@@ -29,8 +62,21 @@ pub struct GenerateTokenResponse {
     pub tenant_id: String,
 }
 
-/// Generate a JWT token for a tenant
-/// This endpoint allows generating tokens for testing and development
+/// Generate a JWT token for a tenant.
+///
+/// Authorization (B0a): this handler used to take no session at all, so any
+/// authenticated principal - including the lowest-privilege `TenantUser` or any
+/// service-user API key - could POST `{"tenant_id": "<any>", "roles":["Root"]}`
+/// and receive a signed `Root` token for an arbitrary tenant. That is a total
+/// privilege escalation, since `check_permission` short-circuits for `Root`.
+///
+/// The rules now are:
+///   * `Root` may mint anything.
+///   * `TenantAdmin` may mint only for its own tenant, and only a role at or
+///     below its own.
+///   * everyone else is refused.
+/// A role supplied in the body is never trusted for a non-`Root` caller beyond
+/// those bounds.
 #[utoipa::path(
     post,
     path = "/api/v1/tokens",
@@ -39,59 +85,106 @@ pub struct GenerateTokenResponse {
     responses(
         (status = 200, description = "Token generated", body = GenerateTokenResponse),
         (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
         (status = 500, description = "Internal server error")
-    )
+    ),
+    security(("bearer_auth" = []))
 )]
 pub async fn generate_token(
     State(store): State<AppState>,
+    Extension(session): Extension<UserSession>,
     Json(payload): Json<GenerateTokenRequest>,
 ) -> impl IntoResponse {
     // Validate tenant_id is a valid UUID
-    let _tenant_uuid = match Uuid::parse_str(&payload.tenant_id) {
+    let tenant_uuid = match Uuid::parse_str(&payload.tenant_id) {
         Ok(uuid) => uuid,
         Err(_) => return (StatusCode::BAD_REQUEST, "Invalid tenant_id format").into_response(),
     };
 
+    let caller_is_root = session.role == UserRole::Root;
+    if !caller_is_root {
+        if session.role != UserRole::TenantAdmin {
+            return (
+                StatusCode::FORBIDDEN,
+                "Root or tenant-admin access required to mint tokens",
+            )
+                .into_response();
+        }
+        if session.tenant_id != Some(tenant_uuid) {
+            return (
+                StatusCode::FORBIDDEN,
+                "Cannot mint a token for another tenant",
+            )
+                .into_response();
+        }
+    }
+
     let secret = crate::config::jwt_secret();
-    let expires_in = payload.expires_in_hours.unwrap_or(24);
+    let expires_in = payload
+        .expires_in_hours
+        .unwrap_or(24)
+        .min(MAX_TOKEN_LIFETIME_HOURS);
     let now = chrono::Utc::now();
-    let exp = now
+    let Some(exp) = now
         .checked_add_signed(chrono::Duration::hours(expires_in as i64))
-        .unwrap()
-        .timestamp();
+        .map(|t| t.timestamp())
+    else {
+        return (StatusCode::BAD_REQUEST, "expires_in_hours out of range").into_response();
+    };
 
     let username = payload.username.unwrap_or_else(|| "api-user".to_string());
 
-    // Map role strings to UserRole
-    // Default to lookup user role or TenantUser if not specified
-    let role = if let Some(roles) = &payload.roles {
-        if let Some(first_role) = roles.first() {
-            match first_role.as_str() {
-                "Root" | "root" => UserRole::Root,
-                "Admin" | "admin" | "TenantAdmin" | "tenant-admin" => UserRole::TenantAdmin,
-                _ => UserRole::TenantUser,
-            }
-        } else {
-            UserRole::TenantUser
+    // Map role strings to UserRole. An unknown name is now a 400 rather than a
+    // silent downgrade, so a typo cannot quietly hand out the wrong role.
+    let requested_role = if let Some(roles) = &payload.roles {
+        match roles.first() {
+            Some(first_role) => match parse_role(first_role) {
+                Some(r) => Some(r),
+                None => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("Unknown role: {}", first_role),
+                    )
+                        .into_response()
+                }
+            },
+            None => None,
         }
     } else {
-        // Try to lookup user
-        if let Ok(Some(user)) = store.get_user_by_username(&username).await {
-            tracing::info!(
-                "generate_token: Found user '{}' with role {:?} ({})",
-                username,
-                user.role,
-                user.id
-            );
-            user.role
-        } else {
-            tracing::warn!(
-                "generate_token: User '{}' not found, defaulting to TenantUser",
-                username
-            );
-            UserRole::TenantUser
+        None
+    };
+
+    let role = match requested_role {
+        Some(r) => r,
+        None => {
+            // Try to look up the user's own role.
+            if let Ok(Some(user)) = store.get_user_by_username(&username).await {
+                tracing::info!(
+                    "generate_token: Found user '{}' with role {:?} ({})",
+                    username,
+                    user.role,
+                    user.id
+                );
+                user.role
+            } else {
+                tracing::warn!(
+                    "generate_token: User '{}' not found, defaulting to TenantUser",
+                    username
+                );
+                UserRole::TenantUser
+            }
         }
     };
+
+    // A non-root caller can never mint above its own rank, whatever the body or
+    // the looked-up user says.
+    if !caller_is_root && role_rank(&role) > role_rank(&session.role) {
+        return (
+            StatusCode::FORBIDDEN,
+            "Cannot mint a token more privileged than the caller",
+        )
+            .into_response();
+    }
 
     // sub MUST be a UUID for to_session() to work
     // If user exists, use their ID. Else generate one.
@@ -121,10 +214,7 @@ pub async fn generate_token(
             // Store token info for listing
             let token_info = TokenInfo {
                 id: token_id,
-                tenant_id: match Uuid::parse_str(&payload.tenant_id) {
-                    Ok(u) => u,
-                    Err(_) => Uuid::default(), // Should be validated above
-                },
+                tenant_id: tenant_uuid,
                 user_id,
                 username: username.clone(),
                 expires_at: chrono::DateTime::from_timestamp(exp, 0).unwrap_or_default(),
@@ -141,7 +231,7 @@ pub async fn generate_token(
             let response = GenerateTokenResponse {
                 token,
                 expires_at: chrono::DateTime::from_timestamp(exp, 0)
-                    .unwrap()
+                    .unwrap_or_default()
                     .to_rfc3339(),
                 tenant_id: payload.tenant_id,
             };
@@ -190,11 +280,22 @@ pub async fn revoke_current_token(
     Extension(session): Extension<UserSession>,
     Json(payload): Json<RevokeTokenRequest>,
 ) -> impl IntoResponse {
-    // Generate an expiration time (tokens typically expire in 24 hours)
-    let expires_at = Utc::now() + Duration::hours(24);
+    // Revoke until the token would have expired anyway; the blacklist entry
+    // only has to outlive the token.
+    let expires_at = session.expires_at.max(Utc::now());
 
-    // Use the user_id as the token_id for revocation
-    let token_id = session.user_id;
+    // B0j: revoke the token's own `jti`. This used to revoke `session.user_id`,
+    // which no token ever carries as its `jti`, so the middleware's revocation
+    // check (keyed by `jti`) never matched: logout returned 200 and the token
+    // stayed valid for its full lifetime.
+    let Some(token_id) = session.token_id else {
+        // API-key and root-basic-auth sessions have no revocable JWT.
+        return (
+            StatusCode::BAD_REQUEST,
+            "This session is not backed by a revocable token",
+        )
+            .into_response();
+    };
 
     match store
         .revoke_token(token_id, expires_at, payload.reason)
@@ -474,10 +575,16 @@ pub async fn rotate_token(
     let secret = crate::config::jwt_secret();
     let now = chrono::Utc::now();
     let expires_in = 24; // Default rotation to 24h
-    let exp = now
+    let Some(exp) = now
         .checked_add_signed(chrono::Duration::hours(expires_in))
-        .unwrap()
-        .timestamp();
+        .map(|t| t.timestamp())
+    else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to compute token expiry",
+        )
+            .into_response();
+    };
 
     let token_id = Uuid::new_v4();
     let tenant_id_str = session.tenant_id.map(|t| t.to_string()).unwrap_or_default();
@@ -514,21 +621,31 @@ pub async fn rotate_token(
                 tracing::warn!("Failed to store rotated token info: {}", e);
             }
 
-            // 3. Revoke old token (if we knew its ID - session doesn't carry jti currently in UserSession struct?)
-            // Wait, UserSession struct usually just has user info.
-            // Current `auth_middleware` decodes claims but might not pass `jti` to `UserSession`.
-            // Let's check `UserSession`. If it doesn't have token ID, we can't revoke the *specific* old token easily.
-            // We can revoke ALL other tokens for this user? No, that's too aggressive.
-            // If we can't revoke the old one, "Rotation" is just "Get New Token".
-            // Ideally UserSession should have `token_id`.
-            // I'll skip revocation of old token for now if I lack the ID, but assume the client will discard it.
-            // Implementation: Just return new token.
-            // Update: We can update UserSession to include token_id (jti) later.
+            // 3. Revoke the old token. `UserSession` now carries the presenting
+            // token's `jti` (B0j), so rotation is a real rotation rather than
+            // "issue a second valid token and hope the client forgets the first".
+            if let Some(old_token_id) = session.token_id {
+                if let Err(e) = store
+                    .revoke_token(
+                        old_token_id,
+                        session.expires_at.max(Utc::now()),
+                        Some("Rotated".to_string()),
+                    )
+                    .await
+                {
+                    tracing::error!(error = %e, "failed to revoke the rotated-out token");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Issued a new token but could not revoke the old one",
+                    )
+                        .into_response();
+                }
+            }
 
             let response = GenerateTokenResponse {
                 token,
                 expires_at: chrono::DateTime::from_timestamp(exp, 0)
-                    .unwrap()
+                    .unwrap_or_default()
                     .to_rfc3339(),
                 tenant_id: tenant_id_str,
             };

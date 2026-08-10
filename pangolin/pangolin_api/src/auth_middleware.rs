@@ -57,6 +57,12 @@ pub fn create_session(
         role,
         issued_at: now,
         expires_at,
+        // Sessions built here are not derived from a presented JWT: they are
+        // either about to have a token minted *from* them (login), or backed by
+        // an API key / root basic auth, which have nothing to revoke. Sessions
+        // that do come from a bearer token get their `jti` in
+        // `Claims::to_session`.
+        token_id: None,
     }
 }
 
@@ -223,6 +229,18 @@ pub async fn auth_middleware(
         // tests and tools can exercise a specific identity even in NO_AUTH mode.
     }
 
+    // Public endpoints, matched structurally rather than by suffix (A-11).
+    //
+    // B0o: this check used to sit *below* the API-key branch, which returned
+    // unconditionally. A client that sets `X-API-Key` globally - the normal way
+    // to configure an HTTP client - therefore could not reach `/v1/config`,
+    // `/health` or the OAuth token endpoint at all, the opposite of the
+    // documented ordering. Resolving public paths first also keeps an
+    // unauthenticated `/health` probe away from bcrypt.
+    if crate::public_paths::is_public_path(&path) {
+        return next.run(req).await;
+    }
+
     // Service-user API key.
     if let Some(api_key_header) = req.headers().get("X-API-Key") {
         let Ok(api_key) = api_key_header.to_str() else {
@@ -269,11 +287,6 @@ pub async fn auth_middleware(
                 return (StatusCode::UNAUTHORIZED, "Invalid or expired API key").into_response();
             }
         }
-    }
-
-    // Public endpoints, matched structurally rather than by suffix (A-11).
-    if crate::public_paths::is_public_path(&path) {
-        return next.run(req).await;
     }
 
     let auth_header = req
@@ -369,8 +382,19 @@ pub async fn auth_middleware(
     // Revocation must fail *closed*. Previously an error from the store was
     // logged and ignored, so during a database blip every revoked token was
     // accepted again (A-13).
-    if let Some(ref jti_str) = claims.jti {
-        if let Ok(token_id) = uuid::Uuid::parse_str(jti_str) {
+    //
+    // B0o: the two nested `if let`s also failed open on the *shape* of the
+    // claim. A token whose `jti` was present but not a UUID skipped the
+    // revocation check entirely and was unrevocable for its whole lifetime, and
+    // a token minted with no `jti` at all was likewise exempt. A malformed `jti`
+    // is now a hard rejection, and the no-`jti` case is accepted only when the
+    // operator has explicitly opted into legacy tokens.
+    match claims.jti.as_deref() {
+        Some(jti_str) => {
+            let Ok(token_id) = uuid::Uuid::parse_str(jti_str) else {
+                tracing::warn!(jti = %jti_str, "rejected a token with a malformed jti");
+                return (StatusCode::UNAUTHORIZED, "Invalid token").into_response();
+            };
             match store.is_token_revoked(token_id).await {
                 Ok(true) => {
                     tracing::warn!(jti = %jti_str, "revoked token presented");
@@ -388,6 +412,15 @@ pub async fn auth_middleware(
                     )
                         .into_response();
                 }
+            }
+        }
+        None => {
+            if !crate::config::allow_tokens_without_jti() {
+                tracing::warn!(
+                    "rejected a token with no jti; it could never be revoked. Re-issue the \
+                     token, or set PANGOLIN_ALLOW_TOKENS_WITHOUT_JTI=true during migration"
+                );
+                return (StatusCode::UNAUTHORIZED, "Invalid token").into_response();
             }
         }
     }

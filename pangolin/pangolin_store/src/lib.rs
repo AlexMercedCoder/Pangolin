@@ -1,5 +1,6 @@
 pub mod aws_utils;
 pub mod azure_signer;
+pub mod file_delete;
 pub mod gcp_signer;
 pub mod memory;
 pub mod mongo;
@@ -118,7 +119,21 @@ pub trait CatalogStore: Send + Sync + Signer {
         catalog_name: &str,
         namespace: Vec<String>,
     ) -> Result<()>;
+    /// Merge `properties` into the namespace's existing properties.
     async fn update_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()>;
+    /// Replace the namespace's properties with `properties`.
+    ///
+    /// The merge-only method above cannot express a removal, which is why the
+    /// Iceberg `updateProperties` handler silently dropped every `removals`
+    /// entry while reporting success (B16h). Errors when the namespace does not
+    /// exist, so "updated nothing" and "no such namespace" are distinguishable.
+    async fn replace_namespace_properties(
         &self,
         tenant_id: Uuid,
         catalog_name: &str,
@@ -340,6 +355,13 @@ pub trait CatalogStore: Send + Sync + Signer {
     // Generic File IO (for metadata files)
     async fn read_file(&self, location: &str) -> Result<Vec<u8>>;
     async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()>;
+    /// Delete a single file, resolving warehouse credentials from the location.
+    ///
+    /// Needed so the commit path can reclaim the metadata file it wrote before
+    /// losing a compare-and-swap (B16d), and so `create_table` can clean up
+    /// after a failed registration (B16g). Deleting something that is not there
+    /// succeeds.
+    async fn delete_file(&self, location: &str) -> Result<()>;
 
     // Maintenance Operations
     async fn expire_snapshots(

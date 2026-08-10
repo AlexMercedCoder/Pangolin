@@ -25,6 +25,50 @@ pub struct OAuthUserInfo {
     pub sub: String,
     pub email: String,
     pub name: Option<String>,
+    /// Whether the provider asserts the address has been verified.
+    ///
+    /// Absent on providers that do not report it - notably GitHub's
+    /// `/user` endpoint - which is why an absent value is treated as
+    /// *unverified* (B0l).
+    #[serde(default)]
+    pub email_verified: Option<bool>,
+}
+
+impl OAuthUserInfo {
+    fn email_is_verified(&self) -> bool {
+        self.email_verified.unwrap_or(false)
+    }
+}
+
+/// Domains whose *verified* addresses may link to a pre-existing local account.
+///
+/// Empty by default: with no allowlist configured, email never links an account,
+/// and only a `(provider, subject)` match does.
+fn email_link_domain_allowlist() -> Vec<String> {
+    std::env::var("PANGOLIN_OAUTH_EMAIL_LINK_DOMAINS")
+        .ok()
+        .map(|v| {
+            v.split(',')
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// May `email` be used to adopt an existing local account?
+fn email_may_link(user_info: &OAuthUserInfo, allowlist: &[String]) -> bool {
+    if !user_info.email_is_verified() {
+        return false;
+    }
+    let Some(domain) = user_info
+        .email
+        .rsplit_once('@')
+        .map(|(_, d)| d.to_ascii_lowercase())
+    else {
+        return false;
+    };
+    allowlist.iter().any(|allowed| *allowed == domain)
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -180,22 +224,31 @@ pub async fn oauth_callback(
     };
 
     // 4. Find or Create User
-    // We assume email is unique and can be used to link accounts or create new ones
-    // For MVP, we'll create a new user if not found by email, or maybe by oauth_subject
-    // Ideally look up by (provider, subject)
-
-    // Since CatalogStore doesn't expose `get_user_by_oauth` yet, we'll use `get_user_by_username` as a fallback or iterate
-    // But `CatalogStore` trait needs a method for this efficiently.
-    // For now, let's list users and filter (inefficient but works for MemoryStore)
-    // Or better, let's just stick to email for now if unique.
-
-    // Let's implement a rudimentary lookup
+    //
+    // B0l: the match used to include `|| u.email == user_info.email`, with no
+    // `email_verified` check and no provider binding. Anyone who could set a
+    // matching address on *any* configured provider - GitHub happily reports
+    // unverified addresses - logged in as that Pangolin user, including the
+    // seeded `TenantAdmin`. Identity is `(provider, subject)`; an address is
+    // only allowed to adopt a pre-existing account when the provider says it is
+    // verified *and* its domain is one the operator listed.
     let all_users = store.list_users(None, None).await.unwrap_or_default();
+    let allowlist = email_link_domain_allowlist();
+    let may_link_by_email = email_may_link(&user_info, &allowlist);
+
     let existing_user = all_users.into_iter().find(|u| {
-        (u.oauth_provider == Some(provider_enum.clone())
-            && u.oauth_subject == Some(user_info.sub.clone()))
-            || u.email == user_info.email
+        let subject_match = u.oauth_provider == Some(provider_enum.clone())
+            && u.oauth_subject == Some(user_info.sub.clone());
+        let email_match = may_link_by_email && u.email == user_info.email;
+        subject_match || email_match
     });
+
+    if !may_link_by_email && !allowlist.is_empty() && !user_info.email_is_verified() {
+        tracing::warn!(
+            provider = %provider,
+            "OAuth provider reported an unverified email; not linking by address"
+        );
+    }
 
     let user = match existing_user {
         Some(u) => {

@@ -233,6 +233,7 @@ fn create_test_metadata() -> TableMetadata {
         last_updated_ms: 1234567890,
         last_column_id: 1,
         schemas: vec![Schema {
+            type_: "struct".to_string(),
             schema_id: 0,
             fields: vec![],
             identifier_field_ids: None,
@@ -242,6 +243,7 @@ fn create_test_metadata() -> TableMetadata {
             spec_id: 0,
             fields: vec![],
         }],
+        last_partition_id: 999,
         properties: Some(HashMap::new()),
         current_snapshot_id: None,
         snapshots: None,

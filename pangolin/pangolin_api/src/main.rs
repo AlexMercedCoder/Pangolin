@@ -114,11 +114,25 @@ async fn main() {
     // the compare-and-swap that publishes it leaks an orphaned metadata file.
     let serve = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal(shutdown_grace));
 
-    if let Err(e) = serve.await {
-        tracing::error!("server error: {e}");
-        std::process::exit(1);
+    // B16n: `shutdown_grace` used to be logged and nothing else. There was no
+    // bound on the drain at all, so `with_graceful_shutdown` waited for
+    // in-flight connections *indefinitely* - one hung upstream call blocked
+    // SIGTERM past the k8s termination grace period and into a SIGKILL, which
+    // is exactly the mid-commit kill this whole path exists to avoid.
+    // `PANGOLIN_SHUTDOWN_GRACE_SECS` now actually bounds the drain.
+    match tokio::time::timeout(shutdown_grace, serve).await {
+        Ok(Ok(())) => tracing::info!("shutdown complete"),
+        Ok(Err(e)) => {
+            tracing::error!("server error: {e}");
+            std::process::exit(1);
+        }
+        Err(_) => {
+            tracing::warn!(
+                grace_secs = shutdown_grace.as_secs(),
+                "drain did not finish within the shutdown grace period; exiting anyway"
+            );
+        }
     }
-    tracing::info!("shutdown complete");
 }
 
 /// Probe this instance's readiness endpoint. Returns a process exit code.
@@ -367,4 +381,12 @@ async fn shutdown_signal(grace: std::time::Duration) {
     // while in-flight requests finish.
     health::mark_draining();
     tracing::info!(grace_secs = grace.as_secs(), "draining in-flight requests");
+
+    // Give the load balancer a moment to observe the failing readiness probe
+    // before the listener stops accepting. Without this pause the LB can still
+    // be routing new connections at the instant we stop accepting them, which
+    // shows up to clients as connection resets during every rolling update.
+    // Capped so it can never consume the whole grace budget.
+    let deregistration_pause = std::cmp::min(grace / 4, std::time::Duration::from_secs(5));
+    tokio::time::sleep(deregistration_pause).await;
 }

@@ -151,8 +151,14 @@ pub fn app_with_options(
             get(iceberg::namespaces::list_namespaces).post(iceberg::namespaces::create_namespace),
         )
         .route(
+            // `loadNamespaceMetadata` and `namespaceExists` were on the README's
+            // "not implemented" list: a client could create a namespace and set
+            // properties but never read them back, and had no cheap existence
+            // probe.
             "/v1/:prefix/namespaces/:namespace",
-            delete(iceberg::namespaces::delete_namespace),
+            get(iceberg::namespaces::load_namespace_metadata)
+                .head(iceberg::namespaces::namespace_exists)
+                .delete(iceberg::namespaces::delete_namespace),
         )
         .route(
             "/v1/:prefix/namespaces/:namespace/properties",
@@ -192,7 +198,9 @@ pub fn app_with_options(
         )
         .route(
             "/v1/:prefix/v1/namespaces/:namespace",
-            delete(iceberg::namespaces::delete_namespace),
+            get(iceberg::namespaces::load_namespace_metadata)
+                .head(iceberg::namespaces::namespace_exists)
+                .delete(iceberg::namespaces::delete_namespace),
         )
         .route(
             "/v1/:prefix/v1/namespaces/:namespace/properties",
@@ -558,15 +566,33 @@ pub fn app_with_options(
         // Resource safety. There were previously no limits of any kind (A-20):
         // a single large POST could be buffered without bound and a slow
         // backend request had no deadline.
+        //
+        // Layer order matters, and `.layer()` applies *outermost last*, so this
+        // list reads inside-out: body limit is innermost, then the concurrency
+        // limiter, then the timeout, then load shedding.
+        //
+        // B16l: the timeout used to sit *inside* the concurrency limiter, so a
+        // request queued for one of the permits had no deadline at all - the
+        // 30s clock only started once it was admitted. Under sustained overload
+        // the queue grew without bound and clients saw latencies far past
+        // `PANGOLIN_REQUEST_TIMEOUT_SECS`. With the timeout outside, the
+        // deadline covers queueing time, which is what a client's timeout budget
+        // actually cares about.
         .layer(DefaultBodyLimit::max(options.body_limit_bytes))
-        .layer(tower_http::timeout::TimeoutLayer::new(
-            options.request_timeout,
-        ))
         // GlobalConcurrencyLimitLayer rather than ConcurrencyLimitLayer: the
         // latter's service is not `Clone`, which axum requires.
         .layer(tower::limit::GlobalConcurrencyLimitLayer::new(
             options.concurrency_limit,
         ))
+        .layer(tower_http::timeout::TimeoutLayer::new(
+            options.request_timeout,
+        ))
+        // B0m: token issuance could be driven to panic by a request-controlled
+        // `expires_in_hours`, and with no catch-panic layer the panic tore down
+        // the whole connection task rather than failing one request. The
+        // arithmetic is now total, but a panic anywhere else should still be a
+        // 500 for one caller rather than a dropped connection for several.
+        .layer(tower_http::catch_panic::CatchPanicLayer::new())
         // Request IDs, access logging and metrics. `tower-http` was already
         // built with the `trace` feature but `TraceLayer` was never applied.
         .layer(axum::middleware::from_fn(observability::track_request))

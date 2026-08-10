@@ -56,6 +56,14 @@ pub struct UserSession {
     pub role: UserRole,
     pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    /// The `jti` of the bearer token that produced this session, when there was
+    /// one. Revocation is keyed by `jti`, so logout has to revoke *this* id -
+    /// revoking `user_id` (as it once did) blacklists an id no token ever
+    /// carries, and the token keeps working until it expires naturally.
+    ///
+    /// `None` for sessions with no underlying JWT (API keys, root basic auth).
+    #[serde(default)]
+    pub token_id: Option<Uuid>,
 }
 
 /// Service user for API key authentication

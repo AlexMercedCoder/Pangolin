@@ -18,7 +18,10 @@ pub mod tables;
 pub mod types;
 
 // Re-export types for convenience
-pub use error::iceberg_error;
+pub use error::{
+    bad_request, forbidden, iceberg_error, internal, namespace_already_exists, namespace_not_empty,
+    no_such_namespace, no_such_table, no_such_view, table_already_exists,
+};
 pub use types::*;
 pub type AppState = std::sync::Arc<dyn pangolin_store::CatalogStore + Send + Sync>;
 

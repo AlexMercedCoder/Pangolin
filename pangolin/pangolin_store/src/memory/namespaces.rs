@@ -3,6 +3,17 @@ use anyhow::Result;
 use pangolin_core::model::*;
 use uuid::Uuid;
 
+/// The single encoding of a namespace path into a map key.
+///
+/// B17: create/get keyed with `join(".")` (via `Namespace::to_string`) while
+/// delete/update keyed with `join("\x1F")`. The two never met, so a multi-level
+/// namespace could never be deleted or updated on the memory backend - both
+/// returned "Namespace not found" - while the SQL backends succeeded. One helper
+/// used everywhere makes that class of divergence impossible.
+fn ns_key(tenant_id: Uuid, catalog_name: &str, namespace: &[String]) -> (Uuid, String, String) {
+    (tenant_id, catalog_name.to_string(), namespace.join("."))
+}
+
 impl MemoryStore {
     pub(crate) async fn create_namespace_internal(
         &self,
@@ -10,7 +21,7 @@ impl MemoryStore {
         catalog_name: &str,
         namespace: Namespace,
     ) -> Result<()> {
-        let key = (tenant_id, catalog_name.to_string(), namespace.to_string());
+        let key = ns_key(tenant_id, catalog_name, &namespace.name);
         self.namespaces.insert(key, namespace);
         Ok(())
     }
@@ -57,7 +68,7 @@ impl MemoryStore {
         catalog_name: &str,
         namespace: Vec<String>,
     ) -> Result<Option<Namespace>> {
-        let key = (tenant_id, catalog_name.to_string(), namespace.join("."));
+        let key = ns_key(tenant_id, catalog_name, &namespace);
         if let Some(n) = self.namespaces.get(&key) {
             Ok(Some(n.value().clone()))
         } else {
@@ -70,8 +81,7 @@ impl MemoryStore {
         catalog_name: &str,
         namespace: Vec<String>,
     ) -> Result<()> {
-        let ns_str = namespace.join("\x1F");
-        let key = (tenant_id, catalog_name.to_string(), ns_str);
+        let key = ns_key(tenant_id, catalog_name, &namespace);
         if self.namespaces.remove(&key).is_some() {
             Ok(())
         } else {
@@ -85,11 +95,26 @@ impl MemoryStore {
         namespace: Vec<String>,
         properties: std::collections::HashMap<String, String>,
     ) -> Result<()> {
-        let ns_str = namespace.join("\x1F");
-        let key = (tenant_id, catalog_name.to_string(), ns_str);
+        let key = ns_key(tenant_id, catalog_name, &namespace);
 
         if let Some(mut ns) = self.namespaces.get_mut(&key) {
             ns.properties.extend(properties);
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Namespace not found"))
+        }
+    }
+    pub(crate) async fn replace_namespace_properties_internal(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        let key = ns_key(tenant_id, catalog_name, &namespace);
+
+        if let Some(mut ns) = self.namespaces.get_mut(&key) {
+            ns.properties = properties;
             Ok(())
         } else {
             Err(anyhow::anyhow!("Namespace not found"))

@@ -256,6 +256,17 @@ impl CatalogStore for PostgresStore {
             .await
     }
 
+    async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        self.replace_namespace_properties(tenant_id, catalog_name, namespace, properties)
+            .await
+    }
+
     // Asset Operations
     async fn create_asset(
         &self,
@@ -1151,6 +1162,15 @@ impl CatalogStore for PostgresStore {
                 "Only s3:// paths are supported in Postgres store"
             ))
         }
+    }
+
+    async fn delete_file(&self, path: &str) -> Result<()> {
+        self.metadata_cache.invalidate(path).await;
+        let storage_config = self
+            .get_warehouse_for_location(path)
+            .await?
+            .map(|w| w.storage_config);
+        crate::file_delete::delete_location(storage_config.as_ref(), path).await
     }
 
     // Tag Operations
