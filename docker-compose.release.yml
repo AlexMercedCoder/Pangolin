@@ -38,7 +38,7 @@ services:
     # "release verification" compose file verified an image nobody ships.
     # Parameterised so a release can be tested by setting PANGOLIN_VERSION,
     # with the current version as the default.
-    image: alexmerced/pangolin-api:${PANGOLIN_VERSION:-0.6.0}
+    image: alexmerced/pangolin-api:${PANGOLIN_VERSION:-0.7.0}
     ports:
       - "8080:8080"
     environment:
@@ -70,13 +70,21 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_REGION=us-east-1
-      - TEST_MODE=${TEST_MODE:-no-auth}
+      # Mirrors the server's own setting rather than a separate TEST_MODE that
+      # nothing read, so the smoke test knows whether the authenticated surface
+      # is reachable.
+      - PANGOLIN_NO_AUTH=${PANGOLIN_NO_AUTH:-false}
     depends_on:
       - pangolin-api
-    # B10: this ran scripts/test_release_v0.2.0.py, which does not exist in
-    # scripts/ - so the verification step failed on a missing file rather than
-    # verifying anything.
-    command: sh -c "pip install requests pyiceberg pyarrow && python scripts/integration_test.py"
+    # B10 pointed this at scripts/test_release_v0.2.0.py, which does not exist,
+    # then at scripts/integration_test.py - which builds and starts its own
+    # server with `cargo run`, and so cannot run in a python:3.11-slim container
+    # with only ./scripts mounted. Either way the release was never verified.
+    #
+    # release_smoke_test.py talks to the already-running container over HTTP,
+    # which is both the only thing possible here and the more useful check: it
+    # exercises the published image rather than a rebuild of the source.
+    command: sh -c "pip install requests && python scripts/release_smoke_test.py"
 
 volumes:
   minio_data_release:

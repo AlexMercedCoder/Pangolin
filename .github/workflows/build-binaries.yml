@@ -29,7 +29,19 @@ jobs:
           path: deployment_assets/bin/linux-x86_64/*
 
   build-macos-intel:
-    runs-on: macos-13  # Intel runner
+    # `macos-15-intel`, not `macos-13`.
+    #
+    # The macOS 13 image was retired in December 2025. Every tagged release
+    # since has hung here: the job sat queued for the full 24-hour limit
+    # waiting for a runner that no longer exists, while linux, macos-arm and
+    # windows finished in 8-15 minutes, and `create-release` was skipped
+    # because it `needs:` all four. That is why v0.4.0 through v0.6.0 produced
+    # no GitHub release and no binaries - the workflow had never once
+    # succeeded.
+    #
+    # `macos-15-intel` is GitHub's documented replacement for workflows that
+    # genuinely need x86_64.
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -98,8 +110,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          body: |
+            See [CHANGELOG.md](https://github.com/AlexMercedCoder/Pangolin/blob/main/CHANGELOG.md)
+            for the full list of changes, and
+            [SECURITY.md](https://github.com/AlexMercedCoder/Pangolin/blob/main/SECURITY.md)
+            for the security advisory and upgrade steps.
           files: |
             linux-binaries/*
             macos-intel-binaries/*

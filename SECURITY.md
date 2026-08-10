@@ -47,11 +47,17 @@ security fixes.
 
 ## Fixed in 0.7.0
 
-**0.6.0 is affected by a privilege-escalation vulnerability and should not be
-run.** Upgrade to 0.7.0 and rotate every issued token. The findings below come
-from a full-repo audit conducted the day after the 0.6.0 release; the
-authorization cluster was outside that release's scope and is new information,
-not a regression.
+**Every version before 0.7.0 is affected by a privilege-escalation
+vulnerability and should not be run.** Upgrade to 0.7.0 and rotate every issued
+token. The findings below come from a full-repo audit conducted the day after
+the 0.6.0 release; the authorization cluster was outside that release's scope
+and is new information, not a regression.
+
+Note which version you are actually running. The published container image
+`alexmerced/pangolin-api` was last pushed at **0.5.1** — no 0.6.0 image was
+ever released — so most deployments are on 0.5.1, which carries everything
+described here *and* everything 0.6.0 fixed. The affected range is
+`< 0.7.0`, not `0.6.0` alone.
 
 ### Exploitable by any authenticated principal
 

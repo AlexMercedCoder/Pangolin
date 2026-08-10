@@ -9,7 +9,7 @@ From 0.6.0 the server, both CLIs, the Python SDK, the UI and the Helm chart all
 carry the same version number. Before that they had drifted to five different
 values and there was no way to tell which combination had been tested together.
 
-## [Unreleased]
+## [0.7.0] — 2026-08-10
 
 Implements `roadmap_aug10.md`, the full-repo audit of 2026-08-10. **This is a
 security release.** Five of the fixes below are exploitable by any
