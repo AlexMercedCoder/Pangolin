@@ -44,11 +44,14 @@ impl S3Signer {
 
 #[async_trait]
 impl CredentialSigner for S3Signer {
+    // `duration` is read only under `aws-sts`; the other two are unused either
+    // way. Without the allow, a default build warns on all three.
+    #[allow(unused_variables)]
     async fn generate_credentials(
         &self,
         _resource_path: &str,
         _permissions: &[String],
-        _duration: Duration,
+        duration: Duration,
     ) -> Result<VendedCredentials> {
         #[cfg(feature = "aws-sts")]
         {
@@ -102,9 +105,12 @@ impl CredentialSigner for S3Signer {
                     config.insert("s3.endpoint".to_string(), endpoint.clone());
                 }
 
-                let expires_at = chrono::DateTime::parse_from_rfc3339(creds.expiration())
-                    .ok()
-                    .map(|dt| dt.with_timezone(&Utc));
+                // `expiration()` hands back an `aws_smithy_types::DateTime`, not
+                // an RFC3339 string, so this went through `parse_from_rfc3339`
+                // on a value that was never text.
+                let expiry = creds.expiration();
+                let expires_at =
+                    chrono::DateTime::from_timestamp(expiry.secs(), expiry.subsec_nanos());
 
                 tracing::info!("✅ Successfully assumed AWS role");
 

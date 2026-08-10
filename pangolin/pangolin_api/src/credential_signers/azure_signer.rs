@@ -49,13 +49,18 @@ impl AzureSasSigner {
 
 #[async_trait]
 impl CredentialSigner for AzureSasSigner {
+    // These are read only under the feature; without the allow, a default
+    // build warns on every one of them. Prefixing them with `_` instead -
+    // which is what was here - meant the cfg block referenced names that did
+    // not exist, so the feature could not compile at all.
+    #[allow(unused_variables)]
     async fn generate_credentials(
         &self,
-        _resource_path: &str,
-        _permissions: &[String],
+        resource_path: &str,
+        permissions: &[String],
         duration: Duration,
     ) -> Result<VendedCredentials> {
-        let _expires_at = Utc::now() + duration;
+        let expires_at = Utc::now() + duration;
 
         // Check for account key first (works regardless of feature flags)
         if let Some(account_key) = &self.account_key {

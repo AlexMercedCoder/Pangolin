@@ -25,7 +25,7 @@ Finally, pangolins are rare and specialized. They exist for a specific purpose a
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Rust 1.92+
+- Rust 1.94+
 - Docker (optional, for MinIO)
 
 ### Running Locally

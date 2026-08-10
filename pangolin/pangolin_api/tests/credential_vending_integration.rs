@@ -294,6 +294,6 @@ async fn test_permission_scoping() {
     assert!(read_write.config.contains_key("gcp-oauth-token"));
 
     // Both should succeed but in real implementation would have different scopes
-    assert!(read_only.config.get("gcp-oauth-token").is_some());
-    assert!(read_write.config.get("gcp-oauth-token").is_some());
+    assert!(read_only.config.contains_key("gcp-oauth-token"));
+    assert!(read_write.config.contains_key("gcp-oauth-token"));
 }

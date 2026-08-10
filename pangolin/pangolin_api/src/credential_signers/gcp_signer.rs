@@ -1,5 +1,9 @@
 use super::{CredentialSigner, VendedCredentials};
 use anyhow::Result;
+// Only the feature path raises errors with the macro; importing it
+// unconditionally warns in a default build.
+#[cfg(feature = "gcp-oauth")]
+use anyhow::anyhow;
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
@@ -30,10 +34,15 @@ impl GcpTokenSigner {
 
 #[async_trait]
 impl CredentialSigner for GcpTokenSigner {
+    // These are read only under the feature; without the allow, a default
+    // build warns on every one of them. Prefixing them with `_` instead -
+    // which is what was here - meant the cfg block referenced names that did
+    // not exist, so the feature could not compile at all.
+    #[allow(unused_variables)]
     async fn generate_credentials(
         &self,
-        _resource_path: &str,
-        _permissions: &[String],
+        resource_path: &str,
+        permissions: &[String],
         duration: Duration,
     ) -> Result<VendedCredentials> {
         #[cfg(feature = "gcp-oauth")]

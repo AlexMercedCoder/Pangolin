@@ -265,6 +265,69 @@ Note that the app runs in Svelte 5's **legacy mode**: none of its 90 components
 use runes. That is supported and works; converting them is a separate piece of
 work and has not been done here.
 
+### Fixed — the cloud-credential features had never compiled
+
+Found while bumping dependencies: `cargo check -p pangolin_api --features
+cloud-credentials` fails, and had been failing at every version. So did each of
+`aws-sts`, `azure-oauth` and `gcp-oauth` individually. Nothing built with
+`--features`, so nothing noticed.
+
+For a catalog whose job includes vending scoped, time-limited cloud
+credentials, that is the feature set. Every deployment using it was running
+without it.
+
+The errors were the kind that only appear when a `cfg` block is never
+type-checked:
+
+- parameters bound as `_duration`, `_resource_path`, `_permissions` to silence
+  unused warnings in the default build, then referenced as `duration`,
+  `resource_path`, `permissions` inside the feature block — three files, five
+  bindings;
+- `anyhow!` used in `gcp_signer.rs` with only `anyhow::Result` imported;
+- `creds.expiration()` fed to `chrono::DateTime::parse_from_rfc3339`, but it
+  returns an `aws_smithy_types::DateTime`, not text — so the STS credential
+  expiry was parsed from a value that was never a string.
+
+`aws-sdk-sts` was also pinned to an exact `=1.50.0` with no comment. It was
+protecting nothing — the feature failed identically at that version — and it
+blocked `aws-config` from reaching a release that drops the second, vulnerable
+TLS stack. Relaxed to `1.109`.
+
+A `features` CI job now builds each optional feature, and `pangolin_store`'s
+`azure` and `gcp` backends alongside them.
+
+### Changed — minimum supported Rust version is now 1.94
+
+Raised from 1.92 to pick up the AWS SDK releases carrying fixed `aws-lc-sys`
+and `rustls-webpki`. That is what cleared the certificate-validation
+advisories — two of them high severity, on the path Pangolin uses to reach S3,
+Azure Blob Storage and GCS.
+
+`rust-version` is a promise to consumers and nothing verified it: every job ran
+`stable`. An `msrv` job now reads the declared version out of the workspace
+manifest and builds with exactly that toolchain, so the floor is checked rather
+than asserted. `Dockerfile`, `README.md`, `CONTRIBUTING.md` and the deployment
+guide are all in step.
+
+### Security — dependency advisories
+
+`cargo audit` reported 26 vulnerabilities, the one job still red after the CI
+repair. Now zero, by a combination of upgrades and eight deliberate,
+individually justified exceptions in `.cargo/audit.toml`.
+
+Cleared by upgrading: the `aws-lc-sys` cluster (including two high-severity
+certificate-validation bypasses and a PKCS7 signature-validation bypass),
+`rustls-webpki` name-constraint and CRL-parsing defects, `quinn-proto`,
+`hickory-proto`, `bytes`, `crossbeam-epoch`, `time`.
+
+Accepted, with the reason recorded against each ID: `rsa`'s Marvin attack
+(never compiled — `sqlx-mysql` is an optional dependency this workspace does
+not enable), `quick-xml` (held by `object_store` 0.11 and by `azure_core` 0.20,
+which is behind an optional feature), the second `rustls-webpki` copy that
+arrives via the AWS SDK's `rustls` 0.21, `http-types`, and `rand`'s
+custom-logger unsoundness. The ignore list names specific advisory IDs, so a
+new advisory — including a new one against these same crates — still fails CI.
+
 ### Added
 
 - **A permission matrix test (improvement #0).** Drives each sensitive route as

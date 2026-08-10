@@ -18,7 +18,7 @@ members = [
 [workspace.package]
 version = "0.7.0"
 edition = "2021"
-rust-version = "1.92"
+rust-version = "1.94"
 license = "MIT"
 repository = "https://github.com/AlexMercedCoder/pangolin"
 authors = ["Alex Merced"]

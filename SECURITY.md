@@ -105,6 +105,30 @@ Not security boundaries, but silent corruption is worth the same attention:
   panics on a decode failure, so any search returning at least one hit panicked
   the request.
 
+### Credential vending could not be built
+
+The `aws-sts`, `azure-oauth` and `gcp-oauth` features - and the
+`cloud-credentials` bundle that unions them - did not compile, at any version.
+`cargo build` and `cargo test` run with default features and no job ever passed
+`--features`, so the entire cloud-credential surface had rotted into code that
+could not be built at all: parameters bound as `_name` and referenced as `name`
+inside the `cfg` block, a missing macro import, and an STS expiry parsed from a
+`DateTime` as though it were an RFC3339 string.
+
+This is not an exploitable defect - unbuildable code ships in no binary. It
+matters because it means **STS-based credential vending was not running
+anywhere**, so any deployment that believed it was handing out scoped,
+time-limited credentials was not. Check what your warehouses are actually
+configured with: if `use_sts` is set but the server was built without the
+feature (which is to say, always), the static-credential fallback in
+`S3Signer::generate_credentials` is what answered - vending your long-lived
+warehouse keys, with no expiry, instead of a scoped session token. Where no
+static keys were configured either, the call failed with "AWS credentials not
+configured", which at least failed closed.
+
+Fixed in 0.7.0, with a CI job that builds every optional feature so it cannot
+recur silently.
+
 ### Upgrading to 0.7.0
 
 1. **Rotate every issued token.** B0a means any account may have minted a
@@ -218,5 +242,12 @@ Stated plainly, because a checklist that hides its limits is worse than none:
 * **Audit records are not tamper-evident.** They live in the same database as
   application data, with no hash chaining and no WORM option.
 * **No MFA, password policy, or account lockout.**
+* **Eight dependency advisories are accepted rather than fixed**, each with its
+  reasoning recorded in `.cargo/audit.toml`. None is reachable in a default
+  build, but they are exceptions rather than absences: `rsa` (never compiled),
+  `quick-xml` (held back by `object_store` 0.11 and `azure_core` 0.20),
+  a second `rustls-webpki` arriving via the AWS SDK's `rustls` 0.21,
+  `http-types`, and `rand`'s custom-logger unsoundness. Re-check the list when
+  dependencies move.
 
 These are tracked in `AUDIT_EXECUTION_PLAN.md` (items C-2 through C-20).

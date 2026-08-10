@@ -150,6 +150,67 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           working-directory: pangolin
 
+  # Every optional feature must compile.
+  #
+  # None of them did. `cargo build` and `cargo test` run with default features,
+  # and no job ever passed `--features`, so the entire cloud-credential surface
+  # - `aws-sts`, `azure-oauth`, `gcp-oauth` and the `cloud-credentials` bundle
+  # that unions them - had rotted into code that could not be built at all:
+  # parameters bound as `_name` and then referenced as `name` inside the `cfg`
+  # block, a missing `anyhow!` import, an `expiration()` that returns a
+  # DateTime being fed to an RFC3339 string parser. For a catalog whose job
+  # includes vending scoped cloud credentials, that is the feature set, and
+  # nothing was watching it.
+  features:
+    name: optional features build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          - aws-sts
+          - azure-oauth
+          - gcp-oauth
+          - cloud-credentials
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pangolin
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - run: cargo check -p pangolin_api --features ${{ matrix.feature }} --all-targets
+      - name: The store's own optional backends must build too
+        if: matrix.feature == 'cloud-credentials'
+        run: cargo check -p pangolin_store --features azure,gcp --all-targets
+
+  # The declared MSRV must be true, not aspirational.
+  #
+  # `rust-version` is a promise to consumers, and every other job runs
+  # `stable`, so nothing checked it. It was 1.92 and is now 1.94 - raised
+  # deliberately to pick up the AWS SDK releases that carry fixed `aws-lc-sys`
+  # and `rustls-webpki`, which is what cleared the certificate-validation
+  # advisories.
+  msrv:
+    name: minimum supported rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read rust-version from the workspace manifest
+        id: msrv
+        run: |
+          v=$(grep -m1 '^rust-version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "declared MSRV: $v"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pangolin
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - run: cargo check --workspace --all-targets
+
   helm:
     name: helm lint
     runs-on: ubuntu-latest

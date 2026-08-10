@@ -5,7 +5,7 @@ recently, nothing at all for contributors — this file closes that gap.
 
 ## From clone to green
 
-You need Rust 1.92 or newer and Docker (only for the database-backed tests).
+You need Rust 1.94 or newer and Docker (only for the database-backed tests).
 
 ```bash
 git clone https://github.com/AlexMercedCoder/pangolin

@@ -1,0 +1,64 @@
+# Advisories accepted deliberately, each with the reason it cannot be fixed by
+# upgrading and what the exposure actually is.
+#
+# This file is not a way to make `cargo audit` quiet. Every entry is a specific
+# advisory ID, so a *new* advisory - including a new one against these same
+# crates - still fails CI. Re-check this list whenever dependencies move; the
+# right outcome for most of these is deletion once upstream releases.
+#
+# Reviewed: 2026-08-10, against Cargo.lock at pangolin 0.7.0.
+
+[advisories]
+ignore = [
+    # ---- No fixed version exists at any release ----
+
+    # RUSTSEC-2023-0071 - Marvin Attack: RSA key recovery through timing side
+    # channels. The `rsa` crate has no fixed release; the maintainers' guidance
+    # is that a constant-time rewrite is required.
+    #
+    # It is never compiled into Pangolin. Its only route in is `sqlx-mysql`,
+    # which is an *optional* dependency of `sqlx`: this workspace builds sqlx
+    # with `postgres` and `sqlite` only, and there is no MySQL `CatalogStore`.
+    # `cargo tree -i rsa --target all` finds no path to it. It appears here
+    # solely because `cargo audit` scans Cargo.lock, which records optional
+    # dependencies whether or not their feature is enabled.
+    "RUSTSEC-2023-0071",
+
+    # ---- Held back by an upstream that has not released ----
+
+    # RUSTSEC-2026-0194 / -0195 - quick-xml quadratic attribute checking and
+    # unbounded namespace allocation, both DoS. Two copies are in the tree and
+    # neither is ours to move:
+    #   * 0.31.0 via azure_core 0.20, which is behind the OPTIONAL `azure`
+    #     feature and absent from a default build;
+    #   * 0.37.5 via object_store 0.11, which is not optional.
+    # object_store 0.14 carries a fixed quick-xml but is three minor versions
+    # ahead with breaking API changes across the IO layer. That upgrade is
+    # worth doing on its own terms, not as a drive-by inside a security fix.
+    # Exposure: both parse XML from the object store's own responses, so an
+    # attacker needs control of the storage endpoint's replies.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+
+    # RUSTSEC-2026-0098 / -0099 / -0104 - rustls-webpki name-constraint and CRL
+    # defects. The fixed 0.103.13 IS in the tree and is what rustls 0.23 uses.
+    # The flagged 0.101.7 comes in alongside it via rustls 0.21, pulled by
+    # aws-smithy-http-client 1.2.0. No release of the AWS SDK has dropped that
+    # second TLS stack yet. Pangolin's own TLS goes through the 0.23 path.
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0104",
+
+    # RUSTSEC-2026-0174 - http-types can build Authorization and
+    # WwwAuthenticate header values that violate ASCII invariants. Via
+    # azure_core 0.20, so behind the optional `azure` feature. http-types is
+    # unmaintained and azure_core 0.20 is the last release of that line before
+    # the Azure SDK restructure; moving off it is an Azure-support project.
+    "RUSTSEC-2026-0174",
+
+    # RUSTSEC-2026-0097 - `rand` is unsound when a custom logger calls
+    # `rand::rng()` re-entrantly. Pangolin installs no custom logger that draws
+    # randomness; `tracing-subscriber`'s formatters do not. Both 0.8 and 0.9 are
+    # in the tree transitively and neither has a fixed release.
+    "RUSTSEC-2026-0097",
+]
