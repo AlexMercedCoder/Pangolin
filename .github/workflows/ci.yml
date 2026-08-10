@@ -145,10 +145,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: rustsec/audit-check@v2.0.0
+      - uses: Swatinem/rust-cache@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: pangolin
+          workspaces: pangolin
+      - run: cargo install cargo-audit --locked
+      # Run from `pangolin/`, not through `rustsec/audit-check`.
+      #
+      # That action invokes `cargo audit --file pangolin/Cargo.lock` from the
+      # repository root, and `cargo audit` reads its config from
+      # `.cargo/audit.toml` relative to the *current directory* only - it does
+      # not walk up the tree. So the exceptions in `pangolin/.cargo/audit.toml`
+      # were silently not applied and the job failed on advisories that had
+      # already been reviewed and justified.
+      #
+      # Duplicating the config at the repository root would fix CI and leave a
+      # developer running `cargo audit` in `pangolin/` - where the workspace
+      # is - seeing a different answer from the one CI sees. This job now runs
+      # the identical command in the identical directory instead (the
+      # workflow's `defaults.run.working-directory` is `pangolin`).
+      - run: cargo audit
 
   # Every optional feature must compile.
   #
