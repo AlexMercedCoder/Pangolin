@@ -34,12 +34,20 @@ services:
       "
 
   pangolin-api:
-    image: alexmerced/pangolin-api:0.2.0
+    # B10: this pinned 0.2.0 - four releases behind the workspace - so the
+    # "release verification" compose file verified an image nobody ships.
+    # Parameterised so a release can be tested by setting PANGOLIN_VERSION,
+    # with the current version as the default.
+    image: alexmerced/pangolin-api:${PANGOLIN_VERSION:-0.6.0}
     ports:
       - "8080:8080"
     environment:
       - RUST_LOG=info
-      - PANGOLIN_STORE_TYPE=memory
+      # B9: the server reads PANGOLIN_STORAGE_TYPE; PANGOLIN_STORE_TYPE was
+      # silently ignored.
+      - PANGOLIN_STORAGE_TYPE=memory
+      # B8: the server refuses to start without a JWT secret.
+      - PANGOLIN_JWT_SECRET=${PANGOLIN_JWT_SECRET:?set it first, e.g. export PANGOLIN_JWT_SECRET=$(openssl rand -base64 48)}
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_REGION=us-east-1
@@ -65,7 +73,10 @@ services:
       - TEST_MODE=${TEST_MODE:-no-auth}
     depends_on:
       - pangolin-api
-    command: sh -c "pip install requests pyiceberg pyarrow && python scripts/test_release_v0.2.0.py"
+    # B10: this ran scripts/test_release_v0.2.0.py, which does not exist in
+    # scripts/ - so the verification step failed on a missing file rather than
+    # verifying anything.
+    command: sh -c "pip install requests pyiceberg pyarrow && python scripts/integration_test.py"
 
 volumes:
   minio_data_release:

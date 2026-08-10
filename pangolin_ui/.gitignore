@@ -21,3 +21,12 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Test and debug output (B45).
+#
+# ~260 KB of `check_*.txt` scratch files and Playwright artefacts were tracked
+# in git. The ignore patterns did not cover them, and by the time they were
+# added the files were already tracked - so `.gitignore` had no effect on them.
+test-results/
+playwright-report/
+check_*.txt

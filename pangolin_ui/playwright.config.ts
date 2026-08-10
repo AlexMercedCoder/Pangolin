@@ -8,17 +8,22 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:5175',
+    baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
     viewport: { width: 1280, height: 720 },
     ignoreHTTPSErrors: true,
     actionTimeout: 15000,
   },
-  /* webServer: {
+  // B46: this was commented out and pointed at port 5175, while `vite dev`
+  // serves 5173 - so every spec connected to nothing. With webServer enabled,
+  // `npm run test:e2e` starts the dev server itself rather than depending on
+  // one a developer remembered to start on the right port.
+  webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:5175',
+    url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
-  }, */
+    timeout: 120000,
+  },
   timeout: 30000,
   projects: [
     {

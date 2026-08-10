@@ -206,3 +206,59 @@ jobs:
             echo "::error::the image runs as root"
             exit 1
           fi
+
+  # Deployment artefacts drift from the code that reads them, and nothing
+  # noticed. `PANGOLIN_STORE_TYPE` sat in both compose files for several
+  # releases while the server read `PANGOLIN_STORAGE_TYPE` (B9); the quick-start
+  # compose file could not start the API at all because it set no signing secret
+  # (B8); and the release compose file pinned an image four versions old and ran
+  # a verification script that did not exist (B10). All three are the same
+  # failure: config that is never validated.
+  config-drift:
+    name: config drift
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every compose file must be valid
+        env:
+          PANGOLIN_JWT_SECRET: ci-only-secret-of-adequate-length-0000000
+        run: |
+          for f in docker-compose*.yml; do
+            echo "validating $f"
+            docker compose -f "$f" config > /dev/null
+          done
+
+      - name: The quick start must fail loudly without a signing secret
+        run: |
+          # `docker compose config` must *fail* here: the `:?` form on
+          # PANGOLIN_JWT_SECRET is what turns a crash-looping container into an
+          # immediate, explicable error.
+          if docker compose -f docker-compose.yml config > /dev/null 2>&1; then
+            echo "::error::docker-compose.yml accepted an unset PANGOLIN_JWT_SECRET"
+            exit 1
+          fi
+          echo "compose correctly refuses to start without a signing secret"
+
+      - name: No compose file may set a variable the server does not read
+        run: |
+          # PANGOLIN_STORE_TYPE is the specific name that survived for releases;
+          # the general check below catches its successors.
+          if grep -n 'PANGOLIN_STORE_TYPE' docker-compose*.yml deployment_assets 2>/dev/null | grep -v 'not read'; then
+            echo "::error::PANGOLIN_STORE_TYPE is not read by the server; use PANGOLIN_STORAGE_TYPE"
+            exit 1
+          fi
+          for name in $(grep -rhoE 'PANGOLIN_[A-Z0-9_]+' docker-compose*.yml | sort -u); do
+            if ! grep -rq "$name" pangolin/pangolin_api/src pangolin/pangolin_store/src; then
+              echo "::error::$name appears in a compose file but no code reads it"
+              exit 1
+            fi
+          done
+          echo "every PANGOLIN_* name in the compose files is read by the server"
+
+      - name: The environment-variable reference must match the code
+        working-directory: pangolin
+        run: ./scripts/check_env_var_docs.sh

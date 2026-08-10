@@ -40,7 +40,17 @@ services:
       - "8080:8080"
     environment:
       - RUST_LOG=info
-      - PANGOLIN_STORE_TYPE=memory
+      # B8: since 0.6.0 the server refuses to start without a JWT secret, and
+      # refuses PANGOLIN_NO_AUTH on the default 0.0.0.0 bind - so the documented
+      # quick start produced a crash-looping container with no explanation. The
+      # `:?` form fails the `docker compose up` itself with this message, which
+      # is a far better failure than a restart loop.
+      - PANGOLIN_JWT_SECRET=${PANGOLIN_JWT_SECRET:?set it first, e.g. export PANGOLIN_JWT_SECRET=$(openssl rand -base64 48)}
+      # B9: the server reads PANGOLIN_STORAGE_TYPE. This said
+      # PANGOLIN_STORE_TYPE, which nothing reads - so anyone editing it to
+      # `postgres` silently kept the in-memory backend and lost their data on
+      # every restart.
+      - PANGOLIN_STORAGE_TYPE=memory
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_REGION=us-east-1
@@ -57,7 +67,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://localhost:8080
+      # B31: SvelteKit's dynamic public env requires the PUBLIC_ prefix. The
+      # client reads PUBLIC_API_URL; this used to pass VITE_API_URL, which
+      # nothing read, so every deployed build fell back to the *end user's*
+      # localhost:8080.
+      - PUBLIC_API_URL=http://localhost:8080
       - ORIGIN=http://localhost:3000
     depends_on:
       - pangolin-api

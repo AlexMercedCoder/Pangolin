@@ -53,3 +53,14 @@ check_log.txt
 test_results.txt
 debug_output*.txt
 :memory:
+
+# Editor backup copies of source files (B45).
+#
+# `pangolin_store/src/memory.rs.bak` and `mongo.rs.bak` sat in the tree as ~4k
+# lines of divergent, dead query copies - a grep trap that returned plausible
+# but stale code for anyone searching the store layer.
+*.bak
+*.rs.bak
+
+# Logs live under logs/ directories that were previously tracked.
+logs/
