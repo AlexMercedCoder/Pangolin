@@ -21,7 +21,14 @@ env:
   CARGO_TERM_COLOR: always
   # Keep the debug artefacts small; CI does not need line tables.
   CARGO_PROFILE_TEST_DEBUG: 0
-  RUSTFLAGS: -D warnings
+  # No `RUSTFLAGS: -D warnings` here. It used to be, and it was a trap rather
+  # than a gate: the tree still carries a warning backlog, so every job that
+  # compiles Rust had to override it with `RUSTFLAGS: ""` - and the two that
+  # forgot (`guardrails` and `mongo-replica-set`) failed at *compile*, so the
+  # authz matrix, the parity suite and every MongoDB test they were added to
+  # run had never once executed. A guard that cannot run is worse than no
+  # guard, because it reads as protection. `clippy-ratchet` is the real gate on
+  # warnings; it counts them and fails if the count grows.
 
 defaults:
   run:
@@ -55,8 +62,6 @@ jobs:
       # `clippy-ratchet` below — and it flips to blocking once the backlog is
       # cleared (Phase 2.2).
       - run: cargo clippy --workspace --all-targets
-        env:
-          RUSTFLAGS: ""
 
   clippy-ratchet:
     name: clippy warning count
@@ -71,8 +76,6 @@ jobs:
           workspaces: pangolin
       - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - name: Count warnings and compare against the budget
-        env:
-          RUSTFLAGS: ""
         run: |
           # `--message-format short` emits one `path:line:col: warning: ...`
           # line per finding, plus per-crate summary lines that start with
@@ -125,14 +128,11 @@ jobs:
           done
 
       - name: cargo test --workspace
-        env:
-          RUSTFLAGS: ""
         run: cargo test --workspace --no-fail-fast
 
       - name: cargo test --workspace (against live databases)
         if: matrix.services
         env:
-          RUSTFLAGS: ""
           PANGOLIN_TEST_POSTGRES_URL: postgresql://testuser:testpass@localhost:5432/testdb
           PANGOLIN_TEST_MONGO_URL: mongodb://testuser:testpass@localhost:27017
         # MongoDB parity is still incomplete; see the Known limitations section
@@ -454,11 +454,33 @@ jobs:
         run: |
           # PANGOLIN_STORE_TYPE is the specific name that survived for releases;
           # the general check below catches its successors.
-          if grep -n 'PANGOLIN_STORE_TYPE' docker-compose*.yml deployment_assets 2>/dev/null | grep -v 'not read'; then
+          # Comment lines are excluded: two compose files carry the offending
+          # name verbatim while explaining why it is wrong. The previous
+          # `grep -v 'not read'` was meant to do this and matched neither
+          # comment ("was renamed", "which nothing reads"), so this guard
+          # failed on its own documentation.
+          if grep -rn 'PANGOLIN_STORE_TYPE' docker-compose*.yml deployment_assets 2>/dev/null \
+               | grep -vE ":[[:space:]]*#"; then
             echo "::error::PANGOLIN_STORE_TYPE is not read by the server; use PANGOLIN_STORAGE_TYPE"
             exit 1
           fi
-          for name in $(grep -rhoE 'PANGOLIN_[A-Z0-9_]+' docker-compose*.yml | sort -u); do
+          # Comment lines are stripped first, for the same reason as above:
+          # several compose comments name a variable precisely to explain that
+          # it is *not* read, and the guard would flag its own documentation.
+          #
+          # Two names are legitimately not read by the server:
+          #   PANGOLIN_VERSION  - a compose-level image tag, not an app setting.
+          #   PANGOLIN_API_URL  - set on the `tests` service in
+          #     docker-compose.release.yml. Nothing reads it *yet*: the script
+          #     that service runs, scripts/integration_test.py, starts its own
+          #     server with `cargo run`, which cannot work in a python:3.11-slim
+          #     container with only ./scripts mounted. That release-verification
+          #     path is broken independently of this guard.
+          exempt='PANGOLIN_VERSION|PANGOLIN_API_URL'
+          names=$(grep -rhE '^[^#]*PANGOLIN_[A-Z0-9_]+' docker-compose*.yml \
+            | sed 's/#.*//' | grep -ohE 'PANGOLIN_[A-Z0-9_]+' | sort -u)
+          for name in $names; do
+            if echo "$name" | grep -qE "^($exempt)$"; then continue; fi
             if ! grep -rq "$name" pangolin/pangolin_api/src pangolin/pangolin_store/src; then
               echo "::error::$name appears in a compose file but no code reads it"
               exit 1
@@ -500,7 +522,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e '.[iceberg]'
-          pip install pytest ruff
+          # Pinned deliberately: `pip install ruff` picked up 0.16, whose
+          # wider default rule set produced 316 findings in a package that had
+          # opted into ruff's defaults as they stood. Adopting the new rules is
+          # a separate, deliberate change - not something a runner should decide
+          # on the day it happens to run.
+          pip install pytest 'ruff==0.15.19'
       - name: The package must import without the Iceberg extra
         run: |
           # B41 regression: `pip install pypangolin` then `import pypangolin`

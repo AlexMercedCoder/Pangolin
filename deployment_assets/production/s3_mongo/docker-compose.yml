@@ -16,7 +16,7 @@ services:
       - "8080:8080"
     environment:
       - RUST_LOG=info
-      - PANGOLIN_STORE_TYPE=mongo
+      - PANGOLIN_STORAGE_TYPE=mongo
       - DATABASE_URL=mongodb://mongo:27017
       - MONGO_DB_NAME=${MONGO_DB_NAME:-pangolin}
       - PANGOLIN_ROOT_USER=${PANGOLIN_ROOT_USER:-admin}
