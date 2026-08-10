@@ -69,16 +69,28 @@
 </script>
 
 <div class="space-y-4">
-	{#if searchable && !serverSide}
+	<!--
+		B36: the only `<slot name="actions"/>` outlet lived inside this
+		`searchable && !serverSide` guard. The catalogs page passes
+		`searchable={false} serverSide={true}`, so its "New Catalog" control never
+		rendered - and there was no way to create a catalog from the catalogs
+		page at all. The header now renders whenever there is a search box *or*
+		an actions slot to show.
+	-->
+	{#if (searchable && !serverSide) || $$slots.actions}
 		<div class="flex items-center gap-4">
-			<div class="flex-1">
-				<input
-					type="text"
-					bind:value={searchQuery}
-					placeholder={searchPlaceholder}
-					class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-				/>
-			</div>
+			{#if searchable && !serverSide}
+				<div class="flex-1">
+					<input
+						type="text"
+						bind:value={searchQuery}
+						placeholder={searchPlaceholder}
+						class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+					/>
+				</div>
+			{:else}
+				<div class="flex-1"></div>
+			{/if}
 			<slot name="actions" />
 		</div>
 	{/if}

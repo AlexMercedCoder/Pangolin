@@ -3,13 +3,13 @@ import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
 	plugins: [sveltekit()],
-    define: {
-        'import.meta.env': {
-            VITE_API_URL: 'http://localhost:8080',
-            DEV: true,
-            SSR: false
-        }
-    },
+	// B46: there used to be a `define: { 'import.meta.env': {...} }` here, which
+	// replaced `import.meta.env` *wholesale*. SvelteKit's virtual
+	// `$env/dynamic/public` module reads `import.meta.env.<X>` off the real
+	// object, so the override left it undefined and every suite importing the
+	// API client failed to load at all with "Cannot read properties of undefined
+	// (reading 'env')". `test.env` below sets the same value without clobbering
+	// anything.
 	resolve: {
 		conditions: ['browser']
 	},
@@ -19,7 +19,7 @@ export default defineConfig({
 		environment: 'jsdom',
 		setupFiles: ['./src/tests/setup.ts'],
     env: {
-        VITE_API_URL: 'http://localhost:8080'
+        PUBLIC_API_URL: 'http://localhost:8080'
     },
 		coverage: {
 			provider: 'v8',

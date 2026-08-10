@@ -30,3 +30,4 @@ vite.config.ts.timestamp-*
 test-results/
 playwright-report/
 check_*.txt
+node_modules/

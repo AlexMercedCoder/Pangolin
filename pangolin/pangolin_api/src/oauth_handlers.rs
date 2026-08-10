@@ -407,6 +407,37 @@ pub async fn oauth_exchange(Json(req): Json<OAuthExchangeRequest>) -> Response {
     }
 }
 
+/// The providers this deployment has actually configured.
+///
+/// B33: the UI called `GET /api/v1/oauth/providers`, which did not exist, so it
+/// 404'd - which is why the login page fell back to rendering all four provider
+/// buttons unconditionally, including ones the operator had never configured.
+/// Clicking those went nowhere.
+///
+/// This endpoint is public (see `public_paths`): the login page has to render
+/// before anyone is authenticated. It reveals only which provider *names* are
+/// enabled - never a client id, and never a secret.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct OAuthProvidersResponse {
+    pub providers: Vec<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/oauth/providers",
+    tag = "Authentication",
+    responses((status = 200, description = "Configured OAuth providers", body = OAuthProvidersResponse))
+)]
+pub async fn list_oauth_providers() -> impl IntoResponse {
+    let providers = ["google", "microsoft", "github", "okta"]
+        .into_iter()
+        .filter(|p| get_oauth_config(p).is_some())
+        .map(|p| p.to_string())
+        .collect();
+
+    (StatusCode::OK, Json(OAuthProvidersResponse { providers }))
+}
+
 /// Get OAuth configuration for provider
 fn get_oauth_config(provider: &str) -> Option<OAuthConfig> {
     // TODO: Load from environment variables or config file

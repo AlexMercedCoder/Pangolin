@@ -2,6 +2,13 @@
     import { page } from '$app/stores';
     import { goto } from '$app/navigation';
     import { authStore, isRoot, isTenantAdmin } from '$lib/stores/auth';
+    // B37: `tenantStore` was used below with no import at all - a latent
+    // ReferenceError the moment the handler ran. It never ran, because the
+    // handler was not wired to any element and the tenant loader was commented
+    // out, so root users could not switch tenants and X-Pangolin-Tenant was
+    // never set.
+    import { tenantStore } from '$lib/stores/tenant';
+    import { setUnauthorizedHandler } from '$lib/api/client';
     import { themeStore } from '$lib/stores/theme';
 	import { helpStore } from '$lib/stores/help';
 	import { tenantsApi, type Tenant } from '$lib/api/tenants';
@@ -21,15 +28,26 @@
     let tenantsLoaded = false;
 
 	onMount(() => {
+		// B34: give the API client somewhere to send a 401. Without this an
+		// expired token left the user in a permanently broken "authenticated"
+		// session - nothing cleared the token and nothing redirected.
+		setUnauthorizedHandler(() => {
+			authStore.sessionExpired();
+			if ($page.url.pathname !== '/login') {
+				goto('/login');
+			}
+		});
+
 		// Initialize auth - checks server config and auto-authenticates if NO_AUTH mode
 		const init = async () => {
 			await authStore.initialize();
 		};
 		init();
-		
+
 		// Load theme
 		themeStore.loadTheme();
 
+		return () => setUnauthorizedHandler(null);
 	});
     
     // Auth redirect logic & State Reset
@@ -49,9 +67,10 @@
         }
     }
     
-    // Load tenants logic - Protected against infinite loops
-    // Load tenants logic - Protected against infinite loops
-    /*
+    // B37: re-enabled. While this was commented out the switcher had nothing to
+    // switch between, so a root user could never set X-Pangolin-Tenant and every
+    // request resolved against the default tenant. The `tenantsLoaded` /
+    // `loadingTenants` pair is what keeps the reactive statement from looping.
     $: if ($authStore.isAuthenticated && $isRoot && !tenantsLoaded && !loadingTenants) {
         loadingTenants = true;
         tenantsApi.list()
@@ -62,7 +81,6 @@
                 tenantsLoaded = true;
             });
     }
-    */
 
 	// Route guards
 	$: if ($authStore.isAuthenticated && !$authStore.isLoading) {
@@ -328,7 +346,28 @@
                         </div>
 
 						<div class="flex items-center gap-4">
-							<!-- Context Switcher Removed for Root -->
+							<!--
+								B37: the tenant switcher was removed from the header while
+								`handleTenantChange` stayed behind, wired to nothing. Root
+								users therefore had no way to set X-Pangolin-Tenant, so
+								every request they made resolved against the default
+								tenant regardless of which one they meant.
+							-->
+							{#if $isRoot && tenants.length}
+								<label class="sr-only" for="tenant-switcher">Tenant context</label>
+								<select
+									id="tenant-switcher"
+									on:change={handleTenantChange}
+									value={$tenantStore.selectedTenantId ?? ''}
+									class="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+									title="Act within a tenant's context"
+								>
+									<option value="">All tenants</option>
+									{#each tenants as tenant (tenant.id)}
+										<option value={tenant.id}>{tenant.name}</option>
+									{/each}
+								</select>
+							{/if}
 
 							<!-- Theme toggle -->
 							<button

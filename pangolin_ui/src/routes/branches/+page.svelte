@@ -45,12 +45,9 @@
 		loading = true;
 		try {
 			const allBranches = await branchesApi.list(selectedCatalog);
-			console.log('All branches from API:', allBranches);
-			console.log('Selected catalog:', selectedCatalog);
 			
 			// Filter by selected catalog
 			branches = allBranches;
-			console.log('Filtered branches:', branches);
 			
 			if (allBranches.length > 0 && branches.length === 0) {
 				notifications.info(`No branches found for catalog "${selectedCatalog}". Total branches: ${allBranches.length}`);

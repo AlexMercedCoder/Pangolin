@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth';
 	import { authApi } from '$lib/api/auth';
+	import { API_URL, apiClient } from '$lib/api/client';
 	import Button from '$lib/components/ui/Button.svelte';
 	import Input from '$lib/components/ui/Input.svelte';
 	import Card from '$lib/components/ui/Card.svelte';
@@ -14,9 +15,22 @@
 	let showTenantSelector = false;
 	let tenantId = '';
 
+	// B33: this page used to render all four provider buttons unconditionally,
+	// because `GET /api/v1/oauth/providers` did not exist and returned 404. The
+	// buttons for providers the operator had never configured went nowhere. The
+	// endpoint now exists and is public, so only configured providers render.
+	let oauthProviders: string[] = [];
+
 	import { page } from '$app/stores';
 
 	onMount(async () => {
+        // Which OAuth providers this deployment actually has configured.
+        apiClient
+            .get<{ providers: string[] }>('/api/v1/oauth/providers')
+            .then((res) => {
+                oauthProviders = res.error ? [] : (res.data?.providers ?? []);
+            });
+
         // Check for OAuth callback token
         const token = $page.url.searchParams.get('token');
         if (token) {
@@ -54,7 +68,6 @@
 		try {
             // Check for No-Auth Root Login trigger
             if (username === 'root' && password === 'root' && !$authStore.authEnabled) {
-                console.log('Detected Root No-Auth trigger');
                 const result = authStore.loginNoAuth();
                 if (result.success) {
                     goto('/');
@@ -62,7 +75,6 @@
                 }
             }
             
-			console.log('Attempting login for:', username, 'with tenant:', tenantId);
             
             // Default to Zero GUID if not specified when not using tenant selector
             // This is primarily for the default tenant admin case (0000...)
@@ -78,7 +90,6 @@
             }
             
 			const result = await authStore.login(username, password, tenantIdToSend);
-            console.log('Login result:', result);
 			if (result.success) {
 				goto('/');
 			} else {
@@ -185,6 +196,7 @@
 		</form>
 
 			<!-- OAuth Options -->
+			{#if oauthProviders.length}
 			<div class="mt-6">
 				<div class="relative">
 					<div class="absolute inset-0 flex items-center">
@@ -196,25 +208,18 @@
 				</div>
 
 				<div class="mt-4 grid grid-cols-2 gap-3">
-                    {#each ['google', 'github', 'microsoft', 'okta'] as provider}
+                    {#each oauthProviders as provider (provider)}
                         <Button
                             variant="secondary"
                             fullWidth
                             on:click={() => {
-                                // Direct navigation to backend OAuth endpoint
-                                // We use current origin + /login as redirect_uri to come back here and process token
+                                // B31: this read `import.meta.env.VITE_API_URL` -
+                                // a *third* spelling of the API base URL, after
+                                // client.ts's PUBLIC_API_URL and the compose
+                                // files' VITE_API_URL, none of which agreed. It
+                                // now uses the one resolved base URL.
                                 const redirectUri = encodeURIComponent(`${window.location.origin}/login`);
-                                // Assuming API is on relative path /api or simple /oauth if proxied, 
-                                // but safe to use the env var from client.ts logic if possible.
-                                // For now, let's assume relative path /oauth/authorize/ if served from same domain,
-                                // or we need the API_URL.
-                                // Let's use a cleaner approach: construct URL relative to current location if proxied, 
-                                // or strictly use configured API URL.
-                                // Since we don't have API_URL exposed easily here without importing from env,
-                                // let's try relative path assuming proxy setup or modify client to expose it.
-                                // Fallback to hardcoded for now or use window.location.origin if in dev.
-                                const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080';
-                                window.location.href = `${apiUrl}/oauth/authorize/${provider}?redirect_uri=${redirectUri}`;
+                                window.location.href = `${API_URL}/oauth/authorize/${provider}?redirect_uri=${redirectUri}`;
                             }}
                         >
                             <span class="capitalize">{provider}</span>
@@ -222,6 +227,7 @@
                     {/each}
 				</div>
 			</div>
+			{/if}
 		</Card>
 
 		<p class="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">

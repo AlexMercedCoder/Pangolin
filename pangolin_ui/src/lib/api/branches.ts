@@ -61,8 +61,18 @@ export const branchesApi = {
 		return response.data!;
 	},
 
+	/**
+	 * Delete a branch.
+	 *
+	 * B33: this called `/api/v1/branches/{catalog}/{name}`, a path the router
+	 * never registered, so branch deletion from the UI always 404'd. The server
+	 * now serves `DELETE /api/v1/branches/{name}?catalog=...`, matching the
+	 * shape `get`/`list` already use rather than inventing a third one.
+	 */
 	async delete(catalog: string, name: string): Promise<void> {
-		const response = await apiClient.delete<void>(`/api/v1/branches/${encodeURIComponent(catalog)}/${encodeURIComponent(name)}`);
+		const response = await apiClient.delete<void>(
+			`/api/v1/branches/${encodeURIComponent(name)}?catalog=${encodeURIComponent(catalog)}`
+		);
 		if (response.error) throw new Error(response.error.message);
 	},
 };

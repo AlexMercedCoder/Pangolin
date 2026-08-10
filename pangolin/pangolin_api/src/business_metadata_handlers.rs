@@ -186,10 +186,39 @@ pub async fn delete_business_metadata(
     }
 }
 
+/// Query parameters for asset search.
+///
+/// B35: `tags` was typed `Option<Vec<String>>` and extracted with axum's
+/// `Query`, which uses `serde_urlencoded` - and `serde_urlencoded` cannot
+/// deserialize repeated keys (`?tags=a&tags=b`) into a `Vec`. The UI sent
+/// exactly that, so every tag-filtered search returned `400 Bad Request`:
+/// tag-filtered search was broken end to end and had presumably never worked.
+///
+/// A comma-separated string is the fix that keeps working with a plain `Query`
+/// extractor, and it is also what an operator would type by hand. Repeated
+/// keys are still accepted by the deserializer below, so a client that sends
+/// the old shape gets the last value rather than a 400.
 #[derive(Deserialize, Serialize, ToSchema)]
 pub struct SearchRequest {
     pub query: String,
+    /// Comma-separated tag names, e.g. `?tags=pii,finance`.
+    #[serde(default, deserialize_with = "deserialize_comma_separated")]
     pub tags: Option<Vec<String>>,
+}
+
+/// Deserialize `a,b,c` into `["a", "b", "c"]`, trimming and dropping blanks.
+fn deserialize_comma_separated<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(deserializer)?;
+    Ok(raw.map(|value| {
+        value
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }))
 }
 
 #[utoipa::path(

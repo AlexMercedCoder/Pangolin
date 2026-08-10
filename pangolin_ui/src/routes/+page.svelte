@@ -56,7 +56,6 @@
         // OR we just alert them to use the admin tools.
         
         // Check detailed user state
-        console.log('GenerateToken Debug:', { tenantId, role: $user.role, user: $user });
 
         const role = $user.role;
         const isRoot = role === 'root' || (typeof role === 'string' && role.toLowerCase() === 'root') || 

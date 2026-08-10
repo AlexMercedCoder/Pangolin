@@ -44,10 +44,19 @@
 	async function loadCatalogs() {
 		loading = true;
 		try {
-			catalogs = await catalogsApi.list();
+			// B36: this called `catalogsApi.list()` bare - no limit, no offset -
+			// and never set `hasNextPage`, so the table advertised server-side
+			// pagination while refetching the same unpaginated list and leaving
+			// Next permanently disabled. Asking for one row more than the page
+			// size is how we learn whether a next page exists without a count
+			// query.
+			const rows = await catalogsApi.list(pageSize + 1, (page - 1) * pageSize);
+			hasNextPage = rows.length > pageSize;
+			catalogs = rows.slice(0, pageSize);
 		} catch (error: any) {
 			notifications.error(`Failed to load catalogs: ${error.message}`);
 			catalogs = [];
+			hasNextPage = false;
 		} finally {
 			loading = false;
 		}
@@ -124,18 +133,22 @@
 			]}
 			data={catalogs}
 			{loading}
-			emptyMessage="No catalogs found" <!-- Updated empty message -->
+			emptyMessage="No catalogs found"
 			searchPlaceholder="Search catalogs..."
 			on:rowClick={handleRowClick}
-            searchable={false} <!-- Added -->
-            serverSide={true} <!-- Added -->
-            {page} <!-- Added -->
-            {pageSize} <!-- Added -->
-            {hasNextPage} <!-- Added -->
-            on:pageChange={handlePageChange} <!-- Added -->
+			searchable={false}
+			serverSide={true}
+			{page}
+			{pageSize}
+			{hasNextPage}
+			on:pageChange={handlePageChange}
 		>
-            <!-- Added actions slot -->
-            <div slot="actions">
+			<!--
+				B36: the comments that used to sit between these attributes were
+				parsed by Svelte as boolean props, spreading `<!--`, `Added` and
+				`-->` onto the component.
+			-->
+			<div slot="actions">
                 <a
                     href="/catalogs/new"
                     class="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"

@@ -41,8 +41,17 @@ describe('Catalogs Page', () => {
         });
     });
 
-    it('shows create catalog button for Admin', () => {
+    // B36 regression: the catalogs page passes `searchable={false}
+    // serverSide={true}`, and DataTable's only actions-slot outlet used to sit
+    // inside an `{#if searchable && !serverSide}` guard - so this control never
+    // rendered and there was no way to create a catalog from this page at all.
+    //
+    // The assertion also had the wrong label ("Create Catalog"; the control says
+    // "New Catalog"), so it would have failed even once the slot rendered.
+    it('shows the new-catalog control', async () => {
         render(CatalogsPage);
-        expect(screen.getByText('Create Catalog')).toBeInTheDocument();
+        await waitFor(() => {
+            expect(screen.getByText('New Catalog')).toBeInTheDocument();
+        });
     });
 });

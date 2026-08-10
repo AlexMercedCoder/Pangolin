@@ -304,6 +304,99 @@ pub async fn get_branch(
     }
 }
 
+/// Delete a branch.
+///
+/// B33: the UI has had a "delete branch" control calling
+/// `DELETE /api/v1/branches/{catalog}/{name}` since before this audit, but the
+/// router only ever registered `GET` on `/api/v1/branches/:name` - so branch
+/// deletion from the UI always 404'd. The store has supported it all along; the
+/// route simply did not exist. Added here with the catalog as a query parameter,
+/// matching `get_branch` rather than inventing a third path shape.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/branches/{name}",
+    tag = "Branches",
+    params(
+        ("name" = String, Path, description = "Branch name"),
+        ("catalog" = String, Query, description = "Catalog the branch belongs to")
+    ),
+    responses(
+        (status = 204, description = "Branch deleted"),
+        (status = 400, description = "The main branch cannot be deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Branch or catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_branch(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path(name): Path<String>,
+    Query(params): Query<ListBranchParams>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = &params.catalog;
+
+    // Deleting `main` would strand every asset on it with no branch to reach
+    // them through.
+    if name == "main" {
+        return (StatusCode::BAD_REQUEST, "The main branch cannot be deleted").into_response();
+    }
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_branch: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    let scope = PermissionScope::Catalog {
+        catalog_id: catalog.id,
+    };
+    match crate::authz::check_permission(&store, &session, &Action::Delete, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_branch: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
+
+    match store
+        .delete_branch(tenant_id, catalog_name, name.clone())
+        .await
+    {
+        Ok(_) => {
+            if let Err(e) = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::success(
+                        tenant_id,
+                        Some(session.user_id),
+                        session.username.clone(),
+                        pangolin_core::audit::AuditAction::DeleteBranch,
+                        pangolin_core::audit::ResourceType::Branch,
+                        None,
+                        format!("{}/{}", catalog_name, name),
+                    ),
+                )
+                .await
+            {
+                tracing::error!(error = %e, "failed to write the branch-delete audit record");
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) => {
+            tracing::debug!(error = %e, "delete_branch: branch not deleted");
+            (StatusCode::NOT_FOUND, "Branch not found").into_response()
+        }
+    }
+}
+
 #[utoipa::path(
     post,
     path = "/api/v1/branches/merge",

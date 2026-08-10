@@ -38,7 +38,6 @@
             // Namespace comes in as dot-separated string from URL
             const nsParts = namespace.split('.');
             table = await icebergApi.loadTable(catalogName, nsParts, tableName);
-            console.log('Loaded table:', table);
         } catch (e: any) {
             console.error('Failed to load table:', e);
             error = e.message;

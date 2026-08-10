@@ -33,7 +33,6 @@
                    // Propagate 403 immediately to outer catch
                    throw icebergError;
                 }
-                console.log("Failed to load as Iceberg table, attempting fallback to generic asset:", icebergError);
                 // Fallback to generic asset
                 table = await icebergApi.getAsset(catalogName, namespaceParts, tableName);
             }

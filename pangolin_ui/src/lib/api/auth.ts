@@ -102,17 +102,24 @@ export const authApi = {
 		return user;
 	},
 
-	async getOAuthProviders(): Promise<OAuthProvider[]> {
-		const response = await apiClient.get<OAuthProvider[]>('/api/v1/oauth/providers');
+	/**
+	 * Which OAuth providers this deployment has configured.
+	 *
+	 * B33: this endpoint did not exist and returned 404, which is why the login
+	 * page hardcoded four provider buttons. The server now serves it, publicly,
+	 * returning provider names only.
+	 */
+	async getOAuthProviders(): Promise<string[]> {
+		const response = await apiClient.get<{ providers: string[] }>('/api/v1/oauth/providers');
 		if (response.error) throw new Error(response.error.message);
-		return response.data || [];
+		return response.data?.providers ?? [];
 	},
 
-	async initiateOAuth(provider: string): Promise<{ url: string }> {
-		const response = await apiClient.get<{ url: string }>(`/api/v1/oauth/${provider}`);
-		if (response.error) throw new Error(response.error.message);
-		return response.data!;
-	},
+	// B33: `initiateOAuth` called `GET /api/v1/oauth/{provider}`, which does not
+	// exist and never did. The real entry point is a *browser navigation* to
+	// `/oauth/authorize/{provider}` - an XHR cannot follow the provider redirect
+	// anyway - so the login page navigates there directly and this dead method
+	// is gone.
 
 	async generateToken(request: GenerateTokenRequest): Promise<GenerateTokenResponse> {
 		const response = await apiClient.post<GenerateTokenResponse>('/api/v1/tokens', request);

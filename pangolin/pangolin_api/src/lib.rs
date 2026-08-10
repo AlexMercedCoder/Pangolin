@@ -260,7 +260,12 @@ pub fn app_with_options(
             "/api/v1/branches/:name/rebase",
             post(pangolin_handlers::rebase_branch),
         ) // Rebase endpoint
-        .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
+        .route(
+            // B33: the UI's branch-delete control has been 404ing because only
+            // GET was registered here.
+            "/api/v1/branches/:name",
+            get(pangolin_handlers::get_branch).delete(pangolin_handlers::delete_branch),
+        )
         .route(
             "/api/v1/branches/:name/commits",
             get(pangolin_handlers::list_commits),
@@ -524,6 +529,13 @@ pub fn app_with_options(
         .route(
             "/api/v1/oauth/exchange",
             post(oauth_handlers::oauth_exchange),
+        )
+        .route(
+            // B33: the login page needs to know which providers are configured
+            // *before* anyone is authenticated; without this it rendered all
+            // four buttons unconditionally, several of them dead.
+            "/api/v1/oauth/providers",
+            get(oauth_handlers::list_oauth_providers),
         )
         // Business Metadata (by asset id)
         .route(
