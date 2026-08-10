@@ -70,6 +70,23 @@ four hats, described below. Remaining gaps:
     degradation path was unreachable and the delete failed outright.
   * retryable writes are unavailable — add `retryWrites=false` to your
     connection string or single-document writes will be rejected.
+
+  Both topologies are tested. CI runs the MongoDB suites twice: once against a
+  standalone (the `guardrails` job) and once against a single-node replica set
+  (`mongo-replica-set`), because the two exercise *different branches* of
+  `delete_catalog` and testing one says nothing about the other. Locally:
+
+  ```bash
+  # standalone — the degraded paths
+  docker compose -f docker-compose.db-test.yml up -d mongo
+  export PANGOLIN_TEST_MONGO_URL='mongodb://testuser:testpass@localhost:27017/?retryWrites=false'
+
+  # replica set — transactions and retryable writes
+  docker compose -f docker-compose.mongo-rs.yml up -d
+  export PANGOLIN_TEST_MONGO_URL='mongodb://localhost:27018/?replicaSet=rs0&directConnection=true'
+  ```
+
+  They use different ports so both can run at once.
 * Multi-statement operations other than `delete_catalog` are still not atomic.
 
 ## What the first live run found
@@ -85,6 +102,13 @@ amount of code reading had surfaced:
 | MongoDB | **`get_metadata_location` had no fallback to the asset's own `location`**, unlike the other three backends. A table created with a location but no explicit metadata-location property reported none, so its metadata could not be loaded and its commits compared against a different value than the read path returned. |
 | MongoDB | **Role assignments were written by serde and queried as BSON Binary.** `bson::to_document` writes a `Uuid` as a string; the deserializer expects Binary. So `get_user_roles` never matched, every role-derived permission silently vanished, and a user holding an admin role was authorized as though they held none. The same asymmetry caused B1 (audit) and B2 (token revocation). |
 | MongoDB | **`delete_catalog`'s "fall back when transactions are unavailable" path was unreachable.** `start_transaction` is a local call in the Rust driver, so it cannot fail for want of a replica set; the error arrives on the first operation *inside* the transaction and was propagated instead of caught. |
+| MongoDB | Once that fallback *did* run, it carried B21 — the cascade deleted every matching child row before checking the catalog existed, then reported "not found" to a caller with every reason to believe nothing had happened. The same shape had been fixed for SQLite during the roadmap work; it survived here because this branch had never executed. |
+
+Postgres, notably, is the only backend that makes the orphaned-child state
+*unreachable*: it carries foreign keys from namespaces to catalogs and from
+assets to namespaces, so a mis-ordered cascade has nothing to destroy. The other
+three permit orphans, which is why the parity suite asserts the ordering there
+and records the asymmetry rather than skipping quietly.
 
 None of these were regressions. They had been present for as long as the code
 had, and a per-backend test could not have found the first three: each is one

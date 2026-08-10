@@ -603,13 +603,57 @@ pub async fn deleting_a_missing_catalog_destroys_nothing<S: CatalogStore>(store:
         .await
         .expect("create asset");
 
-    // The SQLite cascade used to run *before* the existence check, so this call
-    // deleted every child row whose catalog_name matched and only then errored.
+    // A namespace under a catalog name that has no catalog row.
+    //
+    // This is the state a cascade-before-existence-check destroys, and it is
+    // reachable: `namespaces` carries a foreign key to `tenants` only, on every
+    // backend. (An orphaned *asset* is not portable - Postgres has a composite
+    // key from assets to namespaces, so it refuses one. That strictness is
+    // worth knowing about; it is also why this uses the child row that every
+    // backend does allow to be orphaned.)
+    //
+    // An earlier version of this test named a catalog with no children at all,
+    // which passes whatever the ordering is. It is worth being precise about
+    // what a regression test actually constrains.
+    let orphan_ns = vec!["orphaned".to_string()];
+    let orphan_created = store
+        .create_namespace(
+            tenant_id,
+            "absent",
+            Namespace {
+                name: orphan_ns.clone(),
+                properties: HashMap::new(),
+            },
+        )
+        .await
+        .is_ok();
+
     let result = store.delete_catalog(tenant_id, "absent".to_string()).await;
     assert!(
         result.is_err(),
         "deleting a nonexistent catalog should be an error"
     );
+
+    if orphan_created {
+        // The backend permits orphaned children, so the ordering is observable:
+        // a cascade that runs before the existence check destroys them and only
+        // then reports "not found".
+        let orphan_survived = store
+            .get_namespace(tenant_id, "absent", orphan_ns)
+            .await
+            .expect("get orphaned namespace");
+        assert!(
+            orphan_survived.is_some(),
+            "a failed delete_catalog destroyed the rows it matched before \
+             discovering the catalog did not exist (B21)"
+        );
+    }
+    // Otherwise the backend enforces referential integrity between namespaces
+    // and catalogs and the orphaned state is unreachable, so there is nothing
+    // for a mis-ordered cascade to destroy. Postgres is the one that does; the
+    // deliberate asymmetry is recorded rather than papered over, because
+    // "Postgres refuses to create the fixture" and "Postgres passed the
+    // assertion" are very different facts.
 
     let still_there = store
         .get_asset(tenant_id, catalog, None, namespace, kept.name.clone())

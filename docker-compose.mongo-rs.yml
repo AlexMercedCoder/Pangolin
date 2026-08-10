@@ -1,0 +1,41 @@
+# A single-node MongoDB replica set, for exercising the paths a standalone
+# `mongod` cannot reach.
+#
+# `docker-compose.db-test.yml` runs MongoDB standalone, which is the *degraded*
+# topology: no transactions and no retryable writes. Everything verified against
+# it therefore exercised the fallback paths only — and the fallback in
+# `delete_catalog` was itself broken for as long as the code had existed,
+# precisely because nothing ever ran the other branch.
+#
+# A single node is enough: a replica set of one supports transactions and
+# retryable writes, which is what distinguishes the two code paths. It is not a
+# model of production redundancy and is not meant to be.
+#
+#   docker compose -f docker-compose.mongo-rs.yml up -d
+#   export PANGOLIN_TEST_MONGO_URL='mongodb://localhost:27018/?replicaSet=rs0&directConnection=true'
+#   cargo test -p pangolin_store
+#
+# Note the port: 27018, so this can run alongside the standalone on 27017 and
+# the two topologies can be tested in one sitting.
+#
+# No authentication here. A replica set with auth needs a shared keyfile, which
+# is meaningful setup for a throwaway test fixture; the standalone compose file
+# covers the authenticated path.
+
+services:
+  mongo-rs:
+    image: mongo:7.0
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all", "--port", "27018"]
+    ports:
+      - "27018:27018"
+    healthcheck:
+      # Health is "the replica set has a primary", not "the process started".
+      # `mongod` accepts connections long before the set is initiated, and a
+      # client that connects in between fails in confusing ways.
+      test: >-
+        mongosh --port 27018 --quiet --eval
+        "try { rs.status().ok } catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27018'}]}).ok }"
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s

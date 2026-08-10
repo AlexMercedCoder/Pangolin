@@ -310,6 +310,90 @@ jobs:
           fi
           echo "all four backends ran"
 
+  # A standalone `mongod` supports neither transactions nor retryable writes, so
+  # the `guardrails` job above exercises only MongoDB's *degraded* paths. That
+  # is the topology in which `delete_catalog`'s fallback was found to be broken
+  # - and the transactional branch it falls back *from* has correspondingly
+  # never run. Testing one branch and not the other is the same gap one layer in.
+  #
+  # A single-node replica set is enough: a set of one supports transactions and
+  # retryable writes, which is the whole distinction. It is not a model of
+  # production redundancy and is not meant to be.
+  mongo-replica-set:
+    name: mongodb (replica set)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Start a single-node replica set
+        run: |
+          # Not a `services:` container: the set has to be initiated after the
+          # process is listening, and a service container's healthcheck has no
+          # hook for that.
+          docker run -d --name mongo-rs -p 27018:27018 mongo:7.0 \
+            mongod --replSet rs0 --bind_ip_all --port 27018
+
+          for i in $(seq 1 30); do
+            if docker exec mongo-rs mongosh --port 27018 --quiet --eval \
+                 "rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27018'}]})" \
+                 >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+
+          # Wait for a primary. Accepting connections is not the same as being
+          # able to serve a write, and a client that connects in between fails
+          # in ways that look like application bugs.
+          for i in $(seq 1 30); do
+            state=$(docker exec mongo-rs mongosh --port 27018 --quiet \
+              --eval "try { rs.status().myState } catch (e) { 0 }" 2>/dev/null | tr -d '[:space:]')
+            if [ "$state" = "1" ]; then
+              echo "replica set has a primary"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the replica set never elected a primary"
+          docker logs mongo-rs | tail -50
+          exit 1
+
+      - name: The set must actually support transactions
+        run: |
+          # Otherwise this job silently re-tests the standalone paths and the
+          # whole point of it is lost.
+          docker exec mongo-rs mongosh --port 27018 --quiet --eval '
+            const s = db.getMongo().startSession();
+            s.startTransaction();
+            s.getDatabase("probe").c.insertOne({ok: 1});
+            s.commitTransaction();
+            print("transactions available");
+          '
+
+      - name: MongoDB suites against a replica set
+        env:
+          PANGOLIN_TEST_MONGO_URL: mongodb://localhost:27018/?replicaSet=rs0&directConnection=true
+          PANGOLIN_TEST_MONGO_DB: pangolin_rs_test
+        run: |
+          cargo test -p pangolin_store --test store_integration test_mongo
+          cargo test -p pangolin_store --test mongo_comprehensive_tests
+          cargo test -p pangolin_store --test mongo_audit_tests
+          cargo test -p pangolin_store --test mongo_tests
+
+      - name: The suites must not have skipped MongoDB
+        env:
+          PANGOLIN_TEST_MONGO_URL: mongodb://localhost:27018/?replicaSet=rs0&directConnection=true
+          PANGOLIN_TEST_MONGO_DB: pangolin_rs_test
+        run: |
+          out=$(cargo test -p pangolin_store --test store_integration test_mongo 2>&1)
+          echo "$out"
+          grep -q "test test_mongo_store_regression \.\.\. ok" <<<"$out" || {
+            echo "::error::the MongoDB backend did not run"
+            exit 1
+          }
+
   # Deployment artefacts drift from the code that reads them, and nothing
   # noticed. `PANGOLIN_STORE_TYPE` sat in both compose files for several
   # releases while the server read `PANGOLIN_STORAGE_TYPE` (B9); the quick-start

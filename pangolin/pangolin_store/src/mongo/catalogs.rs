@@ -259,6 +259,29 @@ impl MongoStore {
         child_filter: Document,
         name: &str,
     ) -> Result<()> {
+        // Existence is checked *first*. This path used to delete every matching
+        // tag, branch, asset and namespace and only then discover the catalog
+        // did not exist - returning "not found" to a caller who had every reason
+        // to believe nothing had happened. That is B21, which was fixed for
+        // SQLite during the roadmap work; the same shape survived here because
+        // this branch only runs on a deployment without transactions, and
+        // nothing had ever run it.
+        //
+        // Without a transaction the cascade below is still not atomic - a
+        // failure partway through leaves a partial delete. Checking first at
+        // least means a *no-op* call destroys nothing, which is the case an
+        // operator is most likely to hit by typo.
+        let exists = self
+            .db
+            .collection::<Document>("catalogs")
+            .find_one(filter.clone())
+            .await?
+            .is_some();
+
+        if !exists {
+            return Err(anyhow::anyhow!("Catalog '{}' not found", name));
+        }
+
         for collection in ["tags", "branches", "assets", "namespaces"] {
             self.db
                 .collection::<Document>(collection)
@@ -266,15 +289,11 @@ impl MongoStore {
                 .await?;
         }
 
-        let result = self
-            .db
+        self.db
             .collection::<Document>("catalogs")
             .delete_one(filter)
             .await?;
 
-        if result.deleted_count == 0 {
-            return Err(anyhow::anyhow!("Catalog '{}' not found", name));
-        }
         Ok(())
     }
 }
