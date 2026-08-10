@@ -9,6 +9,145 @@ From 0.6.0 the server, both CLIs, the Python SDK, the UI and the Helm chart all
 carry the same version number. Before that they had drifted to five different
 values and there was no way to tell which combination had been tested together.
 
+## [Unreleased]
+
+Implements `roadmap_aug10.md`, the full-repo audit of 2026-08-10. **This is a
+security release.** Five of the fixes below are exploitable by any
+authenticated principal, including the lowest-privilege tenant user and any
+service-user API key. If you run 0.6.0, upgrade and rotate tokens.
+
+### Security
+
+- **Any authenticated caller could mint a `Root` JWT for any tenant (B0a).**
+  `POST /api/v1/tokens` took no session at all and mapped a body-supplied
+  `roles: ["Root"]` straight into signed claims. Since `check_permission`
+  short-circuits for `Root`, this was a total privilege escalation reachable by
+  a tenant user. Minting is now restricted to `Root`, or to a `TenantAdmin`
+  within its own tenant and never above its own rank.
+- **Any tenant member could vend read+write cloud credentials for the whole
+  warehouse (B0b).** The credential endpoint performed no authorization, never
+  looked the table up, and hardcoded `["read", "write"]` - so it issued
+  credentials for tables the caller had no rights to and that need not exist.
+  It now resolves the asset, requires `Read`, and adds `"write"` only when
+  `Write` is actually held.
+- **Logout did not revoke anything (B0j).** Revocation is keyed by the token's
+  `jti`; the handler revoked `session.user_id`, which no token ever carries as
+  its `jti`. Logout returned 200 and the token kept working for its full
+  24-hour lifetime. `UserSession` now carries the `jti`.
+- **An expired service user could renew indefinitely (B0g).** The Iceberg OAuth
+  token endpoint checked `active` but not expiry, so an expired API key could
+  still exchange `client_credentials` for a fresh JWT - bypassing key expiry
+  entirely, and renewably.
+- **`PANGOLIN_DEV_MODE` waived the `NO_AUTH` public-bind guard (B0h).** The two
+  flags are routinely set together in compose and dev setups, and together they
+  started a server on `0.0.0.0` that treated every anonymous request as
+  `TenantAdmin`. Dev mode now relaxes secret strength only, never exposure.
+- **A tenant-wide grant applied across tenants (B0i).** `PermissionScope::Tenant`
+  matched without comparing the grant's tenant to the resource's.
+- **OAuth linked accounts by unverified email (B0l).** Anyone who could set a
+  matching address on any configured provider - GitHub reports unverified ones -
+  logged in as that Pangolin user, including the seeded tenant admin. Identity
+  is now `(provider, subject)`; email linking needs a verified address and an
+  operator domain allowlist.
+- **The OAuth login flow could not complete (B0k).** `POST /api/v1/oauth/exchange`
+  was not in the public-path allowlist, so the endpoint whose job is to issue
+  the first token demanded one. The browser landed with a `?code=` it could
+  never redeem.
+- Missing authorization on `rename_table` (B0c), `update_namespace_properties`
+  (B0d), view create/read (B0e), `perform_maintenance` (B0f), `rebase_branch`
+  and `delete_business_metadata`. `perform_maintenance` additionally ran
+  destructive snapshot expiry against a hardcoded `"default"` catalog rather
+  than the one in the path.
+- A caller-supplied `expires_in_hours` could panic token issuance and abort the
+  connection task (B0m); clamped, plus a `CatchPanicLayer`.
+- A malformed or absent `jti` skipped the revocation check entirely, making such
+  tokens unrevocable for their lifetime (B0o).
+- The admin CLI and Python SDK wrote their auth tokens world-readable, and
+  `generate-code` / `get-token` echoed live JWTs into copy-paste output
+  (B_cli7, B_sdk4).
+- A live PyPI API token was removed from the repo-root `.env` (B44). **It was
+  present in plaintext and must be rotated.**
+
+### Fixed
+
+- **Storage backends disagreed with each other in ten ways (B1-B7, B17-B30).**
+  A cross-tenant audit read on Mongo, a revocation that was a silent no-op on
+  Mongo, a SQLite branch delete that orphaned its assets and referenced a
+  column that does not exist, a Postgres search that panicked on any hit, a
+  Mongo compare-and-swap that lost Iceberg snapshots, a memory index that
+  broke another tenant's lookups, and all three persistent backends silently
+  rewriting 15 of the 17 asset types to `IcebergTable`. Plus pagination that
+  could repeat or skip rows everywhere, and four different answers to the same
+  search.
+- **Two defects the new parity suite found on its first run.** `SqliteStore`
+  had no inherent `revoke_token`/`is_token_revoked`, so the trait delegations
+  called themselves - revoking a token on SQLite recursed until the stack was
+  exhausted and *aborted the process*. And the SQLite `audit_logs` table still
+  declared its original column set while the code inserted the full entry, so
+  every audit write failed and the backend kept no audit trail at all.
+- **Iceberg metadata was not spec-conformant (B11-B16o).** `default-spec-id`
+  was written under the wrong name, the required `last-partition-id` was
+  absent, schemas omitted `"type": "struct"`, and `metadata-log` was never
+  appended - so metadata Pangolin wrote could not be read as v2 metadata by an
+  external engine. On the commit path: nested namespaces registered under one
+  key and looked up under another (every commit to one 404'd), a client could
+  jump the sequence counter to `i64::MAX` and overflow the next commit, a
+  feature-branch commit moved `main`, `last-updated-ms` only advanced on
+  snapshots, `-1` resolved against the whole list rather than what the commit
+  added, `create_table` returned the table directory as `metadata-location`
+  and dropped every complex-typed column from the schema, and lost
+  compare-and-swaps orphaned metadata files.
+- **`docker compose up` could not start the API (B8-B10).** No signing secret
+  was set and the server has refused to start without one since 0.6.0. Both
+  compose files also set a storage variable nothing reads, and the release
+  compose file pinned an image four versions old and ran a script that does
+  not exist.
+- **The management UI was disconnected from the server (B31-B37).** Four
+  spellings of the API base URL coexisted and none agreed, so every deployed
+  build called the visitor's own localhost; ~13 raw `fetch('/api/v1/...')`
+  calls 404'd outside the dev proxy and skipped the tenant header; three
+  endpoints the UI called did not exist; nothing handled a 401, so an expired
+  token left a permanently broken session; tag-filtered search 400'd end to
+  end; there was no way to create a catalog from the catalogs page; and the
+  tenant switcher was dead code referencing an unimported store.
+- **Both CLIs and the SDK called endpoints that do not exist (B_cli1-8,
+  B_sdk1-5).** Roughly 35 sites: wrong paths, wrong field names, wrong types,
+  commands that were `Ok(())` stubs reporting success. All of it survived
+  because every command swallowed its error and exited 0.
+
+### Added
+
+- **A permission matrix test (improvement #0).** Drives each sensitive route as
+  Root / tenant admin / ungranted tenant user / foreign tenant admin and
+  asserts the expected 200 or 403. Every bug in the authorization cluster was
+  invisible to CI precisely because nothing asserted this.
+- **A cross-backend parity suite (improvement #1).** Runs the same assertions
+  against memory, SQLite, Postgres and Mongo. Nearly half the storage findings
+  were one backend diverging from the others, which no per-backend test can
+  see.
+- `#[serde(deny_unknown_fields)]` on all 34 server request structs, so a client
+  sending the wrong field name gets a 422 naming it rather than a 200 for a
+  request the server silently emptied. It caught five such payloads in the
+  project's own tests immediately.
+- CI jobs for the Python SDK, the UI, configuration drift, and the two
+  guardrail suites above (improvements #1-#3). Previously CI covered only Rust,
+  Helm and Docker - which is exactly where the SDK and UI rot happened.
+- `loadNamespaceMetadata`, `namespaceExists`, `DELETE /api/v1/branches/{name}`
+  and `GET /api/v1/oauth/providers`; spec pagination (`pageToken`/`pageSize`
+  and `next-page-token`) and the spec error envelope across the Iceberg
+  handlers.
+- `scripts/check_env_var_docs.sh`, which regenerates the environment-variable
+  reference check from `config.rs`. The old page documented three variables
+  that do not exist and omitted 34 that do (B43).
+
+### Removed
+
+- 18 unused UI runtime dependencies, ~260 KB of tracked debug output, two
+  ~4k-line `.bak` store monoliths that any grep of the storage layer would hit,
+  27 `console.log` calls (one logging a bearer-token prefix), and an
+  unauthenticated file-read route in the UI with no callers and a
+  blacklist-based traversal guard.
+
 ## [0.6.0] — 2026-08-09
 
 **This is a security release.** If you are running any earlier version, upgrade

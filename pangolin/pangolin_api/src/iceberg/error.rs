@@ -8,7 +8,10 @@
 //!
 //! Pangolin emitted a flat `{"error": "<string>"}`, and most Iceberg handlers
 //! bypassed the error type entirely and returned bare `(StatusCode, &str)`
-//! tuples with a plain-text body (A-6). Engines parse the envelope to tell a
+//! tuples with a plain-text body (A-6, and still open as B16j at the August
+//! audit despite this module reading as though it were resolved). Every return
+//! in `iceberg/` now routes through the helpers below; there are zero bare
+//! tuples left in that module. Engines parse the envelope to tell a
 //! `NoSuchTableException` from a `CommitFailedException`, which is what drives
 //! their retry logic, so a non-conforming body breaks retries rather than
 //! merely looking untidy.
