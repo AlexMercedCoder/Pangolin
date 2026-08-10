@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pypangolin"
-version = "0.6.0"
+version = "0.7.0"
 description = "Python client for Pangolin Data Catalog"
 readme = "README.md"
 # B40: this said ">=3.8", which is unsatisfiable with the declared

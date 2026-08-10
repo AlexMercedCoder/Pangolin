@@ -138,10 +138,18 @@ async fn test_postgres_access_requests() {
         .expect("Create tenant");
 
     // Setup: User
+    //
+    // The username and email are unique per run. They used to be the literal
+    // "req_user"/"req_pg@example.com", which is fine against a database created
+    // fresh for each run and fails on the second run against a persistent one -
+    // `users_username_key` is a unique constraint. A test that only passes on a
+    // clean database cannot be re-run, which is exactly what a CI service
+    // container and a developer's local Postgres both need.
+    let unique = Uuid::new_v4();
     let user = User {
         id: Uuid::new_v4(),
-        username: "req_user".to_string(),
-        email: "req_pg@example.com".to_string(),
+        username: format!("req_user_{unique}"),
+        email: format!("req_pg_{unique}@example.com"),
         password_hash: None,
         oauth_provider: None,
         oauth_subject: None,

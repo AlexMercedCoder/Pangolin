@@ -1,4 +1,4 @@
-use super::main::to_bson_uuid;
+use super::main::{to_bson_uuid, with_binary_uuids};
 use super::MongoStore;
 use anyhow::Result;
 use futures::stream::TryStreamExt;
@@ -9,11 +9,21 @@ use uuid::Uuid;
 
 impl MongoStore {
     pub async fn grant_permission(&self, permission: Permission) -> Result<()> {
-        let mut doc = mongodb::bson::to_document(&permission)?;
-        doc.insert("id", to_bson_uuid(permission.id));
-        doc.insert("user_id", to_bson_uuid(permission.user_id));
-        doc.insert("tenant_id", to_bson_uuid(permission.tenant_id));
-        doc.insert("granted_by", to_bson_uuid(permission.granted_by));
+        // The overrides used *snake_case* names while `Permission` serializes
+        // as kebab-case, so this added a second set of fields rather than
+        // replacing the first: the document carried both `user-id` (a string)
+        // and `user_id` (Binary). Filters matched the Binary copy, but
+        // deserializing the record back into `Permission` read the string and
+        // failed with "invalid type: string, expected bytes".
+        let doc = with_binary_uuids(
+            mongodb::bson::to_document(&permission)?,
+            &[
+                ("id", permission.id),
+                ("user-id", permission.user_id),
+                ("tenant-id", permission.tenant_id),
+                ("granted-by", permission.granted_by),
+            ],
+        );
 
         self.db
             .collection::<Document>("permissions")
@@ -37,7 +47,7 @@ impl MongoStore {
         pagination: Option<crate::PaginationParams>,
     ) -> Result<Vec<Permission>> {
         // 1. Fetch direct permissions
-        let filter = doc! { "user_id": to_bson_uuid(user_id) };
+        let filter = doc! { "user-id": to_bson_uuid(user_id) };
         let cursor = self
             .db
             .collection::<Permission>("permissions")
@@ -98,7 +108,7 @@ impl MongoStore {
         }
 
         // 2. Get permissions for those users
-        let perm_filter = doc! { "user_id": { "$in": user_ids } };
+        let perm_filter = doc! { "user-id": { "$in": user_ids } };
 
         let collection = self.db.collection::<Permission>("permissions");
         let mut find = collection.find(perm_filter);

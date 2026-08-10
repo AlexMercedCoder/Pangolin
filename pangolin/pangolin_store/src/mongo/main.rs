@@ -197,7 +197,15 @@ impl MongoStore {
             .get_asset(tenant_id, catalog_name, branch, namespace, table)
             .await?
         {
-            Ok(asset.properties.get("metadata_location").cloned())
+            // Found by running the parity suite against a live MongoDB: this
+            // read only `properties["metadata_location"]` and had no fallback to
+            // the asset's own `location`, which is what memory, SQLite and
+            // Postgres all fall back to. A table created with a location but no
+            // explicit metadata-location property therefore reported *no*
+            // metadata location on Mongo alone - so `load_table` could not find
+            // its metadata and every commit's compare-and-swap was working from
+            // a different notion of "current" than the read path.
+            Ok(current_metadata_location(&asset))
         } else {
             Ok(None)
         }
@@ -233,13 +241,36 @@ impl MongoStore {
             "name": table
         };
 
+        // The expectation has to be expressed against the *same* notion of
+        // "current location" that `get_metadata_location` returns - property
+        // first, then the asset's own `location`. Keeping it inside the filter
+        // rather than reading-then-comparing preserves the single-document
+        // atomicity that makes this a real CAS on a standalone mongod.
         match &expected_location {
             Some(expected) => {
-                filter.insert("properties.metadata_location", expected.clone());
+                filter.insert(
+                    "$or",
+                    vec![
+                        doc! { "properties.metadata_location": expected.clone() },
+                        doc! { "$and": vec![
+                            doc! { "properties.metadata_location": { "$exists": false } },
+                            doc! { "location": expected.clone() },
+                        ]},
+                    ],
+                );
             }
             // `None` means "there must not be one yet" - the create-path CAS.
             None => {
-                filter.insert("properties.metadata_location", doc! { "$exists": false });
+                filter.insert(
+                    "$and",
+                    vec![
+                        doc! { "properties.metadata_location": { "$exists": false } },
+                        doc! { "$or": vec![
+                            doc! { "location": { "$exists": false } },
+                            doc! { "location": "" },
+                        ]},
+                    ],
+                );
             }
         }
 
@@ -264,6 +295,50 @@ impl MongoStore {
         }
         Ok(())
     }
+}
+
+/// The metadata location a reader would see for `asset`.
+///
+/// Property first, then the asset's own `location` when it is non-empty - the
+/// same resolution memory, SQLite and Postgres use. Defined once so the read
+/// path and the compare-and-swap cannot drift apart again.
+fn current_metadata_location(asset: &pangolin_core::model::Asset) -> Option<String> {
+    asset
+        .properties
+        .get("metadata_location")
+        .cloned()
+        .or_else(|| {
+            if asset.location.is_empty() {
+                None
+            } else {
+                Some(asset.location.clone())
+            }
+        })
+}
+
+/// Rewrite the named keys of a serde-produced document as BSON Binary UUIDs.
+///
+/// `bson::to_document` writes a `Uuid` as a *string*, but the driver's
+/// deserializer expects Binary - so a document written through serde alone
+/// cannot be read back into a struct with `Uuid` fields ("invalid type: string,
+/// expected bytes"), and a filter built with [`to_bson_uuid`] never matches it.
+///
+/// That asymmetry is the single cause of the Mongo RBAC failures: role
+/// assignments were written by serde and queried as Binary, so `get_user_roles`
+/// always returned empty and every role-derived permission silently vanished.
+/// The audit-log and token-revocation paths (B1, B2) were the same bug in two
+/// other collections.
+///
+/// The keys given are the *serialized* names - kebab-case for these types - so
+/// the document stays deserializable into its struct.
+pub(crate) fn with_binary_uuids(
+    mut doc: mongodb::bson::Document,
+    fields: &[(&str, Uuid)],
+) -> mongodb::bson::Document {
+    for (key, value) in fields {
+        doc.insert(*key, to_bson_uuid(*value));
+    }
+    doc
 }
 
 pub(crate) fn to_bson_uuid(id: Uuid) -> Bson {

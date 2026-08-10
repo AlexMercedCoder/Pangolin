@@ -93,6 +93,13 @@ impl SqliteStore {
         .execute(&self.pool)
         .await?;
 
+        // Structural changes have to run *before* the schema file, because
+        // `CREATE TABLE IF NOT EXISTS` cannot alter a table that already exists
+        // - it silently does nothing, which is precisely how bumping
+        // SQLITE_SCHEMA_VERSION on its own left every upgraded database still
+        // broken while fresh ones looked fine.
+        self.migrate_audit_logs_to_v2().await?;
+
         let schema = include_str!("../../sql/sqlite_schema.sql");
         self.apply_schema(schema).await?;
 
@@ -110,6 +117,88 @@ impl SqliteStore {
             "sqlite schema is up to date"
         );
         Ok(())
+    }
+
+    /// Replace a pre-v2 `audit_logs` table with the current shape.
+    ///
+    /// The table was declared with the original `(actor, resource, details)`
+    /// columns while `sqlite/audit_logs.rs` inserted the full `AuditLogEntry`.
+    /// The two have been divergent since the SQLite backend was split into
+    /// modules, so on SQLite *every* audit write has failed with "table
+    /// audit_logs has no column named user_id" and the backend has never
+    /// recorded an audit trail.
+    ///
+    /// Keyed off table introspection rather than the recorded schema version:
+    /// some databases predate the version table entirely, and a version number
+    /// only says what a previous run *claimed*. Asking the table what columns it
+    /// has is the fact. That also makes this safe to run repeatedly.
+    ///
+    /// Any rows present are moved to `audit_logs_pre_v2` rather than discarded
+    /// or force-fitted. The old shape has no `resource_type`, which is
+    /// `NOT NULL` and parses as an enum, so there is no honest value to invent
+    /// for it - and a fabricated entry in an audit log is worse than an absent
+    /// one. In practice the table is empty, because nothing could ever write
+    /// to it.
+    async fn migrate_audit_logs_to_v2(&self) -> Result<()> {
+        let columns = self.table_columns("audit_logs").await?;
+
+        // No table yet: a fresh database. The schema file creates it.
+        if columns.is_empty() {
+            return Ok(());
+        }
+
+        // Already current.
+        if columns.iter().any(|c| c == "user_id") {
+            return Ok(());
+        }
+
+        let row_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
+            .fetch_one(&self.pool)
+            .await
+            .unwrap_or(0);
+
+        tracing::warn!(
+            rows = row_count,
+            "migrating the pre-v2 sqlite audit_logs table; the old table is kept \
+             as audit_logs_pre_v2"
+        );
+
+        let mut tx = self.pool.begin().await?;
+
+        // A stale backup from an interrupted previous attempt would make the
+        // rename fail, so clear the way first.
+        sqlx::query("DROP TABLE IF EXISTS audit_logs_pre_v2")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("ALTER TABLE audit_logs RENAME TO audit_logs_pre_v2")
+            .execute(&mut *tx)
+            .await?;
+
+        // The index followed the table through the rename and would collide
+        // with the one the schema file recreates.
+        sqlx::query("DROP INDEX IF EXISTS idx_audit_logs_tenant_ts")
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Column names of `table`, or an empty vec if it does not exist.
+    ///
+    /// Exposed so the migration tests can assert on the *actual* shape of a
+    /// database rather than on what the recorded version claims - the two
+    /// disagreeing is exactly the bug the v2 migration exists to fix.
+    pub async fn table_columns(&self, table: &str) -> Result<Vec<String>> {
+        // `table` is never caller-supplied in a production path, and PRAGMA does
+        // not accept a bind parameter for a table name.
+        let rows = sqlx::query(&format!("PRAGMA table_info({table})"))
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| r.get::<String, _>("name"))
+            .collect())
     }
 
     /// The schema version currently recorded in the database, if any.

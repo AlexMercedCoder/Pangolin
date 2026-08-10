@@ -41,8 +41,100 @@ security fixes.
 
 | Version | Supported |
 |---|---|
-| 0.6.x | Yes |
-| 0.5.x and earlier | No — upgrade to 0.6.x |
+| 0.7.x | Yes |
+| 0.6.x | No — upgrade to 0.7.x, see the advisory below |
+| 0.5.x and earlier | No — upgrade to 0.7.x |
+
+## Fixed in 0.7.0
+
+**0.6.0 is affected by a privilege-escalation vulnerability and should not be
+run.** Upgrade to 0.7.0 and rotate every issued token. The findings below come
+from a full-repo audit conducted the day after the 0.6.0 release; the
+authorization cluster was outside that release's scope and is new information,
+not a regression.
+
+### Exploitable by any authenticated principal
+
+Every issue in this table needs nothing but a valid credential — including the
+lowest-privilege `tenant-user` account, or any service-user API key.
+
+| ID | Issue | Impact |
+|---|---|---|
+| B0a | `POST /api/v1/tokens` took no session and mapped a body-supplied `roles: ["Root"]` straight into signed claims | **Full privilege escalation.** Any authenticated caller could mint a valid `Root` token for any tenant. `check_permission` short-circuits for `Root`, so the resulting token bypasses every subsequent authorization check in the system |
+| B0b | The credential-vending endpoint performed no authorization, never resolved the table, and hardcoded `["read", "write"]` | **Cloud storage credential disclosure.** Any tenant member obtained read+write credentials for the entire warehouse, naming a table they had no rights to and which need not exist |
+| B0j | Logout revoked `session.user_id`; revocation is keyed by the token's `jti`, which no token carries as its `user_id` | **Logout did nothing.** The token stayed valid for its full 24-hour lifetime. On a shared machine, "signing out" left a working credential behind |
+| B0g | The Iceberg OAuth token endpoint checked `active` but not expiry, unlike the API-key path | **Expired credentials were renewable indefinitely.** An expired service user could exchange `client_credentials` for a fresh JWT, repeatedly |
+| B0h | The `NO_AUTH` public-bind guard read `no_auth && !dev_mode && !is_loopback(..)` | **Unauthenticated tenant-admin access.** `PANGOLIN_NO_AUTH=true` with `PANGOLIN_DEV_MODE=true` — routinely set together in compose and development setups — started happily on `0.0.0.0` and treated every anonymous request as `TenantAdmin` |
+| B0l | OAuth matched existing users on email with no `email_verified` check and no provider binding | **Account takeover.** Anyone able to set a matching address on any configured provider — GitHub permits unverified addresses — logged in as that Pangolin user, including the seeded tenant admin |
+| B0i | `PermissionScope::Tenant` matched without comparing the grant's tenant to the resource's | A tenant-wide grant issued in one tenant satisfied authorization for another tenant's resources |
+| B0c–B0f | `rename_table`, `update_namespace_properties`, view create/read and `perform_maintenance` performed no authorization check at all | Any tenant member could move any table (an effective delete), rewrite namespace properties including `location`, read any view's SQL, and trigger snapshot expiry and orphan-file deletion. `perform_maintenance` additionally ran against a hardcoded `"default"` catalog rather than the one addressed |
+| B0m | `expires_in_hours` reached `chrono::Duration::hours` unclamped, and no catch-panic layer was installed | **Remote panic.** A large value aborted the connection task, taking other in-flight requests on that connection with it |
+| B0o | A token whose `jti` was absent or unparseable skipped the revocation check entirely | Such tokens were unrevocable for their full lifetime |
+
+### Availability
+
+| ID | Issue | Impact |
+|---|---|---|
+| — | `SqliteStore` had no inherent `revoke_token`/`is_token_revoked`, so the trait implementations called themselves | **Remote crash on the SQLite backend.** Revoking a token — which logout does — recursed until the thread stack was exhausted and aborted the process |
+| B2 | On MongoDB the revocation write and the revocation check used different field names *and* different types | Revocation could never match. Revoked tokens, including after logout, stayed valid |
+
+### Confidentiality and integrity of records
+
+| ID | Issue | Impact |
+|---|---|---|
+| B1 | MongoDB's `get_audit_event` discarded the `tenant_id` parameter | **Cross-tenant audit disclosure.** Any tenant holding an audit-event UUID could read another tenant's record: username, IP address, resource names and metadata |
+| — | The SQLite `audit_logs` table declared different columns than the code inserted | **No audit trail at all on SQLite.** Every audit write failed at runtime. If you run SQLite, assume you have no audit history prior to 0.7.0 |
+| — | The admin CLI and Python SDK wrote their stored bearer tokens at the process umask, typically `0644` | Any local account could read the token. Now `0600` under a `0700` directory |
+| — | `generate-code` and `get-token` printed live JWTs into copy-paste output | Tokens landed in shell scrollback, session transcripts and pasted snippets |
+| B44 | A live PyPI API publish token was committed to the repository working tree in `.env` | Never tracked by Git, but readable by any local tool and passed into containers by `docker compose`. **The token has been removed and must be treated as compromised** |
+
+### Data loss
+
+Not security boundaries, but silent corruption is worth the same attention:
+
+* **B5** MongoDB's `update_metadata_location` ignored the compare-and-swap
+  entirely. Two concurrent Iceberg commits both reported success and one
+  snapshot was lost. Memory, Postgres and SQLite all enforced it.
+* **B3** SQLite's `delete_branch` referenced a column that does not exist and
+  was not transactional: the branch was committed away and its assets orphaned
+  permanently, while the caller received an error suggesting nothing happened.
+* **B7** All three persistent backends stored the `Debug` spelling of
+  `AssetType` and parsed only two of seventeen variants. A `DeltaTable`,
+  `MlModel` or `Lance` asset round-tripped as an Iceberg table.
+* **B4** Postgres decoded a `TEXT[]` column as `String`; `sqlx::Row::get`
+  panics on a decode failure, so any search returning at least one hit panicked
+  the request.
+
+### Upgrading to 0.7.0
+
+1. **Rotate every issued token.** B0a means any account may have minted a
+   `Root` token, and B0j means logging out never invalidated anything. Rotating
+   `PANGOLIN_JWT_SECRET` invalidates all existing sessions at once and is the
+   fastest way to be sure.
+2. **Rotate service-user API keys**, for the same reason: B0g allowed expired
+   keys to keep issuing fresh JWTs.
+3. **Rotate any cloud storage credentials** reachable through a warehouse that
+   an untrusted tenant member could name. B0b vended them to anyone.
+4. **Audit for the escalation.** `POST /api/v1/tokens` calls from non-admin
+   principals, and credential-vending calls for tables the caller had no grant
+   on, are the two signals. Note that on SQLite there is no audit history to
+   check, and on MongoDB action-filtered queries returned nothing (B23) — so a
+   clean audit log is not evidence of absence on those backends.
+5. **Check `PANGOLIN_NO_AUTH` and `PANGOLIN_DEV_MODE`.** If both were set on a
+   non-loopback bind, treat the deployment as having been open to anonymous
+   tenant-admin access for that period. The server now refuses to start in that
+   configuration.
+6. **Set `PANGOLIN_OAUTH_EMAIL_LINK_DOMAINS`** if you rely on OAuth accounts
+   being matched to existing local users by email. Without it, identity is
+   `(provider, subject)` only and an address never adopts an existing account —
+   which is the safe default, and a behaviour change.
+7. **On SQLite, upgrading migrates the `audit_logs` table** to schema version 2.
+   The previous table is preserved as `audit_logs_pre_v2`; it is empty in
+   practice, because nothing could ever write to it.
+8. **Third-party API clients may need changes.** Server request bodies now
+   reject unknown fields with `422` instead of silently ignoring them. If a
+   client sent a misspelled or obsolete field, it was already being discarded —
+   the request was never doing what it appeared to.
 
 ## Fixed in 0.6.0
 

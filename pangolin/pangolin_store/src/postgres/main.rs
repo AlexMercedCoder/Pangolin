@@ -1173,6 +1173,29 @@ impl CatalogStore for PostgresStore {
         crate::file_delete::delete_location(storage_config.as_ref(), path).await
     }
 
+    // Business Metadata Operations
+    //
+    // These were absent, so `PostgresStore` fell through to the trait defaults
+    // ("Operation not supported by this store") while `search_assets` joined a
+    // table no migration created.
+    async fn upsert_business_metadata(
+        &self,
+        metadata: pangolin_core::business_metadata::BusinessMetadata,
+    ) -> Result<()> {
+        self.upsert_business_metadata(metadata).await
+    }
+
+    async fn get_business_metadata(
+        &self,
+        asset_id: Uuid,
+    ) -> Result<Option<pangolin_core::business_metadata::BusinessMetadata>> {
+        self.get_business_metadata(asset_id).await
+    }
+
+    async fn delete_business_metadata(&self, asset_id: Uuid) -> Result<()> {
+        self.delete_business_metadata(asset_id).await
+    }
+
     // Tag Operations
     async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()> {
         self.create_tag(tenant_id, catalog_name, tag).await

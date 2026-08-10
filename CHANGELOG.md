@@ -115,6 +115,45 @@ service-user API key. If you run 0.6.0, upgrade and rotate tokens.
   commands that were `Ok(())` stubs reporting success. All of it survived
   because every command swallowed its error and exited 0.
 
+### Fixed — found by running the suites against live databases
+
+The parity suite was written against memory and SQLite, the two backends CI
+could run without a service container. Pointing it at a live PostgreSQL and
+MongoDB for the first time failed on both. None were regressions; all had been
+present for as long as the code had.
+
+- **PostgreSQL: asset search was broken outright.** No migration ever created
+  `business_metadata`, while `search_assets` joined it — so every search failed
+  with `relation "business_metadata" does not exist`, a hard SQL error rather
+  than an empty result. The three CRUD methods were unimplemented, so the
+  trait's "Operation not supported by this store" default answered them. Added
+  the migration and the implementation.
+- **MongoDB: role assignments were unreadable.** `bson::to_document` writes a
+  `Uuid` as a string while the deserializer expects BSON Binary, so
+  `assign_role` wrote documents that `get_user_roles` could never match and
+  that could not be deserialized at all. Every role-derived permission silently
+  vanished: **a user holding an admin role was authorized as though they held
+  none.** The same asymmetry caused B1 and B2 in two other collections; one
+  helper now covers all of them.
+- **MongoDB: `get_metadata_location` had no fallback** to the asset's own
+  `location`, unlike the other three backends. A table created with a location
+  but no explicit metadata-location property reported none, so its metadata
+  could not be loaded and its commits compared against a different value than
+  the read path returned.
+- **MongoDB: the "no transaction support" fallback was unreachable.**
+  `start_transaction` is a local call in the Rust driver and cannot fail for
+  want of a replica set; the error arrives on the first operation *inside* the
+  transaction and was propagated rather than caught. `delete_catalog` failed
+  outright on any standalone `mongod` instead of degrading as its own comment
+  promised.
+- **SQLite: the `audit_logs` fix did not reach existing databases.** The schema
+  file is written with `CREATE TABLE IF NOT EXISTS`, which does nothing when the
+  table already exists — so fresh installs got the corrected columns and every
+  upgraded database kept the broken ones, with a bumped version number now
+  claiming otherwise. Added a real v1→v2 migration, keyed off table
+  introspection rather than the recorded version, with the old table preserved
+  as `audit_logs_pre_v2`.
+
 ### Added
 
 - **A permission matrix test (improvement #0).** Drives each sensitive route as
@@ -139,6 +178,15 @@ service-user API key. If you run 0.6.0, upgrade and rotate tokens.
 - `scripts/check_env_var_docs.sh`, which regenerates the environment-variable
   reference check from `config.rs`. The old page documented three variables
   that do not exist and omitted 34 that do (B43).
+- `scripts/bump_version.sh`, which sets the version across all five artifacts
+  and their inter-crate requirements, with a `--check` mode wired into CI
+  (improvement #8). The "one version everywhere" property had already drifted
+  in two places a day after the release that introduced it.
+- CI now runs the parity suite against live PostgreSQL and MongoDB service
+  containers, and **fails if any backend was skipped**. A skipped backend
+  passing silently is how two of them went untested through a security release.
+- An upgrade guide at `docs/upgrading/0.6-to-0.7.md`, and a security advisory
+  in `SECURITY.md`.
 
 ### Removed
 

@@ -224,14 +224,91 @@ jobs:
   guardrails:
     name: authz matrix + backend parity
     runs-on: ubuntu-latest
+    services:
+      # The parity suite is only meaningful against real backends. Running it
+      # on memory and SQLite alone is what let four cross-backend defects reach
+      # a release.
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U testuser"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mongo:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: testuser
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      # The store compliance tests exercise file IO. Without an object store
+      # they fall through to the EC2 instance-metadata endpoint and spend ~11s
+      # timing out before failing, which reads as a code failure rather than a
+      # missing service.
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+          MINIO_DEFAULT_BUCKETS: warehouse,bucket,test-bucket
+        ports: ["9000:9000"]
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      S3_ENDPOINT: http://localhost:9000
+      AWS_ENDPOINT_URL: http://localhost:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+      AWS_ALLOW_HTTP: "true"
+      # Without this the S3 client probes 169.254.169.254 for instance
+      # credentials and burns the retry budget before failing.
+      AWS_EC2_METADATA_DISABLED: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Permission matrix
         run: cargo test -p pangolin_api --lib authz_matrix_tests -- --nocapture
-      - name: Cross-backend parity (memory + SQLite)
+      - name: Cross-backend parity (all four backends)
+        env:
+          PANGOLIN_TEST_POSTGRES_URL: postgresql://testuser:testpass@localhost:5432/testdb
+          # A standalone mongod supports neither transactions nor retryable
+          # writes; the code degrades for the former and this disables the
+          # latter. A replica set would exercise both paths and is what
+          # production should use - see docs/operations/backend-parity.md.
+          PANGOLIN_TEST_MONGO_URL: mongodb://testuser:testpass@localhost:27017/?retryWrites=false
         run: cargo test -p pangolin_store --test store_integration
+
+      - name: The parity suite must not have skipped a backend
+        env:
+          PANGOLIN_TEST_POSTGRES_URL: postgresql://testuser:testpass@localhost:5432/testdb
+          PANGOLIN_TEST_MONGO_URL: mongodb://testuser:testpass@localhost:27017/?retryWrites=false
+        run: |
+          # The suite skips a backend with a printed note when its URL is
+          # unset, which passes. That is right for a developer laptop and wrong
+          # for CI: a silently skipped backend is how Postgres and MongoDB went
+          # untested through an entire security release. Assert all four ran.
+          out=$(cargo test -p pangolin_store --test store_integration 2>&1)
+          echo "$out"
+          for backend in memory sqlite postgres mongo; do
+            if ! grep -q "test test_${backend}_store_regression \.\.\. ok" <<<"$out"; then
+              echo "::error::the ${backend} backend did not run"
+              exit 1
+            fi
+          done
+          if grep -qiE "^skipping:" <<<"$out"; then
+            echo "::error::a backend was skipped"
+            exit 1
+          fi
+          echo "all four backends ran"
 
   # Deployment artefacts drift from the code that reads them, and nothing
   # noticed. `PANGOLIN_STORE_TYPE` sat in both compose files for several
@@ -288,6 +365,16 @@ jobs:
       - name: The environment-variable reference must match the code
         working-directory: pangolin
         run: ./scripts/check_env_var_docs.sh
+
+      - name: Every artifact must carry the same version
+        run: |
+          # Improvement #8. The "one version everywhere" property introduced in
+          # 0.6.0 had already drifted a day later in two places, because it was
+          # maintained by hand across five files.
+          version=$(grep -oE '^version = "[0-9]+\.[0-9]+\.[0-9]+[^"]*"' pangolin/Cargo.toml \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^"]*')
+          echo "workspace version: $version"
+          ./scripts/bump_version.sh "$version" --check
 
   # Improvement #2: the SDK and UI had no CI at all - only Rust, Helm and
   # Docker were covered. That is exactly where the 0.6.0 "no CI, silent rot"

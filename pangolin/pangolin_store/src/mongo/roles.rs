@@ -1,4 +1,4 @@
-use super::main::to_bson_uuid;
+use super::main::{to_bson_uuid, with_binary_uuids};
 use super::MongoStore;
 use anyhow::Result;
 use futures::stream::TryStreamExt;
@@ -8,7 +8,22 @@ use uuid::Uuid;
 
 impl MongoStore {
     pub async fn create_role(&self, role: Role) -> Result<()> {
-        self.roles().insert_one(role).await?;
+        // Written through an explicit document so the UUID fields are Binary.
+        // `insert_one(role)` went through serde, which writes them as strings -
+        // and then `get_role`'s Binary filter could never match, so a role could
+        // be created and never found again.
+        let doc = with_binary_uuids(
+            mongodb::bson::to_document(&role)?,
+            &[
+                ("id", role.id),
+                ("tenant-id", role.tenant_id),
+                ("created-by", role.created_by),
+            ],
+        );
+        self.db
+            .collection::<Document>("roles")
+            .insert_one(doc)
+            .await?;
         Ok(())
     }
 
@@ -61,13 +76,38 @@ impl MongoStore {
 
     pub async fn update_role(&self, role: Role) -> Result<()> {
         let filter = doc! { "id": to_bson_uuid(role.id) };
-        self.roles().replace_one(filter, role).await?;
+        // Same reason as `create_role`: a serde replacement would put the string
+        // form back and make the role unfindable again.
+        let doc = with_binary_uuids(
+            mongodb::bson::to_document(&role)?,
+            &[
+                ("id", role.id),
+                ("tenant-id", role.tenant_id),
+                ("created-by", role.created_by),
+            ],
+        );
+        self.db
+            .collection::<Document>("roles")
+            .replace_one(filter, doc)
+            .await?;
         Ok(())
     }
 
     // Role Assignment
     pub async fn assign_role(&self, assignment: UserRole) -> Result<()> {
-        let doc = mongodb::bson::to_document(&assignment)?;
+        // The assignment's UUIDs are written as Binary under their serialized
+        // (kebab-case) names, matching both `get_user_roles`' filter and the
+        // deserializer. Previously serde wrote strings, so `get_user_roles`
+        // returned nothing and every role-derived permission was lost - a user
+        // with an admin role was authorized as if they had none.
+        let doc = with_binary_uuids(
+            mongodb::bson::to_document(&assignment)?,
+            &[
+                ("user-id", assignment.user_id),
+                ("role-id", assignment.role_id),
+                ("assigned-by", assignment.assigned_by),
+            ],
+        );
         self.db
             .collection::<Document>("user_roles")
             .insert_one(doc)
@@ -76,9 +116,10 @@ impl MongoStore {
     }
 
     pub async fn remove_role(&self, user_id: Uuid, role_id: Uuid) -> Result<()> {
+        // Kebab-case: these are the serialized field names.
         let filter = doc! {
-            "user_id": to_bson_uuid(user_id),
-            "role_id": to_bson_uuid(role_id)
+            "user-id": to_bson_uuid(user_id),
+            "role-id": to_bson_uuid(role_id)
         };
         self.db
             .collection::<Document>("user_roles")
@@ -88,7 +129,7 @@ impl MongoStore {
     }
 
     pub async fn get_user_roles(&self, user_id: Uuid) -> Result<Vec<UserRole>> {
-        let filter = doc! { "user_id": to_bson_uuid(user_id) };
+        let filter = doc! { "user-id": to_bson_uuid(user_id) };
         let cursor = self
             .db
             .collection::<UserRole>("user_roles")

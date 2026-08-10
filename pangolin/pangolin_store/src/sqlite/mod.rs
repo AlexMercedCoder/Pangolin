@@ -23,5 +23,5 @@ pub mod users;
 pub mod warehouses;
 
 // Re-export SqliteStore
-pub use main::SqliteStore;
+pub use main::{SqliteStore, SQLITE_SCHEMA_VERSION};
 pub mod business_metadata;

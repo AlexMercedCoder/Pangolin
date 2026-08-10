@@ -8,6 +8,13 @@ on which backend.
 
 **Recommended for production: PostgreSQL.**
 
+Every ✅ below is now backed by the cross-backend parity suite
+(`cargo test -p pangolin_store --test store_integration`) run against a live
+instance of each backend, not by inspection. That distinction matters: until
+0.7.0 the Postgres and MongoDB tests had never actually been executed, and this
+table asserted several capabilities that failed at the first request — see
+"What the first live run found" below.
+
 | Capability | Memory | SQLite | PostgreSQL | MongoDB |
 |---|:--:|:--:|:--:|:--:|
 | Tenants, catalogs, namespaces, assets | ✅ | ✅ | ✅ | ✅ |
@@ -52,15 +59,37 @@ a `pg_advisory_lock` so that concurrent replicas do not race.
 > also carried a shape the code could not write to, so every audit write failed.
 > Both are fixed in 0.6.0; see `migrations/20260809000000_repair_orphaned_schema.sql`.
 
-**MongoDB.** Functional for core catalog operations. Known gaps:
+**MongoDB.** Functional for core catalog operations. The RBAC and audit-log
+failures listed here before 0.7.0 are fixed — all of them were one bug wearing
+four hats, described below. Remaining gaps:
 
-* No schema or index management at all — indexes must be created by hand.
-* No transactions: `MongoStore` opens no sessions, so multi-statement
-  operations are not atomic.
-* RBAC aggregation and audit-log filtering have failing tests
-  (`test_mongo_rbac_operations`, `test_mongo_list_user_permissions_aggregation`,
-  `test_mongo_audit_log_filtering`, `test_mongo_store_regression`). Treat
-  MongoDB as beta.
+* No schema or index management beyond a handful of indexes created at startup.
+* **A replica set is strongly recommended.** On a standalone `mongod`:
+  * transactions are unavailable, so `delete_catalog` degrades to a sequential,
+    non-atomic cascade. It now degrades with a warning; before 0.7.0 the
+    degradation path was unreachable and the delete failed outright.
+  * retryable writes are unavailable — add `retryWrites=false` to your
+    connection string or single-document writes will be rejected.
+* Multi-statement operations other than `delete_catalog` are still not atomic.
+
+## What the first live run found
+
+The parity suite was written against the memory and SQLite backends, which are
+the two that CI could run without a service container. The first time it was
+pointed at a live PostgreSQL and MongoDB it failed on both, for reasons no
+amount of code reading had surfaced:
+
+| Backend | Defect |
+|---|---|
+| PostgreSQL | **`business_metadata` was never created by any migration**, while `search_assets` joined it. Every asset search failed with `relation "business_metadata" does not exist` — a hard SQL error, not an empty result. The three CRUD methods were unimplemented, so the trait's "not supported" default answered them. |
+| MongoDB | **`get_metadata_location` had no fallback to the asset's own `location`**, unlike the other three backends. A table created with a location but no explicit metadata-location property reported none, so its metadata could not be loaded and its commits compared against a different value than the read path returned. |
+| MongoDB | **Role assignments were written by serde and queried as BSON Binary.** `bson::to_document` writes a `Uuid` as a string; the deserializer expects Binary. So `get_user_roles` never matched, every role-derived permission silently vanished, and a user holding an admin role was authorized as though they held none. The same asymmetry caused B1 (audit) and B2 (token revocation). |
+| MongoDB | **`delete_catalog`'s "fall back when transactions are unavailable" path was unreachable.** `start_transaction` is a local call in the Rust driver, so it cannot fail for want of a replica set; the error arrives on the first operation *inside* the transaction and was propagated instead of caught. |
+
+None of these were regressions. They had been present for as long as the code
+had, and a per-backend test could not have found the first three: each is one
+backend disagreeing with the others, which is only visible when something asserts
+they agree.
 
 ## Transactions
 
@@ -75,7 +104,10 @@ rollback and no repair tooling.
 
 What exists today:
 
-* SQLite uses a transaction in one place.
+* SQLite uses transactions for branch deletion and the catalog cascade.
+* MongoDB uses a transaction for the catalog cascade where the deployment
+  supports one, and degrades to a sequential cascade with a warning where it
+  does not.
 * PostgreSQL serialises schema setup with an advisory lock, so concurrent
   replicas cannot corrupt the schema.
 * The Iceberg table-commit path uses compare-and-swap on the metadata pointer
