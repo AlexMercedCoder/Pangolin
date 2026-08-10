@@ -60,8 +60,12 @@ a `pg_advisory_lock` so that concurrent replicas do not race.
 > Both are fixed in 0.6.0; see `migrations/20260809000000_repair_orphaned_schema.sql`.
 
 **MongoDB.** Functional for core catalog operations. The RBAC and audit-log
-failures listed here before 0.7.0 are fixed — all of them were one bug wearing
-four hats, described below. Remaining gaps:
+failures listed here before 0.7.0 are fixed, along with four more found by
+auditing every collection at once: they were all one bug wearing eight hats, and
+"The MongoDB UUID encoding rule" below is what it takes not to add a ninth. Note
+in particular that the ✅ against *service users and API keys* was wrong until
+0.7.0 — every method in that module was a silent no-op, so an API key could not
+authenticate on MongoDB at all. Remaining gaps:
 
 * No schema or index management beyond a handful of indexes created at startup.
 * **A replica set is strongly recommended.** On a standalone `mongod`:
@@ -114,6 +118,48 @@ None of these were regressions. They had been present for as long as the code
 had, and a per-backend test could not have found the first three: each is one
 backend disagreeing with the others, which is only visible when something asserts
 they agree.
+
+## The MongoDB UUID encoding rule
+
+If you write a MongoDB backend method, this is the one thing to get right.
+
+There are three ways this codebase converts a `Uuid` into BSON, and they produce
+three different values:
+
+| Route | Produces |
+|---|---|
+| `to_bson_uuid(id)` | `Binary`, generic subtype |
+| `doc! { "k": id }` | `Binary`, **UUID** subtype |
+| `bson::to_document(&value)` | a `String` |
+
+Reads disagree as well. A typed `Collection<T>` deserializes non-human-readably
+and requires binary; `bson::from_bson` requires a string. So a write and a read
+chosen independently agree only by luck.
+
+When they disagree the code does not fail loudly. The document is written, the
+filter matches nothing, and the caller gets an empty result that is
+indistinguishable from "there is nothing there". That is how a user holding an
+admin role came to be authorized as though they held none, how token revocation
+became a silent no-op, and how every service-user method became an unremarked
+no-op including the API-key lookup.
+
+The rule:
+
+* **Write** UUIDs with `to_bson_uuid`, or with `with_binary_uuids` when the
+  document came from `bson::to_document`. Pass the *serialized* field names —
+  most of these structs are `rename_all = "kebab-case"`, so it is `"tenant-id"`,
+  not `"tenant_id"`. Getting that wrong is its own silent no-op.
+* **Read** UUIDs with `from_bson_uuid` (or `read_optional_uuid` for an optional
+  field), which accepts all three encodings so records already in a deployed
+  database still load.
+* **Add a case to `mongo_uuid_round_trip_tests.rs`** for any new collection. It
+  runs against both topologies in CI and is the only thing that checks the write
+  and the read agree.
+
+Timestamps have the same shape of problem in the opposite direction: serde
+writes a `DateTime<Utc>` as an RFC3339 string, `doc!` writes a BSON DateTime,
+and chrono's `Deserialize` accepts only the string. Match whatever the
+collection already uses.
 
 ## Transactions
 

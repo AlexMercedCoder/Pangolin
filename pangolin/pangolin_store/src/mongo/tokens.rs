@@ -6,6 +6,32 @@ use mongodb::bson::{doc, Bson, Document};
 use pangolin_core::token::TokenInfo;
 use uuid::Uuid;
 
+/// Read a timestamp that may have been written either way.
+///
+/// `store_token` builds its document with `doc!`, and `doc!` converts a
+/// `chrono::DateTime` into a `Bson::DateTime`. Feeding that back through
+/// `bson::from_bson::<DateTime<Utc>>` does not work: the deserializer presents
+/// a `Bson::DateTime` as the map `{"$date": ...}`, while chrono's `Deserialize`
+/// only accepts an RFC3339 string. So `list_active_tokens` failed outright with
+/// `invalid type: map, expected an RFC 3339 formatted date and time string` -
+/// **listing active tokens was broken for any token that existed**, and the
+/// `created_at` arm swallowed the same error and substituted `now()`, so had
+/// the first one not aborted the call, every token would have reported the
+/// listing time as its creation time.
+///
+/// Both encodings are accepted because documents written before this fix are
+/// still in the collection, and a token record is not worth a migration - it
+/// expires on its own.
+fn read_datetime(doc: &Document, key: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    match doc.get(key)? {
+        Bson::DateTime(dt) => Some(dt.to_chrono()),
+        Bson::String(s) => chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|dt| dt.with_timezone(&chrono::Utc)),
+        _ => None,
+    }
+}
+
 impl MongoStore {
     pub async fn list_active_tokens(
         &self,
@@ -49,13 +75,9 @@ impl MongoStore {
                 )?,
                 username: d.get_str("username").unwrap_or("unknown").to_string(),
                 token: d.get_str("token").ok().map(|s| s.to_string()),
-                expires_at: mongodb::bson::from_bson(d.get("expires_at").unwrap().clone())?,
-                created_at: mongodb::bson::from_bson(
-                    d.get("created_at")
-                        .unwrap_or(&mongodb::bson::Bson::Null)
-                        .clone(),
-                )
-                .unwrap_or_else(|_| chrono::Utc::now()),
+                expires_at: read_datetime(&d, "expires_at")
+                    .ok_or(anyhow::anyhow!("Missing or unreadable expires_at"))?,
+                created_at: read_datetime(&d, "created_at").unwrap_or_else(chrono::Utc::now),
                 is_valid: true,
             });
         }

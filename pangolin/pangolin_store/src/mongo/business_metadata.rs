@@ -1,4 +1,4 @@
-use super::main::{from_bson_uuid, to_bson_uuid};
+use super::main::{from_bson_uuid, read_optional_uuid, to_bson_uuid, with_binary_uuids};
 use super::MongoStore;
 use anyhow::Result;
 use futures::stream::TryStreamExt;
@@ -9,10 +9,25 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 impl MongoStore {
+    /// Insert or replace an asset's business metadata.
+    ///
+    /// Only `asset-id` used to be rewritten as Binary. The other three UUID
+    /// fields kept whatever `to_document` produced - a string - so the record
+    /// could be written and located but never *deserialized*:
+    /// `get_business_metadata` failed with `invalid type: string "...",
+    /// expected bytes` on the first field it reached. Writing metadata
+    /// therefore made an asset's metadata permanently unreadable.
     pub async fn upsert_business_metadata(&self, metadata: BusinessMetadata) -> Result<()> {
         let filter = doc! { "asset-id": to_bson_uuid(metadata.asset_id) };
-        let mut doc = mongodb::bson::to_document(&metadata)?;
-        doc.insert("asset-id", to_bson_uuid(metadata.asset_id));
+        let doc = with_binary_uuids(
+            mongodb::bson::to_document(&metadata)?,
+            &[
+                ("id", metadata.id),
+                ("asset-id", metadata.asset_id),
+                ("created-by", metadata.created_by),
+                ("updated-by", metadata.updated_by),
+            ],
+        );
 
         let options = mongodb::options::ReplaceOptions::builder()
             .upsert(true)
@@ -211,9 +226,7 @@ impl MongoStore {
             results.push((
                 Branch {
                     name: d.get_str("name")?.to_string(),
-                    head_commit_id: mongodb::bson::from_bson(
-                        d.get("head_commit_id").unwrap().clone(),
-                    )?,
+                    head_commit_id: read_optional_uuid(&d, "head_commit_id")?,
                     branch_type,
                     assets: mongodb::bson::from_bson(d.get("assets").unwrap().clone())?,
                 },

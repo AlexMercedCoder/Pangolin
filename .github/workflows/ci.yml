@@ -247,20 +247,7 @@ jobs:
         options: >-
           --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
           --health-interval 5s --health-timeout 5s --health-retries 10
-      # The store compliance tests exercise file IO. Without an object store
-      # they fall through to the EC2 instance-metadata endpoint and spend ~11s
-      # timing out before failing, which reads as a code failure rather than a
-      # missing service.
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DEFAULT_BUCKETS: warehouse,bucket,test-bucket
-        ports: ["9000:9000"]
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
-          --health-interval 5s --health-timeout 5s --health-retries 20
+      # MinIO is not a service container - see the step that starts it below.
     env:
       S3_ENDPOINT: http://localhost:9000
       AWS_ENDPOINT_URL: http://localhost:9000
@@ -275,6 +262,38 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+
+      # The store compliance tests exercise file IO. Without an object store
+      # they fall through to the EC2 instance-metadata endpoint and spend ~11s
+      # timing out before failing, which reads as a code failure rather than a
+      # missing service.
+      #
+      # This is a step rather than a `services:` entry because `minio/minio`
+      # needs the `server /data` argument and service containers cannot
+      # override a command. The image that does not - `bitnami/minio`, whose
+      # MINIO_DEFAULT_BUCKETS created the buckets for free - was withdrawn from
+      # Docker Hub, so the service definition that used to be here no longer
+      # resolves.
+      - name: Object storage for the file-IO tests
+        run: |
+          set -euo pipefail
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:9000/minio/health/live >/dev/null
+          # `warehouse` is the application's bucket; the other two are test
+          # fixtures. A missing one fails as `NoSuchBucket`, which the
+          # compliance test reports as "File IO should be supported".
+          docker run --rm --network host --entrypoint sh minio/mc -c '
+            mc alias set m http://localhost:9000 minioadmin minioadmin
+            for b in warehouse bucket test-bucket; do mc mb --ignore-existing "m/$b"; done
+          '
+
       - name: Permission matrix
         run: cargo test -p pangolin_api --lib authz_matrix_tests -- --nocapture
       - name: Cross-backend parity (all four backends)
@@ -381,6 +400,7 @@ jobs:
           cargo test -p pangolin_store --test mongo_comprehensive_tests
           cargo test -p pangolin_store --test mongo_audit_tests
           cargo test -p pangolin_store --test mongo_tests
+          cargo test -p pangolin_store --test mongo_uuid_round_trip_tests
 
       - name: The suites must not have skipped MongoDB
         env:

@@ -154,6 +154,63 @@ present for as long as the code had.
   introspection rather than the recorded version, with the old table preserved
   as `audit_logs_pre_v2`.
 
+### Fixed — the MongoDB UUID encoding audit
+
+The string/Binary asymmetry above had by then been fixed four times, in four
+collections, each time as its own bug. Auditing every collection at once — with
+a round-trip test per entity rather than per feature — found four more, and a
+second encoding disagreement nobody had noticed.
+
+There are three ways this codebase converts a `Uuid` to BSON and they all differ:
+`to_bson_uuid` gives Binary with the generic subtype, `doc! { "k": uuid }` gives
+Binary with the *UUID* subtype, and `bson::to_document` gives a string. Reads
+disagree too: a typed `Collection<T>` demands binary, `bson::from_bson` demands a
+string. A write and a read chosen independently agree only by luck, and when they
+do not, nothing fails loudly — the filter just matches nothing.
+
+- **Every service-user method was a no-op.** `create_service_user` let Mongo
+  generate an `ObjectId` while the four by-id methods filtered on
+  `{"_id": <uuid string>}`, which matched nothing; the tenant listing and the
+  API-key lookup used snake_case field names for a kebab-case struct; and
+  `update_service_user_last_used` wrote to a field no reader looks at. The
+  consequence that matters: **API-key authentication could never resolve a
+  service user on MongoDB.** It fails closed, so this was an outage of
+  service-user auth rather than a bypass. Changing a role also wrote the Rust
+  variant name instead of its serde form, making the record unreadable
+  afterwards.
+- **Business metadata could be written but never read.** Only `asset-id` was
+  rewritten as Binary; `id`, `created-by` and `updated-by` kept the string form,
+  so `get_business_metadata` failed on the first of them. Writing metadata made
+  an asset's metadata permanently unreadable.
+- **Listing active tokens failed outright.** `store_token` writes timestamps as
+  BSON DateTime, which `bson::from_bson::<DateTime<Utc>>` rejects — chrono wants
+  an RFC3339 string. The `created_at` arm swallowed the same error and
+  substituted `now()`, so even without the hard failure every token would have
+  reported the listing time as its creation time.
+- **A branch with a head commit could not be read.** `create_branch` writes the
+  head through `doc!` (Binary, UUID subtype) and the reader accepted only a
+  string. A freshly created branch has no head, so this only bit once a branch
+  had been committed to — which is why it survived every existing test.
+
+`from_bson_uuid` now accepts all three encodings, so records already written by
+any of them still load, while writes go through `to_bson_uuid` alone.
+`mongo_uuid_round_trip_tests.rs` covers all 21 collections and runs against both
+MongoDB topologies in CI.
+
+### Fixed — test environment drift
+
+- **`docker-compose.db-test.yml` had no object store.** The store compliance
+  tests exercise file IO; with no S3 they fall through to the EC2
+  instance-metadata endpoint, hang for eleven seconds and fail with a
+  credentials error that names nothing relevant. CI had MinIO and the documented
+  local workflow did not, so the two disagreed about what it takes to run the
+  suite.
+- **The MinIO image CI pulled no longer exists.** `bitnami/minio:latest` was
+  withdrawn from Docker Hub and now fails with `manifest unknown`. Both CI and
+  the compose file use `minio/minio` with an explicit bucket-creation step —
+  `warehouse` for the application, `bucket` and `test-bucket` for the compliance
+  tests, whose absence surfaces as `NoSuchBucket`.
+
 ### Added
 
 - **A permission matrix test (improvement #0).** Drives each sensitive route as

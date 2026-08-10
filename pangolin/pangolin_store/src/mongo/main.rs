@@ -348,12 +348,44 @@ pub(crate) fn to_bson_uuid(id: Uuid) -> Bson {
     })
 }
 
+/// Decode a UUID that may have been written by any of the three routes.
+///
+/// There are three, and they disagree:
+///
+/// 1. [`to_bson_uuid`] - `Binary` with the *generic* subtype;
+/// 2. `doc! { "k": some_uuid }` - `Binary` with the *UUID* subtype, via bson's
+///    `From<Uuid> for Bson`;
+/// 3. `bson::to_document` - a plain `String`.
+///
+/// Writes should use `to_bson_uuid` so new data is uniform, but reads have to
+/// accept all three: documents written by the other two are already in
+/// deployed databases. Being strict here is what made a branch with a head
+/// commit unreadable - `create_branch` used route 2 and the reader accepted
+/// only route 1.
 pub(crate) fn from_bson_uuid(bson: &Bson) -> Result<Uuid> {
     match bson {
         Bson::Binary(Binary {
-            subtype: BinarySubtype::Generic,
+            subtype: BinarySubtype::Generic | BinarySubtype::Uuid,
             bytes,
         }) => Ok(Uuid::from_slice(bytes)?),
+        Bson::String(s) => Ok(Uuid::parse_str(s)?),
         _ => Err(anyhow::anyhow!("Invalid UUID bson")),
+    }
+}
+
+/// Decode an optional UUID field.
+///
+/// A missing key and an explicit `null` both mean "absent"; anything else has
+/// to decode, because silently returning `None` for a value that is present
+/// but unreadable would turn a corrupt record into a plausible-looking one.
+///
+/// `bson::from_bson::<Option<Uuid>>` cannot be used for this: handed a
+/// `Bson::Binary` it reports `invalid type: map, expected a UUID string`,
+/// because the deserializer presents binary data as the extended-JSON map
+/// `{"$binary": ...}` while `Uuid`'s `Deserialize` wants a string.
+pub(crate) fn read_optional_uuid(doc: &mongodb::bson::Document, key: &str) -> Result<Option<Uuid>> {
+    match doc.get(key) {
+        None | Some(Bson::Null) => Ok(None),
+        Some(value) => from_bson_uuid(value).map(Some),
     }
 }
