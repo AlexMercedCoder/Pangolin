@@ -1,6 +1,6 @@
 import click
 import logging
-from .config import load_config, get_active_profile
+from .config import get_active_profile
 from .admin import admin
 from .user import user
 from .config import set_active_profile, load_config as load_full_config

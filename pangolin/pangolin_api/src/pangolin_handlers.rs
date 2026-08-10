@@ -755,7 +755,7 @@ pub async fn delete_tag(
 pub async fn rebase_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
-    Extension(_session): Extension<UserSession>,
+    Extension(session): Extension<UserSession>,
     Path(branch_name): Path<String>,
     Json(payload): Json<CreateBranchRequest>, // We need catalog_name from body
 ) -> impl IntoResponse {
@@ -765,11 +765,32 @@ pub async fn rebase_branch(
     // Source: main
     // Target: branch_name
 
-    // Check permissions
-    // TODO: Granular permissions? For now assume Write on Catalog
-
     // Catalog is now required
     let catalog_name = &payload.catalog;
+
+    // The `// TODO: Granular permissions? For now assume Write on Catalog` that
+    // stood here *was* the authorization: any tenant member could rebase any
+    // branch, which rewrites that branch's contents. Same class as B0c-B0f.
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "rebase_branch: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    let scope = PermissionScope::Catalog {
+        catalog_id: catalog.id,
+    };
+    match crate::authz::check_permission(&store, &session, &Action::Write, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "rebase_branch: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
 
     match store
         .merge_branch(tenant_id, catalog_name, "main".to_string(), branch_name)
@@ -849,7 +870,16 @@ pub async fn list_catalogs(
     let tenant_id = tenant.0;
     tracing::info!("list_catalogs called with tenant_id: {}", tenant_id);
 
-    match store.list_catalogs(tenant_id, Some(pagination)).await {
+    // B42: the store used to paginate first and `filter_catalogs` removed the
+    // unauthorized rows afterwards, so a `TenantUser` got variable-size pages -
+    // including *empty pages while more authorized data existed*. Any client
+    // that stops on an empty page (the normal idiom) silently missed data.
+    //
+    // Filtering has to happen before slicing. The permitted set is not
+    // expressible as a store predicate today, so the rows are fetched unpaged
+    // and the page is cut after filtering; the page window is applied below.
+    let requested = pagination;
+    match store.list_catalogs(tenant_id, None).await {
         Ok(catalogs) => {
             // Use authz_utils for consistent permission filtering
             let permissions = if matches!(session.role, UserRole::TenantUser) {
@@ -880,8 +910,16 @@ pub async fn list_catalogs(
                 session.user_id
             );
 
-            let resp: Vec<CatalogResponse> =
-                filtered_catalogs.into_iter().map(|c| c.into()).collect();
+            // Now slice the *authorized* set, so a page is empty only when the
+            // caller has actually reached the end.
+            let offset = requested.offset.unwrap_or(0);
+            let limit = requested.limit.unwrap_or(usize::MAX);
+            let resp: Vec<CatalogResponse> = filtered_catalogs
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .map(|c| c.into())
+                .collect();
             (StatusCode::OK, Json(resp)).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),

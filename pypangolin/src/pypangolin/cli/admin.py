@@ -2,8 +2,6 @@ import click
 from rich.console import Console
 from rich.table import Table
 from ..client import PangolinClient
-from .config import get_active_profile
-import json
 
 console = Console()
 
@@ -150,7 +148,7 @@ def create_warehouse(ctx, name, type_, bucket, region, endpoint, access_key, sec
     client = get_client(ctx)
     try:
         if type_ == 's3':
-             resp = client.warehouses.create_s3(
+             client.warehouses.create_s3(
                 name=name,
                 bucket=bucket,
                 region=region,
@@ -207,7 +205,7 @@ def create_catalog(ctx, name, warehouse, type):
     """Create a new catalog"""
     client = get_client(ctx)
     try:
-        resp = client.catalogs.create(name=name, warehouse=warehouse, type=type)
+        client.catalogs.create(name=name, warehouse=warehouse, type=type)
         console.print(f"[green]Catalog created successfully:[/green] {name}")
     except Exception as e:
          console.print(f"[red]Error creating catalog:[/red] {e}")

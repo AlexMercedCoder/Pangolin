@@ -1,6 +1,5 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from .models import Role, Permission, ServiceUser, BusinessMetadata, AccessRequest
-from .exceptions import NotFoundError, ForbiddenError, PangolinError
 
 class RoleClient:
     def __init__(self, client):

@@ -84,6 +84,18 @@ all = [
 [project.scripts]
 pangolin = "pypangolin.cli:main"
 
+[tool.ruff]
+# Improvement #2 adds ruff to CI, so the ruleset is pinned here rather than left
+# to whatever version the runner installs.
+target-version = "py39"
+
+[tool.ruff.lint]
+# E701 (`if x: y` on one line) is a consistent style choice throughout this
+# package - 26 occurrences, all in short guard clauses. Reformatting them would
+# be churn with no correctness value, so the rule is off deliberately rather
+# than by accident.
+ignore = ["E701"]
+
 [tool.pytest.ini_options]
 # B41: without this, `pytest tests/` could not import the src/ layout unless the
 # package happened to be installed editable.

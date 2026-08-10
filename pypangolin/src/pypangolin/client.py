@@ -1,6 +1,6 @@
 import requests
 from typing import Optional, List, Dict, Any, Union
-from .models import Tenant, Warehouse, Catalog, Namespace, Asset, User
+from .models import Tenant, Warehouse, Catalog, Namespace, User
 from .auth import login
 from .git import BranchClient, TagClient, MergeOperationClient
 from .governance import RoleClient, PermissionClient, ServiceUserClient, BusinessMetadataClient

@@ -24,6 +24,9 @@ pub mod audit_handlers;
 pub mod audit_tests;
 pub mod auth_middleware;
 pub mod authz;
+/// Permission matrix: who is allowed to call what (roadmap improvement #0).
+#[cfg(test)]
+pub mod authz_matrix_tests;
 pub mod authz_utils; // Permission filtering utilities
 pub mod business_metadata_handlers;
 pub mod config;

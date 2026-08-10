@@ -2,10 +2,8 @@
 Database connection assets with encrypted credential storage.
 """
 
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple
 from cryptography.fernet import Fernet
-import base64
-import json
 
 
 class BaseConnectionAsset:

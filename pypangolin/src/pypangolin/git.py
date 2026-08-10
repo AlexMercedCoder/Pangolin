@@ -1,6 +1,5 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Any
 from .models import Branch, Tag, Commit, MergeOperation, Conflict
-from .exceptions import NotFoundError, PangolinError
 
 class BranchClient:
     def __init__(self, client):

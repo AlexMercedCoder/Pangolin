@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from .client import PangolinClient
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from pyiceberg.catalog import Catalog

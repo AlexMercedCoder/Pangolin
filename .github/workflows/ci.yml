@@ -207,6 +207,32 @@ jobs:
             exit 1
           fi
 
+  # Roadmap improvements #0 and #1: the two suites that make whole classes of
+  # finding *testable* rather than reviewable.
+  #
+  #   * the permission matrix drives each sensitive route as Root /
+  #     TenantAdmin / TenantUser / a foreign tenant's admin and asserts the
+  #     expected 200 or 403. A handler that forgets `check_permission` is
+  #     indistinguishable from one that calls it until something asserts the
+  #     403 - which is how the B0a-B0m cluster survived a security release.
+  #   * the cross-backend parity suite runs the same assertions against all
+  #     four stores, which is the only thing that catches one backend quietly
+  #     disagreeing with the others.
+  #
+  # Called out as their own job so a failure here reads as "authorization or
+  # backend parity regressed", not as an anonymous test failure.
+  guardrails:
+    name: authz matrix + backend parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Permission matrix
+        run: cargo test -p pangolin_api --lib authz_matrix_tests -- --nocapture
+      - name: Cross-backend parity (memory + SQLite)
+        run: cargo test -p pangolin_store --test store_integration
+
   # Deployment artefacts drift from the code that reads them, and nothing
   # noticed. `PANGOLIN_STORE_TYPE` sat in both compose files for several
   # releases while the server read `PANGOLIN_STORAGE_TYPE` (B9); the quick-start
@@ -262,3 +288,82 @@ jobs:
       - name: The environment-variable reference must match the code
         working-directory: pangolin
         run: ./scripts/check_env_var_docs.sh
+
+  # Improvement #2: the SDK and UI had no CI at all - only Rust, Helm and
+  # Docker were covered. That is exactly where the 0.6.0 "no CI, silent rot"
+  # lesson was repeating: the SDK's test suite could not even *collect*
+  # (B41) and the UI's vitest config broke every suite that imported the API
+  # client (B46), and nothing noticed either.
+  sdk:
+    name: python sdk
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pypangolin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[iceberg]'
+          pip install pytest ruff
+      - name: The package must import without the Iceberg extra
+        run: |
+          # B41 regression: `pip install pypangolin` then `import pypangolin`
+          # must not require the whole Iceberg stack.
+          pip uninstall -y pyiceberg
+          python -c "import pypangolin; print(pypangolin.__version__)"
+      - name: The version must match the package metadata
+        run: |
+          # B38: `__version__` was hardcoded to 0.1.0 against a 0.6.0 package.
+          python - <<'PY'
+          from importlib.metadata import version
+          import pypangolin
+          assert pypangolin.__version__ == version("pypangolin"), (
+              f"__version__ {pypangolin.__version__} != metadata {version('pypangolin')}"
+          )
+          print("version is single-sourced")
+          PY
+      - run: ruff check src
+      - run: pytest -q
+
+  ui:
+    name: management ui
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pangolin_ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: The UI must build
+        run: npm run build
+      - name: No raw /api/v1 fetches may reappear
+        run: |
+          # B32: a relative `fetch('/api/v1/...')` works under the dev proxy and
+          # 404s in production, while also skipping the tenant header. Every
+          # call must go through apiClient, which is not something a type check
+          # can express.
+          # Comment lines are excluded: several carry the offending pattern
+          # verbatim while explaining why it is wrong.
+          if grep -rnE "fetch\((['\`\"])/api/v1" src/ | grep -vE ":[[:space:]]*(//|\*|/\*)"; then
+            echo "::error::raw /api/v1 fetch found; route it through apiClient"
+            exit 1
+          fi
+          echo "no raw /api/v1 fetches"
+      - name: Only PUBLIC_API_URL may name the API base URL
+        run: |
+          # B31: four different spellings coexisted and none agreed, so every
+          # deployed build called the visitor's own localhost.
+          if grep -rn "VITE_API_URL" src/ .env.example vitest.config.ts 2>/dev/null \
+               | grep -vE ":[[:space:]]*(//|#|\*|/\*)"; then
+            echo "::error::VITE_API_URL is not read by SvelteKit; use PUBLIC_API_URL"
+            exit 1
+          fi
+          echo "PUBLIC_API_URL is the only spelling"

@@ -1,5 +1,5 @@
-from typing import List, Dict, Any, Optional
-from .models import FederatedCatalog, FederatedCatalogConfig, SyncStats, View
+from typing import List, Dict, Any
+from .models import FederatedCatalog, SyncStats, View
 
 class FederatedCatalogClient:
     def __init__(self, client):

@@ -4,7 +4,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 from ..client import PangolinClient
-from .config import update_profile, get_active_profile
+from .config import update_profile
 
 console = Console()
 

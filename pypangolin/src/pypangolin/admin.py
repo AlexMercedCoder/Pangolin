@@ -1,6 +1,5 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from .models import AuditEvent, SystemStats, CatalogSummary, SearchResult
-from .exceptions import ForbiddenError, PangolinError
 
 class AuditClient:
     def __init__(self, client):
