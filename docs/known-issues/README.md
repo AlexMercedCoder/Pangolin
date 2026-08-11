@@ -13,3 +13,5 @@ This section documents verified issues, limitations, and architectural quirks pr
 
 No verified issues are open against 0.8.0 beyond the limitations recorded in
 [STATUS.md](../../STATUS.md), which is the authoritative list.
+
+- [The `v0.8.0` tag and the `0.8.0` container image differ](v0.8.0-tag-image-drift.md) — `--version` is missing from the released CLI binaries but present in the image. Cosmetic; resolved in 0.9.0.

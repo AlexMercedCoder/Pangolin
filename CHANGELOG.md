@@ -18,8 +18,11 @@ operations, operational tooling, and OpenID Connect.
 ### Fixed — the published container images
 
 Four defects found by publishing 0.8.0 and then *running* what was published.
-All 18 CI jobs passed over every one of them, because the `docker` job builds
-images and does not exercise what it built.
+All 18 CI jobs passed over every one of them — not because CI ignores images,
+but because it only covers one. The `docker` job builds the API image, starts
+it, probes its shutdown behaviour and fails if it runs as root. `Dockerfile.tools`
+and `pangolin_ui/Dockerfile` are never built in CI at all, so the two images
+with defects were the two nothing tested.
 
 - **`Dockerfile.tools` still pinned `rust:1.88`.** A-36 raised the API image to
   match the workspace MSRV and missed the CLI image, which then failed to
