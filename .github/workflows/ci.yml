@@ -547,6 +547,12 @@ jobs:
       - name: Every compose file must be valid
         env:
           PANGOLIN_JWT_SECRET: ci-only-secret-of-adequate-length-0000000
+          # docker-compose.release.yml takes RELEASE_* rather than PANGOLIN_*
+          # so that a developer's local .env cannot feed the release
+          # verification harness. They are required (`:?`), so `config` cannot
+          # render the file without them.
+          RELEASE_JWT_SECRET: ci-only-secret-of-adequate-length-0000000
+          RELEASE_ROOT_PASSWORD: ci-only-root-password-not-a-placeholder
         run: |
           for f in docker-compose*.yml; do
             echo "validating $f"
@@ -585,11 +591,11 @@ jobs:
           # Two names are legitimately not read by the server:
           #   PANGOLIN_VERSION  - a compose-level image tag, not an app setting.
           #   PANGOLIN_API_URL  - set on the `tests` service in
-          #     docker-compose.release.yml. Nothing reads it *yet*: the script
-          #     that service runs, scripts/integration_test.py, starts its own
-          #     server with `cargo run`, which cannot work in a python:3.11-slim
-          #     container with only ./scripts mounted. That release-verification
-          #     path is broken independently of this guard.
+          #     docker-compose.release.yml and read by
+          #     scripts/release_smoke_test.py, which is a Python script rather
+          #     than the Rust server this guard greps. (It previously needed an
+          #     exemption for a worse reason: nothing read it at all, because
+          #     the script that service ran could not run in that container.)
           exempt='PANGOLIN_VERSION|PANGOLIN_API_URL'
           names=$(grep -rhE '^[^#]*PANGOLIN_[A-Z0-9_]+' docker-compose*.yml \
             | sed 's/#.*//' | grep -ohE 'PANGOLIN_[A-Z0-9_]+' | sort -u)
