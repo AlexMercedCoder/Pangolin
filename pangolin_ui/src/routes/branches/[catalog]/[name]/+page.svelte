@@ -89,7 +89,7 @@
 					{branch?.name || 'Loading...'}
 				</h1>
 				{#if branch}
-					<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {branch.branch_type === 'production' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
+					<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {branch.branch_type === 'ingest' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
 						{branch.branch_type}
 					</span>
 				{/if}

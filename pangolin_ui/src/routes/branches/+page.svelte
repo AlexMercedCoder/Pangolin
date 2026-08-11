@@ -44,17 +44,12 @@
 
 		loading = true;
 		try {
-			const allBranches = await branchesApi.list(selectedCatalog);
-			console.log('All branches from API:', allBranches);
-			console.log('Selected catalog:', selectedCatalog);
-			
-			// Filter by selected catalog
-			branches = allBranches;
-			console.log('Filtered branches:', branches);
-			
-			if (allBranches.length > 0 && branches.length === 0) {
-				notifications.info(`No branches found for catalog "${selectedCatalog}". Total branches: ${allBranches.length}`);
-			}
+			// The server filters: `list` takes the catalog. What used to be here
+			// was `branches = allBranches` under a "filter by selected catalog"
+			// comment, plus a notification guarded by `allBranches.length > 0 &&
+			// branches.length === 0` - which, with the two being the same array,
+			// could never fire.
+			branches = await branchesApi.list(selectedCatalog);
 		} catch (error: any) {
 			console.error('Error loading branches:', error);
 			notifications.error(`Failed to load branches: ${error.message}`);
@@ -63,8 +58,7 @@
 		loading = false;
 	}
 
-	function handleRowClick(event: CustomEvent) {
-		const branch = event.detail;
+	function handleRowClick(branch: any) {
 		goto(`/branches/${encodeURIComponent(branch.catalog)}/${encodeURIComponent(branch.name)}`);
 	}
 
@@ -117,11 +111,11 @@
 			{loading}
 			emptyMessage="No branches found. Create your first branch to enable isolated development."
 			searchPlaceholder="Search branches..."
-			on:rowClick={handleRowClick}
+			onRowClick={handleRowClick}
 		>
 			<svelte:fragment slot="cell" let:row let:column>
 				{#if column.key === 'branch_type'}
-					<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {row.branch_type === 'production' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
+					<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {row.branch_type === 'ingest' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
 						{row.branch_type}
 					</span>
 				{:else if column.key === 'assets'}
@@ -133,8 +127,12 @@
 						{new Date(row.created_at).toLocaleDateString()}
 					</span>
 				{:else if column.key === 'from_branch'}
+					<!-- `-`, not `main`: a branch with no recorded parent was
+					     displayed as having branched from `main`, which claims a
+					     lineage the data does not contain. `-` is what every
+					     other absent value in this table renders as. -->
 					<span class="text-sm text-gray-600 dark:text-gray-400">
-						{row.from_branch || 'main'}
+						{row.from_branch || '-'}
 					</span>
 				{:else}
 					{row[column.key] ?? '-'}

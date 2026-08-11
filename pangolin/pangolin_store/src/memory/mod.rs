@@ -171,6 +171,17 @@ impl CatalogStore for MemoryStore {
             .await
     }
 
+    async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        self.replace_namespace_properties_internal(tenant_id, catalog_name, namespace, properties)
+            .await
+    }
+
     async fn count_namespaces(&self, tenant_id: Uuid) -> Result<usize> {
         self.count_namespaces_internal(tenant_id).await
     }
@@ -411,6 +422,15 @@ impl CatalogStore for MemoryStore {
 
     async fn write_file(&self, location: &str, content: Vec<u8>) -> Result<()> {
         self.write_file_internal(location, content).await
+    }
+
+    async fn delete_file(&self, location: &str) -> Result<()> {
+        self.metadata_cache.invalidate(location).await;
+        self.files.remove(location);
+        let storage_config = self
+            .get_warehouse_for_location(location)
+            .map(|w| w.storage_config);
+        crate::file_delete::delete_location(storage_config.as_ref(), location).await
     }
 
     async fn expire_snapshots(

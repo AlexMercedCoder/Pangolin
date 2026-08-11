@@ -1,12 +1,16 @@
 /// Warehouse operations for SqliteStore
 use super::SqliteStore;
+use crate::secrets;
 use anyhow::Result;
 use pangolin_core::model::{Warehouse, WarehouseUpdate};
 use sqlx::Row;
 use uuid::Uuid;
 
 impl SqliteStore {
-    pub async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
+    pub async fn create_warehouse(&self, tenant_id: Uuid, mut warehouse: Warehouse) -> Result<()> {
+        // C-11: see the module note in `crate::secrets`. A SQLite file is the
+        // easiest of all the backends to walk off with.
+        secrets::seal(&mut warehouse.storage_config)?;
         sqlx::query("INSERT INTO warehouses (id, tenant_id, name, use_sts, storage_config, vending_strategy) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(warehouse.id.to_string())
             .bind(tenant_id.to_string())
@@ -35,7 +39,12 @@ impl SqliteStore {
                 tenant_id,
                 name: row.get("name"),
                 use_sts: row.get::<i32, _>("use_sts") != 0,
-                storage_config: serde_json::from_str(&row.get::<String, _>("storage_config"))?,
+                storage_config: {
+                    let mut config: std::collections::HashMap<String, String> =
+                        serde_json::from_str(&row.get::<String, _>("storage_config"))?;
+                    secrets::open(&mut config)?;
+                    config
+                },
                 vending_strategy,
             }))
         } else {
@@ -55,7 +64,7 @@ impl SqliteStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT id, name, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = ? LIMIT ? OFFSET ?")
+        let rows = sqlx::query("SELECT id, name, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = ? ORDER BY name LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
             .bind(limit)
             .bind(offset)
@@ -72,7 +81,12 @@ impl SqliteStore {
                 tenant_id,
                 name: row.get("name"),
                 use_sts: row.get::<i32, _>("use_sts") != 0,
-                storage_config: serde_json::from_str(&row.get::<String, _>("storage_config"))?,
+                storage_config: {
+                    let mut config: std::collections::HashMap<String, String> =
+                        serde_json::from_str(&row.get::<String, _>("storage_config"))?;
+                    secrets::open(&mut config)?;
+                    config
+                },
                 vending_strategy,
             });
         }
@@ -116,7 +130,10 @@ impl SqliteStore {
             q = q.bind(new_name);
         }
         if let Some(config) = &updates.storage_config {
-            q = q.bind(serde_json::to_string(config)?);
+            // Seal a rotated credential rather than writing the new one clear.
+            let mut sealed = config.clone();
+            secrets::seal(&mut sealed)?;
+            q = q.bind(serde_json::to_string(&sealed)?);
         }
         if let Some(use_sts) = updates.use_sts {
             q = q.bind(use_sts as i32);

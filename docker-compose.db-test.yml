@@ -42,3 +42,48 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Object storage for the file-IO half of the store compliance suite.
+  #
+  # This file used to provide only the databases, so `test_*_store_compliance`
+  # had no S3 to talk to: it fell through to the EC2 instance-metadata endpoint,
+  # hung for eleven seconds, and failed with a credentials error that looked
+  # nothing like "you have no object store". CI has always had one, so the
+  # documented local workflow and CI disagreed about what it took to run the
+  # suite.
+  #
+  # `warehouse` is the bucket the application itself expects; `bucket` and
+  # `test-bucket` are fixtures the compliance tests write to. Creating only
+  # `warehouse` (as `docker-compose.yml` does, for the app) leaves the suite
+  # failing with `NoSuchBucket`.
+  #
+  # The obvious image for this is `bitnami/minio`, whose MINIO_DEFAULT_BUCKETS
+  # makes the init container unnecessary. Bitnami withdrew their public Docker
+  # Hub images, so `bitnami/minio:latest` no longer resolves at all - it fails
+  # with `manifest unknown` rather than anything that names the cause.
+  minio:
+    image: minio/minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set m http://minio:9000 minioadmin minioadmin;
+      for b in warehouse bucket test-bucket; do /usr/bin/mc mb --ignore-existing m/$$b; done;
+      exit 0;
+      "

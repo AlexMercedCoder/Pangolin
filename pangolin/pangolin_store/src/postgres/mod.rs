@@ -2,6 +2,7 @@ pub mod access_requests;
 pub mod assets;
 pub mod audit;
 pub mod branches;
+pub mod business_metadata;
 pub mod catalogs;
 pub mod commits;
 pub mod main;

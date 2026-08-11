@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { catalogsApi } from '$lib/api/catalogs';
 import { apiClient } from '$lib/api/client';
 
+vi.unmock('$lib/api/catalogs');
 vi.mock('$lib/api/client');
 
 describe('Catalogs API', () => {

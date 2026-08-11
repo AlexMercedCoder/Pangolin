@@ -183,6 +183,7 @@ mod tests {
             username: "test_user".to_string(),
             issued_at: chrono::Utc::now(),
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            token_id: None,
         };
 
         // Target Action/Scope
@@ -267,6 +268,7 @@ mod tests {
             username: "test_user".to_string(),
             issued_at: chrono::Utc::now(),
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+            token_id: None,
         };
 
         // --- Branch Permission Test ---

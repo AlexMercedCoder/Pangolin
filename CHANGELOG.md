@@ -9,6 +9,679 @@ From 0.6.0 the server, both CLIs, the Python SDK, the UI and the Helm chart all
 carry the same version number. Before that they had drifted to five different
 values and there was no way to tell which combination had been tested together.
 
+## [Unreleased]
+
+Bucket 2 of the production-readiness work.
+
+### Added — operations: replicas, backup, performance
+
+**The token-cleanup job never ran.** `start_token_cleanup_job` was defined, the
+module was declared, and nothing anywhere called it — so `revoked_tokens` grew
+for the life of every deployment, and the revocation check reads that table on
+every authenticated request. It now runs, and staggers its own start within the
+interval so replicas from one rolling deploy do not sweep in lockstep. Jitter
+rather than leader election: the sweep is a `DELETE ... WHERE expires_at < now`
+and is therefore safe to run concurrently, so a lock table and a lease would be
+complexity spent serialising something that does not need it.
+
+**Backup and recovery, drilled rather than described.**
+`scripts/backup_restore_drill.sh` dumps, **destroys the schema**, restores, and
+verifies — a canary row, matching row counts, and a populated
+`_sqlx_migrations` (without which the next startup re-runs every migration and
+fails). Measured on a laptop against PostgreSQL 15 with 1,345 rows: 7s backup,
+53s restore. Writing it surfaced two real traps: `pg_dump` refuses to dump a
+newer server *after* you think you have a backup, and `PANGOLIN_ENCRYPTION_KEY`
+is not in the dump, so a team that backs up the database religiously and never
+records the key restores a catalog full of unreadable credentials.
+
+**A load harness, and a correction.** The first version used
+`urllib.request.urlopen` per request and reported ~33ms and 504 req/s against a
+server whose own histogram said 29 **microseconds**. It was measuring Python.
+With one keep-alive connection per worker the same server reports 5086 req/s —
+a 10× difference that came entirely from the client. The harness now prints the
+server's own means alongside its own, and says that a large gap means the
+generator is the bottleneck. Publishing the first set of numbers would have
+understated the catalog by roughly 1000×.
+
+Measured: `/health/ready` 0.018ms server-side, `/v1/config` 0.023ms, an
+authenticated catalog list 0.060ms — so authorization roughly triples
+server-side cost and is still 60 microseconds.
+
+New operations documentation: `running-multiple-replicas.md` (what works, what
+needs session affinity, and what has not been tested), `backup-and-recovery.md`,
+`performance.md`.
+
+### Documentation — the audit documents are reconciled
+
+`AUDIT_EXECUTION_PLAN.md` and `roadmap_aug10.md` are historical records and were
+being read as to-do lists. Both now carry a status header, the readiness
+scorecard is updated in place with the original ratings kept alongside for
+direction of travel, and every recommended improvement and feature carries its
+real state. `STATUS.md` is the single reconciled view; README and SECURITY point
+at it.
+
+### Added — the missing Iceberg REST operations (A-5)
+
+`listViews`, `viewExists`, `dropView` and `registerTable` had no route. A client
+calling them got a routing `404`, which is indistinguishable from a catalog
+answering "no such view" — so `SHOW VIEWS` returned nothing, `DROP VIEW`
+appeared to succeed against a catalog that had never heard of the operation, and
+a view created through the Iceberg API could not be removed through it at all.
+
+- **`GET .../views`** — views are stored as assets with `kind: View`, so this is
+  a filtered `list_assets` rather than a second source of truth that can fall
+  out of step. Namespace-scoped `Read`, matching `listTables`: knowing which
+  views exist is itself information about the data.
+- **`HEAD .../views/{view}`** — authorized identically to `loadView`, because
+  answering "does this exist" to a caller who may not read it still discloses
+  that it exists.
+- **`DELETE .../views/{view}`** — refuses to delete a table addressed as a view.
+  Without that check a caller with view-drop rights could remove a table.
+- **`POST .../namespaces/{ns}/register`** — how an engine adopts a table whose
+  metadata already sits in storage: a migration from another catalog, a restore,
+  a table written directly by a job. It refuses a metadata location it cannot
+  read, because registering a location that is not there leaves a table whose
+  every subsequent `loadTable` fails, far from the request that caused it. It
+  also refuses to shadow an existing table unless `overwrite` is set.
+
+`loadNamespaceMetadata` and `namespaceExists`, also listed under A-5, were
+already wired during the 0.7.0 work.
+
+**`commitTransaction` is still absent, deliberately.** The spec's
+`POST /v1/{prefix}/transactions/commit` is a multi-table *atomic* commit; the
+commit path does compare-and-swap per table and there is no cross-table
+transaction behind it. Routing it and committing tables one at a time would be
+worse than leaving it unrouted: an engine that sees the endpoint relies on the
+atomicity the spec promises, and a partial failure would leave half a
+multi-table change applied with no way to detect it. A `404` makes clients fall
+back to per-table commits, which is what happens today, and is honest about it.
+A test pins that decision so it stays a choice rather than becoming an
+oversight.
+
+### Added — MongoDB index management
+
+MongoDB had two indexes, `commits(parent_id)` and `active_tokens(user_id)`,
+created at startup with their errors discarded by `.ok()`. Everything else was a
+collection scan: every catalog lookup, every asset resolution on the Iceberg
+commit path, and — worst — the role and permission reads that run on *every*
+authenticated request.
+
+The full set is now created at startup, derived from the filters the code
+actually issues rather than from what seemed likely. Each entry records why it
+exists, so a future reader can tell which are safe to drop.
+
+Several are `unique`, which is the constraint the SQL backends express as a
+primary key. MongoDB previously accepted two catalogs with the same name in one
+tenant and returned an arbitrary one on lookup — a correctness difference from
+the other three backends, not a performance one. Catalogs, warehouses, branches,
+tags, and one business-metadata record per asset are now enforced.
+
+Failures are reported rather than swallowed. A unique index cannot be created
+over a collection that already holds duplicates, and that is worth an error
+naming the collection and saying the constraint is not in force — startup
+continues, because refusing to boot over a missing index would turn a
+performance problem into an outage.
+
+A unit test asserts the kebab-case collections are spelled as stored: an index
+on `user_id` where the field is `user-id` indexes nothing and silently does
+nothing, which is the same spelling trap that made every role assignment
+unreadable.
+
+### Fixed — creating a branch by copy is atomic, and no longer lies (A-24)
+
+Two defects, the second worse than the first.
+
+The branch row and its copied assets were written by independent statements, so
+a failure between them left a branch that existed holding an arbitrary subset of
+its assets, with no rollback and no repair tool.
+
+And the copy error was **logged and discarded** — `Err(e) =>
+tracing::error!(...)` — after which the handler returned `200`. The caller was
+told the branch was ready when it was empty. The per-asset path did the same
+thing more quietly: `if let Ok(_)` around each create, and `continue` past any
+name it could not parse.
+
+`create_branch_with_assets` now does both in one transaction on PostgreSQL and
+SQLite. PostgreSQL copies with a single `INSERT ... SELECT`, so there is no
+window in which some rows exist and others do not and a large branch need not
+fit in memory. A malformed asset name now fails the whole operation rather than
+silently copying nothing.
+
+MongoDB has no atomic version, and says so rather than pretending: the trait
+default is an error, the API takes the sequential fallback deliberately, logs a
+warning that a partial failure will leave the branch incomplete, and — the part
+that matters — returns a `500` naming the branch instead of a `200`.
+
+The rollback test was verified to be load-bearing by committing the branch row
+before the failure point: it fails with "the branch row survived a failed
+create" and passes again when the transaction is restored.
+
+### Added — warehouse credentials encrypted at rest (C-11)
+
+A warehouse holds the credentials Pangolin uses to reach a customer's object
+storage. They were plaintext JSON in the catalog database, so anything that
+could read one row of `warehouses` — a backup, a replica, a snapshot, an analyst
+with `SELECT` — held every tenant's cloud keys.
+
+Credential fields are now sealed with AES-256-GCM and a fresh 96-bit nonce per
+value, stored as `enc:v1:<base64>`. Only credentials are sealed; bucket, region,
+endpoint and account name stay readable, because the object-store factory
+compares and concatenates them and they are not secrets.
+
+Deliberate choices worth knowing about:
+
+- **Off unless `PANGOLIN_ENCRYPTION_KEY` is set**, and the server warns loudly
+  at startup when it is not. Requiring it would break every existing deployment
+  on upgrade; doing nothing silently is the failure mode this audit keeps
+  finding, so it is said out loud instead.
+- **Reads tolerate plaintext**, so a database written before this exists keeps
+  working. Those rows stay unsealed until something rewrites them —
+  `docs/operations/encryption.md` explains how to force that and how to find
+  what still needs it.
+- **The wrong key fails loudly.** GCM authenticates, so a mismatched key gives
+  an error naming `PANGOLIN_ENCRYPTION_KEY` rather than returning rubbish.
+- **This protects a stolen database, not a compromised host.** The key is in the
+  server's environment. That limit is documented rather than implied away.
+
+PostgreSQL, SQLite and MongoDB seal on write and open on read, on both the
+create and the update paths — sealing only on create would protect the first
+credential and leak every rotation, which is worse than not doing it at all,
+because the table would look encrypted. The memory backend is excluded on
+purpose: it loses everything on restart, so it has no "at rest".
+
+`warehouse_encryption_tests.rs` reads the raw stored bytes through its own
+database connection rather than through the store, and asserts the plaintext is
+absent. Asking the store to read back its own writes would pass just as happily
+if `seal` were never called.
+
+### Added — OpenID Connect (C-2/C-3)
+
+What the OAuth flow did before this was *authorization*, not authentication. It
+exchanged a code for an access token, called the provider's userinfo endpoint,
+and believed the response — which is sufficient only if the access token could
+not have come from anywhere else, and establishing that is exactly what OIDC is
+for.
+
+Now, for every provider that supports it:
+
+- **PKCE (S256).** An attacker who intercepts the authorization code — a
+  referrer header, a proxy log, shell history on a shared machine — cannot
+  redeem it without the verifier. The verifier is held **server-side**, never in
+  `state`: `state` travels through the browser in the same URL as the code, so
+  putting the verifier there would hand it to exactly the attacker PKCE exists
+  to stop.
+- **`id_token` signature validation** against the provider's JWKS, so identity
+  comes from something the provider signed rather than an HTTP response any
+  holder of some access token could have elicited.
+- **`aud`** must contain our `client_id` — without it, a token minted for a
+  different application at the same provider logs its holder in here, which is
+  the classic confused deputy.
+- **`iss`**, checked against a discovery document whose own `issuer` is verified
+  to match where it was fetched — otherwise `iss` validation is circular.
+- **`exp`** with 60s leeway for clock skew.
+- **`nonce`**, bound to the login, so an `id_token` seen in one flow cannot be
+  replayed into another.
+- **Asymmetric algorithms only.** `alg` is attacker-controlled; accepting HS256
+  would let anyone holding the provider's *public* key forge a token, because
+  for HMAC that is also the verification key.
+
+Discovery and JWKS are cached for an hour. An unknown `kid` — what key rotation
+looks like — triggers one refetch, rate-limited to once a minute per provider:
+without the refetch a rotation breaks every login until the cache expires;
+without the limit, a stream of junk `kid`s becomes a denial-of-service against
+the provider and against our own latency.
+
+**GitHub is not an OIDC provider** and is not treated as one. It issues no
+`id_token`, so its logins still use the userinfo endpoint, and the code says so
+rather than reporting validation it did not perform.
+`PANGOLIN_OIDC_REQUIRE=true` refuses any provider that cannot be
+OIDC-validated; it is off by default because enabling it would break a working
+GitHub deployment on upgrade.
+
+Configuration: `PANGOLIN_OIDC_REQUIRE`, and `PANGOLIN_<PROVIDER>_ISSUER` to
+point at a self-hosted Keycloak, Auth0, private Okta or internal IdP. Google,
+Microsoft and Okta issuers are derived automatically.
+
+Tested against a `wiremock` provider serving a real discovery document and JWKS,
+with tokens signed by a real 2048-bit RSA key — nothing mocked at the crypto
+layer, because the properties under test *are* the crypto. The suite was checked
+for being load-bearing: disabling audience validation makes the confused-deputy
+test fail, and weakening the nonce comparison makes the replay test fail. The
+first attempt at that check was inconclusive for the audience case, because
+`jsonwebtoken` also rejects a token carrying an `aud` when none is configured;
+the validation errors now name which check fired, which both improves the logs
+and makes the test able to tell.
+
+### Added — rate limiting on the authentication endpoints (C-5)
+
+The login endpoint had no throttle of any kind and was brute-forceable. There
+were global concurrency and body limits and a request timeout, but nothing made
+the thousandth password guess cost more than the first. Bcrypt slowed each
+attempt, which raises the price of a broad campaign and does nothing against a
+targeted guess at one weak password - while making the endpoint an efficient way
+to burn the server's CPU.
+
+Throttled on two keys, because either alone has a blind spot:
+
+* **by source address** — bounds one attacker working through many accounts;
+* **by account** — bounds many addresses working on one account, which is the
+  shape of a credential-stuffing run and which a per-address limit cannot see.
+
+Both are checked before any password verification, so a refused attempt costs a
+cache lookup rather than a bcrypt round. A successful login clears the account's
+counter, so mistyping a password twice and then getting it right does not leave
+you near the limit. Refusals answer `429` with `Retry-After` and increment
+`pangolin_auth_throttled_total`, which is worth alerting on.
+
+`X-Forwarded-For` is honoured **only** when `PANGOLIN_TRUST_FORWARDED_FOR=true`.
+Trusting it unconditionally would let a caller set a fresh value per request and
+bypass the per-address half entirely - protection that reads as protection and
+is not.
+
+Configuration: `PANGOLIN_AUTH_RATE_LIMIT` (default 10, 0 disables),
+`PANGOLIN_AUTH_RATE_WINDOW_SECS` (default 60), `PANGOLIN_TRUST_FORWARDED_FOR`
+(default false).
+
+Known limitation, stated rather than buried: the counters are in-process, so the
+limit is **per replica**. With N replicas an attacker gets N times the budget.
+
+`main` now serves through `into_make_service_with_connect_info`, without which
+the peer address is not available and every attempt would share one bucket.
+
+## [0.7.0] — 2026-08-10
+
+Implements `roadmap_aug10.md`, the full-repo audit of 2026-08-10. **This is a
+security release.** Five of the fixes below are exploitable by any
+authenticated principal, including the lowest-privilege tenant user and any
+service-user API key. If you run 0.6.0, upgrade and rotate tokens.
+
+### Security
+
+- **Any authenticated caller could mint a `Root` JWT for any tenant (B0a).**
+  `POST /api/v1/tokens` took no session at all and mapped a body-supplied
+  `roles: ["Root"]` straight into signed claims. Since `check_permission`
+  short-circuits for `Root`, this was a total privilege escalation reachable by
+  a tenant user. Minting is now restricted to `Root`, or to a `TenantAdmin`
+  within its own tenant and never above its own rank.
+- **Any tenant member could vend read+write cloud credentials for the whole
+  warehouse (B0b).** The credential endpoint performed no authorization, never
+  looked the table up, and hardcoded `["read", "write"]` - so it issued
+  credentials for tables the caller had no rights to and that need not exist.
+  It now resolves the asset, requires `Read`, and adds `"write"` only when
+  `Write` is actually held.
+- **Logout did not revoke anything (B0j).** Revocation is keyed by the token's
+  `jti`; the handler revoked `session.user_id`, which no token ever carries as
+  its `jti`. Logout returned 200 and the token kept working for its full
+  24-hour lifetime. `UserSession` now carries the `jti`.
+- **An expired service user could renew indefinitely (B0g).** The Iceberg OAuth
+  token endpoint checked `active` but not expiry, so an expired API key could
+  still exchange `client_credentials` for a fresh JWT - bypassing key expiry
+  entirely, and renewably.
+- **`PANGOLIN_DEV_MODE` waived the `NO_AUTH` public-bind guard (B0h).** The two
+  flags are routinely set together in compose and dev setups, and together they
+  started a server on `0.0.0.0` that treated every anonymous request as
+  `TenantAdmin`. Dev mode now relaxes secret strength only, never exposure.
+- **A tenant-wide grant applied across tenants (B0i).** `PermissionScope::Tenant`
+  matched without comparing the grant's tenant to the resource's.
+- **OAuth linked accounts by unverified email (B0l).** Anyone who could set a
+  matching address on any configured provider - GitHub reports unverified ones -
+  logged in as that Pangolin user, including the seeded tenant admin. Identity
+  is now `(provider, subject)`; email linking needs a verified address and an
+  operator domain allowlist.
+- **The OAuth login flow could not complete (B0k).** `POST /api/v1/oauth/exchange`
+  was not in the public-path allowlist, so the endpoint whose job is to issue
+  the first token demanded one. The browser landed with a `?code=` it could
+  never redeem.
+- Missing authorization on `rename_table` (B0c), `update_namespace_properties`
+  (B0d), view create/read (B0e), `perform_maintenance` (B0f), `rebase_branch`
+  and `delete_business_metadata`. `perform_maintenance` additionally ran
+  destructive snapshot expiry against a hardcoded `"default"` catalog rather
+  than the one in the path.
+- A caller-supplied `expires_in_hours` could panic token issuance and abort the
+  connection task (B0m); clamped, plus a `CatchPanicLayer`.
+- A malformed or absent `jti` skipped the revocation check entirely, making such
+  tokens unrevocable for their lifetime (B0o).
+- The admin CLI and Python SDK wrote their auth tokens world-readable, and
+  `generate-code` / `get-token` echoed live JWTs into copy-paste output
+  (B_cli7, B_sdk4).
+- A live PyPI API token was removed from the repo-root `.env` (B44). **It was
+  present in plaintext and must be rotated.**
+
+### Fixed
+
+- **Storage backends disagreed with each other in ten ways (B1-B7, B17-B30).**
+  A cross-tenant audit read on Mongo, a revocation that was a silent no-op on
+  Mongo, a SQLite branch delete that orphaned its assets and referenced a
+  column that does not exist, a Postgres search that panicked on any hit, a
+  Mongo compare-and-swap that lost Iceberg snapshots, a memory index that
+  broke another tenant's lookups, and all three persistent backends silently
+  rewriting 15 of the 17 asset types to `IcebergTable`. Plus pagination that
+  could repeat or skip rows everywhere, and four different answers to the same
+  search.
+- **Two defects the new parity suite found on its first run.** `SqliteStore`
+  had no inherent `revoke_token`/`is_token_revoked`, so the trait delegations
+  called themselves - revoking a token on SQLite recursed until the stack was
+  exhausted and *aborted the process*. And the SQLite `audit_logs` table still
+  declared its original column set while the code inserted the full entry, so
+  every audit write failed and the backend kept no audit trail at all.
+- **Iceberg metadata was not spec-conformant (B11-B16o).** `default-spec-id`
+  was written under the wrong name, the required `last-partition-id` was
+  absent, schemas omitted `"type": "struct"`, and `metadata-log` was never
+  appended - so metadata Pangolin wrote could not be read as v2 metadata by an
+  external engine. On the commit path: nested namespaces registered under one
+  key and looked up under another (every commit to one 404'd), a client could
+  jump the sequence counter to `i64::MAX` and overflow the next commit, a
+  feature-branch commit moved `main`, `last-updated-ms` only advanced on
+  snapshots, `-1` resolved against the whole list rather than what the commit
+  added, `create_table` returned the table directory as `metadata-location`
+  and dropped every complex-typed column from the schema, and lost
+  compare-and-swaps orphaned metadata files.
+- **`docker compose up` could not start the API (B8-B10).** No signing secret
+  was set and the server has refused to start without one since 0.6.0. Both
+  compose files also set a storage variable nothing reads, and the release
+  compose file pinned an image four versions old and ran a script that does
+  not exist.
+- **The management UI was disconnected from the server (B31-B37).** Four
+  spellings of the API base URL coexisted and none agreed, so every deployed
+  build called the visitor's own localhost; ~13 raw `fetch('/api/v1/...')`
+  calls 404'd outside the dev proxy and skipped the tenant header; three
+  endpoints the UI called did not exist; nothing handled a 401, so an expired
+  token left a permanently broken session; tag-filtered search 400'd end to
+  end; there was no way to create a catalog from the catalogs page; and the
+  tenant switcher was dead code referencing an unimported store.
+- **Both CLIs and the SDK called endpoints that do not exist (B_cli1-8,
+  B_sdk1-5).** Roughly 35 sites: wrong paths, wrong field names, wrong types,
+  commands that were `Ok(())` stubs reporting success. All of it survived
+  because every command swallowed its error and exited 0.
+
+### Fixed — found by running the suites against live databases
+
+The parity suite was written against memory and SQLite, the two backends CI
+could run without a service container. Pointing it at a live PostgreSQL and
+MongoDB for the first time failed on both. None were regressions; all had been
+present for as long as the code had.
+
+- **PostgreSQL: asset search was broken outright.** No migration ever created
+  `business_metadata`, while `search_assets` joined it — so every search failed
+  with `relation "business_metadata" does not exist`, a hard SQL error rather
+  than an empty result. The three CRUD methods were unimplemented, so the
+  trait's "Operation not supported by this store" default answered them. Added
+  the migration and the implementation.
+- **MongoDB: role assignments were unreadable.** `bson::to_document` writes a
+  `Uuid` as a string while the deserializer expects BSON Binary, so
+  `assign_role` wrote documents that `get_user_roles` could never match and
+  that could not be deserialized at all. Every role-derived permission silently
+  vanished: **a user holding an admin role was authorized as though they held
+  none.** The same asymmetry caused B1 and B2 in two other collections; one
+  helper now covers all of them.
+- **MongoDB: `get_metadata_location` had no fallback** to the asset's own
+  `location`, unlike the other three backends. A table created with a location
+  but no explicit metadata-location property reported none, so its metadata
+  could not be loaded and its commits compared against a different value than
+  the read path returned.
+- **MongoDB: the "no transaction support" fallback was unreachable.**
+  `start_transaction` is a local call in the Rust driver and cannot fail for
+  want of a replica set; the error arrives on the first operation *inside* the
+  transaction and was propagated rather than caught. `delete_catalog` failed
+  outright on any standalone `mongod` instead of degrading as its own comment
+  promised.
+- **SQLite: the `audit_logs` fix did not reach existing databases.** The schema
+  file is written with `CREATE TABLE IF NOT EXISTS`, which does nothing when the
+  table already exists — so fresh installs got the corrected columns and every
+  upgraded database kept the broken ones, with a bumped version number now
+  claiming otherwise. Added a real v1→v2 migration, keyed off table
+  introspection rather than the recorded version, with the old table preserved
+  as `audit_logs_pre_v2`.
+
+### Fixed — the MongoDB UUID encoding audit
+
+The string/Binary asymmetry above had by then been fixed four times, in four
+collections, each time as its own bug. Auditing every collection at once — with
+a round-trip test per entity rather than per feature — found four more, and a
+second encoding disagreement nobody had noticed.
+
+There are three ways this codebase converts a `Uuid` to BSON and they all differ:
+`to_bson_uuid` gives Binary with the generic subtype, `doc! { "k": uuid }` gives
+Binary with the *UUID* subtype, and `bson::to_document` gives a string. Reads
+disagree too: a typed `Collection<T>` demands binary, `bson::from_bson` demands a
+string. A write and a read chosen independently agree only by luck, and when they
+do not, nothing fails loudly — the filter just matches nothing.
+
+- **Every service-user method was a no-op.** `create_service_user` let Mongo
+  generate an `ObjectId` while the four by-id methods filtered on
+  `{"_id": <uuid string>}`, which matched nothing; the tenant listing and the
+  API-key lookup used snake_case field names for a kebab-case struct; and
+  `update_service_user_last_used` wrote to a field no reader looks at. The
+  consequence that matters: **API-key authentication could never resolve a
+  service user on MongoDB.** It fails closed, so this was an outage of
+  service-user auth rather than a bypass. Changing a role also wrote the Rust
+  variant name instead of its serde form, making the record unreadable
+  afterwards.
+- **Business metadata could be written but never read.** Only `asset-id` was
+  rewritten as Binary; `id`, `created-by` and `updated-by` kept the string form,
+  so `get_business_metadata` failed on the first of them. Writing metadata made
+  an asset's metadata permanently unreadable.
+- **Listing active tokens failed outright.** `store_token` writes timestamps as
+  BSON DateTime, which `bson::from_bson::<DateTime<Utc>>` rejects — chrono wants
+  an RFC3339 string. The `created_at` arm swallowed the same error and
+  substituted `now()`, so even without the hard failure every token would have
+  reported the listing time as its creation time.
+- **A branch with a head commit could not be read.** `create_branch` writes the
+  head through `doc!` (Binary, UUID subtype) and the reader accepted only a
+  string. A freshly created branch has no head, so this only bit once a branch
+  had been committed to — which is why it survived every existing test.
+
+`from_bson_uuid` now accepts all three encodings, so records already written by
+any of them still load, while writes go through `to_bson_uuid` alone.
+`mongo_uuid_round_trip_tests.rs` covers all 21 collections and runs against both
+MongoDB topologies in CI.
+
+### Fixed — test environment drift
+
+- **`docker-compose.db-test.yml` had no object store.** The store compliance
+  tests exercise file IO; with no S3 they fall through to the EC2
+  instance-metadata endpoint, hang for eleven seconds and fail with a
+  credentials error that names nothing relevant. CI had MinIO and the documented
+  local workflow did not, so the two disagreed about what it takes to run the
+  suite.
+- **The MinIO image CI pulled no longer exists.** `bitnami/minio:latest` was
+  withdrawn from Docker Hub and now fails with `manifest unknown`. Both CI and
+  the compose file use `minio/minio` with an explicit bucket-creation step —
+  `warehouse` for the application, `bucket` and `test-bucket` for the compliance
+  tests, whose absence surfaces as `NoSuchBucket`.
+
+### Fixed — the management UI
+
+The UI job in CI built the app and never ran its tests, so the suite had drifted
+to **40 failures across 14 files**. Most could not have passed: the global test
+setup replaces `$lib/api/catalogs`, `$lib/api/warehouses`, `$lib/stores/auth`,
+`$lib/stores/tenant` and `$lib/stores/notifications` with stubs, so the unit
+tests *for those modules* were asserting against the stub rather than the code.
+Others were asserting behaviour the app no longer had. Running them turned up
+real defects underneath:
+
+- **A root user could not create another root user.** The role option's value
+  was `Root`; the server's `UserRole` is kebab-case, so the request was
+  rejected. The same PascalCase leftovers meant a tenant admin was shown an Edit
+  control for root users (`row.role !== 'Root'` never matched), and the role
+  badge colours on the users page keyed off `Root`/`TenantAdmin`, which the API
+  never returns.
+- **A warehouse created in the UI showed no bucket in the UI.** The list page
+  read `s3.bucket`/`azure.container`; the create form writes plain
+  `bucket`/`container`. Both conventions are now accepted on read, as the server
+  already does. The warehouse table also rendered its Type column twice, in
+  place of the Region column its own template already had a branch for.
+- **`production` is not a branch type.** The API knows exactly `ingest` and
+  `experimental`, but the UI's types declared `'experimental' | 'production'`
+  and the green badge keyed off `production` - so every branch rendered as
+  though it were experimental, and `ingest`, the type that carries a distinct
+  permission, had no representation at all.
+- **A branch with no recorded parent was displayed as branching from `main`**,
+  claiming a lineage the data does not contain.
+- **A local catalog could be created with no storage location and no
+  warehouse**, leaving it with nowhere to write its tables. The server accepts
+  it (the field is optional there, for federated catalogs), so nothing rejected
+  it.
+- **The role select on the user edit page had no accessible name** - the label
+  named nothing - and its fallback value, `TenantUser`, matched none of the
+  options, so a user record without a role showed an empty select.
+- **`logout()` could throw**, skipping the caller's redirect and stranding the
+  user on a page they were no longer authenticated for, if the token-revocation
+  call misbehaved. Its `void`/`.catch` pair only covered a rejected promise.
+- Every unparameterised list call left a bare `?` on the end of its URL.
+
+`DataTable` moved from `createEventDispatcher` to callback props, with its six
+consumers. That is the Svelte 5 idiom, and it is what makes the component
+testable at all: `component.$on(...)` was removed in Svelte 5, so the row-click
+test had been left as a stub that asserted nothing.
+
+CI now runs `npm test`, and carries a `svelte-check` error budget on the same
+ratchet as the clippy one. `svelte-check` errors fell from 166 to 150 - mostly by
+giving `StorageConfig` the index signature the server's free-form
+`HashMap<String, String>` always implied.
+
+Note that the app runs in Svelte 5's **legacy mode**: none of its 90 components
+use runes. That is supported and works; converting them is a separate piece of
+work and has not been done here.
+
+### Fixed — the cloud-credential features had never compiled
+
+Found while bumping dependencies: `cargo check -p pangolin_api --features
+cloud-credentials` fails, and had been failing at every version. So did each of
+`aws-sts`, `azure-oauth` and `gcp-oauth` individually. Nothing built with
+`--features`, so nothing noticed.
+
+For a catalog whose job includes vending scoped, time-limited cloud
+credentials, that is the feature set. Every deployment using it was running
+without it.
+
+The errors were the kind that only appear when a `cfg` block is never
+type-checked:
+
+- parameters bound as `_duration`, `_resource_path`, `_permissions` to silence
+  unused warnings in the default build, then referenced as `duration`,
+  `resource_path`, `permissions` inside the feature block — three files, five
+  bindings;
+- `anyhow!` used in `gcp_signer.rs` with only `anyhow::Result` imported;
+- `creds.expiration()` fed to `chrono::DateTime::parse_from_rfc3339`, but it
+  returns an `aws_smithy_types::DateTime`, not text — so the STS credential
+  expiry was parsed from a value that was never a string.
+
+`aws-sdk-sts` was also pinned to an exact `=1.50.0` with no comment. It was
+protecting nothing — the feature failed identically at that version — and it
+blocked `aws-config` from reaching a release that drops the second, vulnerable
+TLS stack. Relaxed to `1.109`.
+
+A `features` CI job now builds each optional feature, and `pangolin_store`'s
+`azure` and `gcp` backends alongside them.
+
+### Changed — minimum supported Rust version is now 1.94
+
+Raised from 1.92 to pick up the AWS SDK releases carrying fixed `aws-lc-sys`
+and `rustls-webpki`. That is what cleared the certificate-validation
+advisories — two of them high severity, on the path Pangolin uses to reach S3,
+Azure Blob Storage and GCS.
+
+`rust-version` is a promise to consumers and nothing verified it: every job ran
+`stable`. An `msrv` job now reads the declared version out of the workspace
+manifest and builds with exactly that toolchain, so the floor is checked rather
+than asserted. `Dockerfile`, `README.md`, `CONTRIBUTING.md` and the deployment
+guide are all in step.
+
+### Security — dependency advisories
+
+`cargo audit` reported 26 vulnerabilities, the one job still red after the CI
+repair. Now zero, by a combination of upgrades and eight deliberate,
+individually justified exceptions in `.cargo/audit.toml`.
+
+Cleared by upgrading: the `aws-lc-sys` cluster (including two high-severity
+certificate-validation bypasses and a PKCS7 signature-validation bypass),
+`rustls-webpki` name-constraint and CRL-parsing defects, `quinn-proto`,
+`hickory-proto`, `bytes`, `crossbeam-epoch`, `time`.
+
+Accepted, with the reason recorded against each ID: `rsa`'s Marvin attack
+(never compiled — `sqlx-mysql` is an optional dependency this workspace does
+not enable), `quick-xml` (held by `object_store` 0.11 and by `azure_core` 0.20,
+which is behind an optional feature), the second `rustls-webpki` copy that
+arrives via the AWS SDK's `rustls` 0.21, `http-types`, and `rand`'s
+custom-logger unsoundness. The ignore list names specific advisory IDs, so a
+new advisory — including a new one against these same crates — still fails CI.
+
+### Fixed — a regression caught by the release gate
+
+Found by running the new release smoke test against the built 0.7.0 image, and
+fixed before 0.7.0 shipped.
+
+- **The server exited 25 seconds after startup, having received no signal.**
+  The B16n change meant to bound the shutdown *drain* was written as
+  `tokio::time::timeout(shutdown_grace, serve)`. `serve` is the whole server,
+  not the drain, so it bounded the lifetime of the process:
+  `PANGOLIN_SHUTDOWN_GRACE_SECS` became a countdown to a clean exit rather than
+  a limit on how long draining may take. Every container would have
+  crash-looped. The deadline is now armed inside `shutdown_signal`, only once a
+  signal has actually been seen.
+
+  All 18 CI jobs passed with this present, as did the full workspace suite:
+  nothing ran the binary for longer than the 25-second default. The `docker`
+  job now starts the built image with a 5-second grace, waits 20 seconds, and
+  fails if it is no longer serving - then checks it still stops promptly when
+  told to.
+
+- **Release verification inherited the developer's `.env`.** Compose auto-loads
+  it, so a local `PANGOLIN_ROOT_USER` / `PANGOLIN_ROOT_PASSWORD` fed the
+  harness - and where that password is a placeholder, the server's config guard
+  refuses to start, so verification failed for reasons having nothing to do
+  with the artifact. The harness now takes `RELEASE_*` names that cannot
+  collide with a real deployment's.
+
+- **The release stack shared a Compose project with the development database
+  stack**, both deriving `pangolin` from the directory name, so `up` and
+  `down -v` in one stopped containers belonging to the other. It now declares
+  `name: pangolin-release`, and its MinIO no longer publishes host ports it
+  never used.
+
+### Added
+
+- **A permission matrix test (improvement #0).** Drives each sensitive route as
+  Root / tenant admin / ungranted tenant user / foreign tenant admin and
+  asserts the expected 200 or 403. Every bug in the authorization cluster was
+  invisible to CI precisely because nothing asserted this.
+- **A cross-backend parity suite (improvement #1).** Runs the same assertions
+  against memory, SQLite, Postgres and Mongo. Nearly half the storage findings
+  were one backend diverging from the others, which no per-backend test can
+  see.
+- `#[serde(deny_unknown_fields)]` on all 34 server request structs, so a client
+  sending the wrong field name gets a 422 naming it rather than a 200 for a
+  request the server silently emptied. It caught five such payloads in the
+  project's own tests immediately.
+- CI jobs for the Python SDK, the UI, configuration drift, and the two
+  guardrail suites above (improvements #1-#3). Previously CI covered only Rust,
+  Helm and Docker - which is exactly where the SDK and UI rot happened.
+- `loadNamespaceMetadata`, `namespaceExists`, `DELETE /api/v1/branches/{name}`
+  and `GET /api/v1/oauth/providers`; spec pagination (`pageToken`/`pageSize`
+  and `next-page-token`) and the spec error envelope across the Iceberg
+  handlers.
+- `scripts/check_env_var_docs.sh`, which regenerates the environment-variable
+  reference check from `config.rs`. The old page documented three variables
+  that do not exist and omitted 34 that do (B43).
+- `scripts/bump_version.sh`, which sets the version across all five artifacts
+  and their inter-crate requirements, with a `--check` mode wired into CI
+  (improvement #8). The "one version everywhere" property had already drifted
+  in two places a day after the release that introduced it.
+- CI now runs the parity suite against live PostgreSQL and MongoDB service
+  containers, and **fails if any backend was skipped**. A skipped backend
+  passing silently is how two of them went untested through a security release.
+- An upgrade guide at `docs/upgrading/0.6-to-0.7.md`, and a security advisory
+  in `SECURITY.md`.
+
+### Removed
+
+- 18 unused UI runtime dependencies, ~260 KB of tracked debug output, two
+  ~4k-line `.bak` store monoliths that any grep of the storage layer would hit,
+  27 `console.log` calls (one logging a bearer-token prefix), and an
+  unauthenticated file-read route in the UI with no callers and a
+  blacklist-based traversal guard.
+
 ## [0.6.0] — 2026-08-09
 
 **This is a security release.** If you are running any earlier version, upgrade

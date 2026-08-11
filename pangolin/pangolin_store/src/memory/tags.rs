@@ -42,13 +42,7 @@ impl MemoryStore {
             })
             .map(|r| r.value().clone());
 
-        let tags = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let tags = crate::memory::main::paginate_sorted(iter, pagination, |t| t.name.clone());
         Ok(tags)
     }
     pub(crate) async fn delete_tag_internal(

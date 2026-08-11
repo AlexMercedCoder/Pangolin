@@ -6,6 +6,7 @@ pub mod business_metadata;
 pub mod catalogs;
 pub mod commits;
 pub mod federated;
+mod indexes;
 pub mod io;
 pub mod main;
 pub mod merge;
@@ -151,6 +152,17 @@ impl CatalogStore for MongoStore {
         properties: HashMap<String, String>,
     ) -> Result<()> {
         self.update_namespace_properties(tenant_id, catalog_name, namespace, properties)
+            .await
+    }
+
+    async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: HashMap<String, String>,
+    ) -> Result<()> {
+        self.replace_namespace_properties(tenant_id, catalog_name, namespace, properties)
             .await
     }
 
@@ -460,10 +472,12 @@ impl CatalogStore for MongoStore {
     }
     async fn get_audit_event(
         &self,
-        _tenant_id: Uuid,
+        tenant_id: Uuid,
         id: Uuid,
     ) -> Result<Option<pangolin_core::audit::AuditLogEntry>> {
-        self.get_audit_event(id).await
+        // B1: `tenant_id` used to be discarded here (`_tenant_id`), which is
+        // where the cross-tenant audit read came from.
+        self.get_audit_event(tenant_id, id).await
     }
     async fn count_audit_events(
         &self,
@@ -606,6 +620,14 @@ impl CatalogStore for MongoStore {
     }
     async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
         self.write_file(path, data).await
+    }
+    async fn delete_file(&self, path: &str) -> Result<()> {
+        self.metadata_cache.invalidate(path).await;
+        let storage_config = self
+            .get_warehouse_for_location(path)
+            .await?
+            .map(|w| w.storage_config);
+        crate::file_delete::delete_location(storage_config.as_ref(), path).await
     }
 
     // Access Requests

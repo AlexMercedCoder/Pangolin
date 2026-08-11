@@ -1,5 +1,4 @@
 from .base import BaseAsset
-import os
 
 def write_dataframe(location, data, format="parquet", **kwargs):
     """

@@ -21,7 +21,14 @@ env:
   CARGO_TERM_COLOR: always
   # Keep the debug artefacts small; CI does not need line tables.
   CARGO_PROFILE_TEST_DEBUG: 0
-  RUSTFLAGS: -D warnings
+  # No `RUSTFLAGS: -D warnings` here. It used to be, and it was a trap rather
+  # than a gate: the tree still carries a warning backlog, so every job that
+  # compiles Rust had to override it with `RUSTFLAGS: ""` - and the two that
+  # forgot (`guardrails` and `mongo-replica-set`) failed at *compile*, so the
+  # authz matrix, the parity suite and every MongoDB test they were added to
+  # run had never once executed. A guard that cannot run is worse than no
+  # guard, because it reads as protection. `clippy-ratchet` is the real gate on
+  # warnings; it counts them and fails if the count grows.
 
 defaults:
   run:
@@ -55,8 +62,6 @@ jobs:
       # `clippy-ratchet` below — and it flips to blocking once the backlog is
       # cleared (Phase 2.2).
       - run: cargo clippy --workspace --all-targets
-        env:
-          RUSTFLAGS: ""
 
   clippy-ratchet:
     name: clippy warning count
@@ -71,8 +76,6 @@ jobs:
           workspaces: pangolin
       - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - name: Count warnings and compare against the budget
-        env:
-          RUSTFLAGS: ""
         run: |
           # `--message-format short` emits one `path:line:col: warning: ...`
           # line per finding, plus per-crate summary lines that start with
@@ -125,14 +128,11 @@ jobs:
           done
 
       - name: cargo test --workspace
-        env:
-          RUSTFLAGS: ""
         run: cargo test --workspace --no-fail-fast
 
       - name: cargo test --workspace (against live databases)
         if: matrix.services
         env:
-          RUSTFLAGS: ""
           PANGOLIN_TEST_POSTGRES_URL: postgresql://testuser:testpass@localhost:5432/testdb
           PANGOLIN_TEST_MONGO_URL: mongodb://testuser:testpass@localhost:27017
         # MongoDB parity is still incomplete; see the Known limitations section
@@ -145,10 +145,86 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: rustsec/audit-check@v2.0.0
+      - uses: Swatinem/rust-cache@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: pangolin
+          workspaces: pangolin
+      - run: cargo install cargo-audit --locked
+      # Run from `pangolin/`, not through `rustsec/audit-check`.
+      #
+      # That action invokes `cargo audit --file pangolin/Cargo.lock` from the
+      # repository root, and `cargo audit` reads its config from
+      # `.cargo/audit.toml` relative to the *current directory* only - it does
+      # not walk up the tree. So the exceptions in `pangolin/.cargo/audit.toml`
+      # were silently not applied and the job failed on advisories that had
+      # already been reviewed and justified.
+      #
+      # Duplicating the config at the repository root would fix CI and leave a
+      # developer running `cargo audit` in `pangolin/` - where the workspace
+      # is - seeing a different answer from the one CI sees. This job now runs
+      # the identical command in the identical directory instead (the
+      # workflow's `defaults.run.working-directory` is `pangolin`).
+      - run: cargo audit
+
+  # Every optional feature must compile.
+  #
+  # None of them did. `cargo build` and `cargo test` run with default features,
+  # and no job ever passed `--features`, so the entire cloud-credential surface
+  # - `aws-sts`, `azure-oauth`, `gcp-oauth` and the `cloud-credentials` bundle
+  # that unions them - had rotted into code that could not be built at all:
+  # parameters bound as `_name` and then referenced as `name` inside the `cfg`
+  # block, a missing `anyhow!` import, an `expiration()` that returns a
+  # DateTime being fed to an RFC3339 string parser. For a catalog whose job
+  # includes vending scoped cloud credentials, that is the feature set, and
+  # nothing was watching it.
+  features:
+    name: optional features build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          - aws-sts
+          - azure-oauth
+          - gcp-oauth
+          - cloud-credentials
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pangolin
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - run: cargo check -p pangolin_api --features ${{ matrix.feature }} --all-targets
+      - name: The store's own optional backends must build too
+        if: matrix.feature == 'cloud-credentials'
+        run: cargo check -p pangolin_store --features azure,gcp --all-targets
+
+  # The declared MSRV must be true, not aspirational.
+  #
+  # `rust-version` is a promise to consumers, and every other job runs
+  # `stable`, so nothing checked it. It was 1.92 and is now 1.94 - raised
+  # deliberately to pick up the AWS SDK releases that carry fixed `aws-lc-sys`
+  # and `rustls-webpki`, which is what cleared the certificate-validation
+  # advisories.
+  msrv:
+    name: minimum supported rust version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read rust-version from the workspace manifest
+        id: msrv
+        run: |
+          v=$(grep -m1 '^rust-version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "declared MSRV: $v"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pangolin
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+      - run: cargo check --workspace --all-targets
 
   helm:
     name: helm lint
@@ -198,6 +274,44 @@ jobs:
           tags: pangolin-api:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # The server must outlive its own shutdown grace period.
+      #
+      # `PANGOLIN_SHUTDOWN_GRACE_SECS` is meant to bound the *drain* - the
+      # window between SIGTERM and giving up on in-flight requests. It was
+      # briefly implemented as `timeout(grace, serve)`, which bounds the whole
+      # server instead: the process exited cleanly `grace` seconds after
+      # startup, with no signal, and every container would have crash-looped.
+      # Nothing caught it, because no test ran the binary for longer than the
+      # default 25s. This runs the real image with a short grace and asserts it
+      # is still serving well past it.
+      - name: The server must not exit when its grace period elapses
+        run: |
+          set -euo pipefail
+          docker run -d --name grace-probe -p 8181:8080 \
+            -e PANGOLIN_JWT_SECRET=ci-only-secret-of-adequate-length-000000 \
+            -e PANGOLIN_STORAGE_TYPE=memory \
+            -e PANGOLIN_SHUTDOWN_GRACE_SECS=5 \
+            pangolin-api:ci
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8181/health/ready >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -sf http://localhost:8181/health/ready >/dev/null
+          echo "serving; now waiting 20s, four times the grace period"
+          sleep 20
+          if ! docker ps --filter name=grace-probe --filter status=running -q | grep -q .; then
+            echo "::error::the server exited on its own $(echo 20)s after startup with a 5s grace"
+            docker logs grace-probe | tail -20
+            exit 1
+          fi
+          curl -sf http://localhost:8181/health/ready >/dev/null
+          echo "still serving after 20s"
+          # And it must still stop promptly when actually told to.
+          start=$(date +%s)
+          docker stop -t 30 grace-probe >/dev/null
+          echo "stopped in $(( $(date +%s) - start ))s"
+          docker rm grace-probe >/dev/null
+
       - name: The container must not run as root
         run: |
           user=$(docker inspect --format '{{.Config.User}}' pangolin-api:ci)
@@ -206,3 +320,413 @@ jobs:
             echo "::error::the image runs as root"
             exit 1
           fi
+
+  # Roadmap improvements #0 and #1: the two suites that make whole classes of
+  # finding *testable* rather than reviewable.
+  #
+  #   * the permission matrix drives each sensitive route as Root /
+  #     TenantAdmin / TenantUser / a foreign tenant's admin and asserts the
+  #     expected 200 or 403. A handler that forgets `check_permission` is
+  #     indistinguishable from one that calls it until something asserts the
+  #     403 - which is how the B0a-B0m cluster survived a security release.
+  #   * the cross-backend parity suite runs the same assertions against all
+  #     four stores, which is the only thing that catches one backend quietly
+  #     disagreeing with the others.
+  #
+  # Called out as their own job so a failure here reads as "authorization or
+  # backend parity regressed", not as an anonymous test failure.
+  guardrails:
+    name: authz matrix + backend parity
+    runs-on: ubuntu-latest
+    services:
+      # The parity suite is only meaningful against real backends. Running it
+      # on memory and SQLite alone is what let four cross-backend defects reach
+      # a release.
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: testuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U testuser"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mongo:
+        image: mongo:7.0
+        env:
+          MONGO_INITDB_ROOT_USERNAME: testuser
+          MONGO_INITDB_ROOT_PASSWORD: testpass
+        ports: ["27017:27017"]
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      # MinIO is not a service container - see the step that starts it below.
+    env:
+      S3_ENDPOINT: http://localhost:9000
+      AWS_ENDPOINT_URL: http://localhost:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+      AWS_ALLOW_HTTP: "true"
+      # Without this the S3 client probes 169.254.169.254 for instance
+      # credentials and burns the retry budget before failing.
+      AWS_EC2_METADATA_DISABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # The store compliance tests exercise file IO. Without an object store
+      # they fall through to the EC2 instance-metadata endpoint and spend ~11s
+      # timing out before failing, which reads as a code failure rather than a
+      # missing service.
+      #
+      # This is a step rather than a `services:` entry because `minio/minio`
+      # needs the `server /data` argument and service containers cannot
+      # override a command. The image that does not - `bitnami/minio`, whose
+      # MINIO_DEFAULT_BUCKETS created the buckets for free - was withdrawn from
+      # Docker Hub, so the service definition that used to be here no longer
+      # resolves.
+      - name: Object storage for the file-IO tests
+        run: |
+          set -euo pipefail
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live >/dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://localhost:9000/minio/health/live >/dev/null
+          # `warehouse` is the application's bucket; the other two are test
+          # fixtures. A missing one fails as `NoSuchBucket`, which the
+          # compliance test reports as "File IO should be supported".
+          docker run --rm --network host --entrypoint sh minio/mc -c '
+            mc alias set m http://localhost:9000 minioadmin minioadmin
+            for b in warehouse bucket test-bucket; do mc mb --ignore-existing "m/$b"; done
+          '
+
+      - name: Permission matrix
+        run: cargo test -p pangolin_api --lib authz_matrix_tests -- --nocapture
+      - name: Cross-backend parity (all four backends)
+        env:
+          PANGOLIN_TEST_POSTGRES_URL: postgresql://testuser:testpass@localhost:5432/testdb
+          # A standalone mongod supports neither transactions nor retryable
+          # writes; the code degrades for the former and this disables the
+          # latter. A replica set would exercise both paths and is what
+          # production should use - see docs/operations/backend-parity.md.
+          PANGOLIN_TEST_MONGO_URL: mongodb://testuser:testpass@localhost:27017/?retryWrites=false
+        run: cargo test -p pangolin_store --test store_integration
+
+      - name: The parity suite must not have skipped a backend
+        env:
+          PANGOLIN_TEST_POSTGRES_URL: postgresql://testuser:testpass@localhost:5432/testdb
+          PANGOLIN_TEST_MONGO_URL: mongodb://testuser:testpass@localhost:27017/?retryWrites=false
+        run: |
+          # The suite skips a backend with a printed note when its URL is
+          # unset, which passes. That is right for a developer laptop and wrong
+          # for CI: a silently skipped backend is how Postgres and MongoDB went
+          # untested through an entire security release. Assert all four ran.
+          out=$(cargo test -p pangolin_store --test store_integration 2>&1)
+          echo "$out"
+          for backend in memory sqlite postgres mongo; do
+            if ! grep -q "test test_${backend}_store_regression \.\.\. ok" <<<"$out"; then
+              echo "::error::the ${backend} backend did not run"
+              exit 1
+            fi
+          done
+          if grep -qiE "^skipping:" <<<"$out"; then
+            echo "::error::a backend was skipped"
+            exit 1
+          fi
+          echo "all four backends ran"
+
+  # A standalone `mongod` supports neither transactions nor retryable writes, so
+  # the `guardrails` job above exercises only MongoDB's *degraded* paths. That
+  # is the topology in which `delete_catalog`'s fallback was found to be broken
+  # - and the transactional branch it falls back *from* has correspondingly
+  # never run. Testing one branch and not the other is the same gap one layer in.
+  #
+  # A single-node replica set is enough: a set of one supports transactions and
+  # retryable writes, which is the whole distinction. It is not a model of
+  # production redundancy and is not meant to be.
+  mongo-replica-set:
+    name: mongodb (replica set)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Start a single-node replica set
+        run: |
+          # Not a `services:` container: the set has to be initiated after the
+          # process is listening, and a service container's healthcheck has no
+          # hook for that.
+          docker run -d --name mongo-rs -p 27018:27018 mongo:7.0 \
+            mongod --replSet rs0 --bind_ip_all --port 27018
+
+          for i in $(seq 1 30); do
+            if docker exec mongo-rs mongosh --port 27018 --quiet --eval \
+                 "rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27018'}]})" \
+                 >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+
+          # Wait for a primary. Accepting connections is not the same as being
+          # able to serve a write, and a client that connects in between fails
+          # in ways that look like application bugs.
+          for i in $(seq 1 30); do
+            state=$(docker exec mongo-rs mongosh --port 27018 --quiet \
+              --eval "try { rs.status().myState } catch (e) { 0 }" 2>/dev/null | tr -d '[:space:]')
+            if [ "$state" = "1" ]; then
+              echo "replica set has a primary"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the replica set never elected a primary"
+          docker logs mongo-rs | tail -50
+          exit 1
+
+      - name: The set must actually support transactions
+        run: |
+          # Otherwise this job silently re-tests the standalone paths and the
+          # whole point of it is lost.
+          docker exec mongo-rs mongosh --port 27018 --quiet --eval '
+            const s = db.getMongo().startSession();
+            s.startTransaction();
+            s.getDatabase("probe").c.insertOne({ok: 1});
+            s.commitTransaction();
+            print("transactions available");
+          '
+
+      - name: MongoDB suites against a replica set
+        env:
+          PANGOLIN_TEST_MONGO_URL: mongodb://localhost:27018/?replicaSet=rs0&directConnection=true
+          PANGOLIN_TEST_MONGO_DB: pangolin_rs_test
+        run: |
+          cargo test -p pangolin_store --test store_integration test_mongo
+          cargo test -p pangolin_store --test mongo_comprehensive_tests
+          cargo test -p pangolin_store --test mongo_audit_tests
+          cargo test -p pangolin_store --test mongo_tests
+          cargo test -p pangolin_store --test mongo_uuid_round_trip_tests
+
+      - name: The suites must not have skipped MongoDB
+        env:
+          PANGOLIN_TEST_MONGO_URL: mongodb://localhost:27018/?replicaSet=rs0&directConnection=true
+          PANGOLIN_TEST_MONGO_DB: pangolin_rs_test
+        run: |
+          out=$(cargo test -p pangolin_store --test store_integration test_mongo 2>&1)
+          echo "$out"
+          grep -q "test test_mongo_store_regression \.\.\. ok" <<<"$out" || {
+            echo "::error::the MongoDB backend did not run"
+            exit 1
+          }
+
+  # Deployment artefacts drift from the code that reads them, and nothing
+  # noticed. `PANGOLIN_STORE_TYPE` sat in both compose files for several
+  # releases while the server read `PANGOLIN_STORAGE_TYPE` (B9); the quick-start
+  # compose file could not start the API at all because it set no signing secret
+  # (B8); and the release compose file pinned an image four versions old and ran
+  # a verification script that did not exist (B10). All three are the same
+  # failure: config that is never validated.
+  config-drift:
+    name: config drift
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Every compose file must be valid
+        env:
+          PANGOLIN_JWT_SECRET: ci-only-secret-of-adequate-length-0000000
+          # docker-compose.release.yml takes RELEASE_* rather than PANGOLIN_*
+          # so that a developer's local .env cannot feed the release
+          # verification harness. They are required (`:?`), so `config` cannot
+          # render the file without them.
+          RELEASE_JWT_SECRET: ci-only-secret-of-adequate-length-0000000
+          RELEASE_ROOT_PASSWORD: ci-only-root-password-not-a-placeholder
+        run: |
+          for f in docker-compose*.yml; do
+            echo "validating $f"
+            docker compose -f "$f" config > /dev/null
+          done
+
+      - name: The quick start must fail loudly without a signing secret
+        run: |
+          # `docker compose config` must *fail* here: the `:?` form on
+          # PANGOLIN_JWT_SECRET is what turns a crash-looping container into an
+          # immediate, explicable error.
+          if docker compose -f docker-compose.yml config > /dev/null 2>&1; then
+            echo "::error::docker-compose.yml accepted an unset PANGOLIN_JWT_SECRET"
+            exit 1
+          fi
+          echo "compose correctly refuses to start without a signing secret"
+
+      - name: No compose file may set a variable the server does not read
+        run: |
+          # PANGOLIN_STORE_TYPE is the specific name that survived for releases;
+          # the general check below catches its successors.
+          # Comment lines are excluded: two compose files carry the offending
+          # name verbatim while explaining why it is wrong. The previous
+          # `grep -v 'not read'` was meant to do this and matched neither
+          # comment ("was renamed", "which nothing reads"), so this guard
+          # failed on its own documentation.
+          if grep -rn 'PANGOLIN_STORE_TYPE' docker-compose*.yml deployment_assets 2>/dev/null \
+               | grep -vE ":[[:space:]]*#"; then
+            echo "::error::PANGOLIN_STORE_TYPE is not read by the server; use PANGOLIN_STORAGE_TYPE"
+            exit 1
+          fi
+          # Comment lines are stripped first, for the same reason as above:
+          # several compose comments name a variable precisely to explain that
+          # it is *not* read, and the guard would flag its own documentation.
+          #
+          # Two names are legitimately not read by the server:
+          #   PANGOLIN_VERSION  - a compose-level image tag, not an app setting.
+          #   PANGOLIN_API_URL  - set on the `tests` service in
+          #     docker-compose.release.yml and read by
+          #     scripts/release_smoke_test.py, which is a Python script rather
+          #     than the Rust server this guard greps. (It previously needed an
+          #     exemption for a worse reason: nothing read it at all, because
+          #     the script that service ran could not run in that container.)
+          exempt='PANGOLIN_VERSION|PANGOLIN_API_URL'
+          names=$(grep -rhE '^[^#]*PANGOLIN_[A-Z0-9_]+' docker-compose*.yml \
+            | sed 's/#.*//' | grep -ohE 'PANGOLIN_[A-Z0-9_]+' | sort -u)
+          for name in $names; do
+            if echo "$name" | grep -qE "^($exempt)$"; then continue; fi
+            if ! grep -rq "$name" pangolin/pangolin_api/src pangolin/pangolin_store/src; then
+              echo "::error::$name appears in a compose file but no code reads it"
+              exit 1
+            fi
+          done
+          echo "every PANGOLIN_* name in the compose files is read by the server"
+
+      - name: The environment-variable reference must match the code
+        working-directory: pangolin
+        run: ./scripts/check_env_var_docs.sh
+
+      - name: Every artifact must carry the same version
+        run: |
+          # Improvement #8. The "one version everywhere" property introduced in
+          # 0.6.0 had already drifted a day later in two places, because it was
+          # maintained by hand across five files.
+          version=$(grep -oE '^version = "[0-9]+\.[0-9]+\.[0-9]+[^"]*"' pangolin/Cargo.toml \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+[^"]*')
+          echo "workspace version: $version"
+          ./scripts/bump_version.sh "$version" --check
+
+  # Improvement #2: the SDK and UI had no CI at all - only Rust, Helm and
+  # Docker were covered. That is exactly where the 0.6.0 "no CI, silent rot"
+  # lesson was repeating: the SDK's test suite could not even *collect*
+  # (B41) and the UI's vitest config broke every suite that imported the API
+  # client (B46), and nothing noticed either.
+  sdk:
+    name: python sdk
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pypangolin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[iceberg]'
+          # Pinned deliberately: `pip install ruff` picked up 0.16, whose
+          # wider default rule set produced 316 findings in a package that had
+          # opted into ruff's defaults as they stood. Adopting the new rules is
+          # a separate, deliberate change - not something a runner should decide
+          # on the day it happens to run.
+          pip install pytest 'ruff==0.15.19'
+      - name: The package must import without the Iceberg extra
+        run: |
+          # B41 regression: `pip install pypangolin` then `import pypangolin`
+          # must not require the whole Iceberg stack.
+          pip uninstall -y pyiceberg
+          python -c "import pypangolin; print(pypangolin.__version__)"
+      - name: The version must match the package metadata
+        run: |
+          # B38: `__version__` was hardcoded to 0.1.0 against a 0.6.0 package.
+          python - <<'PY'
+          from importlib.metadata import version
+          import pypangolin
+          assert pypangolin.__version__ == version("pypangolin"), (
+              f"__version__ {pypangolin.__version__} != metadata {version('pypangolin')}"
+          )
+          print("version is single-sourced")
+          PY
+      - run: ruff check src
+      - run: pytest -q
+
+  ui:
+    name: management ui
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pangolin_ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: The UI must build
+        run: npm run build
+
+      # This job built the UI and never ran its tests, so the suite drifted to
+      # 40 failures across 14 files without anything noticing - including tests
+      # that could not pass at all because the global setup mocked the very
+      # module they were testing.
+      - name: The UI test suite must pass
+        run: npm test
+
+      # `svelte-check` reports a backlog inherited from before this job
+      # existed, so it is a ratchet rather than a gate - the same arrangement as
+      # `clippy-ratchet` above, and it flips to blocking once the backlog is
+      # cleared.
+      - name: Count type errors and compare against the budget
+        run: |
+          count=$(npm run check 2>&1 | grep -cE "^Error:" || true)
+          budget=$(cat svelte-check-budget.txt)
+          echo "svelte-check errors: $count (budget: $budget)"
+          if [ "$count" -gt "$budget" ]; then
+            echo "::error::svelte-check errors rose from $budget to $count."
+            exit 1
+          fi
+          if [ "$count" -lt "$budget" ]; then
+            echo "::notice::svelte-check errors fell to $count; lower svelte-check-budget.txt."
+          fi
+
+      - name: No raw /api/v1 fetches may reappear
+        run: |
+          # B32: a relative `fetch('/api/v1/...')` works under the dev proxy and
+          # 404s in production, while also skipping the tenant header. Every
+          # call must go through apiClient, which is not something a type check
+          # can express.
+          # Comment lines are excluded: several carry the offending pattern
+          # verbatim while explaining why it is wrong.
+          if grep -rnE "fetch\((['\`\"])/api/v1" src/ | grep -vE ":[[:space:]]*(//|\*|/\*)"; then
+            echo "::error::raw /api/v1 fetch found; route it through apiClient"
+            exit 1
+          fi
+          echo "no raw /api/v1 fetches"
+      - name: Only PUBLIC_API_URL may name the API base URL
+        run: |
+          # B31: four different spellings coexisted and none agreed, so every
+          # deployed build called the visitor's own localhost.
+          if grep -rn "VITE_API_URL" src/ .env.example vitest.config.ts 2>/dev/null \
+               | grep -vE ":[[:space:]]*(//|#|\*|/\*)"; then
+            echo "::error::VITE_API_URL is not read by SvelteKit; use PUBLIC_API_URL"
+            exit 1
+          fi
+          echo "PUBLIC_API_URL is the only spelling"

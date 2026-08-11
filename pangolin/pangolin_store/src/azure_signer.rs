@@ -36,12 +36,16 @@ impl AzureSigner {
 
 pub fn parse_azure_path(path: &str) -> Result<(String, String)> {
     // Parse az://container/blob/path OR abfs://container@account/path OR abfss://container@account/path
-    let (scheme, rest) = if path.starts_with("az://") {
-        ("az", &path[5..])
-    } else if path.starts_with("abfs://") {
-        ("abfs", &path[7..])
-    } else if path.starts_with("abfss://") {
-        ("abfss", &path[8..])
+    // `strip_prefix` rather than `starts_with` plus a hand-counted `&path[n..]`,
+    // where the index and the prefix have to be kept in step by hand. The three
+    // prefixes are mutually exclusive - `abfss://` does not start with
+    // `abfs://` - so the order of the arms does not matter.
+    let (scheme, rest) = if let Some(rest) = path.strip_prefix("az://") {
+        ("az", rest)
+    } else if let Some(rest) = path.strip_prefix("abfss://") {
+        ("abfss", rest)
+    } else if let Some(rest) = path.strip_prefix("abfs://") {
+        ("abfs", rest)
     } else {
         return Err(anyhow::anyhow!("Invalid Azure path: {}", path));
     };

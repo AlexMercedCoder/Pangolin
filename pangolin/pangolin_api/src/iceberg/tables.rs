@@ -1,5 +1,8 @@
 use super::types::*;
-use super::{check_and_forward_if_federated, commit, iceberg_error, AppState};
+use super::{
+    bad_request, check_and_forward_if_federated, commit, forbidden, iceberg_error, internal,
+    no_such_namespace, no_such_table, table_already_exists, AppState,
+};
 use crate::auth::TenantId;
 use crate::authz::check_permission;
 use axum::{
@@ -11,7 +14,7 @@ use axum::{
 use bytes::Bytes;
 use chrono::Utc;
 use pangolin_core::iceberg_metadata::{
-    NestedField, PartitionSpec, Schema, SortOrder, TableMetadata, Type,
+    MetadataLogEntry, PartitionSpec, Schema, SortOrder, TableMetadata,
 };
 use pangolin_core::model::{Asset, AssetType};
 use pangolin_core::permission::{Action, PermissionScope};
@@ -20,6 +23,11 @@ use pangolin_store::PaginationParams;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// How many previous metadata files to keep in `metadata-log` when the table
+/// does not set `write.metadata.previous-versions-max`. Matches the Iceberg
+/// default.
+const DEFAULT_PREVIOUS_VERSIONS_MAX: usize = 100;
 
 /// List tables in a namespace
 #[utoipa::path(
@@ -43,7 +51,7 @@ pub async fn list_tables(
     Extension(tenant): Extension<TenantId>,
     Extension(session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
-    Query(pagination): Query<PaginationParams>,
+    Query(page): Query<IcebergPageParams>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix.clone();
@@ -66,32 +74,34 @@ pub async fn list_tables(
 
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "list_tables: failed to load catalog");
+            return internal("Failed to load catalog");
         }
     };
 
-    let (ns_name, branch) = parse_table_identifier(&namespace);
+    let (ns_vec, branch) = parse_namespace(&namespace);
 
     // Check Permissions
     let scope = PermissionScope::Namespace {
         catalog_id: catalog.id,
-        namespace: ns_name.clone(),
+        namespace: ns_vec.join("."),
     };
     match check_permission(&store, &session, &Action::List, &scope).await {
         Ok(true) => (),
-        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Ok(false) => return forbidden("Forbidden"),
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Permission check failed: {}", e),
-            )
-                .into_response()
+            tracing::error!(error = %e, "list_tables: permission check failed");
+            return internal("Permission check failed");
         }
     }
 
-    let ns_vec = vec![ns_name];
+    let (offset, limit) = page.resolve();
+    let pagination = PaginationParams {
+        limit: Some(limit as usize),
+        offset: Some(offset as usize),
+    };
 
     match store
         .list_assets(
@@ -104,6 +114,11 @@ pub async fn list_tables(
         .await
     {
         Ok(assets) => {
+            // The page token has to be computed from the number of rows the
+            // store returned, before the asset-type filter narrows it - the
+            // store is what applied `limit`, so a full page of rows means there
+            // may be more even if none of them survive the filter.
+            let returned = assets.len();
             let identifiers: Vec<TableIdentifier> = assets
                 .into_iter()
                 .filter(|a| a.kind == AssetType::IcebergTable)
@@ -112,13 +127,24 @@ pub async fn list_tables(
                     name: a.name,
                 })
                 .collect();
-            (StatusCode::OK, Json(ListTablesResponse { identifiers })).into_response()
+            (
+                StatusCode::OK,
+                Json(ListTablesResponse {
+                    identifiers,
+                    next_page_token: next_page_token(returned, offset, limit),
+                }),
+            )
+                .into_response()
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "list_tables: failed to list assets");
+            internal("Failed to list tables")
+        }
     }
 }
 
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct MaintenanceRequest {
     pub job_type: String, // "expire_snapshots" or "remove_orphan_files"
     pub retention_ms: Option<i64>,
@@ -126,6 +152,13 @@ pub struct MaintenanceRequest {
 }
 
 /// Perform maintenance on a table
+///
+/// Two bugs fixed here (B0f):
+///   1. the catalog from the path was discarded and the literal `"default"` was
+///      passed to `expire_snapshots`/`remove_orphan_files`, so destructive
+///      maintenance ran against the wrong catalog entirely;
+///   2. there was no session and no permission check, so any tenant member could
+///      trigger snapshot expiry and orphan-file deletion on any table.
 #[utoipa::path(
     post,
     path = "/api/v1/catalogs/{prefix}/namespaces/{namespace}/tables/{table}/maintenance",
@@ -139,6 +172,8 @@ pub struct MaintenanceRequest {
     responses(
         (status = 200, description = "Maintenance accepted", body = serde_json::Value),
         (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Catalog or table not found"),
         (status = 500, description = "Internal server error")
     ),
     security(("bearer_auth" = []))
@@ -146,24 +181,67 @@ pub struct MaintenanceRequest {
 pub async fn perform_maintenance(
     State(store): State<Arc<dyn pangolin_store::CatalogStore + Send + Sync>>,
     Extension(tenant_id): Extension<TenantId>,
-    Path((_prefix, namespace, table)): Path<(String, String, String)>,
+    Extension(session): Extension<UserSession>,
+    Path((prefix, namespace, table)): Path<(String, String, String)>,
     Json(payload): Json<MaintenanceRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
-    // Parse table@branch
-    let (table_name, branch_name) = if let Some((t, b)) = table.split_once('@') {
-        (t.to_string(), Some(b.to_string()))
-    } else {
-        (table.to_string(), None)
+    let tenant = tenant_id.0;
+    let catalog_name = prefix;
+
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let (table_name, branch_from_table) = parse_table_identifier(&table);
+    let branch_name = branch_from_table.or(branch_from_ns);
+
+    let catalog = match store.get_catalog(tenant, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!(error = %e, "maintenance: failed to load catalog");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     };
+
+    let asset = match store
+        .get_asset(
+            tenant,
+            &catalog_name,
+            branch_name.clone(),
+            namespace_parts.clone(),
+            table_name.clone(),
+        )
+        .await
+    {
+        Ok(Some(a)) => a,
+        Ok(None) => return Err(StatusCode::NOT_FOUND),
+        Err(e) => {
+            tracing::error!(error = %e, "maintenance: failed to load asset");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Snapshot expiry and orphan-file removal both destroy data, so they need
+    // Delete, not merely Write.
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+        asset_id: asset.id,
+    };
+    match check_permission(&store, &session, &Action::Delete, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return Err(StatusCode::FORBIDDEN),
+        Err(e) => {
+            tracing::error!(error = %e, "maintenance: permission check failed");
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
 
     match payload.job_type.as_str() {
         "expire_snapshots" => {
             let retention = payload.retention_ms.unwrap_or(86400000); // Default 1 day
             store
                 .expire_snapshots(
-                    tenant_id.0,
-                    "default",
+                    tenant,
+                    &catalog_name,
                     branch_name,
                     namespace_parts,
                     table_name,
@@ -179,8 +257,8 @@ pub async fn perform_maintenance(
             let older_than = payload.older_than_ms.unwrap_or(86400000); // Default 1 day
             store
                 .remove_orphan_files(
-                    tenant_id.0,
-                    "default",
+                    tenant,
+                    &catalog_name,
                     branch_name,
                     namespace_parts,
                     table_name,
@@ -256,16 +334,18 @@ pub async fn create_table(
 
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "create_table: failed to load catalog");
+            return internal("Failed to load catalog");
         }
     };
 
     let (tbl_name, branch_from_name) = parse_table_identifier(&payload.name);
-    let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
+    let (ns_vec, branch_from_ns) = parse_namespace(&namespace);
     let branch_from_query = params.get("branch").cloned();
     let branch = branch_from_name.or(branch_from_ns).or(branch_from_query);
+    let ns_name = ns_vec.join(".");
 
     let scope = PermissionScope::Namespace {
         catalog_id: catalog.id,
@@ -273,17 +353,12 @@ pub async fn create_table(
     };
     match check_permission(&store, &session, &Action::Create, &scope).await {
         Ok(true) => (),
-        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Ok(false) => return forbidden("Forbidden"),
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Permission check failed: {}", e),
-            )
-                .into_response()
+            tracing::error!(error = %e, "create_table: permission check failed");
+            return internal("Permission check failed");
         }
     }
-
-    let ns_vec = vec![ns_name.clone()];
 
     let table_uuid = Uuid::new_v4();
     let location = if let Some(loc) = payload.location {
@@ -328,47 +403,39 @@ pub async fn create_table(
         )
     };
 
-    let schema_fields = if let Some(schema_value) = &payload.schema {
-        if let Some(fields) = schema_value.get("fields").and_then(|f| f.as_array()) {
-            fields
-                .iter()
-                .filter_map(|field| {
-                    let id = field.get("id")?.as_i64()? as i32;
-                    let name = field.get("name")?.as_str()?.to_string();
-                    let required = false;
-                    let field_type_str = field.get("type")?.as_str()?;
-
-                    let field_type = match field_type_str {
-                        "int" | "integer" => Type::Primitive("long".to_string()),
-                        "long" => Type::Primitive("long".to_string()),
-                        "string" => Type::Primitive("string".to_string()),
-                        "boolean" => Type::Primitive("boolean".to_string()),
-                        "float" => Type::Primitive("float".to_string()),
-                        "double" => Type::Primitive("double".to_string()),
-                        "date" => Type::Primitive("date".to_string()),
-                        "time" => Type::Primitive("time".to_string()),
-                        "timestamp" => Type::Primitive("timestamp".to_string()),
-                        "timestamptz" => Type::Primitive("timestamptz".to_string()),
-                        "binary" => Type::Primitive("binary".to_string()),
-                        "uuid" => Type::Primitive("uuid".to_string()),
-                        _ => Type::Primitive(field_type_str.to_string()),
-                    };
-
-                    Some(NestedField {
-                        id,
-                        name,
-                        required,
-                        field_type,
-                        doc: None,
-                    })
-                })
-                .collect()
-        } else {
-            vec![]
-        }
-    } else {
-        vec![]
+    // B16f: the schema used to be hand-parsed field by field, which silently
+    // lost data three ways - `required` was hardcoded to `false` so every column
+    // became optional, `int` was widened to `long`, and `field.get("type")?
+    // .as_str()?` inside a `filter_map` returned `None` for any struct/list/map/
+    // decimal/fixed column, so those columns were *dropped* and `last_column_id`
+    // was computed from the survivors. The table was created `200 OK` with a
+    // schema missing columns.
+    //
+    // Deserializing straight into the core `Schema` (as the commit path already
+    // does) keeps nullability and complex types, and a malformed schema is now a
+    // 400 rather than a quietly mangled table.
+    let schema = match &payload.schema {
+        Some(schema_value) => match serde_json::from_value::<Schema>(schema_value.clone()) {
+            Ok(mut s) => {
+                s.schema_id = 0;
+                if s.identifier_field_ids.is_none() {
+                    s.identifier_field_ids = Some(vec![]);
+                }
+                s
+            }
+            Err(e) => {
+                return bad_request(&format!("Invalid schema: {}", e));
+            }
+        },
+        None => Schema {
+            type_: Schema::STRUCT.to_string(),
+            schema_id: 0,
+            identifier_field_ids: Some(vec![]),
+            fields: vec![],
+        },
     };
+
+    let last_column_id = schema.max_field_id();
 
     let metadata = TableMetadata {
         format_version: 2,
@@ -376,18 +443,17 @@ pub async fn create_table(
         location: location.clone(),
         last_sequence_number: 0,
         last_updated_ms: Utc::now().timestamp_millis(),
-        last_column_id: schema_fields.iter().map(|f| f.id).max().unwrap_or(0),
-        schemas: vec![Schema {
-            schema_id: 0,
-            identifier_field_ids: Some(vec![]),
-            fields: schema_fields,
-        }],
+        last_column_id,
+        schemas: vec![schema],
         current_schema_id: 0,
         current_partition_spec_id: 0,
         partition_specs: vec![PartitionSpec {
             spec_id: 0,
             fields: vec![],
         }],
+        // Required by the v2 spec; an empty unpartitioned spec assigns nothing,
+        // so the highest assigned partition id is the "unpartitioned" sentinel.
+        last_partition_id: pangolin_core::iceberg_metadata::PARTITION_FIELD_ID_START - 1,
         default_sort_order_id: 0,
         sort_orders: vec![SortOrder {
             order_id: 0,
@@ -401,7 +467,13 @@ pub async fn create_table(
         refs: None,
     };
 
-    let metadata_json = serde_json::to_string(&metadata).unwrap();
+    let metadata_json = match serde_json::to_string(&metadata) {
+        Ok(json) => json,
+        Err(e) => {
+            tracing::error!(error = %e, "create_table: failed to serialize metadata");
+            return internal("Failed to serialize table metadata");
+        }
+    };
     let metadata_location = format!(
         "{}/metadata/00000-{}.metadata.json",
         location,
@@ -423,23 +495,30 @@ pub async fn create_table(
         },
     };
 
+    // B16g: write the metadata file *first*, then register the asset. The old
+    // order registered the asset and only then wrote the file, so a failed write
+    // left a permanently broken table - registered, pointing at a file that does
+    // not exist, with `load_table` 500ing and `update_table` 404ing and no repair
+    // path. This is also the order the commit path already uses.
+    if let Err(e) = store
+        .write_file(&metadata_location, metadata_json.into_bytes())
+        .await
+    {
+        tracing::error!("Failed to write metadata file: {}", e);
+        return internal("Failed to write metadata");
+    }
+
     match store
-        .create_asset(tenant_id, &catalog_name, branch, ns_vec, asset.clone())
+        .create_asset(
+            tenant_id,
+            &catalog_name,
+            branch,
+            ns_vec.clone(),
+            asset.clone(),
+        )
         .await
     {
         Ok(_) => {
-            if let Err(e) = store
-                .write_file(&metadata_location, metadata_json.into_bytes())
-                .await
-            {
-                tracing::error!("Failed to write metadata file: {}", e);
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to write metadata",
-                )
-                    .into_response();
-            }
-
             let _ = store
                 .log_audit_event(
                     tenant_id,
@@ -493,7 +572,12 @@ pub async fn create_table(
             (
                 StatusCode::OK,
                 Json(TableResponse::with_credentials(
-                    Some(location.clone()),
+                    // B16e: this returned `location` - the table *directory* -
+                    // where the spec (and `load_table`, correctly) return the
+                    // metadata *file*. A client that keeps the returned `Table`
+                    // (PyIceberg does) ended up with a `metadata_location` it
+                    // could neither read nor refresh from.
+                    Some(metadata_location.clone()),
                     metadata,
                     credentials,
                     Some(table_uuid),
@@ -501,11 +585,173 @@ pub async fn create_table(
             )
                 .into_response()
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "create_table: failed to register asset");
+            // The metadata file was written before registration (B16g); with the
+            // asset unregistered it is unreferenced, so clean it up rather than
+            // leaving an orphan behind.
+            if let Err(cleanup) = store.delete_file(&metadata_location).await {
+                tracing::warn!(
+                    error = %cleanup,
+                    location = %metadata_location,
+                    "could not remove the orphaned metadata file after a failed create_asset"
+                );
+            }
+            internal("Failed to create table")
+        }
     }
 }
 
 /// Load a table
+/// The spec's `registerTable` request body.
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RegisterTableRequest {
+    pub name: String,
+    #[serde(rename = "metadata-location")]
+    pub metadata_location: String,
+    /// Spec-optional; some clients send it, and `deny_unknown_fields` would
+    /// otherwise reject an otherwise valid request.
+    #[serde(default, rename = "overwrite")]
+    pub overwrite: Option<bool>,
+}
+
+/// `POST /v1/{prefix}/namespaces/{namespace}/register` — the spec's
+/// `registerTable`.
+///
+/// A-5: this route did not exist. It is how an engine adopts a table whose
+/// metadata already sits in object storage — a migration from another catalog,
+/// a restore, or a table written directly by a job. Without it the only way to
+/// get such a table into Pangolin was to recreate it and lose its history.
+///
+/// Distinct from `create_table`: nothing is written to storage. The metadata
+/// file already exists and this points the catalog at it.
+pub async fn register_table(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path((prefix, namespace)): Path<(String, String)>,
+    Json(payload): Json<RegisterTableRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+
+    let (tbl_name, branch_from_name) = parse_table_identifier(&payload.name);
+    let (ns_vec, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name.or(branch_from_ns);
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "register_table: failed to load catalog");
+            return internal("Failed to load catalog");
+        }
+    };
+
+    // Namespace-scoped Create, the same check `create_table` makes. Registering
+    // is a create: it brings a new table into the namespace.
+    let scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: ns_vec.join("."),
+    };
+    match check_permission(&store, &session, &Action::Create, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return forbidden("Forbidden"),
+        Err(e) => {
+            tracing::error!(error = %e, "register_table: permission check failed");
+            return internal("Permission check failed");
+        }
+    }
+
+    // Refuse to shadow an existing table. The spec has `overwrite` for this and
+    // defaults it to false; silently replacing a table's metadata pointer would
+    // orphan its history.
+    let existing = store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch.clone(),
+            ns_vec.clone(),
+            tbl_name.clone(),
+        )
+        .await;
+    match existing {
+        Ok(Some(_)) if !payload.overwrite.unwrap_or(false) => {
+            return table_already_exists(&format!("{}.{}", ns_vec.join("."), tbl_name));
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::error!(error = %e, "register_table: failed to check for an existing table");
+            return internal("Failed to check for an existing table");
+        }
+    }
+
+    // The metadata file must actually be there. Registering a location that
+    // does not exist would leave a table that every subsequent `loadTable`
+    // fails on, and the failure would surface far from this request.
+    if let Err(e) = store.read_file(&payload.metadata_location).await {
+        tracing::warn!(
+            error = %e,
+            location = %payload.metadata_location,
+            "register_table: the metadata location could not be read"
+        );
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": {
+                    "message": format!(
+                        "metadata-location {:?} could not be read: {e}",
+                        payload.metadata_location
+                    ),
+                    "type": "BadRequestException",
+                    "code": 400
+                }
+            })),
+        )
+            .into_response();
+    }
+
+    let mut properties = HashMap::new();
+    properties.insert(
+        "metadata_location".to_string(),
+        payload.metadata_location.clone(),
+    );
+
+    let asset = pangolin_core::model::Asset {
+        id: uuid::Uuid::new_v4(),
+        name: tbl_name.clone(),
+        kind: pangolin_core::model::AssetType::IcebergTable,
+        location: payload.metadata_location.clone(),
+        properties,
+    };
+
+    if let Err(e) = store
+        .create_asset(tenant_id, &catalog_name, branch, ns_vec.clone(), asset)
+        .await
+    {
+        tracing::error!(error = %e, "register_table: failed to record the asset");
+        return internal("Failed to register the table");
+    }
+
+    tracing::info!(
+        table = %tbl_name,
+        location = %payload.metadata_location,
+        "registered an existing table"
+    );
+
+    // The spec wants the loaded table back. Re-reading through `load_table`'s
+    // path would duplicate the credential-vending logic, so the caller is
+    // pointed at the metadata it just supplied.
+    (
+        axum::http::StatusCode::OK,
+        Json(serde_json::json!({
+            "metadata-location": payload.metadata_location,
+        })),
+    )
+        .into_response()
+}
+
 #[utoipa::path(
     get,
     path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}",
@@ -560,17 +806,18 @@ pub async fn load_table(
 
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "load_table: failed to load catalog");
+            return internal("Failed to load catalog");
         }
     };
 
+    // B16a: shared namespace parsing, so a nested namespace resolves the same
+    // way here as it does on the commit path.
     let (tbl_name, branch_from_name) = parse_table_identifier(&table);
-    let (ns_name, branch_from_ns) = parse_table_identifier(&namespace);
+    let (ns_vec, branch_from_ns) = parse_namespace(&namespace);
     let branch = branch_from_name.or(branch_from_ns);
-
-    let ns_vec = vec![ns_name];
 
     let asset = match store
         .get_asset(
@@ -583,9 +830,10 @@ pub async fn load_table(
         .await
     {
         Ok(Some(a)) => a,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        Ok(None) => return no_such_table(&format!("{}.{}", ns_vec.join("."), tbl_name)),
+        Err(e) => {
+            tracing::error!(error = %e, "load_table: failed to load asset");
+            return internal("Failed to load table");
         }
     };
 
@@ -597,13 +845,10 @@ pub async fn load_table(
 
     match check_permission(&store, &session, &Action::Read, &scope).await {
         Ok(true) => (),
-        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Ok(false) => return forbidden("Forbidden"),
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Permission check failed: {}", e),
-            )
-                .into_response()
+            tracing::error!(error = %e, "load_table: permission check failed");
+            return internal("Permission check failed");
         }
     }
 
@@ -612,12 +857,9 @@ pub async fn load_table(
     if let Some(location) = current_metadata_location {
         let metadata_bytes = match store.read_file(&location).await {
             Ok(bytes) => bytes,
-            Err(_) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to read metadata file",
-                )
-                    .into_response()
+            Err(e) => {
+                tracing::error!(error = %e, "load_table: failed to read metadata file");
+                return internal("Failed to read metadata file");
             }
         };
 
@@ -629,15 +871,13 @@ pub async fn load_table(
         .await
         {
             Ok(Ok(m)) => m,
-            Ok(Err(_)) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to parse metadata",
-                )
-                    .into_response()
+            Ok(Err(e)) => {
+                tracing::error!(error = %e, "update_table: failed to parse metadata");
+                return internal("Failed to parse metadata");
             }
-            Err(_) => {
-                return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response()
+            Err(e) => {
+                tracing::error!(error = %e, "update_table: metadata parse task panicked");
+                return internal("Failed to parse metadata");
             }
         };
 
@@ -683,7 +923,7 @@ pub async fn load_table(
         )
             .into_response()
     } else {
-        (StatusCode::NOT_FOUND, "Metadata location not found").into_response()
+        no_such_table(&format!("{}.{}", ns_vec.join("."), tbl_name))
     }
 }
 
@@ -736,15 +976,23 @@ pub async fn update_table(
 
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "update_table: failed to load catalog");
+            return internal("Failed to load catalog");
         }
     };
 
+    // B16a: this used to split the namespace on 0x1F while `create_table` and
+    // `load_table` went through `parse_table_identifier` (a *single*-element
+    // namespace). A table created in namespace `a\x1Fb` was registered under
+    // `["a\x1Fb"]` and looked up here under `["a", "b"]`, so every commit to a
+    // nested namespace 404'd and the CAS loop below never ran at all.
     let (table_name, branch_from_name) = parse_table_identifier(&table);
-    let branch = branch_from_name.unwrap_or("main".to_string());
-    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name
+        .or(branch_from_ns)
+        .unwrap_or_else(|| "main".to_string());
 
     let asset = match store
         .get_asset(
@@ -757,9 +1005,10 @@ pub async fn update_table(
         .await
     {
         Ok(Some(a)) => a,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        Ok(None) => return no_such_table(&format!("{}.{}", namespace_parts.join("."), table_name)),
+        Err(e) => {
+            tracing::error!(error = %e, "update_table: failed to load asset");
+            return internal("Failed to load table");
         }
     };
 
@@ -771,13 +1020,10 @@ pub async fn update_table(
 
     match check_permission(&store, &session, &Action::Write, &scope).await {
         Ok(true) => (),
-        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Ok(false) => return forbidden("Forbidden"),
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Permission check failed: {}", e),
-            )
-                .into_response()
+            tracing::error!(error = %e, "update_table: permission check failed");
+            return internal("Permission check failed");
         }
     }
 
@@ -798,9 +1044,12 @@ pub async fn update_table(
             .await
         {
             Ok(Some(a)) => a,
-            Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-            Err(_) => {
-                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+            Ok(None) => {
+                return no_such_table(&format!("{}.{}", namespace_parts.join("."), table_name))
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "update_table: failed to re-read asset");
+                return internal("Failed to load table");
             }
         };
 
@@ -809,16 +1058,13 @@ pub async fn update_table(
         let metadata_bytes = if let Some(loc) = &current_metadata_location {
             match store.read_file(loc).await {
                 Ok(bytes) => bytes,
-                Err(_) => {
-                    return (StatusCode::NOT_FOUND, "Failed to read metadata file").into_response()
+                Err(e) => {
+                    tracing::error!(error = %e, "update_table: failed to read metadata file");
+                    return internal("Failed to read metadata file");
                 }
             }
         } else {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Table corrupted (no metadata)",
-            )
-                .into_response();
+            return internal("Table corrupted (no metadata location)");
         };
 
         // Parse metadata in a blocking task to avoid stalling the executor
@@ -829,15 +1075,13 @@ pub async fn update_table(
         .await
         {
             Ok(Ok(m)) => m,
-            Ok(Err(_)) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to parse metadata",
-                )
-                    .into_response()
+            Ok(Err(e)) => {
+                tracing::error!(error = %e, "load_table: failed to parse metadata");
+                return internal("Failed to parse metadata");
             }
-            Err(_) => {
-                return (StatusCode::INTERNAL_SERVER_ERROR, "Task join error").into_response()
+            Err(e) => {
+                tracing::error!(error = %e, "load_table: metadata parse task panicked");
+                return internal("Failed to parse metadata");
             }
         };
 
@@ -854,6 +1098,36 @@ pub async fn update_table(
             return commit_error_response(e);
         }
 
+        // B16b: `last-updated-ms` was only ever assigned inside `add_snapshot`,
+        // so a commit of only `set-properties` / `add-schema` / `set-location` /
+        // `add-spec` / `set-snapshot-ref` / `remove-snapshots` published a new
+        // metadata file carrying an *unchanged* timestamp - and any consumer
+        // that orders or dedupes metadata by that field treated the two versions
+        // as identical. Every successful set of updates bumps it.
+        metadata.last_updated_ms = Utc::now().timestamp_millis();
+
+        // B13: record the metadata file this one supersedes. `metadata-log` was
+        // initialised to an empty vec at table creation and never appended to,
+        // so metadata time-travel and previous-version cleanup
+        // (`write.metadata.previous-versions-max`) had nothing to work with.
+        if let Some(previous) = &current_metadata_location {
+            let log = metadata.metadata_log.get_or_insert_with(Vec::new);
+            log.push(MetadataLogEntry {
+                timestamp_ms: metadata.last_updated_ms,
+                metadata_file: previous.clone(),
+            });
+            let max_entries = metadata
+                .properties
+                .as_ref()
+                .and_then(|p| p.get("write.metadata.previous-versions-max"))
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(DEFAULT_PREVIOUS_VERSIONS_MAX);
+            if log.len() > max_entries {
+                let excess = log.len() - max_entries;
+                log.drain(0..excess);
+            }
+        }
+
         let new_metadata_location = format!(
             "{}/metadata/00000-{}.metadata.json",
             metadata.location,
@@ -863,23 +1137,16 @@ pub async fn update_table(
             Ok(json) => json,
             Err(e) => {
                 tracing::error!(error = %e, "could not serialise table metadata");
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Failed to serialise table metadata",
-                )
-                    .into_response();
+                return internal("Failed to serialise table metadata");
             }
         };
 
-        if let Err(_) = store
+        if store
             .write_file(&new_metadata_location, metadata_json.into_bytes())
             .await
+            .is_err()
         {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to write new metadata",
-            )
-                .into_response();
+            return internal("Failed to write new metadata");
         }
 
         match store
@@ -938,6 +1205,19 @@ pub async fn update_table(
                 // Re-read and re-check requirements on the next pass.
                 tracing::debug!(error = %e, attempt = retries, "metadata CAS lost, retrying");
                 crate::metrics::inc(&crate::metrics::COMMIT_CAS_RETRIES);
+                // B16d: the metadata file was written *before* the CAS, so on a
+                // lost CAS it is unreferenced - and the old code just
+                // `continue`d, orphaning it. Under contention that leaked up to
+                // one file per retry, with up to five left behind on a final
+                // give-up, and an orphan is indistinguishable from live metadata
+                // from the outside so nothing could reap it later.
+                if let Err(cleanup) = store.delete_file(&new_metadata_location).await {
+                    tracing::warn!(
+                        error = %cleanup,
+                        location = %new_metadata_location,
+                        "could not remove the metadata file orphaned by a lost CAS"
+                    );
+                }
                 retries += 1;
                 continue;
             }
@@ -974,6 +1254,13 @@ fn commit_error_response(error: commit::CommitError) -> axum::response::Response
 }
 
 /// Rename a table
+///
+/// B0c: this handler bound `Extension(session)` but never called
+/// `check_permission` - the only table handler that didn't. Any tenant member
+/// could move any table into any namespace: an effective delete (the table
+/// vanishes from where its readers look for it) and a way to smuggle a table
+/// into a namespace where the caller *does* have read rights. It now needs
+/// `Write` on the source table and `Create` on the destination namespace.
 #[utoipa::path(
     post,
     path = "/v1/{prefix}/tables/rename",
@@ -984,6 +1271,7 @@ fn commit_error_response(error: commit::CommitError) -> axum::response::Response
     request_body = RenameTableRequest,
     responses(
         (status = 204, description = "Table renamed"),
+        (status = 403, description = "Forbidden"),
         (status = 404, description = "Source table not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -1022,6 +1310,85 @@ pub async fn rename_table(
     let dest_name = payload.destination.name;
     let branch = Some("main".to_string());
 
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "rename_table: failed to load catalog");
+            return internal("Failed to load catalog");
+        }
+    };
+
+    let source_asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch.clone(),
+            source_ns.clone(),
+            source_name.clone(),
+        )
+        .await
+    {
+        Ok(Some(a)) => a,
+        Ok(None) => return no_such_table(&format!("{}.{}", source_ns.join("."), source_name)),
+        Err(e) => {
+            tracing::error!(error = %e, "rename_table: failed to load source asset");
+            return internal("Failed to load source table");
+        }
+    };
+
+    // Write on the source: renaming is a mutation of the table's identity, and
+    // from every reader's point of view it is a delete at the old path.
+    let source_scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: source_ns.join("."),
+        asset_id: source_asset.id,
+    };
+    match check_permission(&store, &session, &Action::Write, &source_scope).await {
+        Ok(true) => (),
+        Ok(false) => return forbidden("Forbidden: no write access to the source table"),
+        Err(e) => {
+            tracing::error!(error = %e, "rename_table: source permission check failed");
+            return internal("Permission check failed");
+        }
+    }
+
+    // Create on the destination namespace: otherwise a caller with write on one
+    // table could plant it anywhere they can read.
+    let dest_scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: dest_ns.join("."),
+    };
+    match check_permission(&store, &session, &Action::Create, &dest_scope).await {
+        Ok(true) => (),
+        Ok(false) => return forbidden("Forbidden: no create access in the destination namespace"),
+        Err(e) => {
+            tracing::error!(error = %e, "rename_table: destination permission check failed");
+            return internal("Permission check failed");
+        }
+    }
+
+    // The spec returns 409 rather than clobbering an existing destination.
+    match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch.clone(),
+            dest_ns.clone(),
+            dest_name.clone(),
+        )
+        .await
+    {
+        Ok(Some(_)) => {
+            return table_already_exists(&format!("{}.{}", dest_ns.join("."), dest_name))
+        }
+        Ok(None) => {}
+        Err(e) => {
+            tracing::error!(error = %e, "rename_table: destination existence check failed");
+            return internal("Failed to check the destination table");
+        }
+    }
+
     match store
         .rename_asset(
             tenant_id,
@@ -1044,7 +1411,7 @@ pub async fn rename_table(
                         session.username.clone(),
                         pangolin_core::audit::AuditAction::RenameTable,
                         pangolin_core::audit::ResourceType::Table,
-                        None, // Cannot determine asset ID easily without lookup
+                        Some(source_asset.id),
                         format!(
                             "{}/{}.{} -> {}.{}",
                             catalog_name,
@@ -1059,7 +1426,10 @@ pub async fn rename_table(
 
             StatusCode::NO_CONTENT.into_response()
         }
-        Err(_) => (StatusCode::NOT_FOUND, "Table not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "rename_table: rename failed");
+            no_such_table(&format!("{}.{}", source_ns.join("."), source_name))
+        }
     }
 }
 
@@ -1107,15 +1477,18 @@ pub async fn delete_table(
 
     let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
         Ok(Some(c)) => c,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_table: failed to load catalog");
+            return internal("Failed to load catalog");
         }
     };
 
     let (table_name, branch_from_name) = parse_table_identifier(&table);
-    let branch = branch_from_name.or(Some("main".to_string()));
-    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name
+        .or(branch_from_ns)
+        .or(Some("main".to_string()));
 
     let asset = match store
         .get_asset(
@@ -1128,9 +1501,10 @@ pub async fn delete_table(
         .await
     {
         Ok(Some(a)) => a,
-        Ok(None) => return (StatusCode::NOT_FOUND, "Table not found").into_response(),
-        Err(_) => {
-            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        Ok(None) => return no_such_table(&format!("{}.{}", namespace_parts.join("."), table_name)),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_table: failed to load asset");
+            return internal("Failed to load table");
         }
     };
 
@@ -1142,13 +1516,10 @@ pub async fn delete_table(
 
     match check_permission(&store, &session, &Action::Delete, &scope).await {
         Ok(true) => (),
-        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Ok(false) => return forbidden("Forbidden"),
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Permission check failed: {}", e),
-            )
-                .into_response()
+            tracing::error!(error = %e, "delete_table: permission check failed");
+            return internal("Permission check failed");
         }
     }
 
@@ -1172,7 +1543,7 @@ pub async fn delete_table(
                         session.username.clone(),
                         pangolin_core::audit::AuditAction::DropTable,
                         pangolin_core::audit::ResourceType::Table,
-                        None,
+                        Some(asset.id),
                         format!("{}/{}/{}", catalog_name, namespace, table),
                     ),
                 )
@@ -1180,7 +1551,10 @@ pub async fn delete_table(
 
             StatusCode::NO_CONTENT.into_response()
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_table: delete failed");
+            internal("Failed to delete table")
+        }
     }
 }
 
@@ -1203,6 +1577,7 @@ pub async fn delete_table(
 pub async fn table_exists(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace, table)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
@@ -1223,26 +1598,52 @@ pub async fn table_exists(
         return response;
     }
 
-    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
-    let (table_name, branch_name) = if let Some((t, b)) = table.split_once('@') {
-        (t.to_string(), Some(b.to_string()))
-    } else {
-        (table.to_string(), None)
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let (table_name, branch_from_table) = parse_table_identifier(&table);
+    let branch_name = branch_from_table.or(branch_from_ns);
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "table_exists: failed to load catalog");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
-    match store
+    let asset = match store
         .get_asset(
             tenant_id,
             &catalog_name,
             branch_name,
-            namespace_parts,
+            namespace_parts.clone(),
             table_name,
         )
         .await
     {
-        Ok(Some(_)) => StatusCode::OK.into_response(),
-        Ok(None) => StatusCode::NOT_FOUND.into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Ok(Some(a)) => a,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "table_exists: failed to load asset");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    // Existence is information. Without a check this endpoint is an oracle that
+    // reports whether a table the caller cannot read exists - every sibling
+    // handler gates on Read, so this one does too.
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+        asset_id: asset.id,
+    };
+    match check_permission(&store, &session, &Action::Read, &scope).await {
+        Ok(true) => StatusCode::OK.into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "table_exists: permission check failed");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }
 

@@ -77,7 +77,8 @@ mod tests {
                     .header("Authorization", format!("Bearer {}", root_token))
                     .header("Content-Type", "application/json")
                     .body(Body::from(
-                        json!({"name":"audit-tenant", "organization":"org"}).to_string(),
+                        json!({"name":"audit-tenant", "properties": {"organization":"org"}})
+                            .to_string(),
                     ))
                     .unwrap(),
             )
@@ -106,7 +107,8 @@ mod tests {
                     .header("Authorization", format!("Bearer {}", user_token))
                     .header("Content-Type", "application/json")
                     .body(Body::from(
-                        json!({"name":"cat","warehouse_name":"wh","type":"pangolin"}).to_string(),
+                        json!({"name":"cat","warehouse_name":"wh","catalog_type":"Local"})
+                            .to_string(),
                     ))
                     .unwrap(),
             )

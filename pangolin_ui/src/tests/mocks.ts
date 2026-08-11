@@ -22,26 +22,49 @@ export const page = readable({
 export const navigating = readable(null);
 export const updated = readable(false);
 
-// Mock auth store
+// Mock auth store.
+//
+// B46: these mocks were incomplete - `initialize`, `sessionExpired`,
+// `updateSession` and the derived role stores were all missing. That went
+// unnoticed because the suites importing them failed to *load* at all (the
+// `import.meta.env` override in vitest.config.ts broke SvelteKit's virtual env
+// module), so the mocks were never exercised. With the suites loading, an
+// incomplete mock is a "not a function" TypeError, so they are completed here.
 export const authStore = {
     subscribe: vi.fn((run) => {
-        run({ isAuthenticated: false, user: null, token: null });
+        run({
+            isAuthenticated: false,
+            isLoading: false,
+            authEnabled: true,
+            user: null,
+            token: null
+        });
         return () => {};
     }),
+    initialize: vi.fn().mockResolvedValue(undefined),
     login: vi.fn(),
     logout: vi.fn(),
+    sessionExpired: vi.fn(),
+    updateSession: vi.fn(),
     handleOAuthLogin: vi.fn(),
     reset: vi.fn()
 };
 
+export const isRoot = readable(false);
+export const isTenantAdmin = readable(false);
+export const isAuthenticated = readable(false);
+export const user = readable(null);
+export const token = readable(null);
+
 // Mock tenant store
 export const tenantStore = {
     subscribe: vi.fn((run) => {
-        run({ tenants: [], selectedTenantId: null, loading: false, error: null });
+        run({ selectedTenantId: null, selectedTenantName: null });
         return () => {};
     }),
     loadTenants: vi.fn(),
     selectTenant: vi.fn(),
+    clearTenant: vi.fn(),
     reset: vi.fn()
 };
 
@@ -52,5 +75,6 @@ export const notifications = {
     error: vi.fn(),
     info: vi.fn(),
     warning: vi.fn(),
-    remove: vi.fn()
+    remove: vi.fn(),
+    clear: vi.fn()
 };

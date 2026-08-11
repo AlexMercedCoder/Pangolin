@@ -9,12 +9,25 @@ pub struct PangolinClient {
     pub config: CliConfig,
 }
 
+/// Default per-request timeout.
+///
+/// B_cli7: `Client::new()` has no timeout, so a hung or unreachable server left
+/// the CLI blocked indefinitely with no output and no way out but Ctrl-C.
+const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
 impl PangolinClient {
     pub fn new(config: CliConfig) -> Self {
-        Self {
-            client: Client::new(),
-            config,
-        }
+        let client = Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .connect_timeout(CONNECT_TIMEOUT)
+            .build()
+            // The builder only fails on a TLS backend problem, which would make
+            // every request fail anyway; falling back keeps `new` infallible for
+            // its callers.
+            .unwrap_or_else(|_| Client::new());
+
+        Self { client, config }
     }
 
     pub fn update_config(&mut self, config: CliConfig) {

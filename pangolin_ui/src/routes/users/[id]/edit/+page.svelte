@@ -33,7 +33,10 @@
 			user = await usersApi.get(userId);
 			// Pre-populate form
 			email = user.email || '';
-			role = user.role || 'TenantUser';
+			// `tenant-user`: the `TenantUser` fallback matched none of the
+			// options below, so a user record with no role left the select with
+			// nothing shown.
+			role = user.role || 'tenant-user';
 		} catch (error: any) {
 			notifications.error(`Failed to load user: ${error.message}`);
 			goto('/users');
@@ -137,10 +140,18 @@
 				/>
 
 				<div class="space-y-2">
-					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+					<!-- `for`/`id`: this label named nothing, so a screen reader
+					     announced the role select as unlabelled. Every other
+					     field on this form goes through the `Input` component,
+					     which wires this up; this is the one raw control. -->
+					<label
+						for="user-role"
+						class="block text-sm font-medium text-gray-700 dark:text-gray-300"
+					>
 						Role
 					</label>
 					<select
+						id="user-role"
 						bind:value={role}
 						class="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-gray-800 dark:text-white"
 						disabled={submitting}

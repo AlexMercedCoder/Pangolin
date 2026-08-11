@@ -29,7 +29,7 @@ describe('Warehouse Edit Page', () => {
 	};
 
 	beforeEach(() => {
-		vi.resetAllMocks();
+		vi.clearAllMocks();
 		vi.mocked(warehousesApi.get).mockResolvedValue(mockWarehouse);
 		vi.mocked(warehousesApi.update).mockResolvedValue(mockWarehouse);
 	});

@@ -1,6 +1,6 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { token } from '$lib/stores/auth';
+    import { apiClient } from '$lib/api/client';
     import { fade } from 'svelte/transition';
 
     let query = '';
@@ -17,32 +17,36 @@
         loading = true;
         error = '';
         hasSearched = true;
-        
-        try {
-            const params = new URLSearchParams({ query });
-            if (tags) {
-                // Split tags
-                const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
-                tagList.forEach(t => params.append('tags', t));
-            }
 
-            const res = await fetch(`/api/v1/assets/search?${params}`, {
-                headers: { 'Authorization': `Bearer ${$token}` }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                results = Array.isArray(data) ? data : (data.results || []);
-            } else if (res.status === 501) {
-                error = 'Search functionality is not yet implemented on the backend.';
-            } else {
-                error = 'Search failed';
-            }
-        } catch (e: any) {
-            error = e.message || String(e);
-        } finally {
-            loading = false;
+        // B35: this used to append `tags` repeatedly (`?tags=a&tags=b`). The
+        // server extracts with axum's `Query`, and `serde_urlencoded` cannot
+        // deserialize repeated keys into a Vec - so every tag-filtered search
+        // came back 400 and tag filtering had never actually worked. The server
+        // now takes one comma-separated value.
+        const params = new URLSearchParams({ query });
+        const tagList = tags.split(',').map((t) => t.trim()).filter(Boolean);
+        if (tagList.length) {
+            params.set('tags', tagList.join(','));
         }
+
+        // B32: this was a raw `fetch('/api/v1/...')`, which only resolves under
+        // the dev proxy. With adapter-node it hits the SvelteKit server, which
+        // has no /api/v1 routes, and 404s in production - and it skipped the
+        // X-Pangolin-Tenant header, so a root user searched the wrong tenant.
+        const res = await apiClient.get<any>(`/api/v1/assets/search?${params}`);
+
+        if (res.error) {
+            error =
+                res.error.status === 501
+                    ? 'Search functionality is not yet implemented on the backend.'
+                    : res.error.message || 'Search failed';
+            results = [];
+        } else {
+            const data = res.data;
+            results = Array.isArray(data) ? data : (data?.results ?? []);
+        }
+
+        loading = false;
     }
 
     function handleKeydown(e: KeyboardEvent) {

@@ -60,7 +60,7 @@ impl PostgresStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 LIMIT $3 OFFSET $4")
+        let rows = sqlx::query("SELECT namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND catalog_name = $2 ORDER BY namespace_path LIMIT $3 OFFSET $4")
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(limit)
@@ -112,6 +112,28 @@ impl PostgresStore {
                 .bind(&namespace)
                 .execute(&self.pool)
                 .await?;
+        }
+        Ok(())
+    }
+
+    /// Replace a namespace's properties wholesale; see the SQLite twin for why
+    /// a merge-only method could not implement Iceberg property removals (B16h).
+    pub async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        let result = sqlx::query("UPDATE namespaces SET properties = $1 WHERE tenant_id = $2 AND catalog_name = $3 AND namespace_path = $4")
+            .bind(serde_json::to_value(&properties)?)
+            .bind(tenant_id)
+            .bind(catalog_name)
+            .bind(&namespace)
+            .execute(&self.pool)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(anyhow::anyhow!("Namespace not found"));
         }
         Ok(())
     }

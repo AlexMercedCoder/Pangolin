@@ -33,10 +33,10 @@ async fn test_merge_branch_flow() {
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=") // admin:password
         .body(Body::from(
             json!({
-                "name": "MergeTestTenant",
-                "id": tenant_id.to_string(),
-                "admin_username": "merge_admin",
-                "admin_password": "password"
+                // `CreateTenantRequest` takes only `name` and `properties`.
+                // `id`, `admin_username` and `admin_password` were all silently
+                // discarded; `deny_unknown_fields` now names them.
+                "name": "MergeTestTenant"
             })
             .to_string(),
         ))

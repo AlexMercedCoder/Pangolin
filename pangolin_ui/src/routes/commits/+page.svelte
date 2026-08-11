@@ -11,14 +11,16 @@
     onMount(async () => {
         if (!$user || !branchName) return;
         
-        const res = await fetch(`/api/v1/branches/${branchName}/commits`, {
-            headers: { 'Authorization': `Bearer ${$token}` }
-        });
-        
-        if (res.ok) {
-            commits = await res.json();
+        // B32: routed through apiClient so it works outside the dev proxy and
+        // carries X-Pangolin-Tenant.
+        const res = await apiClient.get<any[]>(
+            `/api/v1/branches/${encodeURIComponent(branchName)}/commits`
+        );
+
+        if (!res.error) {
+            commits = res.data ?? [];
         } else {
-            error = "Failed to load commits";
+            error = res.error.message || 'Failed to load commits';
         }
     });
 

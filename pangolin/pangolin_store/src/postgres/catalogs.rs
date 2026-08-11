@@ -62,7 +62,18 @@ impl PostgresStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT id, name, warehouse_name, storage_location, properties FROM catalogs WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
+        // B24: the SELECT omitted `catalog_type` and `federated_config`, and the
+        // loop below hardcoded `Local` / `None`. Every federated catalog looked
+        // Local in a Postgres listing, so anything branching on `catalog_type`
+        // over a listing - including the federated-forwarding decision - took
+        // the wrong path. SQLite and Mongo returned the real values; only
+        // Postgres invented them. `get_catalog` two functions up decodes both
+        // correctly, which is the shape mirrored here.
+        //
+        // B27: `ORDER BY name` so two pages cover the set exactly once. Without
+        // it Postgres may return rows in any order between queries, so
+        // `LIMIT/OFFSET` paging could repeat or skip catalogs.
+        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = $1 ORDER BY name LIMIT $2 OFFSET $3")
             .bind(tenant_id)
             .bind(limit)
             .bind(offset)
@@ -71,13 +82,19 @@ impl PostgresStore {
 
         let mut catalogs = Vec::new();
         for row in rows {
+            let catalog_type_str: String = row.get("catalog_type");
+            let catalog_type = match catalog_type_str.as_str() {
+                "Federated" => pangolin_core::model::CatalogType::Federated,
+                _ => pangolin_core::model::CatalogType::Local,
+            };
+
             catalogs.push(Catalog {
                 id: row.get("id"),
                 name: row.get("name"),
-                catalog_type: pangolin_core::model::CatalogType::Local,
+                catalog_type,
                 warehouse_name: row.get("warehouse_name"),
                 storage_location: row.get("storage_location"),
-                federated_config: None,
+                federated_config: serde_json::from_value(row.get("federated_config")).ok(),
                 properties: serde_json::from_value(row.get("properties")).unwrap_or_default(),
             });
         }

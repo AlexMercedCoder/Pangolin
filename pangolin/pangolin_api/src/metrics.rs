@@ -65,6 +65,15 @@ counters! {
     pub AUDIT_WRITE_FAILURES     => "pangolin_audit_write_failures_total",     "Audit records that could not be persisted.";
     pub WAREHOUSE_CACHE_HITS     => "pangolin_warehouse_cache_hits_total",     "Warehouse lookups served from the in-process cache.";
     pub WAREHOUSE_CACHE_MISSES   => "pangolin_warehouse_cache_misses_total",   "Warehouse lookups that reached the store.";
+    pub AUTH_THROTTLED           => "pangolin_auth_throttled_total",           "Authentication attempts refused by the rate limiter.";
+}
+
+/// One authentication attempt refused by the rate limiter.
+///
+/// Worth alerting on: a sustained non-zero rate is either an attack or a
+/// misconfigured client, and both want a human.
+pub fn record_auth_throttled() {
+    inc(&AUTH_THROTTLED);
 }
 
 /// Increment a counter by one.

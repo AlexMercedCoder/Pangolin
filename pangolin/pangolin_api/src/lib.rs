@@ -24,6 +24,9 @@ pub mod audit_handlers;
 pub mod audit_tests;
 pub mod auth_middleware;
 pub mod authz;
+/// Permission matrix: who is allowed to call what (roadmap improvement #0).
+#[cfg(test)]
+pub mod authz_matrix_tests;
 pub mod authz_utils; // Permission filtering utilities
 pub mod business_metadata_handlers;
 pub mod config;
@@ -36,7 +39,9 @@ pub mod metrics;
 pub mod oauth_handlers;
 pub mod oauth_state;
 pub mod observability;
+pub mod oidc;
 pub mod public_paths;
+pub mod rate_limit;
 /// Shared test fixtures.
 ///
 /// Compiled only for tests: these helpers used to ship inside the release
@@ -78,6 +83,9 @@ pub fn app_with_config(
             concurrency_limit: config.concurrency_limit,
             metrics_enabled: config.metrics_enabled,
             cors_allowed_origins: config.cors_allowed_origins.clone(),
+            auth_rate_limit: config.auth_rate_limit,
+            auth_rate_window: config.auth_rate_window,
+            trust_forwarded_for: config.trust_forwarded_for,
         },
     )
 }
@@ -95,6 +103,12 @@ pub struct RouterOptions {
     pub metrics_enabled: bool,
     /// Explicit CORS origins. `None` allows any origin.
     pub cors_allowed_origins: Option<Vec<String>>,
+    /// Failed authentication attempts allowed per window. 0 disables.
+    pub auth_rate_limit: u32,
+    /// The window those attempts are counted over.
+    pub auth_rate_window: std::time::Duration,
+    /// Honour `X-Forwarded-For` when identifying the client.
+    pub trust_forwarded_for: bool,
 }
 
 impl Default for RouterOptions {
@@ -105,6 +119,15 @@ impl Default for RouterOptions {
             concurrency_limit: 512,
             metrics_enabled: true,
             cors_allowed_origins: None,
+            // Off in the library default, on in `app_with_config`.
+            //
+            // `RouterOptions::default()` is what the in-process tests build
+            // with, and they drive the login endpoint far harder than any real
+            // client. A production default belongs where production config is
+            // read - `PANGOLIN_AUTH_RATE_LIMIT`, which defaults to 10 a minute.
+            auth_rate_limit: 0,
+            auth_rate_window: std::time::Duration::from_secs(60),
+            trust_forwarded_for: false,
         }
     }
 }
@@ -114,6 +137,14 @@ pub fn app_with_options(
     options: RouterOptions,
 ) -> Router {
     let cors = build_cors(options.cors_allowed_origins.as_deref());
+
+    // Shared with the login handler, which applies the per-account half of the
+    // limit; the middleware below only sees the source address.
+    let auth_limiter = std::sync::Arc::new(rate_limit::RateLimiter::new(
+        options.auth_rate_limit,
+        options.auth_rate_window,
+    ));
+    rate_limit::set_auth_limiter(auth_limiter.clone());
 
     let metrics_route = if options.metrics_enabled {
         Router::new().route("/metrics", get(metrics::metrics_handler))
@@ -151,8 +182,22 @@ pub fn app_with_options(
             get(iceberg::namespaces::list_namespaces).post(iceberg::namespaces::create_namespace),
         )
         .route(
+            // `loadNamespaceMetadata` and `namespaceExists` were on the README's
+            // "not implemented" list: a client could create a namespace and set
+            // properties but never read them back, and had no cheap existence
+            // probe.
             "/v1/:prefix/namespaces/:namespace",
-            delete(iceberg::namespaces::delete_namespace),
+            get(iceberg::namespaces::load_namespace_metadata)
+                .head(iceberg::namespaces::namespace_exists)
+                .delete(iceberg::namespaces::delete_namespace),
+        )
+        .route(
+            // A-5: `registerTable`. How an engine adopts a table whose metadata
+            // already exists in storage - a migration from another catalog, a
+            // restore, or a table written directly by a job. Without it the
+            // only way in was to recreate the table and lose its history.
+            "/v1/:prefix/namespaces/:namespace/register",
+            post(iceberg::tables::register_table),
         )
         .route(
             "/v1/:prefix/namespaces/:namespace/properties",
@@ -192,7 +237,9 @@ pub fn app_with_options(
         )
         .route(
             "/v1/:prefix/v1/namespaces/:namespace",
-            delete(iceberg::namespaces::delete_namespace),
+            get(iceberg::namespaces::load_namespace_metadata)
+                .head(iceberg::namespaces::namespace_exists)
+                .delete(iceberg::namespaces::delete_namespace),
         )
         .route(
             "/v1/:prefix/v1/namespaces/:namespace/properties",
@@ -252,7 +299,12 @@ pub fn app_with_options(
             "/api/v1/branches/:name/rebase",
             post(pangolin_handlers::rebase_branch),
         ) // Rebase endpoint
-        .route("/api/v1/branches/:name", get(pangolin_handlers::get_branch))
+        .route(
+            // B33: the UI's branch-delete control has been 404ing because only
+            // GET was registered here.
+            "/api/v1/branches/:name",
+            get(pangolin_handlers::get_branch).delete(pangolin_handlers::delete_branch),
+        )
         .route(
             "/api/v1/branches/:name/commits",
             get(pangolin_handlers::list_commits),
@@ -373,11 +425,19 @@ pub fn app_with_options(
         // Asset Management (Views)
         .route(
             "/v1/:prefix/namespaces/:namespace/views",
-            post(asset_handlers::create_view),
+            // A-5: `listViews` was missing, so an engine could create a view and
+            // load one it already knew the name of, but never discover what
+            // existed. `SHOW VIEWS` calls this.
+            post(asset_handlers::create_view).get(asset_handlers::list_views),
         )
         .route(
             "/v1/:prefix/namespaces/:namespace/views/:view",
-            get(asset_handlers::get_view),
+            // A-5: `dropView` and `viewExists` were missing too. Without the
+            // former a view created through the Iceberg API could never be
+            // removed through it.
+            get(asset_handlers::get_view)
+                .head(asset_handlers::view_exists)
+                .delete(asset_handlers::drop_view),
         )
         // Signing APIs
         .route(
@@ -517,6 +577,13 @@ pub fn app_with_options(
             "/api/v1/oauth/exchange",
             post(oauth_handlers::oauth_exchange),
         )
+        .route(
+            // B33: the login page needs to know which providers are configured
+            // *before* anyone is authenticated; without this it rendered all
+            // four buttons unconditionally, several of them dead.
+            "/api/v1/oauth/providers",
+            get(oauth_handlers::list_oauth_providers),
+        )
         // Business Metadata (by asset id)
         .route(
             "/api/v1/business-metadata/:asset_id",
@@ -555,18 +622,47 @@ pub fn app_with_options(
             },
             auth_middleware::auth_middleware,
         ))
+        // C-5: throttle the credential endpoints. Outside the auth middleware,
+        // so a refused attempt costs a cache lookup rather than a bcrypt round -
+        // the point is to make guessing cheap for us and expensive for the
+        // attacker, and verifying the password first would invert that.
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limit::RateLimitState {
+                limiter: auth_limiter.clone(),
+                trust_forwarded: options.trust_forwarded_for,
+            },
+            rate_limit::throttle_auth,
+        ))
         // Resource safety. There were previously no limits of any kind (A-20):
         // a single large POST could be buffered without bound and a slow
         // backend request had no deadline.
+        //
+        // Layer order matters, and `.layer()` applies *outermost last*, so this
+        // list reads inside-out: body limit is innermost, then the concurrency
+        // limiter, then the timeout, then load shedding.
+        //
+        // B16l: the timeout used to sit *inside* the concurrency limiter, so a
+        // request queued for one of the permits had no deadline at all - the
+        // 30s clock only started once it was admitted. Under sustained overload
+        // the queue grew without bound and clients saw latencies far past
+        // `PANGOLIN_REQUEST_TIMEOUT_SECS`. With the timeout outside, the
+        // deadline covers queueing time, which is what a client's timeout budget
+        // actually cares about.
         .layer(DefaultBodyLimit::max(options.body_limit_bytes))
-        .layer(tower_http::timeout::TimeoutLayer::new(
-            options.request_timeout,
-        ))
         // GlobalConcurrencyLimitLayer rather than ConcurrencyLimitLayer: the
         // latter's service is not `Clone`, which axum requires.
         .layer(tower::limit::GlobalConcurrencyLimitLayer::new(
             options.concurrency_limit,
         ))
+        .layer(tower_http::timeout::TimeoutLayer::new(
+            options.request_timeout,
+        ))
+        // B0m: token issuance could be driven to panic by a request-controlled
+        // `expires_in_hours`, and with no catch-panic layer the panic tore down
+        // the whole connection task rather than failing one request. The
+        // arithmetic is now total, but a panic anywhere else should still be a
+        // 500 for one caller rather than a dropped connection for several.
+        .layer(tower_http::catch_panic::CatchPanicLayer::new())
         // Request IDs, access logging and metrics. `tower-http` was already
         // built with the `trace` feature but `TraceLayer` was never applied.
         .layer(axum::middleware::from_fn(observability::track_request))

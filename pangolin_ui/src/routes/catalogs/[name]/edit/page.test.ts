@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import CatalogEditPage from './+page.svelte';
 import { catalogsApi } from '$lib/api/catalogs';
+import { warehousesApi } from '$lib/api/warehouses';
 import { goto } from '$app/navigation';
 
 vi.mock('$lib/api/catalogs');
@@ -26,9 +27,21 @@ describe('Catalog Edit Page', () => {
 	};
 
 	beforeEach(() => {
-		vi.resetAllMocks();
+		vi.clearAllMocks();
 		vi.mocked(catalogsApi.get).mockResolvedValue(mockCatalog);
 		vi.mocked(catalogsApi.update).mockResolvedValue(mockCatalog);
+		// The warehouse field is a `<select>`, so it can only display a value
+		// that is one of its options. Without the warehouse in this list the
+		// page is right to show nothing selected.
+		vi.mocked(warehousesApi.list).mockResolvedValue([
+			{
+				id: 'wh-1',
+				name: 'test-warehouse',
+				use_sts: false,
+				storage_config: { type: 's3', bucket: 'bucket' },
+				vending_strategy: undefined
+			}
+		] as any);
 	});
 
 	it('loads and displays catalog data', async () => {

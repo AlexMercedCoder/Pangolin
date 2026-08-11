@@ -5,9 +5,29 @@ use pangolin_cli_common::utils::print_table;
 use serde_json::Value;
 
 pub async fn handle_delete_user(client: &PangolinClient, username: String) -> Result<(), CliError> {
-    let res = client
-        .delete(&format!("/api/v1/users/{}", username))
-        .await?;
+    // B_cli5: this interpolated the *username* into a route whose handler takes
+    // `Path<Uuid>`, so every `delete-user` returned 400 before reaching any
+    // logic. The CLI takes a username because that is what an operator knows,
+    // so resolve it to an id first.
+    let listing = client.get("/api/v1/users").await?;
+    if !listing.status().is_success() {
+        return Err(CliError::ApiError(format!(
+            "Failed to look up user: {}",
+            listing.status()
+        )));
+    }
+    let users: Vec<Value> = listing
+        .json()
+        .await
+        .map_err(|e| CliError::ApiError(e.to_string()))?;
+
+    let user_id = users
+        .iter()
+        .find(|u| u["username"].as_str() == Some(username.as_str()))
+        .and_then(|u| u["id"].as_str())
+        .ok_or_else(|| CliError::ApiError(format!("User '{}' not found", username)))?;
+
+    let res = client.delete(&format!("/api/v1/users/{}", user_id)).await?;
     if !res.status().is_success() {
         let status = res.status();
         let t = res.text().await.unwrap_or_default();
@@ -96,8 +116,15 @@ pub async fn handle_update_user(
 ) -> Result<(), CliError> {
     let mut payload = serde_json::json!({});
 
-    if let Some(u) = username {
-        payload["username"] = serde_json::Value::String(u);
+    // B_cli6: `--username` was accepted and written into the payload, but
+    // `UpdateUserRequest` has no `username` field - the server cannot rename a
+    // user - so serde dropped it and the CLI reported success for a rename that
+    // never happened. Saying so is better than pretending.
+    if username.is_some() {
+        return Err(CliError::ApiError(
+            "Renaming a user is not supported by the server; --username is not applied."
+                .to_string(),
+        ));
     }
 
     if let Some(e) = email {

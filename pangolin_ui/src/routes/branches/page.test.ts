@@ -20,7 +20,8 @@ describe('Branches List Page', () => {
 			id: 'br-1',
 			name: 'main',
 			catalog: 'analytics',
-			branch_type: 'production' as const,
+			// The API returns exactly 'ingest' or 'experimental'.
+			branch_type: 'ingest' as const,
 			assets: ['ns.table1', 'ns.table2'],
 			created_at: '2024-01-01T00:00:00Z'
 		},
@@ -44,9 +45,15 @@ describe('Branches List Page', () => {
 	];
 
 	beforeEach(() => {
-		vi.resetAllMocks();
+		vi.clearAllMocks();
 		vi.mocked(catalogsApi.list).mockResolvedValue(mockCatalogs);
-		vi.mocked(branchesApi.list).mockResolvedValue(mockBranches);
+		// The filtering under test is done by the *server*: the page calls
+		// `branchesApi.list(selectedCatalog)`. This mock used to return every
+		// branch whatever it was asked for, so the page could only have passed
+		// by filtering again client-side - something it has no reason to do.
+		vi.mocked(branchesApi.list).mockImplementation(async (catalog?: string) =>
+			mockBranches.filter((b) => b.catalog === catalog)
+		);
 	});
 
 	it('loads and displays catalogs', async () => {
@@ -68,9 +75,13 @@ describe('Branches List Page', () => {
 			expect(branchesApi.list).toHaveBeenCalled();
 		});
 
-		// Should show branches for analytics catalog
+		// Should show branches for analytics catalog.
+		//
+		// `getAllByText` for 'main': it is both a branch name and `dev`'s parent
+		// branch, so it legitimately appears in two cells and `getByText` throws
+		// on the ambiguity.
 		await waitFor(() => {
-			expect(screen.getByText('main')).toBeInTheDocument();
+			expect(screen.getAllByText('main').length).toBeGreaterThan(0);
 			expect(screen.getByText('dev')).toBeInTheDocument();
 		});
 
@@ -92,7 +103,7 @@ describe('Branches List Page', () => {
 		});
 
 		// Should not show analytics branches
-		expect(screen.queryByText('main')).not.toBeInTheDocument();
+		expect(screen.queryAllByText('main')).toHaveLength(0);
 		expect(screen.queryByText('dev')).not.toBeInTheDocument();
 	});
 
@@ -101,10 +112,13 @@ describe('Branches List Page', () => {
 
 		await waitFor(() => expect(branchesApi.list).toHaveBeenCalled());
 
+		// The green badge used to be keyed on `production`, which the API never
+		// returns - so every branch rendered blue and this assertion could only
+		// pass against a fixture that did not resemble a real response.
 		await waitFor(() => {
-			const productionBadge = screen.getByText('production');
-			expect(productionBadge).toBeInTheDocument();
-			expect(productionBadge.className).toContain('bg-green');
+			const ingestBadge = screen.getByText('ingest');
+			expect(ingestBadge).toBeInTheDocument();
+			expect(ingestBadge.className).toContain('bg-green');
 		});
 
 		const experimentalBadges = screen.getAllByText('experimental');

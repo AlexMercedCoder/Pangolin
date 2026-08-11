@@ -22,9 +22,11 @@ class PaimonAsset(BaseAsset):
             partition_keys: List of partition column names (optional)
         """
         try:
-            from pypaimon import Schema
-            from pypaimon.api import Catalog
-            import pyarrow as pa
+            # Imported to probe availability; the names are used further down
+            # once the optional dependency is confirmed present.
+            from pypaimon import Schema  # noqa: F401
+            from pypaimon.api import Catalog  # noqa: F401
+            import pyarrow as pa  # noqa: F401
         except ImportError:
             raise ImportError("Please install 'pypaimon' (pip install pypangolin[paimon]) to use PaimonAsset")
 

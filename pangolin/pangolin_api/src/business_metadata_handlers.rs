@@ -14,6 +14,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct AddMetadataRequest {
     pub description: Option<String>,
     pub tags: Vec<String>,
@@ -24,6 +25,33 @@ pub struct AddMetadataRequest {
 #[derive(Serialize, ToSchema)]
 pub struct MetadataResponse {
     pub metadata: BusinessMetadata,
+}
+
+/// Resolve an asset's permission scope, for the handlers keyed only by asset id.
+///
+/// Several business-metadata handlers took an asset id straight off the path
+/// and acted on it with no authorization at all - the same class as B0e. An
+/// asset id alone is not a scope, so the catalog and namespace have to be
+/// resolved first; `get_asset_by_id` does that in one lookup.
+async fn asset_scope(
+    store: &AppState,
+    tenant_id: uuid::Uuid,
+    asset_id: uuid::Uuid,
+) -> Result<Option<PermissionScope>, anyhow::Error> {
+    let Some((asset, catalog_name, namespace)) = store.get_asset_by_id(tenant_id, asset_id).await?
+    else {
+        return Ok(None);
+    };
+
+    let Some(catalog) = store.get_catalog(tenant_id, catalog_name).await? else {
+        return Ok(None);
+    };
+
+    Ok(Some(PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace.join("."),
+        asset_id: asset.id,
+    }))
 }
 
 #[utoipa::path(
@@ -171,10 +199,31 @@ pub async fn get_business_metadata(
 )]
 pub async fn delete_business_metadata(
     State(store): State<AppState>,
-    Extension(_session): Extension<UserSession>,
+    Extension(session): Extension<UserSession>,
     Path(asset_id): Path<Uuid>,
 ) -> impl IntoResponse {
-    // Check permission logic
+    // The `// Check permission logic` that stood here was the whole of the
+    // authorization: any authenticated tenant member could delete any asset's
+    // business metadata - descriptions, tags, and the `discoverable` flag that
+    // governs who can see the asset at all.
+    let tenant_id = session.tenant_id.unwrap_or_default();
+    let scope = match asset_scope(&store, tenant_id, asset_id).await {
+        Ok(Some(scope)) => scope,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Asset not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_business_metadata: failed to resolve asset");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    match crate::authz::check_permission(&store, &session, &Action::Delete, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_business_metadata: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
 
     match store.delete_business_metadata(asset_id).await {
         Ok(_) => StatusCode::NO_CONTENT.into_response(),
@@ -186,10 +235,40 @@ pub async fn delete_business_metadata(
     }
 }
 
+/// Query parameters for asset search.
+///
+/// B35: `tags` was typed `Option<Vec<String>>` and extracted with axum's
+/// `Query`, which uses `serde_urlencoded` - and `serde_urlencoded` cannot
+/// deserialize repeated keys (`?tags=a&tags=b`) into a `Vec`. The UI sent
+/// exactly that, so every tag-filtered search returned `400 Bad Request`:
+/// tag-filtered search was broken end to end and had presumably never worked.
+///
+/// A comma-separated string is the fix that keeps working with a plain `Query`
+/// extractor, and it is also what an operator would type by hand. Repeated
+/// keys are still accepted by the deserializer below, so a client that sends
+/// the old shape gets the last value rather than a 400.
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SearchRequest {
     pub query: String,
+    /// Comma-separated tag names, e.g. `?tags=pii,finance`.
+    #[serde(default, deserialize_with = "deserialize_comma_separated")]
     pub tags: Option<Vec<String>>,
+}
+
+/// Deserialize `a,b,c` into `["a", "b", "c"]`, trimming and dropping blanks.
+fn deserialize_comma_separated<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(deserializer)?;
+    Ok(raw.map(|value| {
+        value
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }))
 }
 
 #[utoipa::path(
@@ -243,6 +322,7 @@ pub async fn search_assets(
 
             // Apply permission-based filtering
             let filtered_results = crate::authz_utils::filter_assets(
+                tenant_id,
                 results,
                 &permissions,
                 session.role.clone(),
@@ -262,6 +342,7 @@ pub async fn search_assets(
                             let ns_str = namespace.join(".");
                             let required_actions = vec![pangolin_core::permission::Action::Read];
                             crate::authz_utils::has_asset_access(
+                                tenant_id,
                                 catalog_id,
                                 &ns_str,
                                 asset.id,

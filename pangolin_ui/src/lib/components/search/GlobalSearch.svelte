@@ -64,7 +64,6 @@
       // If modal is open, don't navigate
       if (showRequestModal) return;
 
-      console.log('Selecting search result:', result);
       showResults = false;
       searchQuery = '';
       

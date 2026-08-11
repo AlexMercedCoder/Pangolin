@@ -24,6 +24,107 @@ impl PostgresStore {
         Ok(())
     }
 
+    /// Create a branch and copy assets into it in one transaction (A-24).
+    ///
+    /// Both statements commit together or neither does. Previously they were
+    /// issued independently, so a failure between them left a branch that
+    /// existed with some arbitrary prefix of its assets - and the API returned
+    /// `200` regardless, because the caller logged the copy error and carried
+    /// on.
+    pub async fn create_branch_with_assets(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: Branch,
+        src_branch: &str,
+        assets: Option<Vec<String>>,
+    ) -> Result<usize> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            "INSERT INTO branches (tenant_id, catalog_name, name, head_commit_id, branch_type, assets) \
+             VALUES ($1, $2, $3, $4, $5, $6) \
+             ON CONFLICT (tenant_id, catalog_name, name) DO UPDATE SET \
+             head_commit_id = EXCLUDED.head_commit_id, branch_type = EXCLUDED.branch_type, \
+             assets = EXCLUDED.assets",
+        )
+        .bind(tenant_id)
+        .bind(catalog_name)
+        .bind(&branch.name)
+        .bind(branch.head_commit_id)
+        .bind(format!("{:?}", branch.branch_type))
+        .bind(&branch.assets)
+        .execute(&mut *tx)
+        .await?;
+
+        // `INSERT ... SELECT` rather than reading into the process and writing
+        // back: the copy is one statement, so there is no window in which some
+        // rows exist and others do not, and a large branch does not have to fit
+        // in memory.
+        //
+        // `gen_random_uuid()` for the new ids because an asset's primary key is
+        // unique across branches; reusing the source ids would collide.
+        let copied = match &assets {
+            None => sqlx::query(
+                "INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, \
+                     branch_name, asset_type, metadata_location, properties) \
+                     SELECT gen_random_uuid(), tenant_id, catalog_name, namespace_path, name, \
+                     $4, asset_type, metadata_location, properties \
+                     FROM assets \
+                     WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3",
+            )
+            .bind(tenant_id)
+            .bind(catalog_name)
+            .bind(src_branch)
+            .bind(&branch.name)
+            .execute(&mut *tx)
+            .await?
+            .rows_affected(),
+            Some(names) => {
+                if names.is_empty() {
+                    0
+                } else {
+                    // `namespace.table`, so the last segment is the table and
+                    // everything before it is the namespace path.
+                    let mut wanted: Vec<String> = Vec::with_capacity(names.len());
+                    for full in names {
+                        let Some((_, table)) = full.rsplit_once('.') else {
+                            // A name with no namespace cannot identify an asset;
+                            // failing is better than silently copying nothing,
+                            // which is what the old loop did with `continue`.
+                            tx.rollback().await.ok();
+                            return Err(anyhow::anyhow!(
+                                "asset name {full:?} is not in namespace.table form"
+                            ));
+                        };
+                        wanted.push(table.to_string());
+                    }
+
+                    sqlx::query(
+                        "INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, \
+                         branch_name, asset_type, metadata_location, properties) \
+                         SELECT gen_random_uuid(), tenant_id, catalog_name, namespace_path, name, \
+                         $4, asset_type, metadata_location, properties \
+                         FROM assets \
+                         WHERE tenant_id = $1 AND catalog_name = $2 AND branch_name = $3 \
+                         AND array_to_string(namespace_path, '.') || '.' || name = ANY($5)",
+                    )
+                    .bind(tenant_id)
+                    .bind(catalog_name)
+                    .bind(src_branch)
+                    .bind(&branch.name)
+                    .bind(names)
+                    .execute(&mut *tx)
+                    .await?
+                    .rows_affected()
+                }
+            }
+        };
+
+        tx.commit().await?;
+        Ok(copied as usize)
+    }
+
     pub async fn get_branch(
         &self,
         tenant_id: Uuid,
@@ -69,7 +170,7 @@ impl PostgresStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = $1 AND catalog_name = $2 LIMIT $3 OFFSET $4")
+        let rows = sqlx::query("SELECT name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = $1 AND catalog_name = $2 ORDER BY name LIMIT $3 OFFSET $4")
             .bind(tenant_id)
             .bind(catalog_name)
             .bind(limit)

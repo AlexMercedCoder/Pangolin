@@ -12,6 +12,9 @@ pub struct CatalogConfig {
 #[derive(Serialize, ToSchema)]
 pub struct ListNamespacesResponse {
     pub namespaces: Vec<Vec<String>>,
+    /// Continuation token; absent on the final page (B16i).
+    #[serde(rename = "next-page-token", skip_serializing_if = "Option::is_none")]
+    pub next_page_token: Option<String>,
 }
 
 #[derive(Deserialize, IntoParams)]
@@ -32,6 +35,7 @@ pub struct ListNamespacesTreeResponse {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateNamespaceRequest {
     pub namespace: Vec<String>,
     pub properties: Option<HashMap<String, String>>,
@@ -44,6 +48,7 @@ pub struct CreateNamespaceResponse {
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateTableRequest {
     pub name: String,
     pub location: Option<String>,
@@ -107,6 +112,13 @@ impl TableResponse {
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct ListTablesResponse {
     pub identifiers: Vec<TableIdentifier>,
+    /// Continuation token; absent on the final page (B16i).
+    #[serde(
+        rename = "next-page-token",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
+    pub next_page_token: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
@@ -124,6 +136,7 @@ pub struct PartitionField {
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CommitTableRequest {
     pub identifier: Option<TableIdentifier>,
     pub requirements: Vec<CommitRequirement>,
@@ -258,13 +271,117 @@ pub fn parse_table_identifier(identifier: &str) -> (String, Option<String>) {
     }
 }
 
+/// The unit separator the Iceberg REST spec uses to encode a multi-level
+/// namespace inside a single path segment.
+pub const NAMESPACE_SEPARATOR: char = '\u{1F}';
+
+/// Parse a namespace path segment into its levels plus an optional branch.
+///
+/// This is the single parser for namespace path segments (B16a). Handlers used
+/// to disagree: `list_tables`/`create_table`/`load_table` went through
+/// [`parse_table_identifier`], which yields a *single-element* namespace, while
+/// `update_table`/`delete_table`/`table_exists` split on `0x1F` and yielded the
+/// real multi-element path. So a table created in namespace `a\x1Fb` was
+/// registered under `["a\x1Fb"]` but looked up under `["a", "b"]` on commit -
+/// a guaranteed `404 Table not found`, with the CAS loop never running.
+///
+/// The `@branch` suffix is stripped first so a `ns@branch` form works
+/// everywhere, not just on the handlers that happened to call
+/// `parse_table_identifier`.
+pub fn parse_namespace(namespace: &str) -> (Vec<String>, Option<String>) {
+    let (path, branch) = match namespace.split_once('@') {
+        Some((path, branch)) if !branch.is_empty() => (path, Some(branch.to_string())),
+        _ => (namespace, None),
+    };
+
+    let levels: Vec<String> = path
+        .split(NAMESPACE_SEPARATOR)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+
+    (levels, branch)
+}
+
+/// Spec-shaped pagination query parameters.
+///
+/// The Iceberg REST spec paginates with `pageToken`/`pageSize`; Pangolin only
+/// understood `limit`/`offset`, so a spec client's paging parameters were
+/// silently ignored and it had no way to detect a truncated listing (B16i).
+/// Both spellings are accepted, with the spec ones taking precedence.
+#[derive(Deserialize, IntoParams, Default)]
+pub struct IcebergPageParams {
+    #[serde(rename = "pageToken")]
+    pub page_token: Option<String>,
+    #[serde(rename = "pageSize")]
+    pub page_size: Option<u32>,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
+/// Default page size when a client asks for pagination without naming one.
+pub const DEFAULT_PAGE_SIZE: u32 = 100;
+
+impl IcebergPageParams {
+    /// Resolve to `(offset, limit)`.
+    ///
+    /// The page token is an opaque encoding of the offset, per the spec's
+    /// "clients must treat the token as opaque" rule; the encoding here is just
+    /// a prefixed decimal so it stays debuggable, and an unparseable token
+    /// degrades to offset 0 rather than erroring the listing.
+    pub fn resolve(&self) -> (u32, u32) {
+        let limit = self
+            .page_size
+            .or(self.limit)
+            .filter(|l| *l > 0)
+            .unwrap_or(DEFAULT_PAGE_SIZE);
+
+        let offset = self
+            .page_token
+            .as_deref()
+            .and_then(decode_page_token)
+            .or(self.offset)
+            .unwrap_or(0);
+
+        (offset, limit)
+    }
+}
+
+/// Encode an offset as an opaque continuation token.
+pub fn encode_page_token(offset: u32) -> String {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    URL_SAFE_NO_PAD.encode(format!("o:{}", offset))
+}
+
+/// Decode a continuation token produced by [`encode_page_token`].
+pub fn decode_page_token(token: &str) -> Option<u32> {
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    let decoded = URL_SAFE_NO_PAD.decode(token).ok()?;
+    let decoded = String::from_utf8(decoded).ok()?;
+    decoded.strip_prefix("o:")?.parse().ok()
+}
+
+/// Compute the `next-page-token` for a listing.
+///
+/// Returns `None` when the page came back short, which is how a client knows it
+/// has reached the end.
+pub fn next_page_token(returned: usize, offset: u32, limit: u32) -> Option<String> {
+    if returned as u32 == limit {
+        Some(encode_page_token(offset + limit))
+    } else {
+        None
+    }
+}
+
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RenameTableRequest {
     pub source: TableIdentifier,
     pub destination: TableIdentifier,
 }
 
 #[derive(Deserialize, Serialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateNamespacePropertiesRequest {
     pub removals: Option<Vec<String>>,
     pub updates: Option<std::collections::HashMap<String, String>>,

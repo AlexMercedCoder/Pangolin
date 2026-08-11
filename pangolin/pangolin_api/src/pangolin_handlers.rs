@@ -19,6 +19,7 @@ use uuid::Uuid;
 pub type AppState = Arc<dyn CatalogStore + Send + Sync>;
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateBranchRequest {
     name: String,
     branch_type: Option<String>, // "ingest" or "experimental", defaults to experimental
@@ -36,6 +37,7 @@ pub struct ListBranchParams {
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct MergeBranchRequest {
     pub source_branch: String,
     pub target_branch: String,
@@ -164,79 +166,89 @@ pub async fn create_branch(
         name: payload.name.clone(),
         head_commit_id: None,
         branch_type: b_type.clone(),
-        assets: vec![], // Start empty, will be populated
+        assets: vec![], // Populated by the copy below
     };
 
-    // Create branch first
-    if let Err(e) = store.create_branch(tenant_id, catalog_name, branch).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to create branch: {}", e),
+    // A-24. This used to be `create_branch`, then either a loop of
+    // `create_asset` or a `copy_assets_bulk`, as independent statements. Two
+    // things were wrong with that, and the second is worse than the first:
+    //
+    //  1. A failure partway through left a branch that existed holding an
+    //     arbitrary subset of its assets, with no rollback and no repair tool.
+    //  2. The bulk-copy error was *logged and discarded* - `Err(e) =>
+    //     tracing::error!(...)` - and the handler then returned 200. The caller
+    //     was told the branch was ready when it was empty. The per-asset loop
+    //     did the same thing more quietly, with `if let Ok(_)` around each
+    //     create and `continue` on a malformed name.
+    //
+    // The store now does both in one transaction where the backend can. Where
+    // it cannot, it says so and the fallback below is taken deliberately rather
+    // than by accident - and either way a failure is reported to the caller.
+    let copy_result = store
+        .create_branch_with_assets(
+            tenant_id,
+            catalog_name,
+            branch.clone(),
+            from_branch,
+            payload.assets.clone(),
         )
-            .into_response();
-    }
+        .await;
 
-    if let Some(assets_to_copy) = &payload.assets {
-        tracing::info!(
-            "Explicit asset list provided: {} assets",
-            assets_to_copy.len()
-        );
-        // For explicit asset list, we still iterate for now as copy_assets_bulk doesn't take a list
-        // Optimization: We could add a filtered bulk copy in the future
-        for asset_name in assets_to_copy {
-            let parts: Vec<&str> = asset_name.split('.').collect();
-            if parts.len() < 2 {
-                continue; // Skip invalid format
-            }
-            let table_name = parts.last().unwrap().to_string();
-            let namespace_parts = parts[0..parts.len() - 1]
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<String>>();
+    match copy_result {
+        Ok(count) => {
+            tracing::info!(
+                branch = %payload.name,
+                assets = count,
+                "created branch atomically"
+            );
+        }
+        Err(e) if e.to_string().contains("not supported by this store") => {
+            // Backend without transaction support for this operation. Do it
+            // sequentially, but say so, and still fail loudly.
+            tracing::warn!(
+                branch = %payload.name,
+                "this backend cannot create a branch and copy its assets atomically; \
+                 a failure partway through will leave the branch incomplete"
+            );
 
-            // Get asset from source branch
-            if let Ok(Some(asset)) = store
-                .get_asset(
-                    tenant_id,
-                    catalog_name,
-                    Some(from_branch.to_string()),
-                    namespace_parts.clone(),
-                    table_name.clone(),
+            if let Err(e) = store.create_branch(tenant_id, catalog_name, branch).await {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to create branch: {e}"),
                 )
+                    .into_response();
+            }
+
+            match store
+                .copy_assets_bulk(tenant_id, catalog_name, from_branch, &payload.name, None)
                 .await
             {
-                // Create asset in new branch with NEW ID to avoid unique constraint violation
-                let mut new_asset = asset.clone();
-                new_asset.id = uuid::Uuid::new_v4();
-                if let Ok(_) = store
-                    .create_asset(
-                        tenant_id,
-                        catalog_name,
-                        Some(payload.name.clone()),
-                        namespace_parts,
-                        new_asset,
+                Ok(count) => tracing::info!(
+                    branch = %payload.name,
+                    assets = count,
+                    "copied assets into the new branch"
+                ),
+                Err(e) => {
+                    // Previously logged and ignored. The branch exists and is
+                    // incomplete; the caller has to know.
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!(
+                            "Branch {:?} was created but copying its assets failed: {e}. \
+                             The branch is incomplete; delete it and retry.",
+                            payload.name
+                        ),
                     )
-                    .await
-                {
-                    // branch_assets.push(asset_name.clone()); // Unnecessary as create_asset updates branch
+                        .into_response();
                 }
             }
         }
-    } else {
-        tracing::info!("No explicit assets. Auto-propagating from {}", from_branch);
-
-        // Use optimized bulk copy
-        // Note: This works because create_branch (above) initialized the branch, and copy_assets_bulk appends to it (or updates it)
-        match store
-            .copy_assets_bulk(tenant_id, catalog_name, from_branch, &payload.name, None)
-            .await
-        {
-            Ok(count) => tracing::info!(
-                "Bulk copied {} assets to new branch {}",
-                count,
-                payload.name
-            ),
-            Err(e) => tracing::error!("Failed to bulk copy assets: {}", e),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create branch: {e}"),
+            )
+                .into_response();
         }
     }
 
@@ -301,6 +313,99 @@ pub async fn get_branch(
         Ok(Some(branch)) => (StatusCode::OK, Json(BranchResponse::from(branch))).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Branch not found").into_response(),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    }
+}
+
+/// Delete a branch.
+///
+/// B33: the UI has had a "delete branch" control calling
+/// `DELETE /api/v1/branches/{catalog}/{name}` since before this audit, but the
+/// router only ever registered `GET` on `/api/v1/branches/:name` - so branch
+/// deletion from the UI always 404'd. The store has supported it all along; the
+/// route simply did not exist. Added here with the catalog as a query parameter,
+/// matching `get_branch` rather than inventing a third path shape.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/branches/{name}",
+    tag = "Branches",
+    params(
+        ("name" = String, Path, description = "Branch name"),
+        ("catalog" = String, Query, description = "Catalog the branch belongs to")
+    ),
+    responses(
+        (status = 204, description = "Branch deleted"),
+        (status = 400, description = "The main branch cannot be deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Branch or catalog not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_branch(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path(name): Path<String>,
+    Query(params): Query<ListBranchParams>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = &params.catalog;
+
+    // Deleting `main` would strand every asset on it with no branch to reach
+    // them through.
+    if name == "main" {
+        return (StatusCode::BAD_REQUEST, "The main branch cannot be deleted").into_response();
+    }
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_branch: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    let scope = PermissionScope::Catalog {
+        catalog_id: catalog.id,
+    };
+    match crate::authz::check_permission(&store, &session, &Action::Delete, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "delete_branch: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
+
+    match store
+        .delete_branch(tenant_id, catalog_name, name.clone())
+        .await
+    {
+        Ok(_) => {
+            if let Err(e) = store
+                .log_audit_event(
+                    tenant_id,
+                    pangolin_core::audit::AuditLogEntry::success(
+                        tenant_id,
+                        Some(session.user_id),
+                        session.username.clone(),
+                        pangolin_core::audit::AuditAction::DeleteBranch,
+                        pangolin_core::audit::ResourceType::Branch,
+                        None,
+                        format!("{}/{}", catalog_name, name),
+                    ),
+                )
+                .await
+            {
+                tracing::error!(error = %e, "failed to write the branch-delete audit record");
+            }
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) => {
+            tracing::debug!(error = %e, "delete_branch: branch not deleted");
+            (StatusCode::NOT_FOUND, "Branch not found").into_response()
+        }
     }
 }
 
@@ -524,6 +629,7 @@ pub async fn list_commits(
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CreateTagRequest {
     name: String,
     catalog: Option<String>,
@@ -659,7 +765,7 @@ pub async fn delete_tag(
 pub async fn rebase_branch(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
-    Extension(_session): Extension<UserSession>,
+    Extension(session): Extension<UserSession>,
     Path(branch_name): Path<String>,
     Json(payload): Json<CreateBranchRequest>, // We need catalog_name from body
 ) -> impl IntoResponse {
@@ -669,11 +775,32 @@ pub async fn rebase_branch(
     // Source: main
     // Target: branch_name
 
-    // Check permissions
-    // TODO: Granular permissions? For now assume Write on Catalog
-
     // Catalog is now required
     let catalog_name = &payload.catalog;
+
+    // The `// TODO: Granular permissions? For now assume Write on Catalog` that
+    // stood here *was* the authorization: any tenant member could rebase any
+    // branch, which rewrites that branch's contents. Same class as B0c-B0f.
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "rebase_branch: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    let scope = PermissionScope::Catalog {
+        catalog_id: catalog.id,
+    };
+    match crate::authz::check_permission(&store, &session, &Action::Write, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "rebase_branch: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
 
     match store
         .merge_branch(tenant_id, catalog_name, "main".to_string(), branch_name)
@@ -690,6 +817,7 @@ pub async fn rebase_branch(
 
 // Catalog Management
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateCatalogRequest {
     name: String,
     catalog_type: Option<pangolin_core::model::CatalogType>,
@@ -700,6 +828,7 @@ pub struct CreateCatalogRequest {
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateCatalogRequest {
     warehouse_name: Option<String>,
     storage_location: Option<String>,
@@ -751,7 +880,16 @@ pub async fn list_catalogs(
     let tenant_id = tenant.0;
     tracing::info!("list_catalogs called with tenant_id: {}", tenant_id);
 
-    match store.list_catalogs(tenant_id, Some(pagination)).await {
+    // B42: the store used to paginate first and `filter_catalogs` removed the
+    // unauthorized rows afterwards, so a `TenantUser` got variable-size pages -
+    // including *empty pages while more authorized data existed*. Any client
+    // that stops on an empty page (the normal idiom) silently missed data.
+    //
+    // Filtering has to happen before slicing. The permitted set is not
+    // expressible as a store predicate today, so the rows are fetched unpaged
+    // and the page is cut after filtering; the page window is applied below.
+    let requested = pagination;
+    match store.list_catalogs(tenant_id, None).await {
         Ok(catalogs) => {
             // Use authz_utils for consistent permission filtering
             let permissions = if matches!(session.role, UserRole::TenantUser) {
@@ -769,8 +907,12 @@ pub async fn list_catalogs(
                 Vec::new() // Root/TenantAdmin bypass filtering
             };
 
-            let filtered_catalogs =
-                crate::authz_utils::filter_catalogs(catalogs, &permissions, session.role.clone());
+            let filtered_catalogs = crate::authz_utils::filter_catalogs(
+                tenant_id,
+                catalogs,
+                &permissions,
+                session.role.clone(),
+            );
 
             tracing::info!(
                 "list_catalogs returning {} catalogs for user {}",
@@ -778,8 +920,16 @@ pub async fn list_catalogs(
                 session.user_id
             );
 
-            let resp: Vec<CatalogResponse> =
-                filtered_catalogs.into_iter().map(|c| c.into()).collect();
+            // Now slice the *authorized* set, so a page is empty only when the
+            // caller has actually reached the end.
+            let offset = requested.offset.unwrap_or(0);
+            let limit = requested.limit.unwrap_or(usize::MAX);
+            let resp: Vec<CatalogResponse> = filtered_catalogs
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .map(|c| c.into())
+                .collect();
             (StatusCode::OK, Json(resp)).into_response()
         }
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),

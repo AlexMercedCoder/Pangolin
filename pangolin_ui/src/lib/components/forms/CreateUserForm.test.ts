@@ -74,7 +74,7 @@ describe('CreateUserForm', () => {
         // Note: Select component uses native select, so fireEvent.change should work
         // However, the label text might be tricky if it has *
         const roleSelect = screen.getByLabelText(/Role/i);
-        await fireEvent.change(roleSelect, { target: { value: 'TenantUser' } });
+        await fireEvent.change(roleSelect, { target: { value: 'tenant-user' } });
 
 		// Submit
 		const submitButton = screen.getByRole('button', { name: /Create User/i });
@@ -87,7 +87,7 @@ describe('CreateUserForm', () => {
 				username: 'testuser',
 				email: 'test@example.com',
 				password: 'Password123!',
-				role: 'TenantUser',
+				role: 'tenant-user',
 				tenant_id: '00000000-0000-0000-0000-000000000000' // The critical check
 			});
 		});

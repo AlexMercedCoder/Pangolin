@@ -1,6 +1,6 @@
 use pangolin_api::auth_middleware::{create_session, generate_token};
 use pangolin_api::config::{AppConfig, LogFormat};
-use pangolin_api::{app_with_config, health};
+use pangolin_api::{app_with_config, cleanup_job, health};
 use pangolin_core::model::Tenant;
 use pangolin_core::user::{User, UserRole};
 use pangolin_store::{CatalogStore, MemoryStore, MongoStore, PostgresStore, SqliteStore};
@@ -47,6 +47,17 @@ async fn main() {
              administrator. For evaluation only."
         );
     }
+    // C-11. Said out loud rather than left to the documentation: warehouse
+    // credentials are only encrypted at rest when a key is configured, and a
+    // silent no-op is precisely the failure mode this audit keeps finding.
+    if !pangolin_store::secrets::is_enabled() {
+        tracing::warn!(
+            "PANGOLIN_ENCRYPTION_KEY is not set, so warehouse cloud credentials are stored in \
+             the catalog database in plaintext. Anything that can read one row - a backup, a \
+             replica, a snapshot - holds every tenant's cloud keys. Generate a key with \
+             `openssl rand -base64 32`; see docs/operations/encryption.md for the migration."
+        );
+    }
 
     let store = match build_store().await {
         Ok(s) => s,
@@ -91,12 +102,24 @@ async fn main() {
 
     let shutdown_grace = config.shutdown_grace;
     let store_for_health: Arc<dyn CatalogStore + Send + Sync> = store.clone();
+    let store_for_cleanup: Arc<dyn CatalogStore + Send + Sync> = store.clone();
     let app = app_with_config(store, config.clone());
 
     if config.install().is_err() {
         tracing::warn!("configuration was already installed; keeping the existing one");
     }
     health::set_store(store_for_health);
+
+    // Start the revocation sweep. It was dead code: `start_token_cleanup_job`
+    // existed, the module was declared, and nothing called it - so
+    // `revoked_tokens` grew for the life of the deployment, and the revocation
+    // check reads that table on every authenticated request.
+    //
+    // Every replica runs it. The sweep is a `DELETE ... WHERE expires_at < now`
+    // and therefore idempotent, so concurrent runs are correct; the job
+    // staggers its own start so replicas from one deploy do not sweep in
+    // lockstep forever.
+    tokio::spawn(cleanup_job::start_token_cleanup_job(store_for_cleanup));
 
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => l,
@@ -112,13 +135,35 @@ async fn main() {
     // Graceful shutdown. Without this, a Kubernetes rolling update severs every
     // in-flight request; a SIGTERM between writing a table's metadata file and
     // the compare-and-swap that publishes it leaks an orphaned metadata file.
-    let serve = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal(shutdown_grace));
+    // `into_make_service_with_connect_info` rather than the plain service: the
+    // authentication throttle keys on the peer address, and without this the
+    // `ConnectInfo` extractor finds nothing and every attempt shares one bucket.
+    let serve = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal(shutdown_grace));
 
-    if let Err(e) = serve.await {
-        tracing::error!("server error: {e}");
-        std::process::exit(1);
+    // B16n: `shutdown_grace` used to be logged and nothing else. There was no
+    // bound on the drain at all, so `with_graceful_shutdown` waited for
+    // in-flight connections *indefinitely* - one hung upstream call blocked
+    // SIGTERM past the k8s termination grace period and into a SIGKILL, which
+    // is exactly the mid-commit kill this whole path exists to avoid.
+    //
+    // The first attempt at that bound was `tokio::time::timeout(shutdown_grace,
+    // serve)`, which is wrong in the worst possible way: `serve` is the whole
+    // server, not the drain, so it bounded the *lifetime of the process*. The
+    // server exited cleanly `shutdown_grace` seconds after startup - 25 by
+    // default - having received no signal at all. Every container would have
+    // crash-looped. The deadline has to start when the signal arrives, so it
+    // lives in `shutdown_signal` now, armed only once a signal is seen.
+    match serve.await {
+        Ok(()) => tracing::info!("shutdown complete"),
+        Err(e) => {
+            tracing::error!("server error: {e}");
+            std::process::exit(1);
+        }
     }
-    tracing::info!("shutdown complete");
 }
 
 /// Probe this instance's readiness endpoint. Returns a process exit code.
@@ -367,4 +412,30 @@ async fn shutdown_signal(grace: std::time::Duration) {
     // while in-flight requests finish.
     health::mark_draining();
     tracing::info!(grace_secs = grace.as_secs(), "draining in-flight requests");
+
+    // Give the load balancer a moment to observe the failing readiness probe
+    // before the listener stops accepting. Without this pause the LB can still
+    // be routing new connections at the instant we stop accepting them, which
+    // shows up to clients as connection resets during every rolling update.
+    // Capped so it can never consume the whole grace budget.
+    let deregistration_pause = std::cmp::min(grace / 4, std::time::Duration::from_secs(5));
+    tokio::time::sleep(deregistration_pause).await;
+
+    // Arm the hard deadline *here*, once a signal has actually been seen,
+    // rather than around the whole server. `with_graceful_shutdown` waits for
+    // in-flight connections with no bound of its own, so a single hung request
+    // would otherwise hold the process past Kubernetes' termination grace
+    // period and earn a SIGKILL mid-commit - the exact failure this path
+    // exists to prevent.
+    //
+    // Detached so returning from here still lets axum begin its drain; the
+    // task only wins if the drain overruns.
+    tokio::spawn(async move {
+        tokio::time::sleep(grace).await;
+        tracing::warn!(
+            grace_secs = grace.as_secs(),
+            "drain did not finish within the shutdown grace period; exiting anyway"
+        );
+        std::process::exit(0);
+    });
 }

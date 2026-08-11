@@ -1,4 +1,5 @@
 use super::PostgresStore;
+use crate::secrets;
 use anyhow::Result;
 use pangolin_core::model::Warehouse;
 use sqlx::Row;
@@ -6,7 +7,11 @@ use uuid::Uuid;
 
 impl PostgresStore {
     // Warehouse Operations
-    pub async fn create_warehouse(&self, tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
+    pub async fn create_warehouse(&self, tenant_id: Uuid, mut warehouse: Warehouse) -> Result<()> {
+        // C-11: seal the credentials before they reach the database. Anything
+        // that can read this table - a backup, a replica, a stray SELECT - sees
+        // ciphertext rather than every tenant's cloud keys.
+        secrets::seal(&mut warehouse.storage_config)?;
         sqlx::query("INSERT INTO warehouses (id, tenant_id, name, use_sts, storage_config, vending_strategy) VALUES ($1, $2, $3, $4, $5, $6)")
             .bind(warehouse.id)
             .bind(tenant_id)
@@ -32,8 +37,12 @@ impl PostgresStore {
                 name: row.get("name"),
                 tenant_id: row.get("tenant_id"),
                 use_sts: row.try_get("use_sts").unwrap_or(false),
-                storage_config: serde_json::from_value(row.get("storage_config"))
-                    .unwrap_or_default(),
+                storage_config: {
+                    let mut config: std::collections::HashMap<String, String> =
+                        serde_json::from_value(row.get("storage_config")).unwrap_or_default();
+                    secrets::open(&mut config)?;
+                    config
+                },
                 vending_strategy: serde_json::from_value(row.get("vending_strategy")).ok(),
             }))
         } else {
@@ -53,7 +62,7 @@ impl PostgresStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
+        let rows = sqlx::query("SELECT id, name, tenant_id, use_sts, storage_config, vending_strategy FROM warehouses WHERE tenant_id = $1 ORDER BY name LIMIT $2 OFFSET $3")
             .bind(tenant_id)
             .bind(limit)
             .bind(offset)
@@ -67,8 +76,12 @@ impl PostgresStore {
                 name: row.get("name"),
                 tenant_id: row.get("tenant_id"),
                 use_sts: row.try_get("use_sts").unwrap_or(false),
-                storage_config: serde_json::from_value(row.get("storage_config"))
-                    .unwrap_or_default(),
+                storage_config: {
+                    let mut config: std::collections::HashMap<String, String> =
+                        serde_json::from_value(row.get("storage_config")).unwrap_or_default();
+                    secrets::open(&mut config)?;
+                    config
+                },
                 vending_strategy: serde_json::from_value(row.get("vending_strategy")).ok(),
             });
         }
@@ -81,6 +94,17 @@ impl PostgresStore {
         name: String,
         updates: pangolin_core::model::WarehouseUpdate,
     ) -> Result<Warehouse> {
+        // Seal before binding, for the same reason as `create_warehouse`. An
+        // update that rotates a credential must not write the new one in clear.
+        let sealed_update = match &updates.storage_config {
+            Some(config) => {
+                let mut sealed = config.clone();
+                secrets::seal(&mut sealed)?;
+                Some(sealed)
+            }
+            None => None,
+        };
+
         let mut query = String::from("UPDATE warehouses SET ");
         let mut set_clauses = Vec::new();
         let mut bind_count = 1;
@@ -112,7 +136,7 @@ impl PostgresStore {
         if let Some(use_sts) = &updates.use_sts {
             q = q.bind(use_sts);
         }
-        if let Some(storage_config) = &updates.storage_config {
+        if let Some(storage_config) = &sealed_update {
             q = q.bind(serde_json::to_value(storage_config)?);
         }
         if let Some(vending_strategy) = &updates.vending_strategy {
@@ -127,7 +151,14 @@ impl PostgresStore {
             name: row.get("name"),
             tenant_id: row.get("tenant_id"),
             use_sts: row.try_get("use_sts").unwrap_or(false),
-            storage_config: serde_json::from_value(row.get("storage_config")).unwrap_or_default(),
+            // The RETURNING row carries what was just written, which is
+            // sealed; the caller expects a usable warehouse.
+            storage_config: {
+                let mut config: std::collections::HashMap<String, String> =
+                    serde_json::from_value(row.get("storage_config")).unwrap_or_default();
+                secrets::open(&mut config)?;
+                config
+            },
             vending_strategy: serde_json::from_value(row.get("vending_strategy")).ok(),
         })
     }

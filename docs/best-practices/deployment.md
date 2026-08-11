@@ -101,7 +101,7 @@ export PANGOLIN_JWT_SECRET=$(aws secretsmanager get-secret-value \
 
 **Production Dockerfile**
 ```dockerfile
-FROM rust:1.92 as builder
+FROM rust:1.94 as builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release --bin pangolin_api

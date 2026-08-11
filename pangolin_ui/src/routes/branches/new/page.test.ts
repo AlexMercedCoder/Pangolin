@@ -16,7 +16,7 @@ describe('Create Branch Page', () => {
 	];
 
 	beforeEach(() => {
-		vi.resetAllMocks();
+		vi.clearAllMocks();
 		vi.mocked(catalogsApi.list).mockResolvedValue(mockCatalogs);
 		vi.mocked(branchesApi.create).mockResolvedValue({
 			id: 'br-new',
@@ -104,15 +104,19 @@ describe('Create Branch Page', () => {
 		const nameInput = screen.getByLabelText(/Branch Name/i);
 		await fireEvent.input(nameInput, { target: { value: 'prod-branch' } });
 
+		// `ingest`, not `production`: the API knows exactly two branch types and
+		// `production` is not one of them, so this used to select a value the
+		// form had no option for - leaving it on its default and asserting
+		// against a type the server would never have returned.
 		const typeSelect = screen.getByDisplayValue('Experimental');
-		await fireEvent.change(typeSelect, { target: { value: 'production' } });
+		await fireEvent.change(typeSelect, { target: { value: 'ingest' } });
 
 		const submitButton = screen.getByRole('button', { name: /Create Branch/i });
 		await fireEvent.click(submitButton);
 
 		await waitFor(() => {
 			expect(branchesApi.create).toHaveBeenCalledWith(expect.objectContaining({
-				branch_type: 'production'
+				branch_type: 'ingest'
 			}));
 		});
 	});

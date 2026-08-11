@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 /// Request to create a new user
 #[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateUserRequest {
     pub username: String,
     pub email: String,
@@ -24,6 +25,7 @@ pub struct CreateUserRequest {
 /// Request to update a user
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct UpdateUserRequest {
     pub email: Option<String>,
     pub password: Option<String>,
@@ -33,6 +35,7 @@ pub struct UpdateUserRequest {
 /// User login request
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
@@ -439,6 +442,31 @@ pub async fn login(
     State(store): State<Arc<dyn CatalogStore + Send + Sync>>,
     Json(req): Json<LoginRequest>,
 ) -> Response {
+    // C-5, the per-account half of the throttle. The middleware bounds attempts
+    // per source address; this bounds them per account, which is the shape a
+    // credential-stuffing list has - many addresses, one target - and which a
+    // per-address limit cannot see.
+    //
+    // Checked before any password verification so a refused attempt costs a
+    // cache lookup rather than a bcrypt round.
+    let throttle_key = crate::rate_limit::account_key(&req.username, req.tenant_id);
+    let limiter = crate::rate_limit::auth_limiter();
+    if let Some(limiter) = &limiter {
+        if limiter.check(&throttle_key).await.is_err() {
+            tracing::warn!(
+                username = %req.username,
+                "login attempts throttled for an account"
+            );
+            crate::metrics::record_auth_throttled();
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                [("retry-after", "60")],
+                "too many authentication attempts; try again later",
+            )
+                .into_response();
+        }
+    }
+
     // 1. Check for Root User via Environment Variables (only if tenant_id is null)
     // This takes precedence over DB users to ensure Root is always accessible even if a tenant user shadows the name
     // Root basic credentials are only honoured when the operator has configured
@@ -497,6 +525,9 @@ pub async fn login(
                 expires_at: (chrono::Utc::now() + chrono::Duration::seconds(86400)).to_rfc3339(),
             };
 
+            if let Some(limiter) = &limiter {
+                limiter.clear(&throttle_key).await;
+            }
             return (StatusCode::OK, Json(response)).into_response();
         }
     }
@@ -589,6 +620,12 @@ pub async fn login(
         user: UserInfo::from(user),
         expires_at: (chrono::Utc::now() + chrono::Duration::seconds(86400)).to_rfc3339(),
     };
+
+    // The DB-user success path. Same reason as the root path above: a user who
+    // mistypes twice and then gets it right should not still be near the limit.
+    if let Some(limiter) = &limiter {
+        limiter.clear(&throttle_key).await;
+    }
 
     (StatusCode::OK, Json(response)).into_response()
 }

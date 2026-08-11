@@ -1,21 +1,17 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import { token } from '$lib/stores/auth';
+    import { apiClient } from '$lib/api/client';
     import { fade, scale } from 'svelte/transition';
 
-    let permissions: any[] = []; // This might need to be fetched per user or all if admin?
-    // API doesn't seem to have "List ALL permissions" endpoint in implementation plan
-    // GET /api/v1/permissions/user/{id} exists.
-    // If we want a global view, maybe we need to fetch all users and their permissions? Or just focus on "Grant" for now.
-    
-    // Let's implement a "User Permission Viewer" approach.
-    // Select User -> See/Edit Permissions.
-    
+    // A per-user permission viewer: select a user, see and edit their grants.
+    // `GET /api/v1/permissions?user=<uuid>` is the real endpoint for the list.
     let users: any[] = [];
     let selectedUser: any = null;
     let userPermissions: any[] = [];
     let loading = false;
     let showGrant = false;
+    // Errors used to go to `console.error` or a native alert(); surfaced now.
+    let grantError = '';
 
     // Grant State
     let newPerm = {
@@ -30,16 +26,25 @@
     const SCOPES = ['tenant', 'catalog', 'namespace', 'asset', 'tag'];
     const ACTIONS = ['read', 'write', 'delete', 'create', 'update', 'list', 'all', 'ingest-branching', 'experimental-branching', 'manage-discovery'];
 
+    // B32: every call on this page was a raw `fetch('/api/v1/...')`, which only
+    // resolves under the dev proxy - with adapter-node they hit the SvelteKit
+    // server, which has no /api/v1 routes, and 404 in production. They also
+    // skipped X-Pangolin-Tenant, so a root user acted on the wrong tenant.
     async function fetchUsers() {
-        const res = await fetch('/api/v1/users', { headers: { 'Authorization': `Bearer ${$token}` } });
-        if (res.ok) users = await res.json();
+        const res = await apiClient.get<any[]>('/api/v1/users');
+        if (!res.error) users = res.data ?? [];
     }
 
     async function fetchPermissions(userId: string) {
         loading = true;
         try {
-            const res = await fetch(`/api/v1/users/${userId}/permissions`, { headers: { 'Authorization': `Bearer ${$token}` } });
-            if (res.ok) userPermissions = await res.json();
+            // B33: this called `/api/v1/users/{id}/permissions`, which the
+            // router never registered - so the permissions page showed an empty
+            // list forever. The real endpoint is a filter on the collection.
+            const res = await apiClient.get<any[]>(
+                `/api/v1/permissions?user=${encodeURIComponent(userId)}`
+            );
+            userPermissions = res.error ? [] : (res.data ?? []);
         } finally { loading = false; }
     }
 
@@ -64,38 +69,26 @@
             actions: newPerm.actions
         };
 
-        try {
-            const res = await fetch('/api/v1/permissions', {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${$token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (res.ok) {
-                showGrant = false;
-                fetchPermissions(selectedUser.id);
-                // Reset form
-                newPerm.actions = [];
-            } else {
-                alert('Failed to grant permission');
-            }
-        } catch(e) { console.error(e); }
+        const res = await apiClient.post('/api/v1/permissions', payload);
+        if (res.error) {
+            grantError = res.error.message || 'Failed to grant permission';
+            return;
+        }
+        grantError = '';
+        showGrant = false;
+        fetchPermissions(selectedUser.id);
+        // Reset form
+        newPerm.actions = [];
     }
 
     async function revokePermission(permId: string) {
         if (!confirm('Revoke this permission?')) return;
-        try {
-            const res = await fetch(`/api/v1/permissions/${permId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${$token}` }
-            });
-            if (res.ok) {
-                fetchPermissions(selectedUser.id);
-            }
-        } catch(e) { console.error(e); }
+        const res = await apiClient.delete(`/api/v1/permissions/${permId}`);
+        if (!res.error) {
+            fetchPermissions(selectedUser.id);
+        } else {
+            grantError = res.error.message || 'Failed to revoke permission';
+        }
     }
 
     function toggleAction(action: string) {
@@ -181,7 +174,11 @@
     <div class="modal-backdrop" transition:fade on:click={() => showGrant = false}>
         <div class="modal" on:click|stopPropagation transition:scale>
             <h2>Grant Permission</h2>
-            
+
+            {#if grantError}
+                <p class="form-error" role="alert">{grantError}</p>
+            {/if}
+
              <div class="builder">
                 <div class="form-group">
                     <label>Scope Type</label>
@@ -244,6 +241,16 @@
 {/if}
 
 <style>
+    .form-error {
+        color: #b00020;
+        background: rgba(176, 0, 32, 0.08);
+        border: 1px solid rgba(176, 0, 32, 0.3);
+        border-radius: 4px;
+        padding: 0.5rem 0.75rem;
+        margin: 0 0 1rem;
+        font-size: 0.9rem;
+    }
+
     .page-container {
         display: grid;
         grid-template-columns: 250px 1fr;

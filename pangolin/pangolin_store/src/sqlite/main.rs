@@ -9,12 +9,15 @@ use pangolin_core::model::{SyncStats, SystemSettings};
 use pangolin_core::permission::{Permission, Role, UserRole as UserRoleAssignment};
 use pangolin_core::token::TokenInfo;
 use pangolin_core::user::{OAuthProvider, User, UserRole};
-use sqlx::sqlite::{SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
 use sqlx::Row;
 use uuid::Uuid;
 
 /// Version of `sql/sqlite_schema.sql` recorded after a successful migration.
-pub const SQLITE_SCHEMA_VERSION: i64 = 1;
+/// Bumped to 2: the `audit_logs` table was recreated with the columns the code
+/// actually writes. Databases created before this carry the old (actor,
+/// resource, details) shape, on which every audit write failed.
+pub const SQLITE_SCHEMA_VERSION: i64 = 2;
 
 #[derive(Clone)]
 pub struct SqliteStore {
@@ -49,14 +52,20 @@ impl SqliteStore {
             .and_then(|v| v.parse::<u32>().ok())
             .unwrap_or(5);
 
+        // B18: `PRAGMA foreign_keys` is *per connection*. Running it once via
+        // `execute(&pool)` configured exactly one arbitrary connection out of
+        // the pool, so `ON DELETE CASCADE` fired or did not fire depending on
+        // which connection happened to serve a request - nondeterministically,
+        // and differently between runs. Setting it through the connect options
+        // means every connection in the pool is configured, including ones
+        // created later to grow the pool.
+        let connect_options = database_url
+            .parse::<SqliteConnectOptions>()?
+            .foreign_keys(true);
+
         let pool = SqlitePoolOptions::new()
             .max_connections(max_connections)
-            .connect(database_url)
-            .await?;
-
-        // Enable foreign keys
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&pool)
+            .connect_with(connect_options)
             .await?;
 
         Ok(Self {
@@ -84,6 +93,13 @@ impl SqliteStore {
         .execute(&self.pool)
         .await?;
 
+        // Structural changes have to run *before* the schema file, because
+        // `CREATE TABLE IF NOT EXISTS` cannot alter a table that already exists
+        // - it silently does nothing, which is precisely how bumping
+        // SQLITE_SCHEMA_VERSION on its own left every upgraded database still
+        // broken while fresh ones looked fine.
+        self.migrate_audit_logs_to_v2().await?;
+
         let schema = include_str!("../../sql/sqlite_schema.sql");
         self.apply_schema(schema).await?;
 
@@ -103,6 +119,88 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Replace a pre-v2 `audit_logs` table with the current shape.
+    ///
+    /// The table was declared with the original `(actor, resource, details)`
+    /// columns while `sqlite/audit_logs.rs` inserted the full `AuditLogEntry`.
+    /// The two have been divergent since the SQLite backend was split into
+    /// modules, so on SQLite *every* audit write has failed with "table
+    /// audit_logs has no column named user_id" and the backend has never
+    /// recorded an audit trail.
+    ///
+    /// Keyed off table introspection rather than the recorded schema version:
+    /// some databases predate the version table entirely, and a version number
+    /// only says what a previous run *claimed*. Asking the table what columns it
+    /// has is the fact. That also makes this safe to run repeatedly.
+    ///
+    /// Any rows present are moved to `audit_logs_pre_v2` rather than discarded
+    /// or force-fitted. The old shape has no `resource_type`, which is
+    /// `NOT NULL` and parses as an enum, so there is no honest value to invent
+    /// for it - and a fabricated entry in an audit log is worse than an absent
+    /// one. In practice the table is empty, because nothing could ever write
+    /// to it.
+    async fn migrate_audit_logs_to_v2(&self) -> Result<()> {
+        let columns = self.table_columns("audit_logs").await?;
+
+        // No table yet: a fresh database. The schema file creates it.
+        if columns.is_empty() {
+            return Ok(());
+        }
+
+        // Already current.
+        if columns.iter().any(|c| c == "user_id") {
+            return Ok(());
+        }
+
+        let row_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_logs")
+            .fetch_one(&self.pool)
+            .await
+            .unwrap_or(0);
+
+        tracing::warn!(
+            rows = row_count,
+            "migrating the pre-v2 sqlite audit_logs table; the old table is kept \
+             as audit_logs_pre_v2"
+        );
+
+        let mut tx = self.pool.begin().await?;
+
+        // A stale backup from an interrupted previous attempt would make the
+        // rename fail, so clear the way first.
+        sqlx::query("DROP TABLE IF EXISTS audit_logs_pre_v2")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("ALTER TABLE audit_logs RENAME TO audit_logs_pre_v2")
+            .execute(&mut *tx)
+            .await?;
+
+        // The index followed the table through the rename and would collide
+        // with the one the schema file recreates.
+        sqlx::query("DROP INDEX IF EXISTS idx_audit_logs_tenant_ts")
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Column names of `table`, or an empty vec if it does not exist.
+    ///
+    /// Exposed so the migration tests can assert on the *actual* shape of a
+    /// database rather than on what the recorded version claims - the two
+    /// disagreeing is exactly the bug the v2 migration exists to fix.
+    pub async fn table_columns(&self, table: &str) -> Result<Vec<String>> {
+        // `table` is never caller-supplied in a production path, and PRAGMA does
+        // not accept a bind parameter for a table name.
+        let rows = sqlx::query(&format!("PRAGMA table_info({table})"))
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| r.get::<String, _>("name"))
+            .collect())
+    }
+
     /// The schema version currently recorded in the database, if any.
     pub async fn schema_version(&self) -> Result<Option<i64>> {
         let row = sqlx::query("SELECT MAX(version) as v FROM _pangolin_schema_version")
@@ -114,9 +212,16 @@ impl SqliteStore {
     }
 
     pub async fn apply_schema(&self, schema_sql: &str) -> Result<()> {
+        // Schema creation runs on a single dedicated connection so the
+        // foreign-key toggle below is scoped to *this* work rather than
+        // leaking onto whichever pooled connection happened to serve it
+        // (B18) - the old code could leave `OFF` stuck on a connection the
+        // matching `ON` never touched.
+        let mut conn = self.pool.acquire().await?;
+
         // Disable foreign keys during schema creation
         sqlx::query("PRAGMA foreign_keys = OFF")
-            .execute(&self.pool)
+            .execute(&mut *conn)
             .await?;
 
         // Parse statements
@@ -151,12 +256,13 @@ impl SqliteStore {
         }
 
         for statement in statements {
-            sqlx::query(&statement).execute(&self.pool).await?;
+            sqlx::query(&statement).execute(&mut *conn).await?;
         }
 
-        // Re-enable foreign keys
+        // Re-enable foreign keys on this connection before returning it to the
+        // pool.
         sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&self.pool)
+            .execute(&mut *conn)
             .await?;
         Ok(())
     }
@@ -327,6 +433,17 @@ impl CatalogStore for SqliteStore {
             .await
     }
 
+    async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        self.replace_namespace_properties(tenant_id, catalog_name, namespace, properties)
+            .await
+    }
+
     async fn create_asset(
         &self,
         tenant_id: Uuid,
@@ -398,6 +515,17 @@ impl CatalogStore for SqliteStore {
             dest_name,
         )
         .await
+    }
+    async fn create_branch_with_assets(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: pangolin_core::model::Branch,
+        src_branch: &str,
+        assets: Option<Vec<String>>,
+    ) -> Result<usize> {
+        self.create_branch_with_assets(tenant_id, catalog_name, branch, src_branch, assets)
+            .await
     }
     async fn copy_assets_bulk(
         &self,
@@ -532,6 +660,14 @@ impl CatalogStore for SqliteStore {
     }
     async fn write_file(&self, path: &str, data: Vec<u8>) -> Result<()> {
         self.write_file(path, data).await
+    }
+    async fn delete_file(&self, path: &str) -> Result<()> {
+        self.metadata_cache.invalidate(path).await;
+        let storage_config = self
+            .get_warehouse_for_location(path)
+            .await?
+            .map(|w| w.storage_config);
+        crate::file_delete::delete_location(storage_config.as_ref(), path).await
     }
 
     // Phase 3 & 4 (Access Control, Audit, Settings, etc)

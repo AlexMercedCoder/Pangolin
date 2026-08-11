@@ -18,6 +18,7 @@ pub struct GetCredentialsParams {
 }
 
 #[derive(Serialize, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateWarehouseRequest {
     pub name: String,
     pub use_sts: Option<bool>, // If true, use STS credential vending; if false, pass through static creds
@@ -26,6 +27,7 @@ pub struct CreateWarehouseRequest {
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateWarehouseRequest {
     name: Option<String>,
     use_sts: Option<bool>,

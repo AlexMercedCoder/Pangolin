@@ -1,11 +1,23 @@
 version: '3.8'
 
+# An explicit project name, separate from every other compose file here.
+#
+# Compose derives the project name from the directory, so this file,
+# docker-compose.yml and docker-compose.db-test.yml all shared the project
+# `pangolin` - and `up`, `down -v` and orphan cleanup in one would stop and
+# remove containers belonging to another. Verifying a release while a
+# development database stack is running is a completely ordinary thing to do,
+# and it made the API container exit mid-verification for reasons that had
+# nothing to do with the release.
+name: pangolin-release
+
 services:
   minio:
     image: minio/minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+    # No host port publication. The API and the smoke test both reach MinIO
+    # over the compose network, so claiming 9000/9001 on the host bought
+    # nothing and made this file unrunnable whenever a development stack was
+    # already using them - which is exactly when someone verifies a release.
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -34,18 +46,45 @@ services:
       "
 
   pangolin-api:
-    image: alexmerced/pangolin-api:0.2.0
+    # B10: this pinned 0.2.0 - four releases behind the workspace - so the
+    # "release verification" compose file verified an image nobody ships.
+    # Parameterised so a release can be tested by setting PANGOLIN_VERSION,
+    # with the current version as the default.
+    image: alexmerced/pangolin-api:${PANGOLIN_VERSION:-0.7.0}
+    # Published so a human can poke at the server under test. Override
+    # RELEASE_API_PORT if 8080 is taken.
     ports:
-      - "8080:8080"
+      - "${RELEASE_API_PORT:-8080}:8080"
     environment:
       - RUST_LOG=info
-      - PANGOLIN_STORE_TYPE=memory
+      # B9: the server reads PANGOLIN_STORAGE_TYPE; PANGOLIN_STORE_TYPE was
+      # silently ignored.
+      - PANGOLIN_STORAGE_TYPE=memory
+      # B8: the server refuses to start without a JWT secret.
+      # RELEASE_* rather than PANGOLIN_*, deliberately.
+      #
+      # Docker Compose auto-loads `.env` from the project directory, so a
+      # developer's local PANGOLIN_ROOT_USER / PANGOLIN_ROOT_PASSWORD were
+      # silently feeding this file. In this working copy that meant the server
+      # refused to start at all - `.env` carries a placeholder password, and the
+      # config guard rejects it - so the release verification could not run,
+      # for a reason having nothing to do with the artifact being verified.
+      #
+      # A verification harness that inherits ambient local config is not
+      # reproducible. These names cannot collide with a real deployment's.
+      - PANGOLIN_JWT_SECRET=${RELEASE_JWT_SECRET:?set it first, e.g. export RELEASE_JWT_SECRET=$(openssl rand -base64 48)}
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_REGION=us-east-1
       - AWS_ENDPOINT_URL=http://minio:9000
       - AWS_ALLOW_HTTP=true
       - PANGOLIN_NO_AUTH=${PANGOLIN_NO_AUTH:-false}
+      # Root basic auth, so the smoke test can exercise a real authenticated
+      # write against the released image. `PANGOLIN_NO_AUTH` cannot be used for
+      # this: the server refuses to start with it on a non-loopback bind, which
+      # is every container, so that branch was unreachable here.
+      - PANGOLIN_ROOT_USER=${RELEASE_ROOT_USER:-releaseroot}
+      - PANGOLIN_ROOT_PASSWORD=${RELEASE_ROOT_PASSWORD:?set it first, e.g. export RELEASE_ROOT_PASSWORD=$(openssl rand -base64 24)}
     depends_on:
       minio:
         condition: service_healthy
@@ -62,10 +101,23 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_REGION=us-east-1
-      - TEST_MODE=${TEST_MODE:-no-auth}
+      # Mirrors the server's own setting rather than a separate TEST_MODE that
+      # nothing read, so the smoke test knows whether the authenticated surface
+      # is reachable.
+      - PANGOLIN_NO_AUTH=${PANGOLIN_NO_AUTH:-false}
+      - PANGOLIN_ROOT_USER=${RELEASE_ROOT_USER:-releaseroot}
+      - PANGOLIN_ROOT_PASSWORD=${RELEASE_ROOT_PASSWORD}
     depends_on:
       - pangolin-api
-    command: sh -c "pip install requests pyiceberg pyarrow && python scripts/test_release_v0.2.0.py"
+    # B10 pointed this at scripts/test_release_v0.2.0.py, which does not exist,
+    # then at scripts/integration_test.py - which builds and starts its own
+    # server with `cargo run`, and so cannot run in a python:3.11-slim container
+    # with only ./scripts mounted. Either way the release was never verified.
+    #
+    # release_smoke_test.py talks to the already-running container over HTTP,
+    # which is both the only thing possible here and the more useful check: it
+    # exercises the published image rather than a rebuild of the source.
+    command: sh -c "pip install requests && python scripts/release_smoke_test.py"
 
 volumes:
   minio_data_release:

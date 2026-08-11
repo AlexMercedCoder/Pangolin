@@ -66,7 +66,6 @@ export const icebergApi = {
         
         // The backend defines /v1/:prefix/namespaces, so we append /namespaces
         const url = `${baseUrl}/namespaces${query}`;
-        console.log('iceberg.listNamespaces fetching:', url);
         const response = await apiClient.get<ListNamespacesResponse>(url);
         if (response.error) throw new Error(response.error.message);
         return response.data?.namespaces || [];

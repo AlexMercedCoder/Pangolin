@@ -43,30 +43,14 @@ impl MongoStore {
         let client = Client::with_options(client_options)?;
         let db = client.database(database_name);
 
-        // Ensure Indexes
-        let options = mongodb::options::IndexOptions::builder()
-            .background(true)
-            .build();
+        // Indexes. There used to be two here - commits(parent_id) and
+        // active_tokens(user_id) - created with their errors thrown away by
+        // `.ok()`, so everything else was a collection scan and a failure was
+        // invisible. `super::indexes` holds the full set, derived from the
+        // filters this backend actually issues, and reports what it could not
+        // create.
+        super::indexes::ensure_indexes(&db).await;
 
-        // commits(parent_id)
-        let commit_index = mongodb::IndexModel::builder()
-            .keys(doc! { "parent_id": 1 })
-            .options(options.clone())
-            .build();
-        db.collection::<Document>("commits")
-            .create_index(commit_index)
-            .await
-            .ok();
-
-        // active_tokens(user_id)
-        let token_index = mongodb::IndexModel::builder()
-            .keys(doc! { "user_id": 1 })
-            .options(options)
-            .build();
-        db.collection::<Document>("active_tokens")
-            .create_index(token_index)
-            .await
-            .ok();
         Ok(Self {
             client,
             db,
@@ -197,12 +181,32 @@ impl MongoStore {
             .get_asset(tenant_id, catalog_name, branch, namespace, table)
             .await?
         {
-            Ok(asset.properties.get("metadata_location").cloned())
+            // Found by running the parity suite against a live MongoDB: this
+            // read only `properties["metadata_location"]` and had no fallback to
+            // the asset's own `location`, which is what memory, SQLite and
+            // Postgres all fall back to. A table created with a location but no
+            // explicit metadata-location property therefore reported *no*
+            // metadata location on Mongo alone - so `load_table` could not find
+            // its metadata and every commit's compare-and-swap was working from
+            // a different notion of "current" than the read path.
+            Ok(current_metadata_location(&asset))
         } else {
             Ok(None)
         }
     }
 
+    /// Publish a new metadata location, but only if the current one still
+    /// matches `expected_location`.
+    ///
+    /// B5: `expected_location` was ignored (`_expected_location`) and the update
+    /// was an unconditional `$set`. Memory, Postgres and SQLite all enforce the
+    /// compare-and-swap; on Mongo two concurrent Iceberg commits both
+    /// "succeeded" and one snapshot was silently lost - the exact failure class
+    /// the 0.6.0 work fixed at the API layer, still wide open one layer down.
+    ///
+    /// Folding the expectation into the *filter* keeps this a single-document
+    /// atomic update, so it works on a standalone `mongod` with no multi-document
+    /// transaction required.
     pub async fn update_metadata_location(
         &self,
         tenant_id: Uuid,
@@ -210,10 +214,10 @@ impl MongoStore {
         branch: Option<String>,
         namespace: Vec<String>,
         table: String,
-        _expected_location: Option<String>,
+        expected_location: Option<String>,
         new_location: String,
     ) -> Result<()> {
-        let filter = doc! {
+        let mut filter = doc! {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
             "branch": branch.unwrap_or_else(|| "main".to_string()),
@@ -221,18 +225,104 @@ impl MongoStore {
             "name": table
         };
 
+        // The expectation has to be expressed against the *same* notion of
+        // "current location" that `get_metadata_location` returns - property
+        // first, then the asset's own `location`. Keeping it inside the filter
+        // rather than reading-then-comparing preserves the single-document
+        // atomicity that makes this a real CAS on a standalone mongod.
+        match &expected_location {
+            Some(expected) => {
+                filter.insert(
+                    "$or",
+                    vec![
+                        doc! { "properties.metadata_location": expected.clone() },
+                        doc! { "$and": vec![
+                            doc! { "properties.metadata_location": { "$exists": false } },
+                            doc! { "location": expected.clone() },
+                        ]},
+                    ],
+                );
+            }
+            // `None` means "there must not be one yet" - the create-path CAS.
+            None => {
+                filter.insert(
+                    "$and",
+                    vec![
+                        doc! { "properties.metadata_location": { "$exists": false } },
+                        doc! { "$or": vec![
+                            doc! { "location": { "$exists": false } },
+                            doc! { "location": "" },
+                        ]},
+                    ],
+                );
+            }
+        }
+
         let update = doc! {
             "$set": {
-                "properties.metadata_location": new_location
+                "properties.metadata_location": &new_location,
+                "location": &new_location,
             }
         };
 
-        self.db
+        let result = self
+            .db
             .collection::<Document>("assets")
             .update_one(filter, update)
             .await?;
+
+        if result.matched_count == 0 {
+            return Err(anyhow::anyhow!(
+                "CAS failure: metadata location did not match {:?}",
+                expected_location
+            ));
+        }
         Ok(())
     }
+}
+
+/// The metadata location a reader would see for `asset`.
+///
+/// Property first, then the asset's own `location` when it is non-empty - the
+/// same resolution memory, SQLite and Postgres use. Defined once so the read
+/// path and the compare-and-swap cannot drift apart again.
+fn current_metadata_location(asset: &pangolin_core::model::Asset) -> Option<String> {
+    asset
+        .properties
+        .get("metadata_location")
+        .cloned()
+        .or_else(|| {
+            if asset.location.is_empty() {
+                None
+            } else {
+                Some(asset.location.clone())
+            }
+        })
+}
+
+/// Rewrite the named keys of a serde-produced document as BSON Binary UUIDs.
+///
+/// `bson::to_document` writes a `Uuid` as a *string*, but the driver's
+/// deserializer expects Binary - so a document written through serde alone
+/// cannot be read back into a struct with `Uuid` fields ("invalid type: string,
+/// expected bytes"), and a filter built with [`to_bson_uuid`] never matches it.
+///
+/// That asymmetry is the single cause of the Mongo RBAC failures: role
+/// assignments were written by serde and queried as Binary, so `get_user_roles`
+/// always returned empty and every role-derived permission silently vanished.
+/// The audit-log and token-revocation paths (B1, B2) were the same bug in two
+/// other collections.
+///
+/// The keys given are the *serialized* names - kebab-case for these types - so
+/// the document stays deserializable into its struct.
+pub(crate) fn with_binary_uuids(
+    mut doc: mongodb::bson::Document,
+    fields: &[(&str, Uuid)],
+) -> mongodb::bson::Document {
+    for (key, value) in fields {
+        doc.insert(*key, to_bson_uuid(*value));
+    }
+    doc
 }
 
 pub(crate) fn to_bson_uuid(id: Uuid) -> Bson {
@@ -242,12 +332,44 @@ pub(crate) fn to_bson_uuid(id: Uuid) -> Bson {
     })
 }
 
+/// Decode a UUID that may have been written by any of the three routes.
+///
+/// There are three, and they disagree:
+///
+/// 1. [`to_bson_uuid`] - `Binary` with the *generic* subtype;
+/// 2. `doc! { "k": some_uuid }` - `Binary` with the *UUID* subtype, via bson's
+///    `From<Uuid> for Bson`;
+/// 3. `bson::to_document` - a plain `String`.
+///
+/// Writes should use `to_bson_uuid` so new data is uniform, but reads have to
+/// accept all three: documents written by the other two are already in
+/// deployed databases. Being strict here is what made a branch with a head
+/// commit unreadable - `create_branch` used route 2 and the reader accepted
+/// only route 1.
 pub(crate) fn from_bson_uuid(bson: &Bson) -> Result<Uuid> {
     match bson {
         Bson::Binary(Binary {
-            subtype: BinarySubtype::Generic,
+            subtype: BinarySubtype::Generic | BinarySubtype::Uuid,
             bytes,
         }) => Ok(Uuid::from_slice(bytes)?),
+        Bson::String(s) => Ok(Uuid::parse_str(s)?),
         _ => Err(anyhow::anyhow!("Invalid UUID bson")),
+    }
+}
+
+/// Decode an optional UUID field.
+///
+/// A missing key and an explicit `null` both mean "absent"; anything else has
+/// to decode, because silently returning `None` for a value that is present
+/// but unreadable would turn a corrupt record into a plausible-looking one.
+///
+/// `bson::from_bson::<Option<Uuid>>` cannot be used for this: handed a
+/// `Bson::Binary` it reports `invalid type: map, expected a UUID string`,
+/// because the deserializer presents binary data as the extended-JSON map
+/// `{"$binary": ...}` while `Uuid`'s `Deserialize` wants a string.
+pub(crate) fn read_optional_uuid(doc: &mongodb::bson::Document, key: &str) -> Result<Option<Uuid>> {
+    match doc.get(key) {
+        None | Some(Bson::Null) => Ok(None),
+        Some(value) => from_bson_uuid(value).map(Some),
     }
 }

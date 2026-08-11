@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { apiClient } from '$lib/api/client';
     import type { Table } from '$lib/api/iceberg';
     import Card from '$lib/components/ui/Card.svelte';
     import { onMount } from 'svelte';
@@ -24,6 +25,8 @@
     let loadingMetadata = false;
     let metadataAttempted = false; // Track if we've tried loading for current asset
     let editMode = false;
+    // Replaces the native alert() the save path used.
+    let saveError = '';
     let description = '';
     let tags: string[] = [];
     let discoverable = false;
@@ -54,17 +57,17 @@
         loadingMetadata = true;
         metadataAttempted = true; // Mark as attempted immediately
         try {
-            const res = await fetch(`/api/v1/assets/${effectiveAssetId}/metadata`, {
-                headers: { 'Authorization': `Bearer ${$authStore.token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
+            // B32: routed through apiClient so it works outside the dev proxy
+            // and carries X-Pangolin-Tenant.
+            const res = await apiClient.get<any>(`/api/v1/assets/${effectiveAssetId}/metadata`);
+            if (!res.error) {
+                const data = res.data;
                 // Handle potential wrapper from API (some endpoints return { metadata: ... })
-                businessMetadata = data.metadata || data; 
+                businessMetadata = data?.metadata || data;
                 description = businessMetadata?.description || '';
                 tags = businessMetadata?.tags || [];
                 discoverable = businessMetadata?.discoverable || false;
-            } else if (res.status === 404) {
+            } else if (res.error.status === 404) {
                  // Metadata doesn't exist yet, initialize defaults but don't loop
                  businessMetadata = { description: '', tags: [], discoverable: false };
             }
@@ -78,22 +81,21 @@
     async function saveMetadata() {
         if (!effectiveAssetId) return;
         try {
-            const res = await fetch(`/api/v1/assets/${effectiveAssetId}/metadata`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${$authStore.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ description, tags, discoverable, properties: {} })
+            const res = await apiClient.post(`/api/v1/assets/${effectiveAssetId}/metadata`, {
+                description,
+                tags,
+                discoverable,
+                properties: {}
             });
-            if (res.ok) {
+            if (!res.error) {
+                saveError = '';
                 await loadMetadata();
                 editMode = false;
             } else {
-                alert('Failed to save metadata: ' + await res.text());
+                saveError = res.error.message || 'Failed to save metadata';
             }
         } catch (e) {
-            alert('Failed to save metadata');
+            saveError = 'Failed to save metadata';
         }
     }
 
@@ -277,6 +279,11 @@
             {:else if editMode}
                 <div class="space-y-4">
                     <h3 class="text-lg font-medium">Edit Business Metadata</h3>
+                    {#if saveError}
+                        <p class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300" role="alert">
+                            {saveError}
+                        </p>
+                    {/if}
                     <div>
                         <label class="block text-sm font-medium mb-1">Description</label>
                         <textarea bind:value={description} class="w-full px-3 py-2 border rounded-md dark:bg-gray-800" rows="3" />

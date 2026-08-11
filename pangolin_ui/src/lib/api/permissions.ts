@@ -36,8 +36,18 @@ export const permissionsApi = {
 		if (response.error) throw new Error(response.error.message);
 	},
 
+	/**
+	 * A user's direct permission grants.
+	 *
+	 * B33: this called `GET /api/v1/users/{id}/permissions`, which the router
+	 * never registered - so the permissions page and EditPermissionsDialog
+	 * showed an empty list forever, with no error to explain it. The real
+	 * endpoint is a filter on the permissions collection.
+	 */
 	async getUserPermissions(userId: string): Promise<Permission[]> {
-		const response = await apiClient.get<Permission[]>(`/api/v1/users/${userId}/permissions`);
+		const response = await apiClient.get<Permission[]>(
+			`/api/v1/permissions?user=${encodeURIComponent(userId)}`
+		);
 		if (response.error) throw new Error(response.error.message);
 		return response.data || [];
 	},

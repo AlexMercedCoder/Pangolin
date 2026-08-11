@@ -1,6 +1,6 @@
 import requests
 from typing import Optional, List, Dict, Any, Union
-from .models import Tenant, Warehouse, Catalog, Namespace, Asset, User
+from .models import Tenant, Warehouse, Catalog, Namespace, User
 from .auth import login
 from .git import BranchClient, TagClient, MergeOperationClient
 from .governance import RoleClient, PermissionClient, ServiceUserClient, BusinessMetadataClient
@@ -11,13 +11,36 @@ from .exceptions import (
     NotFoundError, ConflictError, ValidationError
 )
 
+#: Default ``(connect, read)`` timeout, in seconds.
+#:
+#: B39: there were no timeouts anywhere in the SDK - ``requests.request`` was
+#: called with no ``timeout=``, and a grep for "timeout" over ``src/`` returned
+#: nothing. A hung server therefore blocked the caller *forever*, including the
+#: CLI built on top of this client, with no way out but Ctrl-C.
+DEFAULT_TIMEOUT = (5, 30)
+
+
 class PangolinClient:
-    def __init__(self, uri: str, username: str = None, password: str = None, token: str = None, tenant_id: str = None, api_key: str = None):
+    def __init__(
+        self,
+        uri: str,
+        username: str = None,
+        password: str = None,
+        token: str = None,
+        tenant_id: str = None,
+        api_key: str = None,
+        timeout: Union[float, tuple] = DEFAULT_TIMEOUT,
+    ):
         self.uri = uri.rstrip("/")
         self._token = token
         self._api_key = api_key
         self._current_tenant_id: Optional[str] = tenant_id
-        
+        self._timeout = timeout
+        # B_sdk5: a Session reuses the underlying TCP connection across calls
+        # instead of establishing a new one per request, which matters for the
+        # CLI's multi-call commands and for any loop over pages.
+        self._session = requests.Session()
+
         if not self._token and not self._api_key and username and password:
             self._token = login(self.uri, username, password, tenant_id=tenant_id)
             
@@ -111,10 +134,16 @@ class PangolinClient:
         if self._current_tenant_id:
             headers["X-Pangolin-Tenant"] = self._current_tenant_id
             
+        # B39: every call is bounded. A caller can still override per request.
+        kwargs.setdefault("timeout", self._timeout)
+
         try:
-            response = requests.request(method, url, headers=headers, **kwargs)
+            response = self._session.request(method, url, headers=headers, **kwargs)
         except requests.RequestException as e:
-            raise PangolinError(f"Connection failed: {str(e)}")
+            # B_sdk5: `raise ... from e` keeps the original traceback, which is
+            # the difference between "Connection failed" and knowing whether it
+            # was DNS, TLS, a refused connection or a timeout.
+            raise PangolinError(f"Connection failed: {str(e)}") from e
             
         if response.status_code >= 400:
             self._handle_error(response)

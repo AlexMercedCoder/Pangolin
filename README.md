@@ -25,7 +25,7 @@ Finally, pangolins are rare and specialized. They exist for a specific purpose a
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Rust 1.92+
+- Rust 1.94+
 - Docker (optional, for MinIO)
 
 ### Running Locally
@@ -160,27 +160,46 @@ could silently fork snapshot lineage under concurrent writers. See
 
 ### Known limitations
 
+> For the reconciled view of what is done and what is not — across both audit
+> documents and every release — see **[STATUS.md](STATUS.md)**.
+
+
 Stated plainly rather than buried:
 
 - **Administrative multi-statement operations are only partly transactional.**
-  As of 0.6.0 PostgreSQL wraps a cascading catalog delete, a branch delete and a
-  branch merge in a transaction, and MongoDB wraps a cascading catalog delete
-  where the deployment supports a session — a standalone `mongod` cannot.
-  **Creating a branch by copying assets is still issued as independent
-  statements**, so a failure partway through leaves the catalog partially
-  applied, with no rollback and no repair tool. Take a backup before large
-  administrative operations.
+  PostgreSQL wraps a cascading catalog delete, a branch delete, a branch merge
+  and — from 0.8.0 — creating a branch by copying assets. SQLite wraps the same
+  branch-by-copy path. MongoDB wraps a cascading catalog delete where the
+  deployment supports a session; a standalone `mongod` cannot, and MongoDB has
+  no atomic branch-by-copy, so the API falls back to sequential statements and
+  says so in the logs. On that path a failure partway through leaves the branch
+  incomplete — but the caller now gets a `500` naming the branch, rather than
+  the `200` it used to get. Take a backup before large administrative
+  operations.
   (The Iceberg table-commit path *is* safe — it uses compare-and-swap with
   requirement enforcement.)
-- **No rate limiting.** There are global concurrency and body limits and a
-  request timeout, but no per-IP or per-account throttle, so the login endpoint
-  is brute-forceable.
-- **OAuth is not full OIDC.** No PKCE, no `id_token` validation, no JWKS, no
-  discovery. Users are matched on provider-supplied email with no
-  `email_verified` check. See [docs/operations/oidc.md](docs/operations/oidc.md).
-- **Warehouse cloud credentials are stored unencrypted** in the catalog database,
-  and the in-process warehouse cache is node-local, so a rotated credential can
-  be served by a peer for up to the cache TTL (5s by default).
+- **Rate limiting is per replica.** The authentication endpoints are throttled
+  per source address *and* per account (`PANGOLIN_AUTH_RATE_LIMIT`, default 10
+  per `PANGOLIN_AUTH_RATE_WINDOW_SECS`, default 60). The counters are
+  in-process, so with N replicas the effective limit is N times the configured
+  one. Set `PANGOLIN_TRUST_FORWARDED_FOR=true` **only** behind a proxy that
+  overwrites `X-Forwarded-For`; trusting it otherwise lets a caller set the
+  header per request and bypass the per-address half entirely.
+- **OIDC is implemented for providers that support it** (Google, Microsoft,
+  Okta, and any IdP via `PANGOLIN_<PROVIDER>_ISSUER`): PKCE, `id_token`
+  signature validation against the provider's JWKS, and `iss`/`aud`/`exp`/
+  `nonce` checks. **GitHub is not an OIDC provider** — it issues no `id_token`
+  — so a GitHub login still relies on the userinfo endpoint;
+  `PANGOLIN_OIDC_REQUIRE=true` refuses it. The PKCE verifier is held in process,
+  so OAuth needs session affinity across replicas. See
+  [docs/operations/oidc.md](docs/operations/oidc.md).
+- **Warehouse cloud credentials are encrypted at rest only if you configure a
+  key.** Set `PANGOLIN_ENCRYPTION_KEY` (`openssl rand -base64 32`); without it
+  they are stored in plaintext and the server says so at startup. See
+  [docs/operations/encryption.md](docs/operations/encryption.md), which is also
+  honest about what envelope encryption does not protect against. The
+  in-process warehouse cache is still node-local, so a rotated credential can be
+  served by a peer for up to the cache TTL (5s by default).
 - **Running more than one replica works but is unproven.** The background token
   cleanup job runs in every replica with no coordination, and the OAuth nonce
   store is in-process, so OAuth needs session affinity.
@@ -217,10 +236,20 @@ than ignored.
 `add-sort-order`, `set-default-sort-order`, `remove-snapshots`. An unrecognised
 update returns `501` rather than a false `200 OK`.
 
-**Not implemented:** `loadNamespaceMetadata` (GET on a namespace),
-`namespaceExists` (HEAD), `registerTable`, `commitTransaction` (multi-table
-atomic commits), and most of the view API — no list, drop, replace, exists or
-rename.
+**Implemented since 0.8.0:** `loadNamespaceMetadata`, `namespaceExists`,
+`registerTable` (adopting a table whose metadata already exists in storage), and
+the view API's `listViews`, `viewExists` and `dropView`.
+
+**Still not implemented:**
+
+- `commitTransaction` (multi-table atomic commits). This is **deliberate**, not
+  an oversight. The spec promises that either every table in the transaction
+  moves or none does; Pangolin's commit path does compare-and-swap per table
+  with no cross-table transaction behind it. Routing the endpoint and committing
+  tables one at a time would be worse than leaving it absent — an engine that
+  sees it will rely on atomicity that is not there. Clients currently fall back
+  to per-table commits, which is what actually happens.
+- `replaceView` and `renameView`.
 
 ---
 

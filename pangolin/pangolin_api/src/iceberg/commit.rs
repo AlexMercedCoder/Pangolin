@@ -207,14 +207,22 @@ pub fn check_requirements(
                 }
             }
 
-            // Pangolin does not track partition-field id assignment separately
-            // from the specs themselves, so this cannot be verified. Refusing
-            // is the honest answer: the alternative is pretending a
-            // precondition held when it was never examined.
-            CommitRequirement::AssertLastAssignedPartitionId { .. } => {
-                return Err(CommitError::Unsupported {
-                    operation: "assert-last-assigned-partition-id".into(),
-                })
+            // Now checkable: `last-partition-id` is a real field on
+            // `TableMetadata` (B12). Before it existed this requirement had to
+            // be refused, because the alternative was pretending a precondition
+            // held when it had never been examined.
+            CommitRequirement::AssertLastAssignedPartitionId {
+                last_assigned_partition_id,
+            } => {
+                if metadata.last_partition_id != *last_assigned_partition_id {
+                    return Err(CommitError::RequirementFailed {
+                        requirement: "assert-last-assigned-partition-id".into(),
+                        detail: format!(
+                            "last-partition-id is {}, expected {last_assigned_partition_id}",
+                            metadata.last_partition_id
+                        ),
+                    });
+                }
             }
 
             CommitRequirement::Unknown => {
@@ -236,6 +244,18 @@ pub fn apply_updates(
     updates: &[CommitUpdate],
     branch: &str,
 ) -> Result<(), CommitError> {
+    // B16c: `-1` in `set-current-schema` / `set-default-spec` /
+    // `set-default-sort-order` means "the one added *by this commit*". The old
+    // code resolved it against `metadata.schemas.last()` etc., which for an
+    // existing table is never empty - so a `-1` sent *without* a preceding
+    // `add-schema` silently repointed the table at whatever happened to be last
+    // in the persisted vector (arbitrary if the vector is not in creation
+    // order), instead of hitting the error arm the message claims. Tracking
+    // what this commit actually added makes the sentinel mean what it says.
+    let mut last_added_schema_id: Option<i32> = None;
+    let mut last_added_spec_id: Option<i32> = None;
+    let mut last_added_sort_order_id: Option<i32> = None;
+
     for update in updates {
         match update {
             CommitUpdate::AssignUuid { uuid } => {
@@ -266,17 +286,33 @@ pub fn apply_updates(
                     serde_json::from_value(schema.clone()).map_err(|e| CommitError::Invalid {
                         detail: format!("add-schema: {e}"),
                     })?;
-                metadata.last_column_id = metadata
-                    .last_column_id
-                    .max(new_schema.fields.iter().map(|f| f.id).max().unwrap_or(0));
+                // Reject a duplicate id rather than pushing a second schema the
+                // rest of the metadata cannot tell apart (B16c).
+                if metadata
+                    .schemas
+                    .iter()
+                    .any(|s| s.schema_id == new_schema.schema_id)
+                {
+                    return Err(CommitError::Invalid {
+                        detail: format!(
+                            "add-schema: schema id {} already exists",
+                            new_schema.schema_id
+                        ),
+                    });
+                }
+                // `max_field_id` walks nested fields; taking the max over the
+                // top-level `fields` alone understates `last-column-id` for any
+                // schema containing a struct, list or map.
+                metadata.last_column_id = metadata.last_column_id.max(new_schema.max_field_id());
+                last_added_schema_id = Some(new_schema.schema_id);
                 metadata.schemas.push(new_schema);
             }
 
             CommitUpdate::SetCurrentSchema { schema_id } => {
                 // -1 means "the schema added by this same commit".
                 if *schema_id == -1 {
-                    match metadata.schemas.last() {
-                        Some(last) => metadata.current_schema_id = last.schema_id,
+                    match last_added_schema_id {
+                        Some(id) => metadata.current_schema_id = id,
                         None => {
                             return Err(CommitError::Invalid {
                                 detail: "set-current-schema: -1 with no schema in this commit"
@@ -299,7 +335,7 @@ pub fn apply_updates(
                     serde_json::from_value(snapshot.clone()).map_err(|e| CommitError::Invalid {
                         detail: format!("add-snapshot: {e}"),
                     })?;
-                add_snapshot(metadata, snapshot_obj, branch);
+                add_snapshot(metadata, snapshot_obj, branch)?;
             }
 
             CommitUpdate::SetSnapshotRef {
@@ -371,18 +407,26 @@ pub fn apply_updates(
                     serde_json::from_value(spec.clone()).map_err(|e| CommitError::Invalid {
                         detail: format!("add-spec: {e}"),
                     })?;
+                if metadata
+                    .partition_specs
+                    .iter()
+                    .any(|s| s.spec_id == new_spec.spec_id)
+                {
+                    return Err(CommitError::Invalid {
+                        detail: format!("add-spec: spec id {} already exists", new_spec.spec_id),
+                    });
+                }
+                last_added_spec_id = Some(new_spec.spec_id);
                 metadata.partition_specs.push(new_spec);
+                // Keep the required `last-partition-id` true (B12).
+                metadata.recompute_last_partition_id();
             }
 
             CommitUpdate::SetDefaultSpec { spec_id } => {
                 let target = if *spec_id == -1 {
-                    metadata
-                        .partition_specs
-                        .last()
-                        .map(|s| s.spec_id)
-                        .ok_or_else(|| CommitError::Invalid {
-                            detail: "set-default-spec: -1 with no spec in this commit".into(),
-                        })?
+                    last_added_spec_id.ok_or_else(|| CommitError::Invalid {
+                        detail: "set-default-spec: -1 with no spec in this commit".into(),
+                    })?
                 } else {
                     *spec_id
                 };
@@ -401,19 +445,28 @@ pub fn apply_updates(
                             detail: format!("add-sort-order: {e}"),
                         }
                     })?;
+                if metadata
+                    .sort_orders
+                    .iter()
+                    .any(|o| o.order_id == new_order.order_id)
+                {
+                    return Err(CommitError::Invalid {
+                        detail: format!(
+                            "add-sort-order: sort order id {} already exists",
+                            new_order.order_id
+                        ),
+                    });
+                }
+                last_added_sort_order_id = Some(new_order.order_id);
                 metadata.sort_orders.push(new_order);
             }
 
             CommitUpdate::SetDefaultSortOrder { sort_order_id } => {
                 let target = if *sort_order_id == -1 {
-                    metadata
-                        .sort_orders
-                        .last()
-                        .map(|o| o.order_id)
-                        .ok_or_else(|| CommitError::Invalid {
-                            detail: "set-default-sort-order: -1 with no sort order in this commit"
-                                .into(),
-                        })?
+                    last_added_sort_order_id.ok_or_else(|| CommitError::Invalid {
+                        detail: "set-default-sort-order: -1 with no sort order in this commit"
+                            .into(),
+                    })?
                 } else {
                     *sort_order_id
                 };
@@ -466,7 +519,11 @@ pub fn apply_updates(
 }
 
 /// Append a snapshot and move the branch to it.
-fn add_snapshot(metadata: &mut TableMetadata, snapshot: Snapshot, branch: &str) {
+fn add_snapshot(
+    metadata: &mut TableMetadata,
+    snapshot: Snapshot,
+    branch: &str,
+) -> Result<(), CommitError> {
     let snapshot_id = snapshot.snapshot_id;
     let timestamp_ms = if snapshot.timestamp_ms > 0 {
         snapshot.timestamp_ms
@@ -475,10 +532,21 @@ fn add_snapshot(metadata: &mut TableMetadata, snapshot: Snapshot, branch: &str) 
     };
 
     // The sequence number is a monotonic counter, *not* a snapshot ID (A-3).
-    // Honour the client's value when it advances the counter; otherwise assign
-    // the next one.
-    let next_sequence = metadata.last_sequence_number + 1;
-    let sequence_number = if snapshot.sequence_number > metadata.last_sequence_number {
+    //
+    // B15: the old rule was "honour any client value greater than the current
+    // counter". A client could therefore submit `i64::MAX`, after which the next
+    // commit computed `last_sequence_number + 1` and overflowed - a panic in
+    // debug builds, a wrap in release, and corrupt commit ordering either way.
+    // The counter is the server's to advance: a client value is accepted only if
+    // it is exactly the next one, and anything else is assigned rather than
+    // honoured.
+    let next_sequence = metadata
+        .last_sequence_number
+        .checked_add(1)
+        .ok_or_else(|| CommitError::Invalid {
+            detail: "add-snapshot: sequence number counter is exhausted".into(),
+        })?;
+    let sequence_number = if snapshot.sequence_number == next_sequence {
         snapshot.sequence_number
     } else {
         next_sequence
@@ -494,15 +562,22 @@ fn add_snapshot(metadata: &mut TableMetadata, snapshot: Snapshot, branch: &str) 
         .push(snapshot);
     metadata.last_sequence_number = sequence_number;
     metadata.last_updated_ms = timestamp_ms;
-    metadata.current_snapshot_id = Some(snapshot_id);
 
-    metadata
-        .snapshot_log
-        .get_or_insert_with(Vec::new)
-        .push(SnapshotLogEntry {
-            timestamp_ms,
-            snapshot_id,
-        });
+    // B16: `current_snapshot_id` and the `snapshot_log` describe *main*. Setting
+    // them for any branch meant a `dev`-branch commit changed what `main`
+    // readers resolve if the metadata document was ever shared across branches
+    // or exported. Same for fabricating a `main` ref pointing at the branch's
+    // snapshot: that silently published unreviewed work to main.
+    if branch == MAIN_REF {
+        metadata.current_snapshot_id = Some(snapshot_id);
+        metadata
+            .snapshot_log
+            .get_or_insert_with(Vec::new)
+            .push(SnapshotLogEntry {
+                timestamp_ms,
+                snapshot_id,
+            });
+    }
 
     let refs = metadata.refs.get_or_insert_with(HashMap::new);
     refs.insert(
@@ -515,18 +590,8 @@ fn add_snapshot(metadata: &mut TableMetadata, snapshot: Snapshot, branch: &str) 
             max_ref_age_ms: None,
         },
     );
-    if branch != MAIN_REF {
-        // Keep `main` consistent with `current_snapshot_id` for readers that
-        // predate ref tracking.
-        refs.entry(MAIN_REF.to_string())
-            .or_insert(SnapshotReference {
-                snapshot_id,
-                ref_type: "branch".to_string(),
-                min_snapshots_to_keep: None,
-                max_snapshot_age_ms: None,
-                max_ref_age_ms: None,
-            });
-    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -545,6 +610,7 @@ mod tests {
             last_column_id: 1,
             current_schema_id: 0,
             schemas: vec![Schema {
+                type_: "struct".to_string(),
                 schema_id: 0,
                 identifier_field_ids: None,
                 fields: vec![NestedField {
@@ -557,6 +623,7 @@ mod tests {
             }],
             current_partition_spec_id: 0,
             partition_specs: vec![],
+            last_partition_id: 999,
             default_sort_order_id: 0,
             sort_orders: vec![],
             properties: None,
@@ -921,8 +988,12 @@ mod tests {
         assert_eq!(snapshots[1].sequence_number, 2);
     }
 
+    /// B15: the counter is the server's. A client value is honoured only when it
+    /// is exactly the next one; anything else is replaced by the next value
+    /// rather than letting the client jump the counter to, say, `i64::MAX` and
+    /// overflow the *following* commit.
     #[test]
-    fn a_client_supplied_sequence_number_may_advance_the_counter() {
+    fn a_client_supplied_sequence_number_cannot_jump_the_counter() {
         let mut metadata = base_metadata();
         let mut snap = snapshot_json(1, None);
         snap["sequence-number"] = serde_json::json!(5);
@@ -932,12 +1003,72 @@ mod tests {
             MAIN_REF,
         )
         .unwrap();
-        assert_eq!(metadata.last_sequence_number, 5);
+        assert_eq!(metadata.last_sequence_number, 1);
+
+        // The exact next value is accepted.
+        let mut snap = snapshot_json(2, None);
+        snap["sequence-number"] = serde_json::json!(2);
+        apply_updates(
+            &mut metadata,
+            &[CommitUpdate::AddSnapshot { snapshot: snap }],
+            MAIN_REF,
+        )
+        .unwrap();
+        assert_eq!(metadata.last_sequence_number, 2);
+    }
+
+    /// B15 regression: `i64::MAX` used to be honoured verbatim, so the next
+    /// commit's `last_sequence_number + 1` overflowed.
+    #[test]
+    fn an_absurd_client_sequence_number_does_not_overflow_the_next_commit() {
+        let mut metadata = base_metadata();
+        let mut snap = snapshot_json(1, None);
+        snap["sequence-number"] = serde_json::json!(i64::MAX);
+        apply_updates(
+            &mut metadata,
+            &[CommitUpdate::AddSnapshot { snapshot: snap }],
+            MAIN_REF,
+        )
+        .unwrap();
+        assert_eq!(metadata.last_sequence_number, 1);
+
+        // The follow-up commit is ordinary arithmetic, not an overflow.
+        apply_updates(
+            &mut metadata,
+            &[CommitUpdate::AddSnapshot {
+                snapshot: snapshot_json(2, None),
+            }],
+            MAIN_REF,
+        )
+        .unwrap();
+        assert_eq!(metadata.last_sequence_number, 2);
     }
 
     #[test]
-    fn adding_a_snapshot_records_the_snapshot_log_and_moves_the_branch() {
+    fn adding_a_snapshot_on_main_records_the_snapshot_log_and_moves_the_branch() {
         let mut metadata = base_metadata();
+        apply_updates(
+            &mut metadata,
+            &[CommitUpdate::AddSnapshot {
+                snapshot: snapshot_json(99, None),
+            }],
+            MAIN_REF,
+        )
+        .unwrap();
+        assert_eq!(metadata.current_snapshot_id, Some(99));
+        assert_eq!(ref_snapshot_id(&metadata, MAIN_REF), Some(99));
+        assert_eq!(metadata.snapshot_log.as_ref().unwrap().len(), 1);
+    }
+
+    /// B16: a commit to a feature branch must move *only* that branch. It used
+    /// to set `current_snapshot_id` for any branch and fabricate a `main` ref
+    /// pointing at the branch's snapshot, so a `dev` commit changed what `main`
+    /// readers resolve.
+    #[test]
+    fn committing_to_a_feature_branch_leaves_main_alone() {
+        let mut metadata = base_metadata();
+        let main_before = ref_snapshot_id(&metadata, MAIN_REF);
+
         apply_updates(
             &mut metadata,
             &[CommitUpdate::AddSnapshot {
@@ -946,9 +1077,24 @@ mod tests {
             "feature",
         )
         .unwrap();
-        assert_eq!(metadata.current_snapshot_id, Some(99));
+
         assert_eq!(ref_snapshot_id(&metadata, "feature"), Some(99));
-        assert_eq!(metadata.snapshot_log.as_ref().unwrap().len(), 1);
+        assert_eq!(
+            ref_snapshot_id(&metadata, MAIN_REF),
+            main_before,
+            "a feature-branch commit must not move main"
+        );
+        assert_eq!(
+            metadata.current_snapshot_id, main_before,
+            "current-snapshot-id describes main, not the committed branch"
+        );
+        assert!(
+            metadata
+                .snapshot_log
+                .as_ref()
+                .is_none_or(|log| log.is_empty()),
+            "the snapshot log describes main's history"
+        );
     }
 
     #[test]

@@ -2,15 +2,17 @@
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
     import { authStore } from '$lib/stores/auth';
-    
+    import { apiClient } from '$lib/api/client';
+
     // Derived values for template compatibility
-    $: token = $authStore.token;
     $: user = $authStore.user;
     import { fade } from 'svelte/transition';
 
     let requests: any[] = [];
     let loading = true;
     let error = '';
+    // Replaces the native alert() the approve/reject actions used.
+    let actionError = '';
 
     // Filter
     let filter = 'pending'; // pending, all
@@ -18,13 +20,13 @@
     async function fetchRequests() {
         loading = true;
         try {
-            const res = await fetch('/api/v1/access-requests', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                requests = await res.json();
+            // B32: routed through apiClient so it works outside the dev proxy
+            // and carries X-Pangolin-Tenant.
+            const res = await apiClient.get<any[]>('/api/v1/access-requests');
+            if (!res.error) {
+                requests = res.data ?? [];
             } else {
-                error = 'Failed to load requests';
+                error = res.error.message || 'Failed to load requests';
             }
         } catch (e: any) { error = e.message; }
         finally { loading = false; }
@@ -34,19 +36,20 @@
         if (!confirm(`Are you sure you want to ${status} this request?`)) return;
         
         try {
-            const res = await fetch(`/api/v1/access-requests/${req.id}`, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ status: status === 'Approve' ? 'approved' : 'rejected', comment: `${status} by admin` })
+            // B32: routed through apiClient so it works outside the dev proxy
+            // and carries X-Pangolin-Tenant.
+            const res = await apiClient.put(`/api/v1/access-requests/${req.id}`, {
+                status: status === 'Approve' ? 'approved' : 'rejected',
+                comment: `${status} by admin`
             });
 
-            if (res.ok) {
+            if (!res.error) {
+                actionError = '';
                 fetchRequests();
+            } else {
+                actionError = res.error.message || 'Action failed';
             }
-        } catch (e: any) { alert('Action failed'); }
+        } catch (e: any) { actionError = e?.message || 'Action failed'; }
     }
 
     onMount(() => {
@@ -76,6 +79,8 @@
     <div class="loading">Loading requests...</div>
 {:else if error}
     <div class="error">{error}</div>
+{:else if actionError}
+    <div class="error" role="alert">{actionError}</div>
 {:else if filteredRequests.length === 0}
     <div class="empty-state">
         <span class="material-icons">inbox</span>

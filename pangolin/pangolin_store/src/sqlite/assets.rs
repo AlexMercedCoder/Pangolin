@@ -24,7 +24,7 @@ impl SqliteStore {
             .bind(&namespace_path)
             .bind(&asset.name)
             .bind(&branch_name)
-            .bind(format!("{:?}", asset.kind))
+            .bind(asset.kind.as_stored_str())
             .bind(asset.properties.get("metadata_location").unwrap_or(&asset.location))
             .bind(serde_json::to_string(&asset.properties)?)
             .execute(&self.pool)
@@ -139,11 +139,9 @@ impl SqliteStore {
 
         if let Some(row) = row {
             let asset_type_str: String = row.get("asset_type");
-            let kind = match asset_type_str.as_str() {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind =
+                AssetType::from_stored_str(&asset_type_str).map_err(|e| anyhow::anyhow!(e))?;
 
             Ok(Some(Asset {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -178,11 +176,9 @@ impl SqliteStore {
                 serde_json::from_str(&namespace_json).unwrap_or_default();
 
             let asset_type_str: String = row.get("asset_type");
-            let kind = match asset_type_str.as_str() {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind =
+                AssetType::from_stored_str(&asset_type_str).map_err(|e| anyhow::anyhow!(e))?;
 
             let asset = Asset {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -218,7 +214,7 @@ impl SqliteStore {
 
         let namespace_path = serde_json::to_string(&namespace)?;
         let branch_name = branch.unwrap_or_else(|| "main".to_string());
-        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND branch_name = ? LIMIT ? OFFSET ?")
+        let rows = sqlx::query("SELECT id, name, asset_type, metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND branch_name = ? ORDER BY name LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
@@ -231,11 +227,9 @@ impl SqliteStore {
         let mut assets = Vec::new();
         for row in rows {
             let asset_type_str: String = row.get("asset_type");
-            let kind = match asset_type_str.as_str() {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind =
+                AssetType::from_stored_str(&asset_type_str).map_err(|e| anyhow::anyhow!(e))?;
 
             assets.push(Asset {
                 id: Uuid::parse_str(&row.get::<String, _>("id"))?,
@@ -319,16 +313,23 @@ impl SqliteStore {
         &self,
         tenant_id: Uuid,
         catalog_name: &str,
-        _branch: Option<String>,
+        branch: Option<String>,
         namespace: Vec<String>,
         table: String,
     ) -> Result<Option<String>> {
+        // B19: `branch` was discarded (`_branch`) and the query matched rows
+        // from *every* branch, with `fetch_optional` returning an arbitrary one.
+        // Reading a table on `dev` could hand back `main`'s metadata pointer -
+        // silently, and differently depending on row order. Postgres and Mongo
+        // both scope by branch.
+        let branch_name = branch.unwrap_or_else(|| "main".to_string());
         let namespace_path = serde_json::to_string(&namespace)?;
-        let row = sqlx::query("SELECT metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ?")
+        let row = sqlx::query("SELECT metadata_location, properties FROM assets WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
             .bind(tenant_id.to_string())
             .bind(catalog_name)
             .bind(&namespace_path)
             .bind(&table)
+            .bind(&branch_name)
             .fetch_optional(&self.pool)
             .await?;
 
@@ -388,9 +389,15 @@ impl SqliteStore {
                 ));
             }
 
-            props.insert("metadata_location".to_string(), new_location);
+            props.insert("metadata_location".to_string(), new_location.clone());
 
-            let update_result = sqlx::query("UPDATE assets SET properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
+            // B20: only `properties` was updated, leaving the `metadata_location`
+            // *column* stale - and reads populate `Asset.location` from that
+            // column. On SQLite an asset's `location` was therefore frozen at
+            // creation time no matter how many Iceberg commits followed.
+            // Postgres updates both.
+            let update_result = sqlx::query("UPDATE assets SET metadata_location = ?, properties = ? WHERE tenant_id = ? AND catalog_name = ? AND namespace_path = ? AND name = ? AND branch_name = ?")
+                .bind(&new_location)
                 .bind(serde_json::to_string(&props)?)
                 .bind(tenant_id.to_string())
                 .bind(catalog_name)

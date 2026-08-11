@@ -33,14 +33,17 @@
 
 	// Add Root option only for Root users
 	$: allRoleOptions = $isRoot
-		? [{ value: 'Root', label: 'Root - Full system access' }, ...roleOptions]
+		// `root`, not `Root`: the server's `UserRole` is kebab-case, so the
+		// PascalCase value was rejected outright - a root user could not create
+		// another root user from this form at all.
+		? [{ value: 'root', label: 'Root - Full system access' }, ...roleOptions]
 		: roleOptions;
 
 	$: tenantOptions = tenants.map((t) => ({ value: t.id, label: t.name }));
 
 	// Only show tenant select for Root users creating non-Root users
 	// In NO_AUTH mode, always use default tenant
-	$: showTenantSelect = $isRoot && formData.role && formData.role !== 'Root';
+	$: showTenantSelect = $isRoot && formData.role && formData.role !== 'root';
 
 	// Auto-set tenant for non-root users or in NO_AUTH mode
 	$: if (!$authStore.authEnabled) {

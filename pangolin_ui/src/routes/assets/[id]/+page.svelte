@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { page } from '$app/stores';
+    import { apiClient } from '$lib/api/client';
     import { authStore } from '$lib/stores/auth';
     import TagInput from '$lib/components/ui/TagInput.svelte';
     
@@ -13,6 +14,8 @@
     let catalogName = '';
     let namespaceName = '';
     let loading = true;
+    // Replaces the native alert() the save path used.
+    let saveError = '';
     let error = '';
     let activeTab = 'overview';
 
@@ -28,11 +31,11 @@
     async function fetchAsset() {
         loading = true;
         try {
-            const res = await fetch(`/api/v1/assets/${assetId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
+            // B32: raw `fetch('/api/v1/...')` only resolves under the dev proxy;
+            // with adapter-node it 404s in production and omits the tenant header.
+            const res = await apiClient.get<any>(`/api/v1/assets/${assetId}`);
+            if (!res.error) {
+                const data = res.data;
                 asset = data.asset;
                 metadata = data.metadata;
                 catalogName = data.catalog;
@@ -62,20 +65,14 @@
                 discoverable: editForm.discoverable
             };
 
-            const res = await fetch(`/api/v1/assets/${assetId}/metadata`, {
-                method: 'POST',
-                headers: { 
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json' 
-                },
-                body: JSON.stringify(payload)
-            });
+            const res = await apiClient.post(`/api/v1/assets/${assetId}/metadata`, payload);
 
-            if (res.ok) {
+            if (!res.error) {
+                saveError = '';
                 isEditing = false;
                 fetchAsset(); // Refresh
             } else {
-                alert('Failed to save metadata');
+                saveError = res.error.message || 'Failed to save metadata';
             }
         } catch(e) { console.error(e); }
     }
@@ -186,6 +183,11 @@
                     </div>
 
                     {#if isEditing}
+            {#if saveError}
+                <p class="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300" role="alert">
+                    {saveError}
+                </p>
+            {/if}
                         <div class="edit-form">
                             <div class="form-group">
                                 <label>Description (Markdown)</label>

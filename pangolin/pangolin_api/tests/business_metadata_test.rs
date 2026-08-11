@@ -124,6 +124,7 @@ async fn test_business_metadata_flow() {
         role: UserRole::Root,
         issued_at: chrono::Utc::now(),
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
+        token_id: None,
     };
 
     let token = pangolin_api::auth_middleware::generate_token(session, secret).unwrap();

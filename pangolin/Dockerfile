@@ -4,8 +4,9 @@
 # Build stage
 # ---------------------------------------------------------------------------
 # The base image is pinned to the Rust version the README requires. It used to
-# be 1.88 while the README asked for 1.92+ (A-36).
-FROM rust:1.92-slim-bookworm AS builder
+# be 1.88 while the README asked for 1.92+ (A-36). Kept in step with
+# `rust-version` in Cargo.toml, which the `msrv` CI job verifies.
+FROM rust:1.94-slim-bookworm AS builder
 
 WORKDIR /usr/src/pangolin
 

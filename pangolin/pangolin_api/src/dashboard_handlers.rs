@@ -132,6 +132,7 @@ pub async fn get_dashboard_stats(
                 .await
                 .map_err(ApiError::from)?;
             let accessible_catalogs = crate::authz_utils::filter_catalogs(
+                tenant_id,
                 all_catalogs,
                 &permissions,
                 session.role.clone(),
@@ -172,6 +173,7 @@ pub async fn get_dashboard_stats(
                         .collect();
 
                     let filtered = crate::authz_utils::filter_namespaces(
+                        tenant_id,
                         namespace_tuples,
                         &permissions,
                         session.role.clone(),
@@ -186,6 +188,7 @@ pub async fn get_dashboard_stats(
             let mut accessible_tables_count = 0;
             if let Ok(all_assets) = store.search_assets(tenant_id, "", None).await {
                 let filtered_assets = crate::authz_utils::filter_assets(
+                    tenant_id,
                     all_assets,
                     &permissions,
                     session.role.clone(),

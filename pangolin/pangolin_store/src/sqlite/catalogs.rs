@@ -64,7 +64,7 @@ impl SqliteStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = ? LIMIT ? OFFSET ?")
+        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = ? ORDER BY name LIMIT ? OFFSET ?")
             .bind(tenant_id.to_string())
             .bind(limit)
             .bind(offset)
@@ -143,48 +143,50 @@ impl SqliteStore {
             .ok_or_else(|| anyhow::anyhow!("Catalog not found"))
     }
 
+    /// Delete a catalog and cascade to its children.
+    ///
+    /// B21: this used to run five sequential deletes with no transaction, and
+    /// the "does the catalog exist?" check was the *last* statement. So
+    /// `delete_catalog(tenant, "nonexistent")` cheerfully deleted every tag,
+    /// branch, asset and namespace whose `catalog_name` matched - and only then
+    /// returned "not found", leaving the caller believing nothing had happened.
+    /// Any failure part-way through left the same wreckage. Postgres wraps the
+    /// identical cascade in a transaction; this now matches it, and checks
+    /// existence first.
     pub async fn delete_catalog(&self, tenant_id: Uuid, name: String) -> Result<()> {
         let tid = tenant_id.to_string();
 
-        // Delete cascading children manually (no FK constraints on catalog_name)
-        // 1. Tags
-        sqlx::query("DELETE FROM tags WHERE tenant_id = ? AND catalog_name = ?")
-            .bind(&tid)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
+        let mut tx = self.pool.begin().await?;
 
-        // 2. Branches
-        sqlx::query("DELETE FROM branches WHERE tenant_id = ? AND catalog_name = ?")
-            .bind(&tid)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
-
-        // 3. Assets
-        sqlx::query("DELETE FROM assets WHERE tenant_id = ? AND catalog_name = ?")
-            .bind(&tid)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
-
-        // 4. Namespaces
-        sqlx::query("DELETE FROM namespaces WHERE tenant_id = ? AND catalog_name = ?")
-            .bind(&tid)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
-
-        // 5. Catalog
-        let result = sqlx::query("DELETE FROM catalogs WHERE tenant_id = ? AND name = ?")
-            .bind(&tid)
-            .bind(&name)
-            .execute(&self.pool)
-            .await?;
-
-        if result.rows_affected() == 0 {
+        // Existence first: nothing is destroyed on behalf of a catalog that is
+        // not there.
+        let exists: Option<(i64,)> =
+            sqlx::query_as("SELECT 1 FROM catalogs WHERE tenant_id = ? AND name = ?")
+                .bind(&tid)
+                .bind(&name)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if exists.is_none() {
             return Err(anyhow::anyhow!("Catalog '{}' not found", name));
         }
+
+        // Delete cascading children manually (no FK constraints on catalog_name)
+        for table in ["tags", "branches", "assets", "namespaces"] {
+            let sql = format!("DELETE FROM {table} WHERE tenant_id = ? AND catalog_name = ?");
+            sqlx::query(&sql)
+                .bind(&tid)
+                .bind(&name)
+                .execute(&mut *tx)
+                .await?;
+        }
+
+        sqlx::query("DELETE FROM catalogs WHERE tenant_id = ? AND name = ?")
+            .bind(&tid)
+            .bind(&name)
+            .execute(&mut *tx)
+            .await?;
+
+        tx.commit().await?;
         Ok(())
     }
 }

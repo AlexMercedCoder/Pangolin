@@ -15,8 +15,8 @@ categories = ["database"]
 workspace = true
 
 [dependencies]
-pangolin_core = { path = "../pangolin_core", version = "0.6.0" }
-pangolin_store = { path = "../pangolin_store", version = "0.6.0" }
+pangolin_core = { path = "../pangolin_core", version = "0.7.0" }
+pangolin_store = { path = "../pangolin_store", version = "0.7.0" }
 axum = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -42,11 +42,16 @@ utoipa-swagger-ui = { version = "6", features = ["axum"] }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 hmac = "0.12"
+# OIDC: PKCE verifiers and nonces need a CSPRNG. `ring` is already compiled into
+# the tree via jsonwebtoken and rustls, so this declares an existing dependency
+# rather than adding one - and it is a better source than `rand`, which carries
+# an open unsoundness advisory (RUSTSEC-2026-0097).
+ring = "0.17"
 sha2 = "0.10"
 
 # Cloud provider SDKs (optional features)
 aws-config = { version = "1.0", optional = true }
-aws-sdk-sts = { version = "=1.50.0", optional = true }
+aws-sdk-sts = { version = "1.109", optional = true }
 aws-credential-types = { version = "1.0", optional = true }
 aws-smithy-types = { version = "1.0", optional = true }
 azure_identity = { version = "0.20", optional = true }
@@ -68,6 +73,6 @@ cloud-credentials = ["aws-sts", "azure-oauth", "gcp-oauth"]
 [dev-dependencies]
 hyper = { version = "1.0", features = ["full"] }
 pangolin_api = { path = ".", features = ["test-fixtures"] }
-pangolin_store = { path = "../pangolin_store", version = "0.6.0" }
+pangolin_store = { path = "../pangolin_store", version = "0.7.0" }
 serial_test = "2.0"
 wiremock = "0.6"

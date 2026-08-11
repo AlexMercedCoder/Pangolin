@@ -45,11 +45,8 @@
     }
 
     async function handleSubmit() {
-        console.log('RegisterAssetModal: handleSubmit called');
-        console.log('Payload:', { catalogName, namespace, name, assetType, location });
         
         if (!name || !location) {
-            console.log('Validation failed');
             notifications.error('Name and location are required');
             return;
         }
@@ -64,14 +61,12 @@
 
         loading = true;
         try {
-            console.log('Calling assetsApi.register...');
             await assetsApi.register(catalogName, namespace, {
                 name,
                 kind: assetType,
                 location,
                 properties: propsRecord
             });
-            console.log('Registration successful');
             notifications.success(`Asset "${name}" registered successfully`);
             open = false;
             resetForm();

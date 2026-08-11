@@ -6,6 +6,9 @@ use mongodb::bson::{doc, Bson, Document};
 use pangolin_core::audit::{AuditLogEntry, AuditLogFilter};
 use uuid::Uuid;
 
+/// Default cap on a listing, matching the SQL backends' `LIMIT 100`.
+const DEFAULT_AUDIT_LIMIT: usize = 100;
+
 impl MongoStore {
     pub async fn log_audit_event(&self, entry: AuditLogEntry) -> Result<()> {
         let mut doc = mongodb::bson::to_document(&entry)?;
@@ -31,8 +34,21 @@ impl MongoStore {
         Ok(())
     }
 
-    pub async fn get_audit_event(&self, id: Uuid) -> Result<Option<AuditLogEntry>> {
-        let filter = doc! { "id": to_bson_uuid(id) };
+    /// Fetch one audit event, scoped to its tenant.
+    ///
+    /// B1: the filter was `{ "id": ... }` alone and the caller's `tenant_id`
+    /// was discarded, so any tenant holding an audit-event UUID could read
+    /// another tenant's audit record - username, IP, resource names, metadata.
+    /// Postgres and SQLite both scoped by tenant; only Mongo did not.
+    pub async fn get_audit_event(
+        &self,
+        tenant_id: Uuid,
+        id: Uuid,
+    ) -> Result<Option<AuditLogEntry>> {
+        let filter = doc! {
+            "id": to_bson_uuid(id),
+            "tenant_id": to_bson_uuid(tenant_id),
+        };
         let doc = self
             .db
             .collection::<AuditLogEntry>("audit_logs")
@@ -60,11 +76,28 @@ impl MongoStore {
         tenant_id: Uuid,
         filter: Option<AuditLogFilter>,
     ) -> Result<Vec<AuditLogEntry>> {
+        // B23: this applied no sort, no limit and no offset while the SQL
+        // backends used `ORDER BY timestamp DESC LIMIT 100`. On a busy tenant
+        // Mongo streamed the entire audit collection into memory and returned
+        // it in storage order.
+        let (limit, offset) = filter
+            .as_ref()
+            .map(|f| {
+                (
+                    f.limit.unwrap_or(DEFAULT_AUDIT_LIMIT),
+                    f.offset.unwrap_or(0),
+                )
+            })
+            .unwrap_or((DEFAULT_AUDIT_LIMIT, 0));
+
         let mongo_filter = self.build_audit_filter(tenant_id, filter)?;
         let cursor = self
             .db
             .collection::<AuditLogEntry>("audit_logs")
             .find(mongo_filter)
+            .sort(doc! { "timestamp": -1 })
+            .skip(offset as u64)
+            .limit(limit as i64)
             .await?;
         let entries: Vec<AuditLogEntry> = cursor.try_collect().await?;
         Ok(entries)
@@ -77,14 +110,28 @@ impl MongoStore {
     ) -> Result<Document> {
         let mut mongo_filter = doc! { "tenant_id": to_bson_uuid(tenant_id) };
         if let Some(f) = filter {
+            // B23: these used `format!("{:?}", ..)` - the Debug spelling,
+            // `"CreateBranch"` - against documents serde wrote in snake_case
+            // (`"create_branch"`). The filters could never match, so an
+            // action- or resource-type-filtered listing always returned zero
+            // rows and `count_audit_events` always returned 0. Going through
+            // `bson::to_bson` uses the same serde naming as the write path.
             if let Some(rt) = f.resource_type {
-                mongo_filter.insert("resource_type", format!("{:?}", rt));
+                mongo_filter.insert("resource_type", mongodb::bson::to_bson(&rt)?);
             }
             if let Some(ra) = f.action {
-                mongo_filter.insert("action", format!("{:?}", ra));
+                mongo_filter.insert("action", mongodb::bson::to_bson(&ra)?);
             }
             if let Some(uid) = f.user_id {
                 mongo_filter.insert("user_id", to_bson_uuid(uid));
+            }
+            // B23: `resource_id` and `result` were accepted by the filter type
+            // and then silently ignored.
+            if let Some(rid) = f.resource_id {
+                mongo_filter.insert("resource_id", to_bson_uuid(rid));
+            }
+            if let Some(result) = f.result {
+                mongo_filter.insert("result", mongodb::bson::to_bson(&result)?);
             }
             if let Some(from) = f.start_time {
                 mongo_filter.insert("timestamp", doc! { "$gte": Bson::DateTime(from.into()) });

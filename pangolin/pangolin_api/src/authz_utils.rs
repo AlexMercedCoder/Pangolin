@@ -3,12 +3,26 @@ use pangolin_core::permission::{Action, Permission, PermissionScope};
 use pangolin_core::user::UserRole;
 use uuid::Uuid;
 
+/// Does a `Tenant`-scoped grant apply to a resource in `resource_tenant_id`?
+///
+/// B0i: all three access checks below used a bare `PermissionScope::Tenant =>
+/// true`, never comparing the grant's own `tenant_id` against the resource's.
+/// A tenant-wide grant issued in tenant A therefore satisfied access checks for
+/// resources in tenant B. Nothing exploited it today only because callers
+/// pre-scope their store queries to one tenant - but every path that can
+/// surface cross-tenant rows (root impersonation, search, dashboards) leaked
+/// through it, and the invariant was one refactor away from mattering.
+fn tenant_grant_applies(perm: &Permission, resource_tenant_id: Uuid) -> bool {
+    perm.tenant_id == resource_tenant_id
+}
+
 /// Check if a user has access to a catalog based on their permissions
 ///
 /// Checks for Read or Discoverable actions on:
 /// - Exact catalog scope
-/// - Tenant-wide scope
+/// - Tenant-wide scope, when the grant belongs to the resource's tenant
 pub fn has_catalog_access(
+    resource_tenant_id: Uuid,
     catalog_id: Uuid,
     permissions: &[Permission],
     required_actions: &[Action],
@@ -18,7 +32,8 @@ pub fn has_catalog_access(
         let scope_matches = matches!(
             &perm.scope,
             PermissionScope::Catalog { catalog_id: cid } if *cid == catalog_id
-        ) || matches!(&perm.scope, PermissionScope::Tenant);
+        ) || (matches!(&perm.scope, PermissionScope::Tenant)
+            && tenant_grant_applies(perm, resource_tenant_id));
 
         // Check if permission has any of the required actions
         let has_action = required_actions
@@ -34,8 +49,9 @@ pub fn has_catalog_access(
 /// Checks for Read or Discoverable actions on:
 /// - Exact namespace scope
 /// - Parent catalog scope
-/// - Tenant-wide scope
+/// - Tenant-wide scope, when the grant belongs to the resource's tenant
 pub fn has_namespace_access(
+    resource_tenant_id: Uuid,
     catalog_id: Uuid,
     namespace: &str,
     permissions: &[Permission],
@@ -49,7 +65,7 @@ pub fn has_namespace_access(
                 namespace: ns,
             } => *cid == catalog_id && ns == namespace,
             PermissionScope::Catalog { catalog_id: cid } => *cid == catalog_id,
-            PermissionScope::Tenant => true,
+            PermissionScope::Tenant => tenant_grant_applies(perm, resource_tenant_id),
             _ => false,
         };
 
@@ -68,8 +84,9 @@ pub fn has_namespace_access(
 /// - Exact asset scope
 /// - Parent namespace scope
 /// - Parent catalog scope
-/// - Tenant-wide scope
+/// - Tenant-wide scope, when the grant belongs to the resource's tenant
 pub fn has_asset_access(
+    resource_tenant_id: Uuid,
     catalog_id: Uuid,
     namespace: &str,
     asset_id: Uuid,
@@ -89,7 +106,7 @@ pub fn has_asset_access(
                 namespace: ns,
             } => *cid == catalog_id && ns == namespace,
             PermissionScope::Catalog { catalog_id: cid } => *cid == catalog_id,
-            PermissionScope::Tenant => true,
+            PermissionScope::Tenant => tenant_grant_applies(perm, resource_tenant_id),
             _ => false,
         };
 
@@ -107,6 +124,7 @@ pub fn has_asset_access(
 /// Returns only catalogs the user has Read or Discoverable access to.
 /// Root and TenantAdmin users bypass filtering.
 pub fn filter_catalogs(
+    resource_tenant_id: Uuid,
     catalogs: Vec<Catalog>,
     permissions: &[Permission],
     user_role: UserRole,
@@ -120,7 +138,14 @@ pub fn filter_catalogs(
 
     catalogs
         .into_iter()
-        .filter(|catalog| has_catalog_access(catalog.id, permissions, &required_actions))
+        .filter(|catalog| {
+            has_catalog_access(
+                resource_tenant_id,
+                catalog.id,
+                permissions,
+                &required_actions,
+            )
+        })
         .collect()
 }
 
@@ -129,6 +154,7 @@ pub fn filter_catalogs(
 /// Returns only namespaces the user has Read or Discoverable access to.
 /// Root and TenantAdmin users bypass filtering.
 pub fn filter_namespaces(
+    resource_tenant_id: Uuid,
     namespaces: Vec<(Namespace, String)>,
     permissions: &[Permission],
     user_role: UserRole,
@@ -147,7 +173,13 @@ pub fn filter_namespaces(
             // Get catalog ID from the map
             if let Some(&catalog_id) = catalog_id_map.get(catalog_name) {
                 let namespace_str = namespace.name.join(".");
-                has_namespace_access(catalog_id, &namespace_str, permissions, &required_actions)
+                has_namespace_access(
+                    resource_tenant_id,
+                    catalog_id,
+                    &namespace_str,
+                    permissions,
+                    &required_actions,
+                )
             } else {
                 false
             }
@@ -160,6 +192,7 @@ pub fn filter_namespaces(
 /// Returns only assets the user has Read or Discoverable access to.
 /// Root and TenantAdmin users bypass filtering.
 pub fn filter_assets(
+    resource_tenant_id: Uuid,
     assets: Vec<(
         Asset,
         Option<pangolin_core::business_metadata::BusinessMetadata>,
@@ -196,6 +229,7 @@ pub fn filter_assets(
             if let Some(&catalog_id) = catalog_id_map.get(catalog_name) {
                 let namespace_str = namespace.join(".");
                 has_asset_access(
+                    resource_tenant_id,
                     catalog_id,
                     &namespace_str,
                     asset.id,
@@ -215,23 +249,29 @@ mod tests {
     use chrono::Utc;
     use std::collections::HashSet;
 
-    #[test]
-    fn test_has_catalog_access_with_catalog_permission() {
-        let catalog_id = Uuid::new_v4();
+    /// Build a permission with a single `Read` action.
+    fn read_permission(tenant_id: Uuid, scope: PermissionScope) -> Permission {
         let mut actions = HashSet::new();
         actions.insert(Action::Read);
-
-        let permission = Permission {
+        Permission {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
-            tenant_id: Uuid::new_v4(),
-            scope: PermissionScope::Catalog { catalog_id },
+            tenant_id,
+            scope,
             actions,
             granted_by: Uuid::new_v4(),
             granted_at: Utc::now(),
-        };
+        }
+    }
+
+    #[test]
+    fn test_has_catalog_access_with_catalog_permission() {
+        let tenant_id = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let permission = read_permission(tenant_id, PermissionScope::Catalog { catalog_id });
 
         assert!(has_catalog_access(
+            tenant_id,
             catalog_id,
             &[permission],
             &[Action::Read]
@@ -240,47 +280,70 @@ mod tests {
 
     #[test]
     fn test_has_catalog_access_with_tenant_permission() {
+        let tenant_id = Uuid::new_v4();
         let catalog_id = Uuid::new_v4();
-        let mut actions = HashSet::new();
-        actions.insert(Action::Read);
-
-        let permission = Permission {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            tenant_id: Uuid::new_v4(),
-            scope: PermissionScope::Tenant,
-            actions,
-            granted_by: Uuid::new_v4(),
-            granted_at: Utc::now(),
-        };
+        let permission = read_permission(tenant_id, PermissionScope::Tenant);
 
         assert!(has_catalog_access(
+            tenant_id,
             catalog_id,
             &[permission],
             &[Action::Read]
         ));
     }
 
+    /// Regression test for B0i: a `Tenant`-scoped grant issued in tenant A must
+    /// not satisfy access for a resource in tenant B.
+    #[test]
+    fn tenant_scoped_grant_does_not_cross_tenants() {
+        let tenant_a = Uuid::new_v4();
+        let tenant_b = Uuid::new_v4();
+        let catalog_id = Uuid::new_v4();
+        let asset_id = Uuid::new_v4();
+        let permission = read_permission(tenant_a, PermissionScope::Tenant);
+        let grants = [permission];
+
+        assert!(has_catalog_access(
+            tenant_a,
+            catalog_id,
+            &grants,
+            &[Action::Read]
+        ));
+        assert!(
+            !has_catalog_access(tenant_b, catalog_id, &grants, &[Action::Read]),
+            "a tenant-A grant must not authorize a tenant-B catalog"
+        );
+        assert!(
+            !has_namespace_access(tenant_b, catalog_id, "sales", &grants, &[Action::Read]),
+            "a tenant-A grant must not authorize a tenant-B namespace"
+        );
+        assert!(
+            !has_asset_access(
+                tenant_b,
+                catalog_id,
+                "sales",
+                asset_id,
+                &grants,
+                &[Action::Read]
+            ),
+            "a tenant-A grant must not authorize a tenant-B asset"
+        );
+    }
+
     #[test]
     fn test_has_catalog_access_without_permission() {
+        let tenant_id = Uuid::new_v4();
         let catalog_id = Uuid::new_v4();
         let other_catalog_id = Uuid::new_v4();
-        let mut actions = HashSet::new();
-        actions.insert(Action::Read);
-
-        let permission = Permission {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            tenant_id: Uuid::new_v4(),
-            scope: PermissionScope::Catalog {
+        let permission = read_permission(
+            tenant_id,
+            PermissionScope::Catalog {
                 catalog_id: other_catalog_id,
             },
-            actions,
-            granted_by: Uuid::new_v4(),
-            granted_at: Utc::now(),
-        };
+        );
 
         assert!(!has_catalog_access(
+            tenant_id,
             catalog_id,
             &[permission],
             &[Action::Read]
@@ -299,7 +362,7 @@ mod tests {
             properties: std::collections::HashMap::new(),
         }];
 
-        let filtered = filter_catalogs(catalogs.clone(), &[], UserRole::Root);
+        let filtered = filter_catalogs(Uuid::new_v4(), catalogs.clone(), &[], UserRole::Root);
         assert_eq!(filtered.len(), catalogs.len());
     }
 
@@ -316,20 +379,15 @@ mod tests {
             properties: std::collections::HashMap::new(),
         }];
 
-        let mut actions = HashSet::new();
-        actions.insert(Action::Read);
+        let tenant_id = Uuid::new_v4();
+        let permission = read_permission(tenant_id, PermissionScope::Catalog { catalog_id });
 
-        let permission = Permission {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            tenant_id: Uuid::new_v4(),
-            scope: PermissionScope::Catalog { catalog_id },
-            actions,
-            granted_by: Uuid::new_v4(),
-            granted_at: Utc::now(),
-        };
-
-        let filtered = filter_catalogs(catalogs.clone(), &[permission], UserRole::TenantUser);
+        let filtered = filter_catalogs(
+            tenant_id,
+            catalogs.clone(),
+            &[permission],
+            UserRole::TenantUser,
+        );
         assert_eq!(filtered.len(), 1);
     }
 
@@ -346,7 +404,7 @@ mod tests {
             properties: std::collections::HashMap::new(),
         }];
 
-        let filtered = filter_catalogs(catalogs, &[], UserRole::TenantUser);
+        let filtered = filter_catalogs(Uuid::new_v4(), catalogs, &[], UserRole::TenantUser);
         assert_eq!(filtered.len(), 0);
     }
 }

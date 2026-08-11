@@ -1,4 +1,4 @@
-use super::main::to_bson_uuid;
+use super::main::{read_optional_uuid, to_bson_uuid};
 use super::MongoStore;
 use anyhow::Result;
 use futures::stream::TryStreamExt;
@@ -17,7 +17,10 @@ impl MongoStore {
             "tenant_id": to_bson_uuid(tenant_id),
             "catalog_name": catalog_name,
             "name": &branch.name,
-            "head_commit_id": branch.head_commit_id,
+            "head_commit_id": branch
+                .head_commit_id
+                .map(to_bson_uuid)
+                .unwrap_or(mongodb::bson::Bson::Null),
             "branch_type": format!("{:?}", branch.branch_type),
             "assets": &branch.assets
         };
@@ -55,7 +58,7 @@ impl MongoStore {
 
             Ok(Some(Branch {
                 name: d.get_str("name")?.to_string(),
-                head_commit_id: mongodb::bson::from_bson(d.get("head_commit_id").unwrap().clone())?,
+                head_commit_id: read_optional_uuid(&d, "head_commit_id")?,
                 branch_type,
                 assets: mongodb::bson::from_bson(d.get("assets").unwrap().clone())?,
             }))
@@ -100,7 +103,7 @@ impl MongoStore {
 
             branches.push(Branch {
                 name: d.get_str("name")?.to_string(),
-                head_commit_id: mongodb::bson::from_bson(d.get("head_commit_id").unwrap().clone())?,
+                head_commit_id: read_optional_uuid(&d, "head_commit_id")?,
                 branch_type,
                 assets: mongodb::bson::from_bson(d.get("assets").unwrap().clone())?,
             });
@@ -171,7 +174,10 @@ impl MongoStore {
 
         let update = doc! {
             "$set": {
-                "head_commit_id": source.head_commit_id
+                "head_commit_id": source
+                    .head_commit_id
+                    .map(to_bson_uuid)
+                    .unwrap_or(mongodb::bson::Bson::Null)
             }
         };
 

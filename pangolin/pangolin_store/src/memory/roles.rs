@@ -28,13 +28,7 @@ impl MemoryStore {
             .filter(|r| r.value().tenant_id == tenant_id)
             .map(|r| r.value().clone());
 
-        let roles = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let roles = crate::memory::main::paginate_sorted(iter, pagination, |r| r.name.clone());
         Ok(roles)
     }
     pub(crate) async fn update_role_internal(&self, role: Role) -> Result<()> {

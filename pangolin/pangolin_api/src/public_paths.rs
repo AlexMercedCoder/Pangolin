@@ -53,6 +53,21 @@ pub fn is_public_path(path: &str) -> bool {
         ["oauth", "authorize", _provider] => true,
         ["oauth", "callback", _provider] => true,
 
+        // Redeeming the one-time code the OAuth callback hands back.
+        //
+        // B0k: this was missing, so the middleware demanded a bearer token on
+        // the very endpoint whose job is to obtain the first one. The 0.6.0
+        // callback -> one-time code -> POST exchange flow was therefore
+        // unreachable in production: the browser landed with a `?code=...` it
+        // could never redeem. The code itself is single-use and short-lived,
+        // which is what makes this endpoint safe to expose unauthenticated.
+        ["api", "v1", "oauth", "exchange"] => true,
+
+        // Which OAuth providers are configured. The login page needs this
+        // before anyone is authenticated (see B33); it reveals only provider
+        // names, never secrets.
+        ["api", "v1", "oauth", "providers"] => true,
+
         _ => false,
     }
 }
@@ -85,6 +100,18 @@ mod tests {
         ] {
             assert!(is_public_path(path), "{path} should be public");
         }
+    }
+
+    /// Regression test for B0k: without this the OAuth login flow cannot
+    /// complete, because the code-exchange endpoint demanded the token it
+    /// exists to issue.
+    #[test]
+    fn oauth_exchange_and_providers_are_public() {
+        assert!(is_public_path("/api/v1/oauth/exchange"));
+        assert!(is_public_path("/api/v1/oauth/providers"));
+        // ...but nothing deeper under the same prefix.
+        assert!(!is_public_path("/api/v1/oauth/exchange/steal"));
+        assert!(!is_public_path("/api/v1/oauth/tokens"));
     }
 
     /// Regression test for A-11: a resource named `config` must not bypass auth.

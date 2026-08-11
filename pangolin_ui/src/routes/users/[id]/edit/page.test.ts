@@ -25,7 +25,7 @@ describe('User Edit Page', () => {
 	};
 
 	beforeEach(() => {
-		vi.resetAllMocks();
+		vi.clearAllMocks();
 		vi.mocked(usersApi.get).mockResolvedValue(mockUser);
 		vi.mocked(usersApi.update).mockResolvedValue(mockUser);
 	});
@@ -66,8 +66,10 @@ describe('User Edit Page', () => {
 		const emailInput = screen.getByLabelText(/Email/i);
 		await fireEvent.input(emailInput, { target: { value: 'newemail@example.com' } });
 
-		// Find select by its current value
-		const roleSelect = screen.getByDisplayValue('tenant-user');
+		// By label, not by display value: `getByDisplayValue` on a `<select>`
+		// matches the selected option's *text* ("Tenant User"), not its value,
+		// so this could never have matched.
+		const roleSelect = screen.getByLabelText(/Role/i);
 		await fireEvent.change(roleSelect, { target: { value: 'tenant-admin' } });
 
 		const submitButton = screen.getByRole('button', { name: /Update User/i });

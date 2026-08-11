@@ -27,13 +27,7 @@ impl MemoryStore {
             .filter(|entry| entry.value().tenant_id == tenant_id)
             .map(|entry| entry.value().clone());
 
-        let result = if let Some(p) = pagination {
-            iter.skip(p.offset.unwrap_or(0))
-                .take(p.limit.unwrap_or(usize::MAX))
-                .collect()
-        } else {
-            iter.collect()
-        };
+        let result = crate::memory::main::paginate_sorted(iter, pagination, |s| s.name.clone());
         Ok(result)
     }
     /// Record that a service user's API key was just used.

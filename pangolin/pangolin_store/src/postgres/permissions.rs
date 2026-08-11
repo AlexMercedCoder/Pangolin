@@ -113,7 +113,7 @@ impl PostgresStore {
             "SELECT id, user_id, tenant_id, scope, actions, granted_by, granted_at 
              FROM permissions 
              WHERE tenant_id = $1
-             LIMIT $2 OFFSET $3",
+             ORDER BY id LIMIT $2 OFFSET $3",
         )
         .bind(tenant_id)
         .bind(limit)

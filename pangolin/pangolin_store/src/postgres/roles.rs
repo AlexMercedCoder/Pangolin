@@ -57,7 +57,7 @@ impl PostgresStore {
             .map(|p| p.offset.unwrap_or(0) as i64)
             .unwrap_or(0);
 
-        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = $1 LIMIT $2 OFFSET $3")
+        let rows = sqlx::query("SELECT id, tenant_id, name, description, permissions, created_by, created_at, updated_at FROM roles WHERE tenant_id = $1 ORDER BY name LIMIT $2 OFFSET $3")
             .bind(tenant_id)
             .bind(limit)
             .bind(offset)

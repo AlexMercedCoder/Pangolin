@@ -1,6 +1,5 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from .models import Role, Permission, ServiceUser, BusinessMetadata, AccessRequest
-from .exceptions import NotFoundError, ForbiddenError, PangolinError
 
 class RoleClient:
     def __init__(self, client):
@@ -34,17 +33,59 @@ class PermissionClient:
     def __init__(self, client):
         self.client = client
 
-    def grant(self, user_id: str, action: str, scope_type: str, scope_id: str = None) -> Permission:
-        """Grant a permission to a user."""
+    def grant(
+        self,
+        user_id: str,
+        actions,
+        scope_type: str,
+        catalog_id: str = None,
+        namespace: str = None,
+        asset_id: str = None,
+        tag_name: str = None,
+    ) -> Permission:
+        """Grant a permission to a user.
+
+        B_sdk1: this used to emit ``{"type": ..., "id": ...}`` as the scope.
+        ``PermissionScope`` is an internally-tagged enum whose variants carry
+        ``catalog_id`` / ``namespace`` / ``asset_id`` / ``tag_name`` - there is
+        no ``id`` field on any variant - so every call 422'd. The variant fields
+        are now named explicitly, and only the ones that variant defines are
+        sent.
+
+        ``actions`` accepts a single action or a list.
+        """
+        if isinstance(actions, str):
+            actions = [actions]
+
+        # Note the mixed casing, verified against the server's own output:
+        # `PermissionScope` carries `#[serde(rename_all = "kebab-case",
+        # tag = "type")]`, and for an enum `rename_all` renames the *variants*,
+        # not the fields of its struct variants. So the tag values are
+        # kebab-case ("catalog", "namespace") while the fields stay snake_case
+        # ("catalog_id", "asset_id", "tag_name"). Guessing either way round is
+        # how B_sdk1 happened.
+        scope = {"type": scope_type}
+        if scope_type == "catalog":
+            scope["catalog_id"] = catalog_id
+        elif scope_type == "namespace":
+            scope["catalog_id"] = catalog_id
+            scope["namespace"] = namespace
+        elif scope_type == "asset":
+            scope["catalog_id"] = catalog_id
+            scope["namespace"] = namespace
+            scope["asset_id"] = asset_id
+        elif scope_type == "tag":
+            scope["tag_name"] = tag_name
+        elif scope_type != "tenant":
+            raise ValueError(
+                f"unknown scope type {scope_type!r}; expected one of "
+                "tenant, catalog, namespace, asset, tag"
+            )
+
         payload = {
             "user-id": user_id,
-            "actions": [action], # Backend expects Set<Action>, passing list usually works if deserializer allows, or single string? 
-            # Backend: pub actions: HashSet<Action>
-            # Action is enum. 
-            "scope": {
-                "type": scope_type,
-                "id": scope_id
-            }
+            "actions": list(actions),
+            "scope": scope,
         }
         data = self.client.post("/api/v1/permissions", json=payload)
         return Permission(**data)
@@ -133,13 +174,28 @@ class BusinessMetadataClient:
         data = self.client.get(f"/api/v1/assets/{asset_id}/metadata")
         return BusinessMetadata(**data["metadata"])
 
-    def delete(self, asset_id: str, key: str):
-        """Delete metadata from an asset."""
-        self.client.delete(f"/api/v1/assets/{asset_id}/metadata", params={"key": key})
+    def delete(self, asset_id: str):
+        """Delete *all* business metadata for an asset.
+
+        B_sdk2: this used to take a ``key`` and pass it as a query parameter,
+        implying a per-key delete. The server takes no such parameter and
+        deletes the asset's entire metadata record - description, tags,
+        properties and the ``discoverable`` flag. Callers reaching for
+        "remove one property" were silently wiping everything. Removing the
+        parameter makes the signature tell the truth; use :meth:`upsert` with
+        the desired properties to change individual keys.
+        """
+        self.client.delete(f"/api/v1/assets/{asset_id}/metadata")
         
-    def request_access(self, asset_id: str, motivation: str) -> AccessRequest:
-        """Request access to an asset."""
-        payload = {"asset_id": asset_id, "motivation": motivation}
+    def request_access(self, asset_id: str, reason: str = None) -> AccessRequest:
+        """Request access to an asset.
+
+        B_sdk2: the payload sent ``motivation``; the server reads ``reason``
+        (``CreateAccessRequestPayload``), so the justification was dropped on
+        every request and reviewers saw an empty reason with no error anywhere.
+        The asset id also does not belong in the body - it is in the path.
+        """
+        payload = {"reason": reason}
         data = self.client.post(f"/api/v1/assets/{asset_id}/access-requests", json=payload)
         return AccessRequest(**data)
         

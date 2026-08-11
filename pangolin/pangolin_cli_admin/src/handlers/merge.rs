@@ -18,7 +18,15 @@ pub async fn handle_list_merge_operations(
             query.push_str(&pag);
         }
 
-        let res = client.get(&format!("/api/v1/merges?{}", query)).await?;
+        // B_cli2: every merge command targeted `/api/v1/merges/...`, a prefix
+        // the router has never registered - all six 404'd. Listing is scoped by
+        // catalog in the path, not by a query parameter.
+        let res = client
+            .get(&format!(
+                "/api/v1/catalogs/{}/merge-operations?{}",
+                catalog, query
+            ))
+            .await?;
         if !res.status().is_success() {
             return Err(CliError::ApiError(format!("Error: {}", res.status())));
         }
@@ -58,7 +66,9 @@ pub async fn handle_get_merge_operation(
     client: &PangolinClient,
     id: String,
 ) -> Result<(), CliError> {
-    let res = client.get(&format!("/api/v1/merges/{}", id)).await?;
+    let res = client
+        .get(&format!("/api/v1/merge-operations/{}", id))
+        .await?;
     if !res.status().is_success() {
         return Err(CliError::ApiError(format!(
             "Failed to get merge operation: {}",
@@ -97,9 +107,9 @@ pub async fn handle_list_merge_conflicts(
 ) -> Result<(), CliError> {
     let q = pangolin_cli_common::utils::pagination_query(limit, offset);
     let path = if q.is_empty() {
-        format!("/api/v1/merges/{}/conflicts", id)
+        format!("/api/v1/merge-operations/{}/conflicts", id)
     } else {
-        format!("/api/v1/merges/{}/conflicts?{}", id, q)
+        format!("/api/v1/merge-operations/{}/conflicts?{}", id, q)
     };
     let res = client.get(&path).await?;
     if !res.status().is_success() {
@@ -176,7 +186,7 @@ pub async fn handle_resolve_merge_conflict(
 
     let res = client
         .post(
-            &format!("/api/v1/merges/conflicts/{}/resolve", conflict_id),
+            &format!("/api/v1/conflicts/{}/resolve", conflict_id),
             &payload,
         )
         .await?;
@@ -198,7 +208,7 @@ pub async fn handle_complete_merge_operation(
 ) -> Result<(), CliError> {
     let res = client
         .post(
-            &format!("/api/v1/merges/{}/complete", id),
+            &format!("/api/v1/merge-operations/{}/complete", id),
             &serde_json::json!({}),
         )
         .await?;
@@ -220,7 +230,7 @@ pub async fn handle_abort_merge_operation(
 ) -> Result<(), CliError> {
     let res = client
         .post(
-            &format!("/api/v1/merges/{}/abort", id),
+            &format!("/api/v1/merge-operations/{}/abort", id),
             &serde_json::json!({}),
         )
         .await?;

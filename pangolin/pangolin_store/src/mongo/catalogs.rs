@@ -6,6 +6,40 @@ use mongodb::bson::{doc, Document};
 use pangolin_core::model::{Catalog, CatalogUpdate};
 use uuid::Uuid;
 
+/// Why a transactional catalog delete stopped.
+enum CatalogDeleteError {
+    /// The catalog does not exist.
+    NotFound,
+    /// The deployment has no transaction support - a standalone `mongod`.
+    ///
+    /// MongoDB reports this as `IllegalOperation` (code 20) with "Transaction
+    /// numbers are only allowed on a replica set member or mongos", and only
+    /// once the first operation inside the transaction reaches the server.
+    TransactionsUnsupported(mongodb::error::Error),
+    Other(anyhow::Error),
+}
+
+impl CatalogDeleteError {
+    fn from_mongo(e: mongodb::error::Error) -> Self {
+        // MongoDB raises `IllegalOperation` for "Transaction numbers are only
+        // allowed on a replica set member or mongos". The driver replaces that
+        // server text with its own "does not support retryable writes" wording,
+        // so matching on the message is unreliable - the code is the stable
+        // signal. This classifier only ever runs on failures from inside a
+        // transaction attempt, where an `IllegalOperation` means the deployment
+        // cannot do transactions; the cost of a false positive is a non-atomic
+        // delete rather than a wrong result.
+        const ILLEGAL_OPERATION: i32 = 20;
+
+        if let mongodb::error::ErrorKind::Command(command_error) = &*e.kind {
+            if command_error.code == ILLEGAL_OPERATION {
+                return Self::TransactionsUnsupported(e);
+            }
+        }
+        Self::Other(anyhow::anyhow!(e))
+    }
+}
+
 impl MongoStore {
     pub async fn create_catalog(&self, tenant_id: Uuid, catalog: Catalog) -> Result<()> {
         let mut doc = doc! {
@@ -128,43 +162,94 @@ impl MongoStore {
         };
 
         if let Some(session) = session.as_mut() {
+            // `start_transaction` is a *local* call in the Rust driver: it
+            // allocates a transaction number and returns without contacting the
+            // server, so it cannot fail for "this deployment has no transaction
+            // support". The fallback below was therefore unreachable - the
+            // topology error surfaced on the first operation *inside* the
+            // transaction and propagated through `?`, failing the delete
+            // outright on any standalone `mongod`. Found by running the parity
+            // suite against a live standalone MongoDB.
+            //
+            // The transactional attempt now runs in full and a topology error
+            // anywhere within it degrades to the sequential path, which is what
+            // the original comment promised.
             if let Err(e) = session.start_transaction().await {
                 tracing::warn!(
                     error = %e,
-                    "this MongoDB deployment does not support transactions (a replica set is \
-                     required); deleting a catalog will not be atomic"
+                    "could not begin a MongoDB transaction; deleting a catalog will not be atomic"
                 );
                 return self
                     .delete_catalog_unsafe(filter, child_filter, &name)
                     .await;
             }
 
-            for collection in ["tags", "branches", "assets", "namespaces"] {
-                self.db
-                    .collection::<Document>(collection)
-                    .delete_many(child_filter.clone())
-                    .session(&mut *session)
-                    .await?;
+            match self
+                .delete_catalog_in_transaction(session, &filter, &child_filter)
+                .await
+            {
+                Ok(()) => return Ok(()),
+                Err(CatalogDeleteError::NotFound) => {
+                    let _ = session.abort_transaction().await;
+                    return Err(anyhow::anyhow!("Catalog '{}' not found", name));
+                }
+                Err(CatalogDeleteError::TransactionsUnsupported(e)) => {
+                    tracing::warn!(
+                        error = %e,
+                        "this MongoDB deployment does not support transactions (a replica set \
+                         is required); deleting a catalog will not be atomic"
+                    );
+                    let _ = session.abort_transaction().await;
+                    // Falls through to the sequential path below.
+                }
+                Err(CatalogDeleteError::Other(e)) => {
+                    let _ = session.abort_transaction().await;
+                    return Err(e);
+                }
             }
-
-            let result = self
-                .db
-                .collection::<Document>("catalogs")
-                .delete_one(filter)
-                .session(&mut *session)
-                .await?;
-
-            if result.deleted_count == 0 {
-                let _ = session.abort_transaction().await;
-                return Err(anyhow::anyhow!("Catalog '{}' not found", name));
-            }
-
-            session.commit_transaction().await?;
-            return Ok(());
         }
 
         self.delete_catalog_unsafe(filter, child_filter, &name)
             .await
+    }
+
+    /// The transactional half of [`Self::delete_catalog`].
+    ///
+    /// Split out so a topology error can be told apart from a genuine failure
+    /// and from "no such catalog" - the caller handles each differently.
+    async fn delete_catalog_in_transaction(
+        &self,
+        session: &mut mongodb::ClientSession,
+        filter: &Document,
+        child_filter: &Document,
+    ) -> std::result::Result<(), CatalogDeleteError> {
+        for collection in ["tags", "branches", "assets", "namespaces"] {
+            self.db
+                .collection::<Document>(collection)
+                .delete_many(child_filter.clone())
+                .session(&mut *session)
+                .await
+                .map_err(CatalogDeleteError::from_mongo)?;
+        }
+
+        let result = self
+            .db
+            .collection::<Document>("catalogs")
+            .delete_one(filter.clone())
+            .session(&mut *session)
+            .await
+            .map_err(CatalogDeleteError::from_mongo)?;
+
+        if result.deleted_count == 0 {
+            return Err(CatalogDeleteError::NotFound);
+        }
+
+        session
+            .commit_transaction()
+            .await
+            .map_err(CatalogDeleteError::from_mongo)?;
+
+        Ok(())
     }
 
     /// Non-atomic fallback for deployments without transaction support.
@@ -174,6 +259,29 @@ impl MongoStore {
         child_filter: Document,
         name: &str,
     ) -> Result<()> {
+        // Existence is checked *first*. This path used to delete every matching
+        // tag, branch, asset and namespace and only then discover the catalog
+        // did not exist - returning "not found" to a caller who had every reason
+        // to believe nothing had happened. That is B21, which was fixed for
+        // SQLite during the roadmap work; the same shape survived here because
+        // this branch only runs on a deployment without transactions, and
+        // nothing had ever run it.
+        //
+        // Without a transaction the cascade below is still not atomic - a
+        // failure partway through leaves a partial delete. Checking first at
+        // least means a *no-op* call destroys nothing, which is the case an
+        // operator is most likely to hit by typo.
+        let exists = self
+            .db
+            .collection::<Document>("catalogs")
+            .find_one(filter.clone())
+            .await?
+            .is_some();
+
+        if !exists {
+            return Err(anyhow::anyhow!("Catalog '{}' not found", name));
+        }
+
         for collection in ["tags", "branches", "assets", "namespaces"] {
             self.db
                 .collection::<Document>(collection)
@@ -181,15 +289,11 @@ impl MongoStore {
                 .await?;
         }
 
-        let result = self
-            .db
+        self.db
             .collection::<Document>("catalogs")
             .delete_one(filter)
             .await?;
 
-        if result.deleted_count == 0 {
-            return Err(anyhow::anyhow!("Catalog '{}' not found", name));
-        }
         Ok(())
     }
 }

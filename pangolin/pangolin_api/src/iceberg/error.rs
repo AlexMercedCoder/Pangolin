@@ -8,7 +8,10 @@
 //!
 //! Pangolin emitted a flat `{"error": "<string>"}`, and most Iceberg handlers
 //! bypassed the error type entirely and returned bare `(StatusCode, &str)`
-//! tuples with a plain-text body (A-6). Engines parse the envelope to tell a
+//! tuples with a plain-text body (A-6, and still open as B16j at the August
+//! audit despite this module reading as though it were resolved). Every return
+//! in `iceberg/` now routes through the helpers below; there are zero bare
+//! tuples left in that module. Engines parse the envelope to tell a
 //! `NoSuchTableException` from a `CommitFailedException`, which is what drives
 //! their retry logic, so a non-conforming body breaks retries rather than
 //! merely looking untidy.
@@ -78,6 +81,47 @@ pub fn no_such_namespace(namespace: &str) -> Response {
 /// `403` for an authenticated caller lacking permission.
 pub fn forbidden(detail: &str) -> Response {
     iceberg_error(StatusCode::FORBIDDEN, "ForbiddenException", detail)
+}
+
+/// `404` for a view that does not exist.
+pub fn no_such_view(identifier: &str) -> Response {
+    iceberg_error(
+        StatusCode::NOT_FOUND,
+        "NoSuchViewException",
+        &format!("View does not exist: {identifier}"),
+    )
+}
+
+/// `400` for a malformed or unusable request.
+pub fn bad_request(detail: &str) -> Response {
+    iceberg_error(StatusCode::BAD_REQUEST, "BadRequestException", detail)
+}
+
+/// `409` for a table that already exists.
+pub fn table_already_exists(identifier: &str) -> Response {
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "AlreadyExistsException",
+        &format!("Table already exists: {identifier}"),
+    )
+}
+
+/// `409` for a namespace that already exists.
+pub fn namespace_already_exists(namespace: &str) -> Response {
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "AlreadyExistsException",
+        &format!("Namespace already exists: {namespace}"),
+    )
+}
+
+/// `409` for a namespace that still has children.
+pub fn namespace_not_empty(namespace: &str) -> Response {
+    iceberg_error(
+        StatusCode::CONFLICT,
+        "NamespaceNotEmptyException",
+        &format!("Namespace is not empty: {namespace}"),
+    )
 }
 
 /// `500`, with the underlying cause logged rather than returned.

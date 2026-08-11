@@ -2,6 +2,9 @@ use super::MemoryStore;
 use anyhow::Result;
 use uuid::Uuid;
 
+/// Default cap on a listing, matching the SQL backends' `LIMIT 100`.
+const DEFAULT_AUDIT_LIMIT: usize = 100;
+
 impl MemoryStore {
     pub(crate) async fn log_audit_event_internal(
         &self,
@@ -19,6 +22,14 @@ impl MemoryStore {
         tenant_id: Uuid,
         filter: Option<pangolin_core::audit::AuditLogFilter>,
     ) -> Result<Vec<pangolin_core::audit::AuditLogEntry>> {
+        // Read the pagination window out before the filter is consumed below.
+        let pagination = filter.as_ref().map(|f| {
+            (
+                f.offset.unwrap_or(0),
+                f.limit.unwrap_or(DEFAULT_AUDIT_LIMIT),
+            )
+        });
+
         if let Some(events) = self.audit_events.get(&tenant_id) {
             let mut filtered = events.clone();
 
@@ -76,13 +87,22 @@ impl MemoryStore {
 
                     true
                 });
-
-                // Apply pagination
-                let offset = f.offset.unwrap_or(0);
-                let limit = f.limit.unwrap_or(100);
-
-                filtered = filtered.into_iter().skip(offset).take(limit).collect();
             }
+
+            // B29: two divergences from the SQL backends, both fixed here.
+            //
+            // 1. Events were returned in *insertion* order (oldest first) while
+            //    every SQL backend uses `ORDER BY timestamp DESC`. A caller
+            //    asking for "the last 100 events" got the *first* 100.
+            // 2. Pagination lived inside the `if let Some(filter)` block, so a
+            //    filterless listing returned the tenant's entire audit history
+            //    while the SQL backends capped it at 100. On a busy tenant that
+            //    is an unbounded allocation driven by an unauthenticated-shaped
+            //    call pattern.
+            filtered.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+            let (offset, limit) = pagination.unwrap_or((0, DEFAULT_AUDIT_LIMIT));
+            let filtered = filtered.into_iter().skip(offset).take(limit).collect();
 
             Ok(filtered)
         } else {

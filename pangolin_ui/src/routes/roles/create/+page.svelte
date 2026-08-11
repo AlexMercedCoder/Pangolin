@@ -137,7 +137,6 @@
       }
       
       role.permissions = backendPermissions;
-      console.log('Sending Role Update with Permissions:', JSON.stringify(role, null, 2));
 
       await rolesApi.update(role.id, role);
 

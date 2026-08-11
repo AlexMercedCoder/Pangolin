@@ -81,21 +81,28 @@ impl SqliteStore {
                 m.created_at as meta_created_at, m.updated_by as meta_updated_by, m.updated_at as meta_updated_at
             FROM assets a
             LEFT JOIN business_metadata m ON a.id = m.asset_id
-            WHERE a.tenant_id = ? AND (a.name LIKE ? OR m.description LIKE ?)"
+            WHERE a.tenant_id = ? AND (a.name LIKE ? ESCAPE '\\' OR m.description LIKE ? ESCAPE '\\')"
         );
 
-        let query_pattern = format!("%{}%", query);
+        let query_pattern = crate::search::contains_pattern(query);
 
+        // B28: this was an ANY-match (`EXISTS ... value IN (...)`) while
+        // Postgres (`@>`) and Mongo (`$all`) required *all* the requested tags.
+        // The chosen semantic - see `crate::search::tags_match` - is ALL-match,
+        // so counting distinct matches against the requested count is what makes
+        // SQLite agree with the other three.
         if let Some(ref tag_list) = tags {
             if !tag_list.is_empty() {
-                sql.push_str(" AND EXISTS (SELECT 1 FROM json_each(m.tags) WHERE value IN (");
+                sql.push_str(
+                    " AND (SELECT COUNT(DISTINCT value) FROM json_each(m.tags) WHERE value IN (",
+                );
                 for (i, _) in tag_list.iter().enumerate() {
                     if i > 0 {
                         sql.push_str(", ");
                     }
                     sql.push('?');
                 }
-                sql.push_str("))");
+                sql.push_str(&format!(")) = {}", tag_list.len()));
             }
         }
 
@@ -117,11 +124,9 @@ impl SqliteStore {
 
         for row in rows {
             let asset_type_str: String = row.get("asset_type");
-            let kind = match asset_type_str.as_str() {
-                "IcebergTable" => AssetType::IcebergTable,
-                "View" => AssetType::View,
-                _ => AssetType::IcebergTable,
-            };
+            // B7: an unknown value used to fall through to `IcebergTable`.
+            let kind =
+                AssetType::from_stored_str(&asset_type_str).map_err(|e| anyhow::anyhow!(e))?;
 
             let asset = Asset {
                 id: Uuid::parse_str(row.get("id"))?,
@@ -153,8 +158,14 @@ impl SqliteStore {
             };
 
             let catalog_name: String = row.get("catalog_name");
+            // B4 (SQLite sibling): `namespace_path` is stored as a JSON array
+            // (`serde_json::to_string(&namespace)`), so splitting it on 0x1F
+            // yielded a single element containing raw JSON - a search result's
+            // namespace came back as `["[\"a\",\"b\"]"]` rather than
+            // `["a", "b"]`. No panic here, just a silently wrong namespace on
+            // every search hit.
             let namespace_path: String = row.get("namespace_path");
-            let namespace: Vec<String> = namespace_path.split('\x1F').map(String::from).collect();
+            let namespace: Vec<String> = serde_json::from_str(&namespace_path).unwrap_or_default();
 
             results.push((asset, metadata, catalog_name, namespace));
         }
@@ -163,8 +174,8 @@ impl SqliteStore {
     }
 
     pub async fn search_catalogs(&self, tenant_id: Uuid, query: &str) -> Result<Vec<Catalog>> {
-        let query_pattern = format!("%{}%", query);
-        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = ? AND name LIKE ?")
+        let query_pattern = crate::search::contains_pattern(query);
+        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = ? AND name LIKE ? ESCAPE '\\' ORDER BY name")
             .bind(tenant_id.to_string())
             .bind(&query_pattern)
             .fetch_all(&self.pool)
@@ -197,8 +208,8 @@ impl SqliteStore {
         tenant_id: Uuid,
         query: &str,
     ) -> Result<Vec<(Namespace, String)>> {
-        let query_pattern = format!("%{}%", query);
-        let rows = sqlx::query("SELECT catalog_name, namespace_path, properties FROM namespaces WHERE tenant_id = ? AND namespace_path LIKE ?")
+        let query_pattern = crate::search::contains_pattern(query);
+        let rows = sqlx::query("SELECT catalog_name, namespace_path, properties FROM namespaces WHERE tenant_id = ? AND namespace_path LIKE ? ESCAPE '\\' ORDER BY catalog_name, namespace_path")
             .bind(tenant_id.to_string())
             .bind(&query_pattern)
             .fetch_all(&self.pool)
@@ -228,8 +239,8 @@ impl SqliteStore {
         tenant_id: Uuid,
         query: &str,
     ) -> Result<Vec<(Branch, String)>> {
-        let query_pattern = format!("%{}%", query);
-        let rows = sqlx::query("SELECT catalog_name, name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND name LIKE ?")
+        let query_pattern = crate::search::contains_pattern(query);
+        let rows = sqlx::query("SELECT catalog_name, name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = ? AND name LIKE ? ESCAPE '\\' ORDER BY catalog_name, name")
             .bind(tenant_id.to_string())
             .bind(&query_pattern)
             .fetch_all(&self.pool)

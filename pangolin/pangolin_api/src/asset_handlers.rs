@@ -1,7 +1,7 @@
 use crate::auth::TenantId;
 use crate::authz::check_permission;
-use crate::iceberg::parse_table_identifier;
 use crate::iceberg::AppState;
+use crate::iceberg::{parse_namespace, parse_table_identifier};
 use axum::{
     extract::{Extension, Path, Query, State},
     http::StatusCode,
@@ -17,6 +17,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateViewRequest {
     pub name: String,
     pub sql: String,
@@ -66,6 +67,7 @@ impl From<Asset> for ViewResponse {
 pub async fn create_view(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace)): Path<(String, String)>,
     Json(payload): Json<CreateViewRequest>,
 ) -> impl IntoResponse {
@@ -73,10 +75,35 @@ pub async fn create_view(
     let catalog_name = prefix;
 
     let (view_name, branch_from_name) = parse_table_identifier(&payload.name);
-    let branch = branch_from_name.unwrap_or("main".to_string());
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name
+        .or(branch_from_ns)
+        .unwrap_or_else(|| "main".to_string());
 
-    // Parse namespace
-    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "create_view: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    // B0e: this handler took no session and performed no authorization at all,
+    // so any tenant member could create a view in any namespace. It now mirrors
+    // `create_table`'s namespace-scoped Create check.
+    let scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+    };
+    match check_permission(&store, &session, &Action::Create, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "create_view: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
 
     let mut properties = payload.properties.unwrap_or_default();
     properties.insert("sql".to_string(), payload.sql);
@@ -104,7 +131,10 @@ pub async fn create_view(
         .await
     {
         Ok(_) => (StatusCode::CREATED, Json(ViewResponse::from(asset))).into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "create_view: failed to create asset");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
     }
 }
 
@@ -128,18 +158,274 @@ pub async fn create_view(
 pub async fn get_view(
     State(store): State<AppState>,
     Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
     Path((prefix, namespace, view)): Path<(String, String, String)>,
 ) -> impl IntoResponse {
     let tenant_id = tenant.0;
     let catalog_name = prefix;
 
     let (view_name, branch_from_name) = parse_table_identifier(&view);
-    let branch = branch_from_name.unwrap_or("main".to_string());
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name
+        .or(branch_from_ns)
+        .unwrap_or_else(|| "main".to_string());
 
-    let namespace_parts: Vec<String> = namespace.split('\x1F').map(|s| s.to_string()).collect();
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "get_view: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            Some(branch),
+            namespace_parts.clone(),
+            view_name,
+        )
+        .await
+    {
+        Ok(Some(a)) => a,
+        Ok(None) => return (StatusCode::NOT_FOUND, "View not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "get_view: failed to load asset");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    if asset.kind != AssetType::View {
+        return (StatusCode::NOT_FOUND, "Asset is not a view").into_response();
+    }
+
+    // B0e: a view's `properties["sql"]` is its whole definition - business
+    // logic, column names, sometimes filter predicates that reveal the data.
+    // Reading it used to require nothing beyond being authenticated.
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+        asset_id: asset.id,
+    };
+    match check_permission(&store, &session, &Action::Read, &scope).await {
+        Ok(true) => (StatusCode::OK, Json(ViewResponse::from(asset))).into_response(),
+        Ok(false) => (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "get_view: permission check failed");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response()
+        }
+    }
+}
+
+/// `GET /v1/{prefix}/namespaces/{namespace}/views` — the spec's `listViews`.
+///
+/// A-5. Only `createView` and `loadView` were routed, so an engine could make a
+/// view and read one it already knew the name of, and had no way to discover
+/// what existed. Spark's `SHOW VIEWS` and every catalog browser call this.
+///
+/// Views are stored as assets with `kind: View`, so this is `list_assets`
+/// filtered - there is no separate view collection to fall out of step.
+pub async fn list_views(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path((prefix, namespace)): Path<(String, String)>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_ns.unwrap_or_else(|| "main".to_string());
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "list_views: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    // Namespace-scoped Read, matching `list_tables`. Knowing which views exist
+    // is itself information about the data.
+    let scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+    };
+    match check_permission(&store, &session, &Action::Read, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "list_views: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
+
+    let assets = match store
+        .list_assets(
+            tenant_id,
+            &catalog_name,
+            Some(branch),
+            namespace_parts.clone(),
+            None,
+        )
+        .await
+    {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::error!(error = %e, "list_views: failed to list assets");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    // The spec's shape: `{"identifiers": [{"namespace": [...], "name": "..."}]}`.
+    let identifiers: Vec<serde_json::Value> = assets
+        .into_iter()
+        .filter(|a| a.kind == AssetType::View)
+        .map(|a| {
+            serde_json::json!({
+                "namespace": namespace_parts.clone(),
+                "name": a.name,
+            })
+        })
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "identifiers": identifiers })),
+    )
+        .into_response()
+}
+
+/// `HEAD /v1/{prefix}/namespaces/{namespace}/views/{view}` — `viewExists`.
+///
+/// A bare existence check, with no body. Clients use it before a create to
+/// decide between create and replace; without it they have to issue a full
+/// `loadView` and read the status, which transfers the view's SQL to answer a
+/// yes/no question.
+pub async fn view_exists(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path((prefix, namespace, view)): Path<(String, String, String)>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    let (view_name, branch_from_name) = parse_table_identifier(&view);
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name
+        .or(branch_from_ns)
+        .unwrap_or_else(|| "main".to_string());
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return StatusCode::NOT_FOUND,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            Some(branch),
+            namespace_parts.clone(),
+            view_name,
+        )
+        .await
+    {
+        Ok(Some(a)) => a,
+        Ok(None) => return StatusCode::NOT_FOUND,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    if asset.kind != AssetType::View {
+        return StatusCode::NOT_FOUND;
+    }
+
+    // Authorized like `loadView`. Answering "does this exist" to a caller who
+    // may not read it still leaks that it exists, so the check is the same one.
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+        asset_id: asset.id,
+    };
+    match check_permission(&store, &session, &Action::Read, &scope).await {
+        Ok(true) => StatusCode::NO_CONTENT,
+        Ok(false) => StatusCode::FORBIDDEN,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// `DELETE /v1/{prefix}/namespaces/{namespace}/views/{view}` — `dropView`.
+///
+/// Without this a view could be created and never removed through the Iceberg
+/// API at all; the only way out was the Pangolin-native asset endpoint, which
+/// an Iceberg client does not know about.
+pub async fn drop_view(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path((prefix, namespace, view)): Path<(String, String, String)>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+    let (view_name, branch_from_name) = parse_table_identifier(&view);
+    let (namespace_parts, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name
+        .or(branch_from_ns)
+        .unwrap_or_else(|| "main".to_string());
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, "Catalog not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "drop_view: failed to load catalog");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    let asset = match store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            Some(branch.clone()),
+            namespace_parts.clone(),
+            view_name.clone(),
+        )
+        .await
+    {
+        Ok(Some(a)) => a,
+        Ok(None) => return (StatusCode::NOT_FOUND, "View not found").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "drop_view: failed to load asset");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+        }
+    };
+
+    // Refuse to delete a table through the view endpoint. Without this check a
+    // client with view-drop rights could remove a table by addressing it as a
+    // view.
+    if asset.kind != AssetType::View {
+        return (StatusCode::NOT_FOUND, "Asset is not a view").into_response();
+    }
+
+    let scope = PermissionScope::Asset {
+        catalog_id: catalog.id,
+        namespace: namespace_parts.join("."),
+        asset_id: asset.id,
+    };
+    match check_permission(&store, &session, &Action::Delete, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "drop_view: permission check failed");
+            return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response();
+        }
+    }
 
     match store
-        .get_asset(
+        .delete_asset(
             tenant_id,
             &catalog_name,
             Some(branch),
@@ -148,19 +434,16 @@ pub async fn get_view(
         )
         .await
     {
-        Ok(Some(asset)) => {
-            if asset.kind == AssetType::View {
-                (StatusCode::OK, Json(ViewResponse::from(asset))).into_response()
-            } else {
-                (StatusCode::NOT_FOUND, "Asset is not a view").into_response()
-            }
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "drop_view: failed to delete asset");
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
         }
-        Ok(None) => (StatusCode::NOT_FOUND, "View not found").into_response(),
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
     }
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RegisterAssetRequest {
     pub name: String,
     pub kind: AssetType,
@@ -487,6 +770,7 @@ pub async fn list_assets(
 
             // Filter assets based on permissions
             let filtered = crate::authz_utils::filter_assets(
+                tenant_id,
                 assets_with_metadata,
                 &permissions,
                 session.role,
@@ -613,6 +897,7 @@ mod tests {
             tenant_id: Some(tenant_id),
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
+            token_id: None,
         };
 
         let payload = RegisterAssetRequest {
@@ -646,6 +931,7 @@ mod tests {
             tenant_id: Some(tenant_id),
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
+            token_id: None,
         };
 
         let payload = RegisterAssetRequest {
@@ -680,6 +966,7 @@ mod tests {
             tenant_id: Some(tenant_id),
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
+            token_id: None,
         };
 
         let payload = RegisterAssetRequest {
@@ -713,6 +1000,7 @@ mod tests {
             tenant_id: Some(tenant_id),
             expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
             issued_at: chrono::Utc::now(),
+            token_id: None,
         };
 
         let asset_types = vec![

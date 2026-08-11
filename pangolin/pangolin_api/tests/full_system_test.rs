@@ -24,7 +24,9 @@ async fn test_full_system_flow() {
     let app = app(store.clone());
 
     // 2. Create Tenant with Initial Admin
-    let tenant_id = Uuid::new_v4();
+    //
+    // The client-chosen id is gone: `CreateTenantRequest` never accepted one,
+    // so this only ever looked like it was being used.
     let admin_username = "system_admin";
     let admin_password = "secure_password";
 
@@ -35,11 +37,11 @@ async fn test_full_system_flow() {
         .header("Authorization", "Basic YWRtaW46cGFzc3dvcmQ=") // root auth
         .body(Body::from(
             json!({
+                // Only `name` and `properties` exist on
+                // `CreateTenantRequest`; the rest were silently discarded, so
+                // the tenant id below never matched what the server assigned.
                 "name": "E2ETenant",
-                "id": tenant_id.to_string(), // In memory store usually ignores ID in payload but useful if supported
-                "properties": {},
-                "admin_username": admin_username,
-                "admin_password": admin_password
+                "properties": {}
             })
             .to_string(),
         ))
@@ -103,7 +105,33 @@ async fn test_full_system_flow() {
 
     println!("Logged in as Tenant Admin. Token length: {}", token.len());
 
-    // 4. Create Catalog
+    // 4. Create the warehouse the catalog references.
+    //
+    // This step did not exist. The catalog payload below named a warehouse
+    // called "default" under a *kebab-case* key the server does not read, so it
+    // was dropped, `warehouse_name` arrived as `None`, and the existence check
+    // was skipped entirely - the test passed while asserting nothing about
+    // warehouses. With the key corrected the check runs, and it needs a
+    // warehouse to find.
+    let create_warehouse_req = Request::builder()
+        .method("POST")
+        .uri("/api/v1/warehouses")
+        .header("Authorization", &auth_header)
+        .header("Content-Type", "application/json")
+        .body(Body::from(
+            json!({
+                "name": "default",
+                "use_sts": false,
+                "storage_config": { "type": "filesystem", "root": "/tmp/pangolin-e2e" }
+            })
+            .to_string(),
+        ))
+        .unwrap();
+
+    let resp = app.clone().oneshot(create_warehouse_req).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // 5. Create Catalog
     // Note: We need to use the Tenant ID header for tenant-scoped operations
     let create_catalog_req = Request::builder()
         .method("POST")
@@ -112,10 +140,17 @@ async fn test_full_system_flow() {
         .header("Content-Type", "application/json")
         .body(Body::from(
             json!({
+                // Three phantom fields lived here: `type` (the field is
+                // `catalog_type`) and kebab-case `warehouse-name` /
+                // `storage-location` (the struct has no rename_all, so they are
+                // snake_case). All three were silently dropped, so this test
+                // asserted 201 for a catalog created with no warehouse and no
+                // storage location - the exact class of drift
+                // `deny_unknown_fields` now catches.
                 "name": "data_catalog",
-                "type": "nessie",
-                "warehouse-name": "default",
-                "storage-location": "s3://bucket/data",
+                "catalog_type": "Local",
+                "warehouse_name": "default",
+                "storage_location": "s3://bucket/data",
                 "properties": {}
             })
             .to_string(),

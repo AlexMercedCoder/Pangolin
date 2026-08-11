@@ -14,9 +14,18 @@ describe('apiClient tenant header handling', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		localStorage.clear();
+		// B46: the mock used to provide only `ok` and `json()`. The client reads
+		// the body with `response.text()`, so every one of these "passing" tests
+		// actually threw inside the client and fell through to the catch arm -
+		// they asserted on the request headers, which are set before the throw,
+		// and so passed while exercising the error path. A mock has to answer
+		// the calls the code under test makes.
 		(global.fetch as any).mockResolvedValue({
 			ok: true,
-			json: async () => ({ data: 'test' })
+			status: 200,
+			statusText: 'OK',
+			json: async () => ({ data: 'test' }),
+			text: async () => JSON.stringify({ data: 'test' })
 		});
 	});
 
@@ -111,5 +120,34 @@ describe('apiClient tenant header handling', () => {
 				body: JSON.stringify({ name: 'test-catalog' })
 			})
 		);
+	});
+
+	// B46 regression: with a mock that lacks `.text()`, the client throws and
+	// returns an error. Asserting on the *response* - not just the request -
+	// is what distinguishes a working call from one that silently failed.
+	it('returns the parsed body on success', async () => {
+		const res = await apiClient.get<{ data: string }>('/api/v1/catalogs');
+
+		expect(res.error).toBeUndefined();
+		expect(res.data).toEqual({ data: 'test' });
+	});
+
+	it('surfaces a structured error envelope as a message', async () => {
+		(global.fetch as any).mockResolvedValue({
+			ok: false,
+			status: 409,
+			statusText: 'Conflict',
+			json: async () => ({
+				error: { message: 'ref main points at 222, expected 111', type: 'CommitFailedException', code: 409 }
+			}),
+			text: async () => ''
+		});
+
+		const res = await apiClient.get('/api/v1/catalogs');
+
+		expect(res.error?.status).toBe(409);
+		// Previously `errorData.error` was an object, so this rendered as
+		// "[object Object]" in the UI.
+		expect(res.error?.message).toBe('ref main points at 222, expected 111');
 	});
 });

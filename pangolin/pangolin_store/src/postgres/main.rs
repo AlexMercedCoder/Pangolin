@@ -256,6 +256,17 @@ impl CatalogStore for PostgresStore {
             .await
     }
 
+    async fn replace_namespace_properties(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        namespace: Vec<String>,
+        properties: std::collections::HashMap<String, String>,
+    ) -> Result<()> {
+        self.replace_namespace_properties(tenant_id, catalog_name, namespace, properties)
+            .await
+    }
+
     // Asset Operations
     async fn create_asset(
         &self,
@@ -387,6 +398,18 @@ impl CatalogStore for PostgresStore {
             .await
     }
 
+    async fn create_branch_with_assets(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: pangolin_core::model::Branch,
+        src_branch: &str,
+        assets: Option<Vec<String>>,
+    ) -> Result<usize> {
+        self.create_branch_with_assets(tenant_id, catalog_name, branch, src_branch, assets)
+            .await
+    }
+
     async fn copy_assets_bulk(
         &self,
         tenant_id: Uuid,
@@ -414,7 +437,7 @@ impl CatalogStore for PostgresStore {
             .unwrap_or(0);
 
         let rows = if let Some(uid) = user_id {
-            sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = $1 AND user_id = $2 AND expires_at > $3 LIMIT $4 OFFSET $5")
+            sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = $1 AND user_id = $2 AND expires_at > $3 ORDER BY expires_at DESC, token_id LIMIT $4 OFFSET $5")
                 .bind(tenant_id)
                 .bind(uid)
                 .bind(Utc::now())
@@ -423,7 +446,7 @@ impl CatalogStore for PostgresStore {
                 .fetch_all(&self.pool)
                 .await?
         } else {
-            sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = $1 AND expires_at > $2 LIMIT $3 OFFSET $4")
+            sqlx::query("SELECT token_id, user_id, tenant_id, token, expires_at FROM active_tokens WHERE tenant_id = $1 AND expires_at > $2 ORDER BY expires_at DESC, token_id LIMIT $3 OFFSET $4")
                 .bind(tenant_id)
                 .bind(Utc::now())
                 .bind(limit)
@@ -1153,6 +1176,38 @@ impl CatalogStore for PostgresStore {
         }
     }
 
+    async fn delete_file(&self, path: &str) -> Result<()> {
+        self.metadata_cache.invalidate(path).await;
+        let storage_config = self
+            .get_warehouse_for_location(path)
+            .await?
+            .map(|w| w.storage_config);
+        crate::file_delete::delete_location(storage_config.as_ref(), path).await
+    }
+
+    // Business Metadata Operations
+    //
+    // These were absent, so `PostgresStore` fell through to the trait defaults
+    // ("Operation not supported by this store") while `search_assets` joined a
+    // table no migration created.
+    async fn upsert_business_metadata(
+        &self,
+        metadata: pangolin_core::business_metadata::BusinessMetadata,
+    ) -> Result<()> {
+        self.upsert_business_metadata(metadata).await
+    }
+
+    async fn get_business_metadata(
+        &self,
+        asset_id: Uuid,
+    ) -> Result<Option<pangolin_core::business_metadata::BusinessMetadata>> {
+        self.get_business_metadata(asset_id).await
+    }
+
+    async fn delete_business_metadata(&self, asset_id: Uuid) -> Result<()> {
+        self.delete_business_metadata(asset_id).await
+    }
+
     // Tag Operations
     async fn create_tag(&self, tenant_id: Uuid, catalog_name: &str, tag: Tag) -> Result<()> {
         self.create_tag(tenant_id, catalog_name, tag).await
@@ -1325,10 +1380,11 @@ impl CatalogStore for PostgresStore {
                 m.created_at as meta_created_at, m.updated_by as meta_updated_by, m.updated_at as meta_updated_at
             FROM assets a
             LEFT JOIN business_metadata m ON a.id = m.asset_id
-            WHERE a.tenant_id = $1 AND (a.name ILIKE $2 OR m.description ILIKE $2)"
+            WHERE a.tenant_id = $1 AND (a.name ILIKE $2 ESCAPE '\\' OR m.description ILIKE $2 ESCAPE '\\')"
         );
 
-        let query_pattern = format!("%{}%", query);
+        // B28: unescaped `%`/`_` in the term were LIKE wildcards.
+        let query_pattern = crate::search::contains_pattern(query);
         let mut param_index = 3;
 
         if let Some(ref tag_list) = tags {
@@ -1388,8 +1444,13 @@ impl CatalogStore for PostgresStore {
             };
 
             let catalog_name: String = row.get("catalog_name");
-            let namespace_path: String = row.get("namespace_path");
-            let namespace: Vec<String> = namespace_path.split('\x1F').map(String::from).collect();
+            // B4: this decoded a `TEXT[]` column as `String`. `sqlx::Row::get`
+            // *panics* on a decode failure, so any search with at least one hit
+            // panicked the request - the failure only stayed hidden because a
+            // search with no results never reached this line. The correct
+            // decode is already used elsewhere in this file and in
+            // `postgres/assets.rs`.
+            let namespace: Vec<String> = row.get("namespace_path");
 
             results.push((asset, metadata, catalog_name, namespace));
         }
@@ -1398,8 +1459,9 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn search_catalogs(&self, tenant_id: Uuid, query: &str) -> Result<Vec<Catalog>> {
-        let query_pattern = format!("%{}%", query);
-        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = $1 AND name ILIKE $2")
+        // B28: unescaped `%`/`_` in the term were LIKE wildcards.
+        let query_pattern = crate::search::contains_pattern(query);
+        let rows = sqlx::query("SELECT id, name, catalog_type, warehouse_name, storage_location, federated_config, properties FROM catalogs WHERE tenant_id = $1 AND name ILIKE $2 ESCAPE '\\' ORDER BY name")
             .bind(tenant_id)
             .bind(&query_pattern)
             .fetch_all(&self.pool)
@@ -1434,9 +1496,10 @@ impl CatalogStore for PostgresStore {
         tenant_id: Uuid,
         query: &str,
     ) -> Result<Vec<(Namespace, String)>> {
-        let query_pattern = format!("%{}%", query);
+        // B28: unescaped `%`/`_` in the term were LIKE wildcards.
+        let query_pattern = crate::search::contains_pattern(query);
         // Postgres stores namespace_path as TEXT[]
-        let rows = sqlx::query("SELECT catalog_name, namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND array_to_string(namespace_path, '.') ILIKE $2")
+        let rows = sqlx::query("SELECT catalog_name, namespace_path, properties FROM namespaces WHERE tenant_id = $1 AND array_to_string(namespace_path, '.') ILIKE $2 ESCAPE '\\' ORDER BY catalog_name, namespace_path")
             .bind(tenant_id)
             .bind(&query_pattern)
             .fetch_all(&self.pool)
@@ -1456,8 +1519,9 @@ impl CatalogStore for PostgresStore {
     }
 
     async fn search_branches(&self, tenant_id: Uuid, query: &str) -> Result<Vec<(Branch, String)>> {
-        let query_pattern = format!("%{}%", query);
-        let rows = sqlx::query("SELECT catalog_name, name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = $1 AND name ILIKE $2")
+        // B28: unescaped `%`/`_` in the term were LIKE wildcards.
+        let query_pattern = crate::search::contains_pattern(query);
+        let rows = sqlx::query("SELECT catalog_name, name, head_commit_id, branch_type, assets FROM branches WHERE tenant_id = $1 AND name ILIKE $2 ESCAPE '\\' ORDER BY catalog_name, name")
             .bind(tenant_id)
             .bind(&query_pattern)
             .fetch_all(&self.pool)

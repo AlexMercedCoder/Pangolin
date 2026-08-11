@@ -60,8 +60,22 @@ impl ConfigManager {
             .map_err(|e| CliError::ConfigError(e.to_string()))?;
         if let Some(parent) = self.config_path.parent() {
             fs::create_dir_all(parent)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(parent, fs::Permissions::from_mode(0o700));
+            }
         }
         fs::write(&self.config_path, content)?;
+
+        // B_cli7: this file holds the auth token and was written at the process
+        // umask - typically 0644 - so any local account could read it.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&self.config_path, fs::Permissions::from_mode(0o600))?;
+        }
+
         Ok(())
     }
 }

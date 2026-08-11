@@ -2,6 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { tenantStore, TENANT_STORAGE_KEY } from '$lib/stores/tenant';
 
+// The global test setup (`src/tests/setup.ts`) replaces this module with a stub
+// so that *component* tests get a predictable API. This file is the unit test
+// for the real thing, so it has to opt out - without this it silently asserts
+// against the stub and fails on values it never set.
+vi.unmock('$lib/stores/tenant');
+
 // Mock browser environment
 vi.mock('$app/environment', () => ({
 	browser: true
