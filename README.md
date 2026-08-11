@@ -116,7 +116,7 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 *Production guides and operational wisdom.*
 - **[Production Runbook](docs/operations/runbook.md)** - Health, metrics, incidents, upgrades, backup.
 - **[Backend Feature Parity](docs/operations/backend-parity.md)** - Which features work on which backend.
-- **[OAuth / SSO](docs/operations/oidc.md)** - Configuration, the 0.6.0 client change, and OIDC limitations.
+- **[OAuth / OIDC](docs/operations/oidc.md)** - Provider setup, what is verified, and what still is not.
 - **[Best Practices Index](docs/best-practices/README.md)** - Complete guide to operating Pangolin.
 - **[Deployment & Security](docs/best-practices/deployment.md)** - Production checklists.
 - **[Scalability](docs/best-practices/scalability.md)** - Tuning for high performance.
@@ -126,37 +126,44 @@ See [Quick Start Guide](docs/getting-started/getting_started.md) for detailed se
 
 ## 🚦 Project Status
 
-**Current version: 0.6.0. Status: Alpha.**
+**Current version: 0.8.0. Status: Beta.**
 
-Pangolin is pre-1.0 software under active hardening. It is a capable catalog
-with a broad feature set, and it is not yet something we would tell you to put
-in front of a production data lake without reading the rest of this section.
+Pangolin is pre-1.0 software. It is a capable catalog with a broad feature set,
+and after two full audits it is substantially hardened — but see the honest
+limits below and in [STATUS.md](STATUS.md) before putting it in front of a
+production data lake.
 
-0.6.0 is a **security release**. If you run anything earlier, upgrade: it fixes
+**0.8.0 and 0.7.0 are security releases. If you run anything earlier, upgrade.**
+Between them they fix a privilege escalation exploitable by any authenticated
+principal, unauthorized cloud-credential vending, a logout that revoked nothing,
 a remotely exploitable OAuth account-takeover path, a working default JWT
-signing secret published in this repository, an authentication bypass, an
-unauthenticated denial-of-service primitive, and an Iceberg commit path that
-could silently fork snapshot lineage under concurrent writers. See
+signing secret published in this repository, and an authentication bypass. See
 [SECURITY.md](SECURITY.md) for the full list and the upgrade steps.
+
+Note that **no 0.6.0 or 0.7.0 container image was ever published** — the release
+pipeline could not complete. If you are running a Pangolin image older than
+0.8.0, you are on 0.5.1 or earlier and predate every fix above.
 
 ### Maturity by area
 
 | Area | Maturity | Notes |
 |---|---|---|
 | Iceberg REST — namespaces, tables, commits | **Solid** | Commit requirements including `assert-ref-snapshot-id` are enforced; unsupported operations return an error rather than a false `200 OK` |
-| Iceberg REST — full spec coverage | **Partial** | Several endpoints are missing; see below |
+| Iceberg REST — full spec coverage | **Good** | `registerTable`, `listViews`, `viewExists`, `dropView` added in 0.8.0. `commitTransaction` is deliberately absent and `replaceView`/`renameView` are not implemented; see below |
 | Multi-tenancy and isolation | **Solid** | Tenant scope is a required parameter throughout; isolation tests pass against the production middleware |
 | Git-style branching, tags, merge | **Good** | Merge direction and branch-asset tracking were fixed in 0.6.0 |
 | RBAC, service users, API keys | **Good** | API keys carry a key ID, so authentication is one bcrypt verification rather than a scan |
+| Authentication | **Good** | OIDC with PKCE, `id_token` validation via JWKS, and `iss`/`aud`/`exp`/`nonce` checks from 0.8.0. Rate limited per address and per account. GitHub is not an OIDC provider and cannot be validated this way |
 | Audit logging | **Good** | 40+ actions, 19 resource types, plus authentication events from 0.6.0. Writes are best-effort and are not tamper-evident |
 | Observability | **New in 0.6.0** | Prometheus metrics, request IDs, working `RUST_LOG`, real health endpoints |
 | PostgreSQL backend | **Good** | The recommended backend. Provisioning from a fresh database was broken before 0.6.0 |
 | SQLite backend | **Good** | Single-writer; suitable for one node |
-| MongoDB backend | **Beta** | No index management, no transactions, four known-failing tests |
+| MongoDB backend | **Beta** | Index management and uniqueness constraints from 0.8.0. Still no versioned schema migrations, and multi-statement transactions only where the deployment provides a session |
 | Kubernetes deployment | **Good** | The chart shipped referencing three templates that did not exist; all present and CI-linted from 0.6.0 |
-| Transactions for admin operations | **Partial** | PostgreSQL wraps `delete_catalog`, `delete_branch` and `merge_branch`; MongoDB wraps `delete_catalog` where the deployment supports sessions. Branch creation by copy is still not atomic |
+| Transactions for admin operations | **Good** | PostgreSQL and SQLite wrap `delete_catalog`, `delete_branch`, `merge_branch` and branch-creation-by-copy; MongoDB wraps `delete_catalog` where the deployment supports sessions, and reports the non-atomic fallback rather than hiding it |
 | HA at N > 1 replicas | **Partial** | See below |
-| Backup / restore / DR | **Undocumented and untested** | |
+| Backup / restore / DR | **Documented and drilled** | `scripts/backup_restore_drill.sh` dumps, destroys and restores against a real database. Measured figures in [docs/operations/backup-and-recovery.md](docs/operations/backup-and-recovery.md). No point-in-time recovery |
+| Warehouse credentials at rest | **Good** | AES-256-GCM when `PANGOLIN_ENCRYPTION_KEY` is set; plaintext with a startup warning when it is not |
 
 ### Known limitations
 

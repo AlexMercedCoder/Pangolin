@@ -112,7 +112,7 @@ Complete merge workflow for branch management. See [Merge Operations Guide](./ad
 
 ## Business Metadata & Governance
 
-Manage business metadata and access requests. See [Business Metadata Guide](./admin-business-metadata.md) for details.
+Manage business metadata and access requests. See [Business Metadata Guide](../features/business_catalog.md) for details.
 
 ### Commands
 - `delete-metadata --asset-id <id>`: Delete business metadata

@@ -12,10 +12,12 @@ pointing here. **Where they disagree with this file, this file is correct.**
 Everything marked done below is verified by tests that run against live
 PostgreSQL, MongoDB and MinIO, not by inspection:
 
-- **63 test targets, 415 tests, zero failures**
-- **19 CI jobs green**, including an authorization matrix, a four-backend parity
-  suite, both MongoDB topologies, an MSRV check, and a build of every optional
-  feature
+- **65 test targets, 448 tests, zero failures**
+- **18 CI jobs green on every push and pull request** — 14 job definitions, of
+  which `test` and `features` are matrices that expand to 2 and 4 runs. They
+  include an authorization matrix, a four-backend parity suite, both MongoDB
+  topologies, an MSRV check, and a build of every optional feature. Five further
+  jobs build and release the binaries, and run only on a `v*` tag.
 - `cargo audit` clean; clippy at a ratcheted budget of 30 (from 314)
 
 That standard exists because this project has repeatedly had things that
@@ -51,7 +53,7 @@ exited 25 seconds after startup passed all 18 CI jobs and the full suite.
 
 | Item | Where |
 |---|---|
-| CI that actually runs — 19 jobs | 0.7.0 / 0.8.0 |
+| CI that actually runs — 18 jobs per push, 5 more per release tag | 0.7.0 / 0.8.0 |
 | A release pipeline that produces a release (it never had; `macos-13` was retired and hung every tag for 24h) | 0.7.0 |
 | A release gate that verifies the published image over HTTP | 0.7.0 |
 | Token-cleanup sweep that **runs** (it was dead code) and staggers across replicas | 0.8.0 |
@@ -119,18 +121,48 @@ blip, every revoked token is accepted again. Watch
 - Eight accepted dependency advisories to re-check when dependencies move
 - clippy 30 and svelte-check 150 backlogs, both ratcheted
 
-## Not shipped
+## Shipped
 
-**0.7.0 and 0.8.0 are not published.** The work is merged to the branch and CI
-is green, but the merge, tag, Docker push and PyPI upload have not been made.
-The most recent published artifact is `alexmerced/pangolin-api:0.5.1` from
-2025-12-30 — so **anything running Pangolin today is on 0.5.1**, which predates
-every security fix listed above.
+**0.8.0 is published**, on 2026-08-11:
 
-The `SECURITY.md` advisory covers `< 0.7.0` for that reason.
+| Artifact | State |
+|---|---|
+| GitHub release `v0.8.0` | 12 binaries across linux, macOS Intel, macOS ARM and Windows — **the first release this project has produced**; v0.4.0 through v0.6.0 had tags and no releases |
+| PyPI `pypangolin` 0.8.0 | wheel and sdist |
+| `alexmerced/pangolin-api` 0.8.0 + latest | linux/amd64 + linux/arm64, 58MB |
+| `alexmerced/pangolin-cli` 0.8.0 + latest | linux/amd64 + linux/arm64, 39MB — the first CLI image since 0.5.0 |
+| `alexmerced/pangolin-ui` 0.8.0 + latest | linux/amd64 + linux/arm64, 52MB — the first UI image since 0.5.0 |
 
-The PyPI token has been rotated. Still requiring a person: decide whether to
-publish a GHSA once a fixed version actually exists.
+Each was verified by pulling the published tag and running it, not by trusting
+the build's exit code: the CLI reports `pangolin-admin 0.8.0` and runs as uid
+10001, the UI serves `HTTP 200` as uid 1000 with a 2.3MB `node_modules`.
+
+Publishing them turned up four defects that every one of the 18 CI jobs had
+passed over, because CI builds images and never runs what it built:
+
+| Defect | Consequence |
+|---|---|
+| `Dockerfile.tools` still pinned `rust:1.88` | The CLI image could not compile once the MSRV moved to 1.94. It failed mid-release, after the API image had already pushed. |
+| The CLI runtime stage installed `libssl-dev` | Headers and static archives shipped in the published artefact. A-36 fixed this in the API image and missed this one. |
+| The UI runtime stage copied all of `node_modules` | All 22 devDependencies — vite, playwright, vitest, svelte-check, tailwind — published in the image. It is now 2.3MB. |
+| Neither CLI accepted `--version` | No way to ask a binary which build it was, on a tool distributed mainly as an image. |
+
+Both images also ran as root. CI now fails if any Dockerfile pins a version
+other than the declared `rust-version`.
+
+No 0.6.0 or 0.7.0 image was ever published, and no `-cli` or `-ui` image since
+0.5.0, because the release pipeline could
+not complete: `build-macos-intel` targeted the `macos-13` runner image, retired
+in December 2025, and hung for the full 24-hour limit on every tag. Fixing that
+exposed a second failure that had been unreachable behind it — the workflow
+never declared `permissions: contents: write`, so creating a release was refused
+with a 403. Both are fixed.
+
+**Anyone running an image older than 0.8.0 is on 0.5.1 or earlier**, which
+predates every security fix listed above.
+
+Still requiring a person: decide whether to publish a GHSA now that a fixed
+version exists.
 
 ## If you are deciding whether to run this
 

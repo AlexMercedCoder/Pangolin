@@ -226,6 +226,31 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
       - run: cargo check --workspace --all-targets
 
+      # Every Dockerfile must build with the declared MSRV.
+      #
+      # A-36 raised `pangolin/Dockerfile` to match and missed
+      # `Dockerfile.tools`, which stayed on rust:1.88 and failed to build the
+      # instant the workspace MSRV moved past it - discovered while publishing
+      # 0.8.0, after the API image had already been pushed.
+      - name: Dockerfiles must pin the declared MSRV
+        working-directory: .
+        run: |
+          set -euo pipefail
+          declared=$(grep -m1 '^rust-version' pangolin/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          echo "declared MSRV: $declared"
+          status=0
+          while IFS= read -r dockerfile; do
+            pinned=$(grep -oE '^FROM rust:[0-9]+\.[0-9]+' "$dockerfile" | head -1 | sed 's/FROM rust://') || true
+            [ -z "$pinned" ] && continue
+            if [ "$pinned" != "$declared" ]; then
+              echo "::error file=$dockerfile::pins rust:$pinned but the workspace declares $declared"
+              status=1
+            else
+              echo "  ok $dockerfile -> rust:$pinned"
+            fi
+          done < <(find . -name 'Dockerfile*' -not -path './node_modules/*' -not -path '*/node_modules/*' -not -path './pangolin/target/*')
+          exit $status
+
   helm:
     name: helm lint
     runs-on: ubuntu-latest
@@ -611,6 +636,15 @@ jobs:
       - name: The environment-variable reference must match the code
         working-directory: pangolin
         run: ./scripts/check_env_var_docs.sh
+
+      # The documentation carried 274 broken relative links: files moved between
+      # `docs/` subdirectories and the links pointing at them were never
+      # updated, plus references into a `planning/` directory that is not in
+      # this repository. A link that 404s is worse than no link - it sends a
+      # reader after something that does not exist while making the surrounding
+      # text look maintained.
+      - name: Every documentation link must resolve
+        run: ./scripts/check_doc_links.sh
 
       - name: Every artifact must carry the same version
         run: |

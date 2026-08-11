@@ -270,4 +270,4 @@ Error: API Request Failed: Connection refused
 
 - [Admin CLI Overview](./admin.md)
 - [API Reference](../api/api_overview.md)
-- [Performance Optimizations](../../planning/performance_optimizations_status.md)
+- Performance Optimizations

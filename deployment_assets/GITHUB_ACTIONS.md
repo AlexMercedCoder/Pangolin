@@ -179,6 +179,6 @@ The workflow:
 
 ## Related Documentation
 
-- [bin/README.md](./bin/README.md) - Using pre-compiled binaries
+- bin/README.md - Using pre-compiled binaries
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Rust Cross-Compilation Guide](https://rust-lang.github.io/rustup/cross-compilation.html)

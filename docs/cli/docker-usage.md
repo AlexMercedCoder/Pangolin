@@ -239,4 +239,4 @@ curl -H "Authorization: Bearer $PANGOLIN_TOKEN" http://localhost:8080/api/v1/ten
 - [Admin CLI Reference](admin.md)
 - [User CLI Reference](user.md)
 - [Configuration Guide](configuration.md)
-- [Binary Installation](../deployment_assets/bin/README.md)
+- Binary Installation

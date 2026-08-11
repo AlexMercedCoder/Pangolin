@@ -8,11 +8,19 @@ The Pangolin repository follows a monorepo structure separating the core Rust im
 pangolin-monorepo/
 ├── docs/                        # Comprehensive Documentation
 │   ├── api/                     # API Reference and Swagger info
+│   ├── architecture/            # Design and internals
+│   ├── backend_storage/         # Per-backend storage notes
+│   ├── best-practices/          # Deployment and usage guidance
 │   ├── cli/                     # CLI Command Reference
 │   ├── features/                # Feature Guides (RBAC, Federation, etc.)
 │   ├── getting-started/         # Installation and Architecture guides
 │   ├── known-issues/            # Registry of quirks and temporary traps
-│   └── ui/                      # UI User Guide
+│   ├── operations/              # Running it: parity, encryption, backup,
+│   │                            #   performance, replicas, OIDC, runbook
+│   ├── reference/               # Lookup tables and reference material
+│   ├── ui/                      # UI User Guide
+│   ├── upgrading/               # Version-to-version upgrade notes
+│   └── warehouse/               # Warehouse and credential-vending docs
 │
 ├── pangolin/                    # Core Rust Implementation (Workspace)
 │   ├── pangolin_api/           # REST API Server (Axum)
@@ -27,13 +35,17 @@ pangolin-monorepo/
 │   └── src/lib/                # Shared Components and Stores
 │
 ├── pypangolin/                  # Python SDK
-│   ├── pypangolin/             # Source Code
+│   ├── src/pypangolin/         # Source Code
 │   └── docs/                   # SDK-specific Documentation
 │
 ├── scripts/                     # Automation & Verification
 │   ├── verify_pypangolin_*.py  # SDK Verification Scripts
-│   ├── test_release_*.py       # End-to-End Release Tests
-│   └── docker-build.sh         # Build helpers
+│   ├── release_smoke_test.py   # Verifies a released image over HTTP
+│   ├── backup_restore_drill.sh # Dumps, destroys, restores, verifies
+│   ├── load_test.py            # Load harness (client + server-side latency)
+│   ├── bump_version.sh         # One version across every artifact
+│   ├── check_env_var_docs.sh   # Env-var reference vs. the code
+│   └── build_docker_sequential.sh  # Builds and pushes the three images
 │
 ├── tests/                       # Integration Test Suites
 │   └── pyiceberg/              # PyIceberg compatibility tests

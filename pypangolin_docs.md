@@ -1,3 +1,14 @@
+<!--
+  GENERATED FILE - do not edit.
+
+  A concatenation of every file under pypangolin/docs/, for feeding to tools that want one
+  document. Each section is preceded by a `<!-- Source: ... -->` marker naming
+  the file it came from.
+
+  Relative links inside are relative to the *original* file's location and do
+  not resolve here. Edit the source file, not this one.
+-->
+
 <!-- Source: pypangolin/docs/admin.md -->
 
 # Admin & System
@@ -218,13 +229,13 @@ PyPangolin provides secure credential management for database connections using 
 
 ## Main Guide
 
-- **[Database Connections Overview](../connections.md)** - Complete guide to database connection management
+- **[Database Connections Overview](pypangolin/docs/connections.md)** - Complete guide to database connection management
 
 ## SQL Databases
 
 - **[PostgreSQL](postgresql.md)** ✅ *Tested* - Open-source relational database
-- **[MySQL](mysql.md)** ✅ *Tested* - Popular relational database  
-- **[Amazon Redshift](redshift.md)** ⚠️ *Untested* - Cloud data warehouse (Postgres-compatible)
+- **[MySQL](pypangolin/docs/connections/mysql.md)** ✅ *Tested* - Popular relational database  
+- **[Amazon Redshift](pypangolin/docs/connections/redshift.md)** ⚠️ *Untested* - Cloud data warehouse (Postgres-compatible)
 
 ## NoSQL Databases
 
@@ -232,13 +243,13 @@ PyPangolin provides secure credential management for database connections using 
 
 ## Cloud Data Warehouses
 
-- **[Snowflake](snowflake.md)** ⚠️ *Untested* - Cloud data platform
-- **[Azure Synapse](synapse.md)** ⚠️ *Untested* - Microsoft analytics service
-- **[Google BigQuery](bigquery.md)** ⚠️ *Untested* - Serverless data warehouse
+- **[Snowflake](pypangolin/docs/connections/snowflake.md)** ⚠️ *Untested* - Cloud data platform
+- **[Azure Synapse](pypangolin/docs/connections/synapse.md)** ⚠️ *Untested* - Microsoft analytics service
+- **[Google BigQuery](pypangolin/docs/connections/bigquery.md)** ⚠️ *Untested* - Serverless data warehouse
 
 ## Analytics Platforms
 
-- **[Dremio](dremio.md)** ✅ *Tested* - Data lakehouse platform with Arrow Flight
+- **[Dremio](pypangolin/docs/connections/dremio.md)** ✅ *Tested* - Data lakehouse platform with Arrow Flight
 
 ## Quick Start
 
@@ -1439,19 +1450,19 @@ PyPangolin provides secure credential management for database connections using 
 
 ### SQL Databases
 - **[PostgreSQL](connections/postgresql.md)** - Open-source relational database ✅ *Tested*
-- **[MySQL](connections/mysql.md)** - Popular relational database ✅ *Tested*
-- **[Amazon Redshift](connections/redshift.md)** - Cloud data warehouse (Postgres-compatible) ⚠️ *Untested*
+- **[MySQL](pypangolin/docs/connections/mysql.md)** - Popular relational database ✅ *Tested*
+- **[Amazon Redshift](pypangolin/docs/connections/redshift.md)** - Cloud data warehouse (Postgres-compatible) ⚠️ *Untested*
 
 ### NoSQL Databases
 - **[MongoDB](connections/mongodb.md)** - Document database ✅ *Tested*
 
 ### Cloud Data Warehouses
-- **[Snowflake](connections/snowflake.md)** - Cloud data platform ⚠️ *Untested*
-- **[Azure Synapse](connections/synapse.md)** - Microsoft analytics service ⚠️ *Untested*
-- **[Google BigQuery](connections/bigquery.md)** - Serverless data warehouse ⚠️ *Untested*
+- **[Snowflake](pypangolin/docs/connections/snowflake.md)** - Cloud data platform ⚠️ *Untested*
+- **[Azure Synapse](pypangolin/docs/connections/synapse.md)** - Microsoft analytics service ⚠️ *Untested*
+- **[Google BigQuery](pypangolin/docs/connections/bigquery.md)** - Serverless data warehouse ⚠️ *Untested*
 
 ### Analytics Platforms
-- **[Dremio](connections/dremio.md)** - Data lakehouse platform with Arrow Flight ✅ *Tested*
+- **[Dremio](pypangolin/docs/connections/dremio.md)** - Data lakehouse platform with Arrow Flight ✅ *Tested*
 
 ## Quick Start
 
@@ -1600,9 +1611,9 @@ encryption_key = secret['data']['data']['encryption_key']
 ## See Also
 
 - [PostgreSQL Guide](connections/postgresql.md)
-- [MySQL Guide](connections/mysql.md)
+- [MySQL Guide](pypangolin/docs/connections/mysql.md)
 - [MongoDB Guide](connections/mongodb.md)
-- [Dremio Guide](connections/dremio.md)
+- [Dremio Guide](pypangolin/docs/connections/dremio.md)
 
 
 ---

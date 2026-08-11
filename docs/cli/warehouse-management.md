@@ -307,7 +307,7 @@ pangolin-admin create-catalog prod-catalog-azure --warehouse production-azure
 ## Related Documentation
 
 - [Storage & Connectivity Architecture](../architecture/storage_and_connectivity.md) - Detailed multi-cloud architecture
-- [PyIceberg Integration Guide](../../planning/pyiceberg_testing_guide.md) - Testing warehouses with PyIceberg
+- PyIceberg Integration Guide - Testing warehouses with PyIceberg
 - [Authentication Guide](../architecture/authentication.md) - CLI authentication methods
 
 ## See Also

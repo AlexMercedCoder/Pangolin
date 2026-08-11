@@ -1,3 +1,14 @@
+<!--
+  GENERATED FILE - do not edit.
+
+  A concatenation of every file under docs/, for feeding to tools that want one
+  document. Each section is preceded by a `<!-- Source: ... -->` marker naming
+  the file it came from.
+
+  Relative links inside are relative to the *original* file's location and do
+  not resolve here. Edit the source file, not this one.
+-->
+
 <!-- Source: docs/CREDENTIAL_VENDING_DOCS_UPDATE.md -->
 
 # Documentation Update Summary - Credential Vending
@@ -764,10 +775,10 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 *Quickest path from zero to a running lakehouse.*
 
 - **[Onboarding Index](./getting-started/README.md)** - **Start Here!**
-- **[Installation Guide](./getting-started/getting_started.md)** - Run Pangolin in 5 minutes.
-- **[Evaluating Pangolin](./getting-started/evaluating-pangolin.md)** - Rapid local testing with `NO_AUTH` mode.
+- **[Installation Guide](docs/getting-started/getting_started.md)** - Run Pangolin in 5 minutes.
+- **[Evaluating Pangolin](docs/getting-started/evaluating-pangolin.md)** - Rapid local testing with `NO_AUTH` mode.
 - **[Deployment Guide](./getting-started/deployment.md)** - Local, Docker, and Production setup.
-- **[Environment Variables](./getting-started/env_vars.md)** - Complete system configuration reference.
+- **[Environment Variables](docs/getting-started/env_vars.md)** - Complete system configuration reference.
 
 ---
 
@@ -777,8 +788,8 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 - **[Infrastructure Features](./features/README.md)** - Index of all platform capabilities.
 - **[Warehouse Management](./warehouse/README.md)** - Configuring S3, Azure, and GCS storage.
 - **[Metadata Backends](./backend_storage/README.md)** - Memory, Postgres, MongoDB, and SQLite.
-- **[Asset Management](./features/asset_management.md)** - Tables, Views, and CRUD operations.
-- **[Federated Catalogs](./features/federated_catalogs.md)** - Proxying external REST catalogs.
+- **[Asset Management](docs/features/asset_management.md)** - Tables, Views, and CRUD operations.
+- **[Federated Catalogs](docs/features/federated_catalogs.md)** - Proxying external REST catalogs.
 - **[Known Issues](./known-issues/README.md)** - Documented limitations and active bugs (e.g., SQL backend quirks).
 
 ---
@@ -786,22 +797,22 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 ## ⚖️ 3. Governance & Security
 *Multi-tenancy, RBAC, and auditing.*
 
-- **[Security Concepts](./features/security_vending.md)** - Identity and Credential Vending principles.
-- **[Credential Vending (IAM Roles)](./features/iam_roles.md)** - Scoped cloud access (STS, SAS, Downscoped).
+- **[Security Concepts](docs/features/security_vending.md)** - Identity and Credential Vending principles.
+- **[Credential Vending (IAM Roles)](docs/features/iam_roles.md)** - Scoped cloud access (STS, SAS, Downscoped).
 - **[Permission System](./permissions.md)** - Understanding RBAC and granular grants.
 - **[Service Users](./features/service_users.md)** - Programmatic access and API key management.
-- **[Audit Logging](./features/audit_logs.md)** - Global action tracking and compliance.
+- **[Audit Logging](docs/features/audit_logs.md)** - Global action tracking and compliance.
 
 ---
 
 ## 🧪 4. Data Life Cycle
 *Git-for-Data and maintenance workflows.*
 
-- **[Branch Management](./features/branch_management.md)** - Working with isolated data environments.
-- **[Merge Operations](./features/merge_operations.md)** - The 3-way merge workflow.
-- **[Merge Conflicts](./features/merge_conflicts.md)** - Theory and resolution strategies.
-- **[Business Metadata & Discovery](./features/business_catalog.md)** - Search, tags, and access requests.
-- **[Maintenance Utilities](./features/maintenance.md)** - Snapshot expiration and compaction.
+- **[Branch Management](docs/features/branch_management.md)** - Working with isolated data environments.
+- **[Merge Operations](docs/features/merge_operations.md)** - The 3-way merge workflow.
+- **[Merge Conflicts](docs/features/merge_conflicts.md)** - Theory and resolution strategies.
+- **[Business Metadata & Discovery](docs/features/business_catalog.md)** - Search, tags, and access requests.
+- **[Maintenance Utilities](docs/features/maintenance.md)** - Snapshot expiration and compaction.
 
 ---
 
@@ -821,8 +832,8 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 
 - **[Architecture Overview](./architecture/README.md)** - System design and component interaction.
 - **[Technical Logic Deep-Dive](./architecture/README.md)** - Caching, Branching (Git-for-Data), and Trait details.
-- **[Data Models](./architecture/models.md)** - Understanding the internal schema.
-- **[CatalogStore Trait](./architecture/catalog-store-trait.md)** - Extending Pangolin storage.
+- **[Data Models](docs/architecture/models.md)** - Understanding the internal schema.
+- **[CatalogStore Trait](docs/architecture/catalog-store-trait.md)** - Extending Pangolin storage.
 - **[Developer Utilities](./utilities/README.md)** - Tools for contributors (e.g. OpenAPI generation).
 
 ---
@@ -832,7 +843,7 @@ Welcome to the comprehensive documentation for **Pangolin**, the cloud-native Ap
 
 - **[Best Practices Index](./best-practices/README.md)** - Complete guide to operating Pangolin.
 - **[Deployment & Security](./best-practices/deployment.md)** - Production checklists.
-- **[Scalability](./best-practices/scalability.md)** - Tuning for high performance.
+- **[Scalability](docs/best-practices/scalability.md)** - Tuning for high performance.
 - **[Iceberg Tuning](./best-practices/iceberg.md)** - Optimizing table layout and compaction.
 
 ---
@@ -855,7 +866,7 @@ Pangolin implements the [Apache Iceberg REST Catalog specification](https://gith
 
 ## Core API
 
-### [API Overview](api_overview.md)
+### [API Overview](docs/api/api_overview.md)
 Complete REST API reference covering:
 - Namespace operations
 - Table operations
@@ -949,7 +960,7 @@ Pangolin provides an interactive Swagger UI for live API exploration:
 
 | Document | Description |
 |----------|-------------|
-| [api_overview.md](api_overview.md) | Complete REST API reference |
+| [api_overview.md](docs/api/api_overview.md) | Complete REST API reference |
 | [authentication.md](authentication.md) | Authentication methods and setup |
 
 ## Quick Examples
@@ -1197,7 +1208,7 @@ The API is protected by authentication middleware that:
 
 ## S3 Credential Vending
 
-For direct S3 access (e.g., from engines like Spark or Trino), Pangolin provides a credential vending mechanism. See [Security & Vending](../features/security_vending.md) for details.
+For direct S3 access (e.g., from engines like Spark or Trino), Pangolin provides a credential vending mechanism. See [Security & Vending](docs/features/security_vending.md) for details.
 
 
 ---
@@ -1881,7 +1892,7 @@ echo "✅ Environment created successfully!"
 - [OpenAPI Specification](./openapi.yaml) - Complete API schema
 - [Apache Iceberg REST Spec](https://github.com/apache/iceberg/blob/main/open-api/rest-catalog-open-api.yaml) - Iceberg endpoints
 - [Authentication Guide](../authentication.md) - Authentication setup
-- [Getting Started](../getting-started/getting_started.md) - Quick start guide
+- [Getting Started](docs/getting-started/getting_started.md) - Quick start guide
 
 ---
 
@@ -2318,19 +2329,19 @@ curl -X POST http://localhost:8080/api/v1/bulk/assets/delete \
 This directory contains detailed technical documentation for the Pangolin architecture.
 
 ## 🏗️ Core Structure
-- **[High-Level Architecture](./architecture.md)**: Overall system design, component interaction, and multi-tenant isolation.
-- **[API Handlers](./handlers.md)**: Map of API endpoints categorized by functional domain (Iceberg, Versioning, Admin).
-- **[Models](./models.md)**: Comprehensive guide to core system structs (Tenant, Asset, Merge, User).
-- **[Enums](./enums.md)**: Exhaustive list of system enumerations and their serialized values.
+- **[High-Level Architecture](docs/architecture/architecture.md)**: Overall system design, component interaction, and multi-tenant isolation.
+- **[API Handlers](docs/architecture/handlers.md)**: Map of API endpoints categorized by functional domain (Iceberg, Versioning, Admin).
+- **[Models](docs/architecture/models.md)**: Comprehensive guide to core system structs (Tenant, Asset, Merge, User).
+- **[Enums](docs/architecture/enums.md)**: Exhaustive list of system enumerations and their serialized values.
 
 ## 🔧 Interfaces & Logic
 - **[System Traits](./traits.md)**: In-depth look at `CatalogStore` and `Signer` interfaces.
 - **[Branching & Merging](./branching.md)**: Operational details of the "Git-for-Data" versioning model.
-- **[Caching Strategy](./caching.md)**: multi-layered performance optimizations for metadata and cloud backends.
+- **[Caching Strategy](docs/architecture/caching.md)**: multi-layered performance optimizations for metadata and cloud backends.
 
 ## 🔐 Security & Operations
 - **[Authentication](./authentication.md)**: Deep dive into JWT, Service User API Keys, and RBAC.
-- **[Storage & Connectivity](./storage_and_connectivity.md)**: Cloud connectivity, modular store structure, and credential vending.
+- **[Storage & Connectivity](docs/architecture/storage_and_connectivity.md)**: Cloud connectivity, modular store structure, and credential vending.
 - **[Dependencies](./dependencies.md)**: Final list of technology stack and library versions.
 
 ---
@@ -3544,7 +3555,7 @@ The entire backend stack is fully asynchronous, built on `tokio` and `axum`.
 - **Background Tasks**: Tasks like `cleanup_expired_tokens` run in detached Tokio tasks to avoid blocking request paths.
 
 ## 4. Caching Layers
-Performance is further augmented by a multi-tier caching strategy explained in [Caching Architecture](./caching.md).
+Performance is further augmented by a multi-tier caching strategy explained in [Caching Architecture](docs/architecture/caching.md).
 - **Level 1**: Wrapper Cache (`CachedCatalogStore`) - Configuration data.
 - **Level 2**: Metadata Cache (`moka`) - Iceberg Manifest bytes.
 - **Level 3**: Connection Pools (`ObjectStoreCache`, DB Pools).
@@ -3793,7 +3804,7 @@ let creds = store.vend_credentials(&warehouse.storage_config, &prefix).await?;
 
 ## See Also
 
-- [CatalogStore Trait](./catalog-store-trait.md)
+- [CatalogStore Trait](docs/architecture/catalog-store-trait.md)
 - [Credential Vending Guide](../guides/credential-vending.md)
 - [Storage Configuration](../configuration/storage.md)
 
@@ -4338,7 +4349,7 @@ catalog = load_catalog(
 
 ### Option B: Credential Vending (Recommended)
 Pangolin automatically vends S3/Cloud credentials if the Warehouse is configured with a role. You only need to provide the Pangolin token.
-- See [Credential Vending](./features/security_vending.md) for warehouse setup.
+- See [Credential Vending](docs/features/security_vending.md) for warehouse setup.
 
 ---
 
@@ -4446,11 +4457,11 @@ DATABASE_URL=mongodb://user:password@localhost:27017/pangolin
 
 ## Next Steps
 
-- [In-Memory Setup Guide](memory.md)
-- [SQLite Setup Guide](sqlite.md)
+- [In-Memory Setup Guide](docs/backend_storage/memory.md)
+- [SQLite Setup Guide](docs/backend_storage/sqlite.md)
 - [PostgreSQL Setup Guide](postgresql.md)
 - [MongoDB Setup Guide](mongodb.md)
-- [Detailed Comparison](comparison.md)
+- [Detailed Comparison](docs/backend_storage/comparison.md)
 
 ## Migration Between Backends
 
@@ -4726,7 +4737,7 @@ All three backends are production-ready and fully tested. Your choice should be 
 
 - [PostgreSQL Setup](postgresql.md)
 - [MongoDB Setup](mongodb.md)
-- [SQLite Setup](sqlite.md)
+- [SQLite Setup](docs/backend_storage/sqlite.md)
 - [Warehouse Storage](../warehouse/README.md)
 
 
@@ -5107,17 +5118,17 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
 ## Additional Resources
 
 - [DashMap Documentation](https://docs.rs/dashmap/)
-- [Backend Storage Comparison](comparison.md)
+- [Backend Storage Comparison](docs/backend_storage/comparison.md)
 - [PostgreSQL Backend](postgresql.md)
 - [MongoDB Backend](mongodb.md)
-- [SQLite Backend](sqlite.md)
+- [SQLite Backend](docs/backend_storage/sqlite.md)
 
 ## Next Steps
 
 - [PostgreSQL Backend](postgresql.md) - For production deployments
 - [MongoDB Backend](mongodb.md) - For cloud-native deployments
-- [SQLite Backend](sqlite.md) - For embedded deployments
-- [Backend Comparison](comparison.md) - Choose the right backend
+- [SQLite Backend](docs/backend_storage/sqlite.md) - For embedded deployments
+- [Backend Comparison](docs/backend_storage/comparison.md) - Choose the right backend
 
 
 ---
@@ -5414,8 +5425,8 @@ db.runCommand({ compact: 'catalogs' })
 ## Next Steps
 
 - [PostgreSQL Backend](postgresql.md)
-- [SQLite Backend](sqlite.md)
-- [Backend Comparison](comparison.md)
+- [SQLite Backend](docs/backend_storage/sqlite.md)
+- [Backend Comparison](docs/backend_storage/comparison.md)
 - [Warehouse Storage](../warehouse/README.md)
 
 
@@ -5783,8 +5794,8 @@ Custom migration script required. Contact support or see migration guide.
 ## Next Steps
 
 - [MongoDB Backend](mongodb.md)
-- [SQLite Backend](sqlite.md)
-- [Backend Comparison](comparison.md)
+- [SQLite Backend](docs/backend_storage/sqlite.md)
+- [Backend Comparison](docs/backend_storage/comparison.md)
 - [Warehouse Storage](../warehouse/README.md)
 
 
@@ -6118,7 +6129,7 @@ rm dev.db
 
 - [PostgreSQL Backend](postgresql.md)
 - [MongoDB Backend](mongodb.md)
-- [Backend Comparison](comparison.md)
+- [Backend Comparison](docs/backend_storage/comparison.md)
 - [Warehouse Storage](../warehouse/README.md)
 
 
@@ -6134,7 +6145,7 @@ Comprehensive guides for deploying, operating, and optimizing Pangolin in produc
 
 ### Operations
 - **[Deployment](./deployment.md)** - Production deployment strategies, Docker, Kubernetes, HA setup
-- **[Scalability](./scalability.md)** - Scaling API servers, databases, multi-tenancy, performance optimization
+- **[Scalability](docs/best-practices/scalability.md)** - Scaling API servers, databases, multi-tenancy, performance optimization
 - **[Security](./security.md)** - Authentication, encryption, audit logging, compliance
 
 ### Data Management
@@ -6144,7 +6155,7 @@ Comprehensive guides for deploying, operating, and optimizing Pangolin in produc
 
 ### Technical
 - **[Apache Iceberg](./iceberg.md)** - Table design, partitioning, schema evolution, performance tuning
-- **[Generic Assets](./generic-assets.md)** - Managing ML models, files, media, and other artifacts
+- **[Generic Assets](docs/best-practices/generic-assets.md)** - Managing ML models, files, media, and other artifacts
 
 ## Quick Reference
 
@@ -6654,10 +6665,10 @@ ORDER BY week DESC;
 
 ## Additional Resources
 
-- [Branch Management Guide](../features/branch_management.md)
-- [Merge Operations](../features/merge_operations.md)
-- [Conflict Resolution](../features/merge_conflicts.md)
-- [Git Operations (PyPangolin)](../../pypangolin/docs/git_operations.md)
+- [Branch Management Guide](docs/features/branch_management.md)
+- [Merge Operations](docs/features/merge_operations.md)
+- [Conflict Resolution](docs/features/merge_conflicts.md)
+- [Git Operations (PyPangolin)](pypangolin/docs/git_operations.md)
 
 
 ---
@@ -7099,9 +7110,9 @@ CREATE INDEX idx_audit_timestamp ON audit_logs(timestamp);
 
 ## Additional Resources
 
-- [Scalability Best Practices](./scalability.md)
+- [Scalability Best Practices](docs/best-practices/scalability.md)
 - [Security Best Practices](./security.md)
-- [Monitoring Guide](../features/audit_logs.md)
+- [Monitoring Guide](docs/features/audit_logs.md)
 
 
 ---
@@ -7584,10 +7595,10 @@ pangolin-admin grant-permission \
 
 ## Additional Resources
 
-- [Generic Assets Guide](../features/generic_assets.md)
-- [PyPangolin File Assets](../../pypangolin/docs/csv.md)
-- [PyPangolin ML Models](../../pypangolin/docs/other.md)
-- [Lance Format](../../pypangolin/docs/lance.md)
+- [Generic Assets Guide](docs/features/generic_assets.md)
+- [PyPangolin File Assets](pypangolin/docs/csv.md)
+- [PyPangolin ML Models](pypangolin/docs/other.md)
+- [Lance Format](pypangolin/docs/lance.md)
 
 
 ---
@@ -7971,9 +7982,9 @@ source_df.writeTo("analytics.new_iceberg_table").create()
 
 ## Additional Resources
 
-- [PyIceberg Integration](../features/pyiceberg_testing.md)
-- [Table Formats Guide](../features/table_formats.md)
-- [Maintenance Operations](../features/maintenance.md)
+- [PyIceberg Integration](docs/features/pyiceberg_testing.md)
+- [Table Formats Guide](docs/features/table_formats.md)
+- [Maintenance Operations](docs/features/maintenance.md)
 - [PyPangolin Iceberg Guide](../../pypangolin/docs/iceberg.md)
 
 
@@ -8528,9 +8539,9 @@ def generate_metadata_dashboard():
 
 ## Additional Resources
 
-- [Business Catalog Guide](../features/business_catalog.md)
-- [Tag Management](../features/tag_management.md)
-- [Data Discovery](../ui/discovery_governance.md)
+- [Business Catalog Guide](docs/features/business_catalog.md)
+- [Tag Management](docs/features/tag_management.md)
+- [Data Discovery](docs/ui/discovery_governance.md)
 
 
 ---
@@ -8995,8 +9006,8 @@ pangolin-admin list-audit-events \
 ## Additional Resources
 
 - [Security Best Practices](./security.md)
-- [RBAC Documentation](../features/rbac.md)
-- [Audit Logging](../features/audit_logs.md)
+- [RBAC Documentation](docs/features/rbac.md)
+- [Audit Logging](docs/features/audit_logs.md)
 
 
 ---
@@ -9430,7 +9441,7 @@ aws s3 cp s3://hot-bucket/old-data/ s3://archive-bucket/old-data/ \
 ## Additional Resources
 
 - [Deployment Best Practices](./deployment.md)
-- [Performance Tuning Guide](../features/maintenance.md)
+- [Performance Tuning Guide](docs/features/maintenance.md)
 - [Database Optimization](../backend_storage/README.md)
 
 
@@ -9894,7 +9905,7 @@ pangolin-admin list-audit-events \
 ## Additional Resources
 
 - [Permissions Management Best Practices](./permissions.md)
-- [Audit Logging Guide](../features/audit_logs.md)
+- [Audit Logging Guide](docs/features/audit_logs.md)
 - [Deployment Security](./deployment.md)
 
 
@@ -9950,33 +9961,33 @@ pangolin-admin create-catalog my-catalog --warehouse my-warehouse
 
 ### Admin Tool (`pangolin-admin`)
 - **[Admin Overview](./admin.md)** - Complete admin tool reference
-- **[Tenant Management](./admin-tenants.md)** - Creating and managing tenants
-- **[User Management](./admin-users.md)** - User creation and administration
-- **[Warehouse Management](./admin-warehouses.md)** - Storage backend configuration
-- **[Catalog Management](./admin-catalogs.md)** - Local catalog operations
-- **[Federated Catalogs](./admin-federated-catalogs.md)** - External catalog integration
-- **[Permission Management](./admin-permissions.md)** - RBAC and access control
-- **[Service Users](./admin-service-users.md)** - API keys and service accounts
-- **[Token Management](./admin-token-management.md)** - User token operations
-- **[Audit Logging](./admin-audit-logging.md)** - Viewing and analyzing audit events
-- **[Merge Operations](./admin-merge-operations.md)** - Managing branch merges
-- **[Update Operations](./admin-update-operations.md)** - Updating resources
-- **[Metadata Management](./admin-metadata.md)** - Business metadata operations
-- **[Optimization Commands](./admin-optimization-commands.md)** - Performance and maintenance
+- **[Tenant Management](docs/cli/admin-tenants.md)** - Creating and managing tenants
+- **[User Management](docs/cli/admin-users.md)** - User creation and administration
+- **[Warehouse Management](docs/cli/admin-warehouses.md)** - Storage backend configuration
+- **[Catalog Management](docs/cli/admin-catalogs.md)** - Local catalog operations
+- **[Federated Catalogs](docs/cli/admin-federated-catalogs.md)** - External catalog integration
+- **[Permission Management](docs/cli/admin-permissions.md)** - RBAC and access control
+- **[Service Users](docs/cli/admin-service-users.md)** - API keys and service accounts
+- **[Token Management](docs/cli/admin-token-management.md)** - User token operations
+- **[Audit Logging](docs/cli/admin-audit-logging.md)** - Viewing and analyzing audit events
+- **[Merge Operations](docs/cli/admin-merge-operations.md)** - Managing branch merges
+- **[Update Operations](docs/cli/admin-update-operations.md)** - Updating resources
+- **[Metadata Management](docs/cli/admin-metadata.md)** - Business metadata operations
+- **[Optimization Commands](docs/cli/admin-optimization-commands.md)** - Performance and maintenance
 
 ### User Tool (`pangolin-user`)
 - **[User Overview](./user.md)** - Complete user tool reference
-- **[Branch Management](./user-branches.md)** - Creating and managing branches
-- **[Tag Management](./user-tags.md)** - Versioning with tags
-- **[Discovery](./user-discovery.md)** - Data discovery and search
-- **[Access Requests](./user-access.md)** - Requesting permissions
-- **[Token Management](./user-tokens.md)** - Personal token management
+- **[Branch Management](docs/cli/user-branches.md)** - Creating and managing branches
+- **[Tag Management](docs/cli/user-tags.md)** - Versioning with tags
+- **[Discovery](docs/cli/user-discovery.md)** - Data discovery and search
+- **[Access Requests](docs/cli/user-access.md)** - Requesting permissions
+- **[Token Management](docs/cli/user-tokens.md)** - Personal token management
 
 ### Configuration & Setup
 - **[Overview](./overview.md)** - CLI tools overview
 - **[Configuration](./configuration.md)** - CLI configuration files
-- **[Docker Usage](./docker-usage.md)** - Running CLI in Docker
-- **[Warehouse Management](./warehouse-management.md)** - Multi-cloud warehouse setup
+- **[Docker Usage](docs/cli/docker-usage.md)** - Running CLI in Docker
+- **[Warehouse Management](docs/cli/warehouse-management.md)** - Multi-cloud warehouse setup
 
 ## Common Tasks
 
@@ -11338,7 +11349,7 @@ Error: API Request Failed: Connection refused
 ## See Also
 
 - [Admin CLI Overview](./admin.md)
-- [API Reference](../api/api_overview.md)
+- [API Reference](docs/api/api_overview.md)
 - [Performance Optimizations](../../planning/performance_optimizations_status.md)
 
 
@@ -11740,7 +11751,7 @@ Use descriptive names that indicate:
 
 - [Service Users API](../service_users.md)
 - [Authentication](../authentication.md)
-- [RBAC](../features/rbac.md)
+- [RBAC](docs/features/rbac.md)
 - [CLI Overview](./admin.md)
 
 
@@ -12586,14 +12597,14 @@ pangolin-admin login --username user --password pass123 --tenant-id $TENANT_ID
 - `revoke-permission <role> <action> <resource>`: Revoke permission from a role.
 
 ### Metadata
-See [Metadata Management Guide](./admin-metadata.md) for detailed attribution and explorer commands.
+See [Metadata Management Guide](docs/cli/admin-metadata.md) for detailed attribution and explorer commands.
 - `get-metadata --entity-type <type> --entity-id <id>`: Get entity properties.
 - `set-metadata --entity-type <type> --entity-id <id> <key> <value>`: Set entity properties.
 - `list-namespace-tree <catalog>`: Browse catalog structure.
 
 ## Update Operations
 
-Update existing resources. See [Update Operations Guide](./admin-update-operations.md) for details.
+Update existing resources. See [Update Operations Guide](docs/cli/admin-update-operations.md) for details.
 
 ### Commands
 - `update-tenant --id <id> --name <name>`: Update tenant properties
@@ -12603,7 +12614,7 @@ Update existing resources. See [Update Operations Guide](./admin-update-operatio
 
 ## Token Management
 
-Manage authentication tokens for security. See [Token Management Guide](./admin-token-management.md) for details.
+Manage authentication tokens for security. See [Token Management Guide](docs/cli/admin-token-management.md) for details.
 
 ### Commands
 - `revoke-token`: Revoke your own token (logout)
@@ -12611,7 +12622,7 @@ Manage authentication tokens for security. See [Token Management Guide](./admin-
 
 ## Merge Operations
 
-Complete merge workflow for branch management. See [Merge Operations Guide](./admin-merge-operations.md) for details.
+Complete merge workflow for branch management. See [Merge Operations Guide](docs/cli/admin-merge-operations.md) for details.
 
 ### Commands
 - `list-merge-operations`: List all merge operations
@@ -13745,7 +13756,7 @@ pangolin-admin create-catalog prod-catalog-azure --warehouse production-azure
 
 ## Related Documentation
 
-- [Storage & Connectivity Architecture](../architecture/storage_and_connectivity.md) - Detailed multi-cloud architecture
+- [Storage & Connectivity Architecture](docs/architecture/storage_and_connectivity.md) - Detailed multi-cloud architecture
 - [PyIceberg Integration Guide](../../planning/pyiceberg_testing_guide.md) - Testing warehouses with PyIceberg
 - [Authentication Guide](../architecture/authentication.md) - CLI authentication methods
 
@@ -14255,45 +14266,45 @@ This directory contains detailed documentation for the core features of the Pang
 
 ## 🗂️ Asset & Data Management
 Basic data operations and lifecycle management.
-- **[Entities](./entities.md)**: Understanding the Pangolin core models.
-- **[Asset Management](./asset_management.md)**: Handling Tables, Views, and other assets.
-- **[Generic Assets](./generic_assets.md)**: Cataloging ML Models, Videos, and Files.
-- **[Modern Table Formats](./table_formats.md)**: Support for Delta Lake, Hudi, and Paimon.
-- **[Warehouse Management](./warehouse_management.md)**: Configuring storage backends.
-- **[Time Travel](./time_travel.md)**: Querying historical data states.
-- **[Tag Management](./tag_management.md)**: Versioning with tags.
+- **[Entities](docs/features/entities.md)**: Understanding the Pangolin core models.
+- **[Asset Management](docs/features/asset_management.md)**: Handling Tables, Views, and other assets.
+- **[Generic Assets](docs/features/generic_assets.md)**: Cataloging ML Models, Videos, and Files.
+- **[Modern Table Formats](docs/features/table_formats.md)**: Support for Delta Lake, Hudi, and Paimon.
+- **[Warehouse Management](docs/features/warehouse_management.md)**: Configuring storage backends.
+- **[Time Travel](docs/features/time_travel.md)**: Querying historical data states.
+- **[Tag Management](docs/features/tag_management.md)**: Versioning with tags.
 
 ## 🌿 Versioning & Branches
 Git-like workflows for your data lake.
-- **[Branch Management](./branch_management.md)**: Creating and managing branches.
-- **[Merge Operations](./merge_operations.md)**: Workflow for 3-way merges.
-- **[Merge Conflicts](./merge_conflicts.md)**: Principles of data conflict resolution.
+- **[Branch Management](docs/features/branch_management.md)**: Creating and managing branches.
+- **[Merge Operations](docs/features/merge_operations.md)**: Workflow for 3-way merges.
+- **[Merge Conflicts](docs/features/merge_conflicts.md)**: Principles of data conflict resolution.
 
 ## 🛡️ Security & Access
 Governance and authentication mechanisms.
-- **[Multi-Tenancy](./multi_tenancy.md)**: Isolation principles and tenant management.
-- **[RBAC](./rbac.md)**: Role-Based Access Control system.
-- **[Credential Vending](./iam_roles.md)**: Cloud IAM and STS integration.
-- **[Security Concepts](./security_vending.md)**: Concept guide for vending and signing.
+- **[Multi-Tenancy](docs/features/multi_tenancy.md)**: Isolation principles and tenant management.
+- **[RBAC](docs/features/rbac.md)**: Role-Based Access Control system.
+- **[Credential Vending](docs/features/iam_roles.md)**: Cloud IAM and STS integration.
+- **[Security Concepts](docs/features/security_vending.md)**: Concept guide for vending and signing.
 
 ## 🔍 Discovery & Audit
 Finding data and tracking changes.
-- **[Business Catalog](./business_catalog.md)**: Data discovery portal and business metadata.
-- **[Audit Logging](./audit_logs.md)**: Comprehensive action tracking and compliance.
+- **[Business Catalog](docs/features/business_catalog.md)**: Data discovery portal and business metadata.
+- **[Audit Logging](docs/features/audit_logs.md)**: Comprehensive action tracking and compliance.
 
 ## 🌐 Integration & Federation
 Connecting to external systems.
-- **[Federated Catalogs](./federated_catalogs.md)**: Connecting to remote Iceberg catalogs.
-- **[Catalog Management](./catalog_management.md)**: Managing local and federated catalogs.
+- **[Federated Catalogs](docs/features/federated_catalogs.md)**: Connecting to remote Iceberg catalogs.
+- **[Catalog Management](docs/features/catalog_management.md)**: Managing local and federated catalogs.
 - **[Service Users](./service_users.md)**: API keys for programmatic access.
 
 ## 🧪 Integration & Testing
 Using Pangolin with other tools.
-- **[PyIceberg Integration](./pyiceberg_testing.md)**: Guide for Python users.
+- **[PyIceberg Integration](docs/features/pyiceberg_testing.md)**: Guide for Python users.
 
 ## 🛠️ Maintenance
 Optimizing and maintaining your data lake.
-- **[Maintenance Operations](./maintenance.md)**: Snapshot management and orphan file cleanup.
+- **[Maintenance Operations](docs/features/maintenance.md)**: Snapshot management and orphan file cleanup.
 
 ---
 
@@ -14924,8 +14935,8 @@ You can interactively register and manage generic assets directly from the **Dat
 
 ## 📚 Related Documentation
 
-- **[Modern Table Formats](./table_formats.md)**: Specific guide for cataloging **Delta Lake**, **Hudi**, and **Paimon**.
-- **[Asset Management](./asset_management.md)**: General governance guide.
+- **[Modern Table Formats](docs/features/table_formats.md)**: Specific guide for cataloging **Delta Lake**, **Hudi**, and **Paimon**.
+- **[Asset Management](docs/features/asset_management.md)**: General governance guide.
 
 ---
 
@@ -15030,9 +15041,9 @@ pangolin-admin create-warehouse --name "prod-s3" --type "s3"
 3. **Use External IDs**: When configuring cross-account `AwsSts` roles, always use an `external_id` to prevent the "confused deputy" problem.
 
 ## Related Documentation
-- [Warehouse Management](warehouse_management.md)
-- [Security & Credential Vending](security_vending.md)
-- [Architecture: Signer Trait](../architecture/signer-trait.md)
+- [Warehouse Management](docs/features/warehouse_management.md)
+- [Security & Credential Vending](docs/features/security_vending.md)
+- [Architecture: Signer Trait](docs/architecture/signer-trait.md)
 
 
 ---
@@ -15121,7 +15132,7 @@ To run maintenance operations, the user must have the following permissions:
 In a Data Lakehouse, merging branches is more complex than merging code because the underlying data is massive and mutable. Pangolin implements specific strategies to handle these updates safely.
 
 > [!NOTE]
-> For the step-by-step API guide and technical details on the 3-Way Merge algorithm, see the **[Merge Operations](./merge_operations.md)** guide.
+> For the step-by-step API guide and technical details on the 3-Way Merge algorithm, see the **[Merge Operations](docs/features/merge_operations.md)** guide.
 
 ## Types of Changes
 
@@ -15348,7 +15359,7 @@ When using the API or CLI, the tenant context is derived from:
 - **API Key Context**: For service users.
 - **X-Pangolin-Tenant Header**: Required for certain administrative operations or when using PyIceberg with cross-tenant access.
 
-For more details on managing tenants, see the **[CLI: Admin Tenants](../cli/admin-tenants.md)** guide.
+For more details on managing tenants, see the **[CLI: Admin Tenants](docs/cli/admin-tenants.md)** guide.
 
 
 ---
@@ -15776,9 +15787,9 @@ After successful testing:
 
 ## Additional Resources
 
-- [Client Configuration](../getting-started/client_configuration.md) - Detailed client setup
-- [Getting Started](../getting-started/getting_started.md) - Quick start guide
-- [Warehouse Management](./warehouse_management.md) - Warehouse and catalog setup
+- [Client Configuration](docs/getting-started/client_configuration.md) - Detailed client setup
+- [Getting Started](docs/getting-started/getting_started.md) - Quick start guide
+- [Warehouse Management](docs/features/warehouse_management.md) - Warehouse and catalog setup
 
 
 ---
@@ -16107,7 +16118,7 @@ POST /api/v1/permissions
 
 - [Service Users](../service_users.md) - API key authentication
 - [Authentication](../authentication.md) - User authentication
-- [Audit Logs](./audit_logs.md) - Access monitoring
+- [Audit Logs](docs/features/audit_logs.md) - Access monitoring
 - [Permissions System](../permissions.md) - Permission details
 
 
@@ -16592,8 +16603,8 @@ AWS_STS_REGIONAL_ENDPOINTS=regional
 
 - [Warehouse Management](../warehouse/README.md) - Creating and configuring warehouses
 - [Authentication](../architecture/authentication.md) - User authentication and tokens
-- [Client Configuration](../getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup
-- [AWS S3 Storage](../warehouse/s3.md) - S3 storage backend configuration
+- [Client Configuration](docs/getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup
+- [AWS S3 Storage](docs/warehouse/s3.md) - S3 storage backend configuration
 
 
 ---
@@ -17154,9 +17165,9 @@ if len(snapshots) > 1:
 
 ## Related Documentation
 
-- [Branch Management](./branch_management.md) - Git-like branching for catalogs
-- [Merge Conflicts](../merge_conflicts.md) - Merging branches
-- [PyIceberg Testing](./pyiceberg_testing.md) - PyIceberg integration
+- [Branch Management](docs/features/branch_management.md) - Git-like branching for catalogs
+- [Merge Conflicts](docs/features/merge_conflicts.md) - Merging branches
+- [PyIceberg Testing](docs/features/pyiceberg_testing.md) - PyIceberg integration
 
 
 ---
@@ -17331,9 +17342,9 @@ curl -X POST http://localhost:8080/api/v1/catalogs \
 
 ## Related Documentation
 
-- [Security & Credential Vending](./security_vending.md) - Detailed credential vending guide
-- [AWS S3 Storage](../warehouse/s3.md) - S3 backend configuration
-- [Client Configuration](../getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup
+- [Security & Credential Vending](docs/features/security_vending.md) - Detailed credential vending guide
+- [AWS S3 Storage](docs/warehouse/s3.md) - S3 backend configuration
+- [Client Configuration](docs/getting-started/client_configuration.md) - PyIceberg, Spark, Trino setup
 
 
 ---
@@ -17346,30 +17357,30 @@ Welcome to Pangolin! This directory contains everything you need to set up, conf
 
 ## 🚀 Onboarding
 Get up and running in minutes.
-- **[Quick Start Guide](./getting_started.md)**: A step-by-step walkthrough of your first tenant, catalog, and table.
-- **[Evaluating Pangolin](./evaluating-pangolin.md)**: Using `NO_AUTH` mode for rapid local testing.
+- **[Quick Start Guide](docs/getting-started/getting_started.md)**: A step-by-step walkthrough of your first tenant, catalog, and table.
+- **[Evaluating Pangolin](docs/getting-started/evaluating-pangolin.md)**: Using `NO_AUTH` mode for rapid local testing.
 
 ## ⚙️ Configuration
 Fine-tune Pangolin for your environment.
-- **[Environment Variables](./env_vars.md)**: Comprehensive list of all configuration options.
+- **[Environment Variables](docs/getting-started/env_vars.md)**: Comprehensive list of all configuration options.
 - **[Configuration Overview](./configuration.md)**: Principles of runtime and storage setup.
-- **[Nested Namespaces](./nested_namespaces.md)**: Guide to creating and managing hierarchical namespaces.
-- **[Storage Backend Logic](./storage-backend-logic.md)**: How backends determine which credentials to use (vending vs client-side).
+- **[Nested Namespaces](docs/getting-started/nested_namespaces.md)**: Guide to creating and managing hierarchical namespaces.
+- **[Storage Backend Logic](docs/getting-started/storage-backend-logic.md)**: How backends determine which credentials to use (vending vs client-side).
 - **[Dependencies](./dependencies.md)**: System requirements and library overview.
 
 ## 🔌 Client Integration
 Connect your favorite tools to the Pangolin REST Catalog.
-- **[Client Configuration](./client_configuration.md)**: Setup guides for PyIceberg, PySpark, and Trino.
+- **[Client Configuration](docs/getting-started/client_configuration.md)**: Setup guides for PyIceberg, PySpark, and Trino.
 
 ## 🔐 Authentication Modes
 Choose your security model.
-- **[Auth Mode](./auth-mode.md)**: Standard operational mode with user authentication.
-- **[No Auth Mode](./no-auth-mode.md)**: For local development and testing.
+- **[Auth Mode](docs/getting-started/auth-mode.md)**: Standard operational mode with user authentication.
+- **[No Auth Mode](docs/getting-started/no-auth-mode.md)**: For local development and testing.
 
 ## 🚢 Deployment
 Move from local testing to production.
 - **[Deployment Guide](./deployment.md)**: Instructions for local, Docker, and production environments.
-- **[Docker Deployment](./docker_deployment.md)**: Detailed Docker setup and configuration.
+- **[Docker Deployment](docs/getting-started/docker_deployment.md)**: Detailed Docker setup and configuration.
 
 ---
 
@@ -17383,7 +17394,7 @@ cd pangolin
 docker-compose up -d
 ```
 
-Visit the [Quick Start Guide](./getting_started.md) to perform your first data operations!
+Visit the [Quick Start Guide](docs/getting-started/getting_started.md) to perform your first data operations!
 
 
 ---
@@ -17894,7 +17905,7 @@ Pangolin follow a "Configuration-over-Code" philosophy, allowing for flexible de
 
 Most settings are managed via **Environment Variables** at startup. This includes everything from the port number to the metadata persistence backend.
 
-- For a complete list of variables, see **[Environment Variables](../environment-variables.md)**.
+- For a complete list of variables, see **[Environment Variables](docs/environment-variables.md)**.
 - For deployment-specific patterns, see **[Deployment Guide](./deployment.md)**.
 
 ## Client Configuration Discovery
@@ -17929,7 +17940,7 @@ GET http://localhost:8080/v1/config?warehouse=main
 
 While core system configuration uses environment variables, **Storage Connectors** (Warehouses) are configured dynamically via the Admin API/CLI. This allows you to add or modify storage locations without restarting the Pangolin service.
 
-- To learn how to configure storage, see **[Warehouse Management](../features/warehouse_management.md)**.
+- To learn how to configure storage, see **[Warehouse Management](docs/features/warehouse_management.md)**.
 
 
 ---
@@ -18056,7 +18067,7 @@ If using Docker deployment:
 
 ## Related Documentation
 
-- [Getting Started](./getting_started.md) - Quick start guide
+- [Getting Started](docs/getting-started/getting_started.md) - Quick start guide
 - [Configuration](./configuration.md) - Configuration options
 - [Deployment](./deployment.md) - Production deployment
 
@@ -18143,15 +18154,15 @@ export DATABASE_URL="postgresql://user:pass@db-host:5432/pangolin"
 Ensure `PANGOLIN_NO_AUTH` is NOT set to `true`. Set a strong `PANGOLIN_JWT_SECRET`.
 
 ### 3. Use Cloud IAM Roles
-For storage access, prefer `AwsSts` or `AzureSas` vending strategies over static keys. See [Credential Vending](../features/iam_roles.md).
+For storage access, prefer `AwsSts` or `AzureSas` vending strategies over static keys. See [Credential Vending](docs/features/iam_roles.md).
 
 ### 4. Monitoring & Logging
 Set `RUST_LOG=info` or `debug` and integrate the container logs with your logging provider.
 
 ## Related Documentation
-- [Environment Variables](./env_vars.md)
-- [Client Configuration](./client_configuration.md)
-- [Multi-Tenancy](../features/multi_tenancy.md)
+- [Environment Variables](docs/getting-started/env_vars.md)
+- [Client Configuration](docs/getting-started/client_configuration.md)
+- [Multi-Tenancy](docs/features/multi_tenancy.md)
 
 
 ---
@@ -18444,7 +18455,7 @@ curl -X POST http://localhost:8080/api/v1/warehouses \
     }
   }'
 ```
-*Note: We use `vending_strategy: AwsStatic` for this quick start. For production with IAM Role assumption, see [Credential Vending](../features/iam_roles.md).*
+*Note: We use `vending_strategy: AwsStatic` for this quick start. For production with IAM Role assumption, see [Credential Vending](docs/features/iam_roles.md).*
 
 ### 3. Create a Catalog
 A catalog references a warehouse and specifies a storage location. The catalog name is what clients use in their connection URIs.
@@ -18552,9 +18563,9 @@ Now, `main` will contain the schema updates made in `dev`.
 
 ## Next Steps
 
-- Explore [Branch Management](../features/branch_management.md) for advanced strategies.
-- Learn about [Credential Vending](../features/iam_roles.md).
-- Set up [Client Configuration](client_configuration.md) for PyIceberg, PySpark, Trino, or Dremio.
+- Explore [Branch Management](docs/features/branch_management.md) for advanced strategies.
+- Learn about [Credential Vending](docs/features/iam_roles.md).
+- Set up [Client Configuration](docs/getting-started/client_configuration.md) for PyIceberg, PySpark, Trino, or Dremio.
 
 ## Production Setup
 
@@ -18625,9 +18636,9 @@ Response (403 Forbidden):
 
 ## Next Steps
 
-- [PyIceberg Testing Guide](../features/pyiceberg_testing.md) - Comprehensive PyIceberg testing
-- [Client Configuration](./client_configuration.md) - Configure various Iceberg clients
-- [Warehouse Management](../features/warehouse_management.md) - Manage warehouses and catalogs
+- [PyIceberg Testing Guide](docs/features/pyiceberg_testing.md) - Comprehensive PyIceberg testing
+- [Client Configuration](docs/getting-started/client_configuration.md) - Configure various Iceberg clients
+- [Warehouse Management](docs/features/warehouse_management.md) - Manage warehouses and catalogs
 - [API Reference](../api/) - Complete API documentation
 
 
@@ -19202,7 +19213,7 @@ This section documents verified issues, limitations, and architectural quirks pr
 
 ## v0.4.0
 
-*   [SQL Backend Token Listing (SQLite/Postgres)](./token_listing_sqlite_join.md)
+*   [SQL Backend Token Listing (SQLite/Postgres)](docs/known-issues/token_listing_sqlite_join.md)
     *   **Description**: Active token lists may be empty for Root users or ephemeral accounts when using SQL backends due to a strict `JOIN` dependency.
     *   **Status**: Identified. Fix proposed for v0.5.x.
 
@@ -19356,23 +19367,23 @@ Choose the guide that matches your environment:
 
 ### Authenticated (Production)
 For multi-tenant environments where security is enforced via JWT tokens.
-- **[Credential Vending](./auth_vended_creds.md)** (Recommended): Pangolin manages storage keys.
-- **[Client-Provided Credentials](./auth_client_creds.md)**: You provide storage keys to the client.
+- **[Credential Vending](docs/pyiceberg/auth_vended_creds.md)** (Recommended): Pangolin manages storage keys.
+- **[Client-Provided Credentials](docs/pyiceberg/auth_client_creds.md)**: You provide storage keys to the client.
 
 ### Service Users (Machine Identity)
 For automation and CI/CD where persistent access is needed.
-- **[API Key Authentication](./auth_api_key.md)**: Using Service User API keys.
+- **[API Key Authentication](docs/pyiceberg/auth_api_key.md)**: Using Service User API keys.
 
 ### No-Auth (Evaluation)
 For rapid local testing and development.
-- **[Credential Vending](./no_auth_vended_creds.md)**: Test the vending flow without RBAC.
-- **[Client-Provided Credentials](./no_auth_client_creds.md)**: Basic local storage connectivity.
+- **[Credential Vending](docs/pyiceberg/no_auth_vended_creds.md)**: Test the vending flow without RBAC.
+- **[Client-Provided Credentials](docs/pyiceberg/no_auth_client_creds.md)**: Basic local storage connectivity.
 
 ---
 
 ## ☁️ Multi-Cloud Support
 Detailed configuration for different storage backends.
-- **[Azure & GCP Integration](./multi_cloud.md)**: Connecting to ADLS Gen2 and Google Cloud Storage.
+- **[Azure & GCP Integration](docs/pyiceberg/multi_cloud.md)**: Connecting to ADLS Gen2 and Google Cloud Storage.
 
 ---
 
@@ -19747,21 +19758,21 @@ catalog = load_catalog(
 This section contains detailed reference guides for all major Pangolin concepts and operations, covering API, CLI, Python SDK, and UI usage.
 
 ## Core Concepts
-*   [**Tenants**](./tenants.md): Managing isolation units and context switching.
-*   [**Users**](./users.md): Identity management for humans.
-*   [**Access Control**](./access_control.md): RBAC (Roles) and ABAC/TBAC (Tags).
+*   [**Tenants**](docs/reference/tenants.md): Managing isolation units and context switching.
+*   [**Users**](docs/reference/users.md): Identity management for humans.
+*   [**Access Control**](docs/reference/access_control.md): RBAC (Roles) and ABAC/TBAC (Tags).
 *   [**Service Users**](./service_users.md): Programmatic access keys for automation.
-*   [**Tokens**](./tokens.md): Session management and authentication.
-*   [**Auditing**](./auditing.md): Governance logs and monitoring.
+*   [**Tokens**](docs/reference/tokens.md): Session management and authentication.
+*   [**Auditing**](docs/reference/auditing.md): Governance logs and monitoring.
 
 ## Storage & Catalogs
-*   [**Warehouses**](./warehouses.md): Configuring object storage (S3, Azure, GCS).
-*   [**Catalogs**](./catalogs.md): Managing local and federated Iceberg catalogs.
+*   [**Warehouses**](docs/reference/warehouses.md): Configuring object storage (S3, Azure, GCS).
+*   [**Catalogs**](docs/reference/catalogs.md): Managing local and federated Iceberg catalogs.
 
 ## Data Management
-*   [**Assets**](./assets.md): Managing tables, views, and generic files.
+*   [**Assets**](docs/reference/assets.md): Managing tables, views, and generic files.
 *   [**Business Metadata**](./metadata.md): Tagging and custom properties.
-*   [**Version Control**](./version_control.md): Branching, merging, and conflict resolution.
+*   [**Version Control**](docs/reference/version_control.md): Branching, merging, and conflict resolution.
 
 
 ---
@@ -20944,20 +20955,20 @@ Welcome to the documentation for the Pangolin Management UI. This web interface 
 ### [General Overview](./overview.md)
 Start here to understand the interface layout, theme switching, and the core dashboard experience.
 
-### [Data Management](./data_management.md)
+### [Data Management](docs/ui/data_management.md)
 Learn how to browse your data, manage branches (Git-for-Data), and handle merge operations.
 - Data Explorer
 - Branching & Tagging
 - Merge Operations & Conflict Resolution
 - Table Maintenance
 
-### [Discovery & Governance](./discovery_governance.md)
+### [Discovery & Governance](docs/ui/discovery_governance.md)
 Tools for finding data and auditing system activity.
 - Data Discovery Portal
 - Access Request Workflow
 - Audit Log Viewer
 
-### [Administration](./administration.md)
+### [Administration](docs/ui/administration.md)
 Configure the foundational resources of your Pangolin instance.
 - Multi-Tenant Management
 - Warehouse & Catalog Configuration
@@ -21273,7 +21284,7 @@ For local testing without an identity provider.
 Username and Bcrypt-hashed password management for standard deployments.
 
 ### 3. OAuth
-One-click login with Google, GitHub, or Microsoft (configured in [System Settings](./administration.md)).
+One-click login with Google, GitHub, or Microsoft (configured in [System Settings](docs/ui/administration.md)).
 
 
 ---
@@ -21286,7 +21297,7 @@ This directory contains utility documentation for maintaining and working with t
 
 ## Available Guides
 
-### [Regenerating OpenAPI Documentation](./regenerating-openapi.md)
+### [Regenerating OpenAPI Documentation](docs/utilities/regenerating-openapi.md)
 Complete guide for regenerating the OpenAPI specification files (JSON and YAML) after making changes to API handlers or models.
 
 **Quick Commands**:
@@ -21838,10 +21849,10 @@ The `use_sts` boolean field is deprecated. Use `vending_strategy` instead.
 
 | Storage | Status | Best For |
 |---------|--------|----------|
-| [AWS S3](s3.md) | ✅ Production | Most common, excellent performance |
-| [Azure Blob](azure.md) | ✅ Production | Azure-native deployments |
-| [Google Cloud Storage](gcs.md) | ✅ Production | GCP-native deployments |
-| [Local Filesystem](local.md) | ⚠️ Dev/Test | Local development & testing |
+| [AWS S3](docs/warehouse/s3.md) | ✅ Production | Most common, excellent performance |
+| [Azure Blob](docs/warehouse/azure.md) | ✅ Production | Azure-native deployments |
+| [Google Cloud Storage](docs/warehouse/gcs.md) | ✅ Production | GCP-native deployments |
+| [Local Filesystem](docs/warehouse/local.md) | ⚠️ Dev/Test | Local development & testing |
 
 ## Quick Start
 
@@ -21916,9 +21927,9 @@ When a catalog has no warehouse, clients must configure storage themselves.
 **PySpark**: Configure Hadoop filesystem properties
 
 See individual storage guides for details:
-- [S3 Client Configuration](s3.md)
-- [Azure Client Configuration](azure.md)
-- [GCS Client Configuration](gcs.md)
+- [S3 Client Configuration](docs/warehouse/s3.md)
+- [Azure Client Configuration](docs/warehouse/azure.md)
+- [GCS Client Configuration](docs/warehouse/gcs.md)
 
 ## Best Practices
 
@@ -21976,9 +21987,9 @@ Error: No credentials provided
 
 ## Next Steps
 
-- [S3 Warehouse Configuration](s3.md)
-- [Azure Blob Warehouse Configuration](azure.md)
-- [GCS Warehouse Configuration](gcs.md)
+- [S3 Warehouse Configuration](docs/warehouse/s3.md)
+- [Azure Blob Warehouse Configuration](docs/warehouse/azure.md)
+- [GCS Warehouse Configuration](docs/warehouse/gcs.md)
 - [Backend Storage Options](../backend_storage/README.md)
 
 
@@ -22216,8 +22227,8 @@ Error: This request is not authorized to perform this operation
 
 ## Next Steps
 
-- [S3 Warehouse](s3.md)
-- [GCS Warehouse](gcs.md)
+- [S3 Warehouse](docs/warehouse/s3.md)
+- [GCS Warehouse](docs/warehouse/gcs.md)
 - [Warehouse Concept](README.md)
 
 
@@ -22481,8 +22492,8 @@ Error: 403 Forbidden
 
 ## Next Steps
 
-- [S3 Warehouse](s3.md)
-- [Azure Warehouse](azure.md)
+- [S3 Warehouse](docs/warehouse/s3.md)
+- [Azure Warehouse](docs/warehouse/azure.md)
 - [Warehouse Concept](README.md)
 
 
@@ -22897,7 +22908,7 @@ aws cloudtrail create-trail \
 
 ## Next Steps
 
-- [Azure Blob Warehouse](azure.md)
-- [GCS Warehouse](gcs.md)
+- [Azure Blob Warehouse](docs/warehouse/azure.md)
+- [GCS Warehouse](docs/warehouse/gcs.md)
 - [Warehouse Concept](README.md)
 - [Backend Storage](../backend_storage/README.md)
