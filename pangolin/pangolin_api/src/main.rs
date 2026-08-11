@@ -47,6 +47,17 @@ async fn main() {
              administrator. For evaluation only."
         );
     }
+    // C-11. Said out loud rather than left to the documentation: warehouse
+    // credentials are only encrypted at rest when a key is configured, and a
+    // silent no-op is precisely the failure mode this audit keeps finding.
+    if !pangolin_store::secrets::is_enabled() {
+        tracing::warn!(
+            "PANGOLIN_ENCRYPTION_KEY is not set, so warehouse cloud credentials are stored in \
+             the catalog database in plaintext. Anything that can read one row - a backup, a \
+             replica, a snapshot - holds every tenant's cloud keys. Generate a key with \
+             `openssl rand -base64 32`; see docs/operations/encryption.md for the migration."
+        );
+    }
 
     let store = match build_store().await {
         Ok(s) => s,

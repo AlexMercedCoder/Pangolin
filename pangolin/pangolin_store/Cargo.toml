@@ -33,6 +33,11 @@ aws-sdk-s3 = { version = "1.0", features = ["behavior-version-latest"] }
 aws-config = { version = "1.10", features = ["behavior-version-latest"] }
 aws-credential-types = "1.0"
 sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "sqlite", "uuid", "chrono", "json"] }
+# C-11, warehouse credential encryption at rest. `ring` is already in the tree
+# via jsonwebtoken, object_store and rustls, so this declares a dependency that
+# was already being compiled rather than adding one.
+ring = "0.17"
+base64 = "0.22"
 mongodb = "3.4.1"
 bson = { version = "2.14", features = ["uuid-1", "chrono-0_4"] }
 aws-sdk-sts = { version = "1.0", features = ["behavior-version-latest"] }
@@ -59,3 +64,6 @@ test-support = []
 
 [dev-dependencies]
 pangolin_store = { path = ".", features = ["test-support"] }
+# The few tests that exercise PANGOLIN_ENCRYPTION_KEY handling mutate a
+# process-global, so they must not run concurrently with each other.
+serial_test = "2.0"

@@ -182,9 +182,13 @@ Stated plainly rather than buried:
 - **OAuth is not full OIDC.** No PKCE, no `id_token` validation, no JWKS, no
   discovery. Users are matched on provider-supplied email with no
   `email_verified` check. See [docs/operations/oidc.md](docs/operations/oidc.md).
-- **Warehouse cloud credentials are stored unencrypted** in the catalog database,
-  and the in-process warehouse cache is node-local, so a rotated credential can
-  be served by a peer for up to the cache TTL (5s by default).
+- **Warehouse cloud credentials are encrypted at rest only if you configure a
+  key.** Set `PANGOLIN_ENCRYPTION_KEY` (`openssl rand -base64 32`); without it
+  they are stored in plaintext and the server says so at startup. See
+  [docs/operations/encryption.md](docs/operations/encryption.md), which is also
+  honest about what envelope encryption does not protect against. The
+  in-process warehouse cache is still node-local, so a rotated credential can be
+  served by a peer for up to the cache TTL (5s by default).
 - **Running more than one replica works but is unproven.** The background token
   cleanup job runs in every replica with no coordination, and the OAuth nonce
   store is in-process, so OAuth needs session affinity.

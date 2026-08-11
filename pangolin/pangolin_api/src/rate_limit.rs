@@ -9,8 +9,8 @@
 //!
 //! Two keys, deliberately:
 //!
-//! * **by source address** - bounds one attacker hammering many accounts;
-//! * **by account** - bounds many sources hammering one account, which is what
+//! * **by source address**: bounds one attacker hammering many accounts;
+//! * **by account**: bounds many sources hammering one account, which is what
 //!   a credential-stuffing list looks like and which a per-IP limit alone
 //!   cannot see.
 //!
@@ -53,7 +53,7 @@ const THROTTLED_PATHS: &[&str] = &[
 ];
 
 pub fn is_throttled_path(path: &str) -> bool {
-    THROTTLED_PATHS.iter().any(|p| path == *p)
+    THROTTLED_PATHS.contains(&path)
 }
 
 #[derive(Clone)]

@@ -2,9 +2,9 @@
 //!
 //! C-5. `rate_limit`'s unit tests prove the counter behaves; they say nothing
 //! about whether it is wired to anything. These drive the real router, because
-//! the interesting failure mode is a limiter that exists and is never consulted
-//! - which is how this endpoint came to be brute-forceable with a limiter crate
-//! already in the dependency tree for something else.
+//! the interesting failure mode is a limiter that exists and is never
+//! consulted. That is how this endpoint came to be brute-forceable with a
+//! limiter crate already in the dependency tree for something else.
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};

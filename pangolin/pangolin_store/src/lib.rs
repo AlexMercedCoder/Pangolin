@@ -5,6 +5,7 @@ pub mod gcp_signer;
 pub mod memory;
 pub mod mongo;
 pub mod postgres;
+pub mod secrets;
 pub mod signer;
 pub mod sqlite;
 /// Helpers for locating the databases backend integration tests need.

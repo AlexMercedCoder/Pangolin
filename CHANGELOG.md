@@ -13,6 +13,44 @@ values and there was no way to tell which combination had been tested together.
 
 Bucket 2 of the production-readiness work.
 
+### Added — warehouse credentials encrypted at rest (C-11)
+
+A warehouse holds the credentials Pangolin uses to reach a customer's object
+storage. They were plaintext JSON in the catalog database, so anything that
+could read one row of `warehouses` — a backup, a replica, a snapshot, an analyst
+with `SELECT` — held every tenant's cloud keys.
+
+Credential fields are now sealed with AES-256-GCM and a fresh 96-bit nonce per
+value, stored as `enc:v1:<base64>`. Only credentials are sealed; bucket, region,
+endpoint and account name stay readable, because the object-store factory
+compares and concatenates them and they are not secrets.
+
+Deliberate choices worth knowing about:
+
+- **Off unless `PANGOLIN_ENCRYPTION_KEY` is set**, and the server warns loudly
+  at startup when it is not. Requiring it would break every existing deployment
+  on upgrade; doing nothing silently is the failure mode this audit keeps
+  finding, so it is said out loud instead.
+- **Reads tolerate plaintext**, so a database written before this exists keeps
+  working. Those rows stay unsealed until something rewrites them —
+  `docs/operations/encryption.md` explains how to force that and how to find
+  what still needs it.
+- **The wrong key fails loudly.** GCM authenticates, so a mismatched key gives
+  an error naming `PANGOLIN_ENCRYPTION_KEY` rather than returning rubbish.
+- **This protects a stolen database, not a compromised host.** The key is in the
+  server's environment. That limit is documented rather than implied away.
+
+PostgreSQL, SQLite and MongoDB seal on write and open on read, on both the
+create and the update paths — sealing only on create would protect the first
+credential and leak every rotation, which is worse than not doing it at all,
+because the table would look encrypted. The memory backend is excluded on
+purpose: it loses everything on restart, so it has no "at rest".
+
+`warehouse_encryption_tests.rs` reads the raw stored bytes through its own
+database connection rather than through the store, and asserts the plaintext is
+absent. Asking the store to read back its own writes would pass just as happily
+if `seal` were never called.
+
 ### Added — rate limiting on the authentication endpoints (C-5)
 
 The login endpoint had no throttle of any kind and was brute-forceable. There

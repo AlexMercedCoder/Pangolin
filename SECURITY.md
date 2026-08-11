@@ -246,7 +246,11 @@ Stated plainly, because a checklist that hides its limits is worse than none:
   returns, with no `email_verified` check.
 * **Symmetric HS256 JWTs with no key rotation.** Rotating the secret invalidates
   every session at once.
-* **Warehouse credentials are stored unencrypted** in the catalog database.
+* **Warehouse credentials are encrypted at rest only when a key is set.**
+  `PANGOLIN_ENCRYPTION_KEY` enables AES-256-GCM sealing of the credential
+  fields; unset, they are plaintext and the server warns at startup. The key
+  lives in the server environment, so this protects a stolen database and not a
+  compromised host.
 * **Audit records are not tamper-evident.** They live in the same database as
   application data, with no hash chaining and no WORM option.
 * **No MFA, password policy, or account lockout.**

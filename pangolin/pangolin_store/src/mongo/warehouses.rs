@@ -1,5 +1,6 @@
 use super::main::to_bson_uuid;
 use super::MongoStore;
+use crate::secrets;
 use anyhow::Result;
 use futures::stream::TryStreamExt;
 use mongodb::bson::doc;
@@ -7,7 +8,9 @@ use pangolin_core::model::{Warehouse, WarehouseUpdate};
 use uuid::Uuid;
 
 impl MongoStore {
-    pub async fn create_warehouse(&self, _tenant_id: Uuid, warehouse: Warehouse) -> Result<()> {
+    pub async fn create_warehouse(&self, _tenant_id: Uuid, mut warehouse: Warehouse) -> Result<()> {
+        // C-11: see the module note in `crate::secrets`.
+        secrets::seal(&mut warehouse.storage_config)?;
         self.warehouses().insert_one(warehouse).await?;
         Ok(())
     }
@@ -15,7 +18,13 @@ impl MongoStore {
     pub async fn get_warehouse(&self, tenant_id: Uuid, name: String) -> Result<Option<Warehouse>> {
         let filter = doc! { "tenant_id": to_bson_uuid(tenant_id), "name": name };
         let warehouse = self.warehouses().find_one(filter).await?;
-        Ok(warehouse)
+        match warehouse {
+            Some(mut w) => {
+                secrets::open(&mut w.storage_config)?;
+                Ok(Some(w))
+            }
+            None => Ok(None),
+        }
     }
 
     pub async fn list_warehouses(
@@ -37,7 +46,10 @@ impl MongoStore {
         }
 
         let cursor = find.await?;
-        let warehouses: Vec<Warehouse> = cursor.try_collect().await?;
+        let mut warehouses: Vec<Warehouse> = cursor.try_collect().await?;
+        for warehouse in &mut warehouses {
+            secrets::open(&mut warehouse.storage_config)?;
+        }
         Ok(warehouses)
     }
 
@@ -54,7 +66,9 @@ impl MongoStore {
             update_doc.insert("name", new_name);
         }
         if let Some(config) = &updates.storage_config {
-            update_doc.insert("storage_config", mongodb::bson::to_bson(config)?);
+            let mut sealed = config.clone();
+            secrets::seal(&mut sealed)?;
+            update_doc.insert("storage_config", mongodb::bson::to_bson(&sealed)?);
         }
         if let Some(use_sts) = updates.use_sts {
             update_doc.insert("use_sts", use_sts);
