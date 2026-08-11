@@ -9,7 +9,7 @@ This directory contains detailed technical documentation for the Pangolin archit
 - **[Enums](./enums.md)**: Exhaustive list of system enumerations and their serialized values.
 
 ## 🔧 Interfaces & Logic
-- **[System Traits](./traits.md)**: In-depth look at `CatalogStore` and `Signer` interfaces.
+- **[System Traits](./catalog-store-trait.md)**: In-depth look at `CatalogStore` and `Signer` interfaces.
 - **[Branching & Merging](./branching.md)**: Operational details of the "Git-for-Data" versioning model.
 - **[Caching Strategy](./caching.md)**: multi-layered performance optimizations for metadata and cloud backends.
 

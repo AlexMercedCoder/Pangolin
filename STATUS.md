@@ -12,16 +12,17 @@ pointing here. **Where they disagree with this file, this file is correct.**
 Everything marked done below is verified by tests that run against live
 PostgreSQL, MongoDB and MinIO, not by inspection:
 
-- **63 test targets, 415 tests, zero failures**
-- **19 CI jobs green**, including an authorization matrix, a four-backend parity
-  suite, both MongoDB topologies, an MSRV check, and a build of every optional
-  feature
+- **65 test targets, 448 tests, zero failures**
+- **14 CI jobs green on every push and pull request**, including an
+  authorization matrix, a four-backend parity suite, both MongoDB topologies, an
+  MSRV check, and a build of every optional feature. Five further jobs build and
+  release the binaries, and run only on a `v*` tag.
 - `cargo audit` clean; clippy at a ratcheted budget of 30 (from 314)
 
 That standard exists because this project has repeatedly had things that
 compiled, passed CI, and did not work. Twice in the 0.8.0 work alone: the
 cloud-credential features had never compiled at any version, and a server that
-exited 25 seconds after startup passed all 18 CI jobs and the full suite.
+exited 25 seconds after startup passed every CI job and the full suite.
 
 ## Done
 
@@ -51,7 +52,7 @@ exited 25 seconds after startup passed all 18 CI jobs and the full suite.
 
 | Item | Where |
 |---|---|
-| CI that actually runs — 19 jobs | 0.7.0 / 0.8.0 |
+| CI that actually runs — 14 jobs per push, 5 more per release tag | 0.7.0 / 0.8.0 |
 | A release pipeline that produces a release (it never had; `macos-13` was retired and hung every tag for 24h) | 0.7.0 |
 | A release gate that verifies the published image over HTTP | 0.7.0 |
 | Token-cleanup sweep that **runs** (it was dead code) and staggers across replicas | 0.8.0 |
@@ -119,18 +120,28 @@ blip, every revoked token is accepted again. Watch
 - Eight accepted dependency advisories to re-check when dependencies move
 - clippy 30 and svelte-check 150 backlogs, both ratcheted
 
-## Not shipped
+## Shipped
 
-**0.7.0 and 0.8.0 are not published.** The work is merged to the branch and CI
-is green, but the merge, tag, Docker push and PyPI upload have not been made.
-The most recent published artifact is `alexmerced/pangolin-api:0.5.1` from
-2025-12-30 — so **anything running Pangolin today is on 0.5.1**, which predates
-every security fix listed above.
+**0.8.0 is published**, on 2026-08-11:
 
-The `SECURITY.md` advisory covers `< 0.7.0` for that reason.
+| Artifact | State |
+|---|---|
+| GitHub release `v0.8.0` | 12 binaries across linux, macOS Intel, macOS ARM and Windows — **the first release this project has produced**; v0.4.0 through v0.6.0 had tags and no releases |
+| PyPI `pypangolin` 0.8.0 | wheel and sdist |
+| `alexmerced/pangolin-api`, `-cli`, `-ui` | see the note below |
 
-The PyPI token has been rotated. Still requiring a person: decide whether to
-publish a GHSA once a fixed version actually exists.
+No 0.6.0 or 0.7.0 image was ever published, because the release pipeline could
+not complete: `build-macos-intel` targeted the `macos-13` runner image, retired
+in December 2025, and hung for the full 24-hour limit on every tag. Fixing that
+exposed a second failure that had been unreachable behind it — the workflow
+never declared `permissions: contents: write`, so creating a release was refused
+with a 403. Both are fixed.
+
+**Anyone running an image older than 0.8.0 is on 0.5.1 or earlier**, which
+predates every security fix listed above.
+
+Still requiring a person: decide whether to publish a GHSA now that a fixed
+version exists.
 
 ## If you are deciding whether to run this
 

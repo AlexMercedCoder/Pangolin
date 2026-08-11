@@ -28,7 +28,7 @@ graph TD
 
 ## Modular Storage Architecture
 
-As of December 2025, all Pangolin storage backends have been refactored into a modular pattern. See the **[Backend Architecture Audit](../../planning/backend_architecture_audit.md)** for detailed status.
+As of December 2025, all Pangolin storage backends have been refactored into a modular pattern. See the **Backend Architecture Audit** for detailed status.
 
 Each backend now resides in its own directory:
 - `pangolin_store/src/postgres/`

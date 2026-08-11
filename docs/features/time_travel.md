@@ -304,5 +304,5 @@ if len(snapshots) > 1:
 ## Related Documentation
 
 - [Branch Management](./branch_management.md) - Git-like branching for catalogs
-- [Merge Conflicts](../merge_conflicts.md) - Merging branches
+- [Merge Conflicts](merge_conflicts.md) - Merging branches
 - [PyIceberg Testing](./pyiceberg_testing.md) - PyIceberg integration

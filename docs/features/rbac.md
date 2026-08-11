@@ -167,7 +167,7 @@ Authorization: Bearer <admin-token>
 
 ## Service Users
 
-Service users are programmatic identities with API key authentication. See [Service Users](../service_users.md) for details.
+Service users are programmatic identities with API key authentication. See [Service Users](./service_users.md) for details.
 
 **Key Points**:
 - Service users inherit the same RBAC system
@@ -318,7 +318,7 @@ POST /api/v1/permissions
 
 ## Related Documentation
 
-- [Service Users](../service_users.md) - API key authentication
+- [Service Users](./service_users.md) - API key authentication
 - [Authentication](../authentication.md) - User authentication
 - [Audit Logs](./audit_logs.md) - Access monitoring
 - [Permissions System](../permissions.md) - Permission details

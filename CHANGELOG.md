@@ -623,7 +623,7 @@ fixed before 0.7.0 shipped.
   crash-looped. The deadline is now armed inside `shutdown_signal`, only once a
   signal has actually been seen.
 
-  All 18 CI jobs passed with this present, as did the full workspace suite:
+  Every CI job passed with this present, as did the full workspace suite:
   nothing ran the binary for longer than the 25-second default. The `docker`
   job now starts the built image with a 5-second grace, waits 20 seconds, and
   fails if it is no longer serving - then checks it still stops promptly when

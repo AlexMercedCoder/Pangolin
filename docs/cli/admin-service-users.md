@@ -277,7 +277,7 @@ Use descriptive names that indicate:
 
 ## Related Documentation
 
-- [Service Users API](../service_users.md)
+- [Service Users API](../features/service_users.md)
 - [Authentication](../authentication.md)
 - [RBAC](../features/rbac.md)
 - [CLI Overview](./admin.md)

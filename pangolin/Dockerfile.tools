@@ -1,5 +1,9 @@
 # Build Stage
-FROM rust:1.88-slim-bookworm as builder
+# Kept in step with `rust-version` in Cargo.toml, which the `msrv` CI job
+# verifies. A-36 raised the API image and missed this one, so the CLI image
+# stayed on 1.88 and failed to build the moment the workspace MSRV moved past
+# it - which is what happened publishing 0.8.0.
+FROM rust:1.94-slim-bookworm AS builder
 
 WORKDIR /usr/src/pangolin
 
@@ -17,21 +21,41 @@ COPY pangolin_cli_common ./pangolin_cli_common
 COPY pangolin_cli_admin ./pangolin_cli_admin
 COPY pangolin_cli_user ./pangolin_cli_user
 
-# Build CLI binaries
-RUN cargo build --release --bin pangolin-admin
-RUN cargo build --release --bin pangolin-user
+# Build CLI binaries.
+#
+# One invocation, not two: the second `cargo build` re-resolved and re-linked
+# the shared dependency graph for no benefit. `--locked` makes the build fail
+# rather than silently resolve a different dependency set than Cargo.lock
+# records - a published binary should be reproducible from the committed lock.
+RUN cargo build --release --locked --bin pangolin-admin --bin pangolin-user
 
 # Runtime Stage
 FROM debian:bookworm-slim
 
-# Install OpenSSL and CA certificates (needed for remote connections)
-RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+LABEL org.opencontainers.image.title="Pangolin CLI" \
+      org.opencontainers.image.description="Admin and user command-line clients for the Pangolin catalog" \
+      org.opencontainers.image.source="https://github.com/AlexMercedCoder/pangolin" \
+      org.opencontainers.image.licenses="MIT"
+
+# libssl3, not libssl-dev: the runtime needs the shared library, not headers
+# and static archives. A-36 corrected this in the API image and missed this
+# one, so the CLI image was still shipping the development package.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libssl3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as an unprivileged user (A-35). These are interactive clients that read
+# credentials from a mounted config; there is no reason for them to be root.
+RUN groupadd --system --gid 10001 pangolin \
+    && useradd --system --uid 10001 --gid pangolin --home-dir /app --shell /usr/sbin/nologin pangolin
 
 WORKDIR /app
 
 # Copy binaries
 COPY --from=builder /usr/src/pangolin/target/release/pangolin-admin /usr/local/bin/pangolin-admin
 COPY --from=builder /usr/src/pangolin/target/release/pangolin-user /usr/local/bin/pangolin-user
+
+USER 10001:10001
 
 # Default command (help)
 CMD ["echo", "Available commands: pangolin-admin, pangolin-user"]

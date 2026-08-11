@@ -699,6 +699,6 @@ export PANGOLIN_NO_AUTH=true
 
 ## See Also
 
-- [Deployment Guide](./deployment.md)
-- [Docker Setup](./docker-setup.md)
-- [Configuration Best Practices](./best-practices/configuration.md)
+- [Deployment Guide](./getting-started/deployment.md)
+- Docker Setup
+- [Configuration Best Practices](./getting-started/configuration.md)

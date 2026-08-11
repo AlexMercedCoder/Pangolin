@@ -135,6 +135,12 @@ configured", which at least failed closed.
 Fixed in 0.7.0, with a CI job that builds every optional feature so it cannot
 recur silently.
 
+### Upgrading
+
+- **To 0.8.0:** [docs/upgrading/0.7-to-0.8.md](docs/upgrading/0.7-to-0.8.md) —
+  MSRV 1.94, `PANGOLIN_ENCRYPTION_KEY`, MongoDB uniqueness constraints that can
+  fail on existing duplicates, rate limiting behind a proxy, and OIDC.
+
 ### Upgrading to 0.7.0
 
 1. **Rotate every issued token.** B0a means any account may have minted a

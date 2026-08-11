@@ -238,5 +238,5 @@ let creds = store.vend_credentials(&warehouse.storage_config, &prefix).await?;
 ## See Also
 
 - [CatalogStore Trait](./catalog-store-trait.md)
-- [Credential Vending Guide](../guides/credential-vending.md)
-- [Storage Configuration](../configuration/storage.md)
+- [Credential Vending Guide](../features/security_vending.md)
+- [Storage Configuration](./storage_and_connectivity.md)

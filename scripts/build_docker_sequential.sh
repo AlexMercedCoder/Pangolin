@@ -41,22 +41,40 @@ echo
 # existing release tag replaces what users pulled yesterday with something else
 # under the same name, which is the one thing a version number is supposed to
 # prevent. Set ALLOW_OVERWRITE=1 to proceed anyway.
+# An image already published at $VERSION is skipped rather than rebuilt, so a
+# run that dies partway through can simply be run again.
+#
+# This was an all-or-nothing abort: if *any* of the three tags existed the
+# script refused to start. Publishing 0.8.0 hit exactly that - the API image
+# pushed, the CLI image failed to compile (Dockerfile.tools was still on
+# rust:1.88), and the only way to finish the release was ALLOW_OVERWRITE=1,
+# which would also have re-pushed the good API image over itself. A partial
+# failure must be resumable without arming the one flag that lets you clobber a
+# published artefact.
+ALREADY_PUBLISHED=""
 if [[ -z "$DRY_RUN" && "${ALLOW_OVERWRITE:-}" != "1" ]]; then
     for repo in pangolin-api pangolin-cli pangolin-ui; do
         code=$(curl -s -o /dev/null -w "%{http_code}" \
             "https://hub.docker.com/v2/repositories/alexmerced/$repo/tags/$VERSION" || echo 000)
         if [[ "$code" == "200" ]]; then
-            echo "error: alexmerced/$repo:$VERSION is already published." >&2
-            echo "       Bump the version, or set ALLOW_OVERWRITE=1 if you are certain." >&2
-            exit 1
+            echo "  alexmerced/$repo:$VERSION is already published - skipping."
+            ALREADY_PUBLISHED="$ALREADY_PUBLISHED $repo"
         fi
     done
-    echo "None of the three tags exist yet; proceeding."
+    if [[ -n "$ALREADY_PUBLISHED" ]]; then
+        echo "  (set ALLOW_OVERWRITE=1 to rebuild and re-push them.)"
+    else
+        echo "None of the three tags exist yet; proceeding."
+    fi
     echo
 fi
 
 build() {
     local name="$1" dockerfile="$2" context="$3" step="$4"
+    if [[ " $ALREADY_PUBLISHED " == *" $name "* ]]; then
+        echo "--- Skipping ${name} (${step}/3): already at ${VERSION} ---"
+        return 0
+    fi
     echo "--- Building ${name} (${step}/3) ---"
     $DRY_RUN docker buildx build \
         --platform linux/amd64,linux/arm64 \
@@ -72,4 +90,4 @@ build pangolin-cli  pangolin/Dockerfile.tools  pangolin     2
 build pangolin-ui   pangolin_ui/Dockerfile     pangolin_ui  3
 
 echo
-echo "All three images published at ${VERSION} and latest."
+echo "All three images are now published at ${VERSION} and latest."

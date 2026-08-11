@@ -103,7 +103,11 @@ authenticate on MongoDB at all. Remaining gaps:
   ```
 
   They use different ports so both can run at once.
-* Multi-statement operations other than `delete_catalog` are still not atomic.
+* Multi-statement operations other than `delete_catalog` are still not atomic on
+  MongoDB. PostgreSQL and SQLite wrap branch-creation-by-copy from 0.8.0;
+  MongoDB has no atomic version, so the API takes a sequential fallback, logs
+  that a partial failure will leave the branch incomplete, and returns a `500`
+  naming it rather than a misleading `200`.
 
 ## What the first live run found
 

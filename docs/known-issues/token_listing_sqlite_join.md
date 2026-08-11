@@ -1,7 +1,14 @@
 
 # Known Issue: SQL Backend Token Listing for Root/Ephemeral Users
 
-**Affected Versions**: v0.4.0 and prior  
+> **Resolved in 0.7.0.** Both SQL backends now select `tenant_id` directly from
+> `active_tokens` instead of joining to `users`, which is what the memory and
+> MongoDB backends always did. The cross-backend parity suite asserts all four
+> behave identically, so this cannot silently return.
+>
+> Kept as a record of the defect and its cause.
+
+**Affected Versions**: v0.4.0 through v0.6.0  
 **Affected Backends**: SQLite, PostgreSQL  
 **Unaffected Backends**: Memory, MongoDB  
 

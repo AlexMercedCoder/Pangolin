@@ -10,7 +10,7 @@ This document lists the handler modules responsible for the API implementation, 
 - `list_tables` / `create_table`: Table lifecycle.
 - `load_table` / `update_table` / `delete_table`: Table operations.
 - `report_metrics`: Metrics reporting.
-- **Planned Refactor**: See [Iceberg Modularization Plan](../../planning/modularization_plan_iceberg.md).
+- **Planned Refactor**: See Iceberg Modularization Plan.
 
 ## Tenant & Storage Management
 **Files**: 
@@ -58,4 +58,4 @@ This document lists the handler modules responsible for the API implementation, 
 
 ## CLI Admin Handlers
 **File**: `pangolin_cli_admin/src/handlers.rs` (Refactor to `handlers/` in progress)
-- **Planned Refactor**: See [CLI Modularization Plan](../../planning/modularization_plan_cli.md).
+- **Planned Refactor**: See CLI Modularization Plan.
