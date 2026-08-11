@@ -10,6 +10,10 @@ use rustyline::Editor;
 
 #[derive(Parser, Debug)]
 #[command(name = "pangolin-user")]
+// `version` reads CARGO_PKG_VERSION. Without it there was no way to ask a
+// binary which build it was - which matters most for the container image,
+// where the tag is the only other clue and `latest` tells you nothing.
+#[command(version)]
 struct Args {
     #[arg(long, env = "PANGOLIN_URL")]
     url: Option<String>,
