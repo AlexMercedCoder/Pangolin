@@ -129,9 +129,29 @@ blip, every revoked token is accepted again. Watch
 |---|---|
 | GitHub release `v0.8.0` | 12 binaries across linux, macOS Intel, macOS ARM and Windows — **the first release this project has produced**; v0.4.0 through v0.6.0 had tags and no releases |
 | PyPI `pypangolin` 0.8.0 | wheel and sdist |
-| `alexmerced/pangolin-api`, `-cli`, `-ui` | see the note below |
+| `alexmerced/pangolin-api` 0.8.0 + latest | linux/amd64 + linux/arm64, 58MB |
+| `alexmerced/pangolin-cli` 0.8.0 + latest | linux/amd64 + linux/arm64, 39MB — the first CLI image since 0.5.0 |
+| `alexmerced/pangolin-ui` 0.8.0 + latest | linux/amd64 + linux/arm64, 52MB — the first UI image since 0.5.0 |
 
-No 0.6.0 or 0.7.0 image was ever published, because the release pipeline could
+Each was verified by pulling the published tag and running it, not by trusting
+the build's exit code: the CLI reports `pangolin-admin 0.8.0` and runs as uid
+10001, the UI serves `HTTP 200` as uid 1000 with a 2.3MB `node_modules`.
+
+Publishing them turned up four defects that every one of the 18 CI jobs had
+passed over, because CI builds images and never runs what it built:
+
+| Defect | Consequence |
+|---|---|
+| `Dockerfile.tools` still pinned `rust:1.88` | The CLI image could not compile once the MSRV moved to 1.94. It failed mid-release, after the API image had already pushed. |
+| The CLI runtime stage installed `libssl-dev` | Headers and static archives shipped in the published artefact. A-36 fixed this in the API image and missed this one. |
+| The UI runtime stage copied all of `node_modules` | All 22 devDependencies — vite, playwright, vitest, svelte-check, tailwind — published in the image. It is now 2.3MB. |
+| Neither CLI accepted `--version` | No way to ask a binary which build it was, on a tool distributed mainly as an image. |
+
+Both images also ran as root. CI now fails if any Dockerfile pins a version
+other than the declared `rust-version`.
+
+No 0.6.0 or 0.7.0 image was ever published, and no `-cli` or `-ui` image since
+0.5.0, because the release pipeline could
 not complete: `build-macos-intel` targeted the `macos-13` runner image, retired
 in December 2025, and hung for the full 24-hour limit on every tag. Fixing that
 exposed a second failure that had been unreachable behind it — the workflow

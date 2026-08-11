@@ -15,6 +15,38 @@ Production-readiness work: authentication hardening, credential encryption,
 transactional correctness, MongoDB index management, the missing Iceberg
 operations, operational tooling, and OpenID Connect.
 
+### Fixed — the published container images
+
+Four defects found by publishing 0.8.0 and then *running* what was published.
+All 18 CI jobs passed over every one of them, because the `docker` job builds
+images and does not exercise what it built.
+
+- **`Dockerfile.tools` still pinned `rust:1.88`.** A-36 raised the API image to
+  match the workspace MSRV and missed the CLI image, which then failed to
+  compile the moment `rust-version` moved to 1.94 — mid-release, after the API
+  image had already been pushed. The `msrv` job now fails if any Dockerfile
+  pins a version other than the declared one.
+- **The CLI runtime stage installed `libssl-dev`,** the development package,
+  shipping OpenSSL headers and static archives in the published artefact. Now
+  `libssl3`. This is the same defect A-36 corrected in the API image.
+- **The UI runtime stage copied the entire `node_modules`,** publishing all 22
+  devDependencies — vite, playwright, vitest, svelte-check, the tailwind
+  toolchain — in the shipped image. Pruned to the single production dependency:
+  283MB to 141MB locally, and `node_modules` from the full toolchain to 2.3MB.
+- **Neither CLI accepted `--version`.** `pangolin-admin --version` was a clap
+  parse error, so there was no way to ask a binary which build it was — on a
+  tool distributed mainly as a container image, where `latest` tells you
+  nothing.
+
+Both images also ran as root and carried no OCI labels; both now run
+unprivileged.
+
+The release script's overwrite guard was all-or-nothing: if any of the three
+tags existed it refused to start, so the partial 0.8.0 failure could only be
+finished with `ALLOW_OVERWRITE=1` — which would also have re-pushed the good
+API image over itself. It now skips images already published at the target
+version.
+
 ### Added — operations: replicas, backup, performance
 
 **The token-cleanup job never ran.** `start_token_cleanup_job` was defined, the
