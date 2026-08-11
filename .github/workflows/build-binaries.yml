@@ -107,6 +107,17 @@ jobs:
     needs: [build-linux, build-macos-intel, build-macos-arm, build-windows]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    # Creating a release is a write to repository contents, and the default
+    # GITHUB_TOKEN is read-only. Without this the job fails with
+    # `403 Resource not accessible by integration` *after* all four platform
+    # builds have spent their time.
+    #
+    # This was invisible until v0.8.0: `build-macos-intel` targeted the retired
+    # `macos-13` image and hung for the full 24-hour limit on every previous
+    # tag, so `create-release` was always skipped and never got far enough to be
+    # refused. Fixing the runner exposed the next failure in the chain.
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
       - name: Create Release
