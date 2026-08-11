@@ -13,6 +13,35 @@ values and there was no way to tell which combination had been tested together.
 
 Bucket 2 of the production-readiness work.
 
+### Added — MongoDB index management
+
+MongoDB had two indexes, `commits(parent_id)` and `active_tokens(user_id)`,
+created at startup with their errors discarded by `.ok()`. Everything else was a
+collection scan: every catalog lookup, every asset resolution on the Iceberg
+commit path, and — worst — the role and permission reads that run on *every*
+authenticated request.
+
+The full set is now created at startup, derived from the filters the code
+actually issues rather than from what seemed likely. Each entry records why it
+exists, so a future reader can tell which are safe to drop.
+
+Several are `unique`, which is the constraint the SQL backends express as a
+primary key. MongoDB previously accepted two catalogs with the same name in one
+tenant and returned an arbitrary one on lookup — a correctness difference from
+the other three backends, not a performance one. Catalogs, warehouses, branches,
+tags, and one business-metadata record per asset are now enforced.
+
+Failures are reported rather than swallowed. A unique index cannot be created
+over a collection that already holds duplicates, and that is worth an error
+naming the collection and saying the constraint is not in force — startup
+continues, because refusing to boot over a missing index would turn a
+performance problem into an outage.
+
+A unit test asserts the kebab-case collections are spelled as stored: an index
+on `user_id` where the field is `user-id` indexes nothing and silently does
+nothing, which is the same spelling trap that made every role assignment
+unreadable.
+
 ### Fixed — creating a branch by copy is atomic, and no longer lies (A-24)
 
 Two defects, the second worse than the first.

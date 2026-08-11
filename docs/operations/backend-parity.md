@@ -67,7 +67,19 @@ in particular that the ✅ against *service users and API keys* was wrong until
 0.7.0 — every method in that module was a silent no-op, so an API key could not
 authenticate on MongoDB at all. Remaining gaps:
 
-* No schema or index management beyond a handful of indexes created at startup.
+* **Indexes are managed; schema migrations are not.** From 0.8.0 the backend
+  creates the full index set at startup, derived from the filters the code
+  actually issues, and reports anything it could not create rather than
+  discarding the error. Several are `unique`, which is the constraint the SQL
+  backends get from a primary key — so MongoDB now rejects a duplicate catalog,
+  warehouse, branch or tag name in a tenant, where before it accepted them and
+  returned an arbitrary one. There is still no versioned migration chain: a
+  field added to a struct changes what new documents look like and nothing
+  rewrites the old ones.
+
+  If a unique index cannot be created because the collection already holds
+  duplicates, startup logs an error naming the collection and continues — that
+  uniqueness is then *not* enforced until you deduplicate and restart.
 * **A replica set is strongly recommended.** On a standalone `mongod`:
   * transactions are unavailable, so `delete_catalog` degrades to a sequential,
     non-atomic cascade. It now degrades with a warning; before 0.7.0 the

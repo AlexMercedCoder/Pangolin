@@ -43,30 +43,14 @@ impl MongoStore {
         let client = Client::with_options(client_options)?;
         let db = client.database(database_name);
 
-        // Ensure Indexes
-        let options = mongodb::options::IndexOptions::builder()
-            .background(true)
-            .build();
+        // Indexes. There used to be two here - commits(parent_id) and
+        // active_tokens(user_id) - created with their errors thrown away by
+        // `.ok()`, so everything else was a collection scan and a failure was
+        // invisible. `super::indexes` holds the full set, derived from the
+        // filters this backend actually issues, and reports what it could not
+        // create.
+        super::indexes::ensure_indexes(&db).await;
 
-        // commits(parent_id)
-        let commit_index = mongodb::IndexModel::builder()
-            .keys(doc! { "parent_id": 1 })
-            .options(options.clone())
-            .build();
-        db.collection::<Document>("commits")
-            .create_index(commit_index)
-            .await
-            .ok();
-
-        // active_tokens(user_id)
-        let token_index = mongodb::IndexModel::builder()
-            .keys(doc! { "user_id": 1 })
-            .options(options)
-            .build();
-        db.collection::<Document>("active_tokens")
-            .create_index(token_index)
-            .await
-            .ok();
         Ok(Self {
             client,
             db,

@@ -6,6 +6,7 @@ pub mod business_metadata;
 pub mod catalogs;
 pub mod commits;
 pub mod federated;
+mod indexes;
 pub mod io;
 pub mod main;
 pub mod merge;
