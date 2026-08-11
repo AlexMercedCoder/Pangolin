@@ -166,79 +166,89 @@ pub async fn create_branch(
         name: payload.name.clone(),
         head_commit_id: None,
         branch_type: b_type.clone(),
-        assets: vec![], // Start empty, will be populated
+        assets: vec![], // Populated by the copy below
     };
 
-    // Create branch first
-    if let Err(e) = store.create_branch(tenant_id, catalog_name, branch).await {
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to create branch: {}", e),
+    // A-24. This used to be `create_branch`, then either a loop of
+    // `create_asset` or a `copy_assets_bulk`, as independent statements. Two
+    // things were wrong with that, and the second is worse than the first:
+    //
+    //  1. A failure partway through left a branch that existed holding an
+    //     arbitrary subset of its assets, with no rollback and no repair tool.
+    //  2. The bulk-copy error was *logged and discarded* - `Err(e) =>
+    //     tracing::error!(...)` - and the handler then returned 200. The caller
+    //     was told the branch was ready when it was empty. The per-asset loop
+    //     did the same thing more quietly, with `if let Ok(_)` around each
+    //     create and `continue` on a malformed name.
+    //
+    // The store now does both in one transaction where the backend can. Where
+    // it cannot, it says so and the fallback below is taken deliberately rather
+    // than by accident - and either way a failure is reported to the caller.
+    let copy_result = store
+        .create_branch_with_assets(
+            tenant_id,
+            catalog_name,
+            branch.clone(),
+            from_branch,
+            payload.assets.clone(),
         )
-            .into_response();
-    }
+        .await;
 
-    if let Some(assets_to_copy) = &payload.assets {
-        tracing::info!(
-            "Explicit asset list provided: {} assets",
-            assets_to_copy.len()
-        );
-        // For explicit asset list, we still iterate for now as copy_assets_bulk doesn't take a list
-        // Optimization: We could add a filtered bulk copy in the future
-        for asset_name in assets_to_copy {
-            let parts: Vec<&str> = asset_name.split('.').collect();
-            if parts.len() < 2 {
-                continue; // Skip invalid format
-            }
-            let table_name = parts.last().unwrap().to_string();
-            let namespace_parts = parts[0..parts.len() - 1]
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<String>>();
+    match copy_result {
+        Ok(count) => {
+            tracing::info!(
+                branch = %payload.name,
+                assets = count,
+                "created branch atomically"
+            );
+        }
+        Err(e) if e.to_string().contains("not supported by this store") => {
+            // Backend without transaction support for this operation. Do it
+            // sequentially, but say so, and still fail loudly.
+            tracing::warn!(
+                branch = %payload.name,
+                "this backend cannot create a branch and copy its assets atomically; \
+                 a failure partway through will leave the branch incomplete"
+            );
 
-            // Get asset from source branch
-            if let Ok(Some(asset)) = store
-                .get_asset(
-                    tenant_id,
-                    catalog_name,
-                    Some(from_branch.to_string()),
-                    namespace_parts.clone(),
-                    table_name.clone(),
+            if let Err(e) = store.create_branch(tenant_id, catalog_name, branch).await {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to create branch: {e}"),
                 )
+                    .into_response();
+            }
+
+            match store
+                .copy_assets_bulk(tenant_id, catalog_name, from_branch, &payload.name, None)
                 .await
             {
-                // Create asset in new branch with NEW ID to avoid unique constraint violation
-                let mut new_asset = asset.clone();
-                new_asset.id = uuid::Uuid::new_v4();
-                if let Ok(_) = store
-                    .create_asset(
-                        tenant_id,
-                        catalog_name,
-                        Some(payload.name.clone()),
-                        namespace_parts,
-                        new_asset,
+                Ok(count) => tracing::info!(
+                    branch = %payload.name,
+                    assets = count,
+                    "copied assets into the new branch"
+                ),
+                Err(e) => {
+                    // Previously logged and ignored. The branch exists and is
+                    // incomplete; the caller has to know.
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!(
+                            "Branch {:?} was created but copying its assets failed: {e}. \
+                             The branch is incomplete; delete it and retry.",
+                            payload.name
+                        ),
                     )
-                    .await
-                {
-                    // branch_assets.push(asset_name.clone()); // Unnecessary as create_asset updates branch
+                        .into_response();
                 }
             }
         }
-    } else {
-        tracing::info!("No explicit assets. Auto-propagating from {}", from_branch);
-
-        // Use optimized bulk copy
-        // Note: This works because create_branch (above) initialized the branch, and copy_assets_bulk appends to it (or updates it)
-        match store
-            .copy_assets_bulk(tenant_id, catalog_name, from_branch, &payload.name, None)
-            .await
-        {
-            Ok(count) => tracing::info!(
-                "Bulk copied {} assets to new branch {}",
-                count,
-                payload.name
-            ),
-            Err(e) => tracing::error!("Failed to bulk copy assets: {}", e),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create branch: {e}"),
+            )
+                .into_response();
         }
     }
 

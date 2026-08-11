@@ -24,6 +24,104 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Create a branch and copy assets into it in one transaction (A-24).
+    ///
+    /// SQLite stores `namespace_path` as a JSON string rather than an array, so
+    /// the `namespace.table` matching is done on `json_each` output rather than
+    /// with an array operator as on Postgres. The property that matters is the
+    /// same: one transaction, so the branch and its assets appear together or
+    /// not at all.
+    pub async fn create_branch_with_assets(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: Branch,
+        src_branch: &str,
+        assets: Option<Vec<String>>,
+    ) -> Result<usize> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query(
+            "INSERT INTO branches (tenant_id, catalog_name, name, head_commit_id, branch_type, assets) \
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(tenant_id.to_string())
+        .bind(catalog_name)
+        .bind(&branch.name)
+        .bind(branch.head_commit_id.map(|u| u.to_string()))
+        .bind(format!("{:?}", branch.branch_type))
+        .bind(serde_json::to_string(&branch.assets)?)
+        .execute(&mut *tx)
+        .await?;
+
+        // Read the source rows inside the transaction so the set cannot change
+        // between selecting and inserting.
+        let rows = sqlx::query(
+            "SELECT namespace_path, name, asset_type, metadata_location, properties \
+             FROM assets WHERE tenant_id = ? AND catalog_name = ? AND branch_name = ?",
+        )
+        .bind(tenant_id.to_string())
+        .bind(catalog_name)
+        .bind(src_branch)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        let wanted: Option<std::collections::HashSet<String>> = match &assets {
+            Some(names) => {
+                for full in names {
+                    if !full.contains('.') {
+                        tx.rollback().await.ok();
+                        return Err(anyhow::anyhow!(
+                            "asset name {full:?} is not in namespace.table form"
+                        ));
+                    }
+                }
+                Some(names.iter().cloned().collect())
+            }
+            None => None,
+        };
+
+        let mut copied = 0usize;
+        for row in rows {
+            let ns_json: String = row.get("namespace_path");
+            let name: String = row.get("name");
+            let ns: Vec<String> = serde_json::from_str(&ns_json).unwrap_or_default();
+
+            if let Some(wanted) = &wanted {
+                let full = format!("{}.{}", ns.join("."), name);
+                if !wanted.contains(&full) {
+                    continue;
+                }
+            }
+
+            let asset_type: String = row.get("asset_type");
+            let metadata_location: Option<String> = row.get("metadata_location");
+            let properties: String = row.get("properties");
+
+            // A fresh id: an asset's primary key is unique across branches.
+            sqlx::query(
+                "INSERT INTO assets (id, tenant_id, catalog_name, namespace_path, name, \
+                 branch_name, asset_type, metadata_location, properties) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(tenant_id.to_string())
+            .bind(catalog_name)
+            .bind(&ns_json)
+            .bind(&name)
+            .bind(&branch.name)
+            .bind(&asset_type)
+            .bind(&metadata_location)
+            .bind(&properties)
+            .execute(&mut *tx)
+            .await?;
+            copied += 1;
+        }
+
+        tx.commit().await?;
+        Ok(copied)
+    }
+
     pub async fn get_branch(
         &self,
         tenant_id: Uuid,

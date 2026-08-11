@@ -310,6 +310,34 @@ pub trait CatalogStore: Send + Sync + Signer {
     async fn create_commit(&self, tenant_id: Uuid, commit: Commit) -> Result<()>;
     async fn get_commit(&self, tenant_id: Uuid, commit_id: Uuid) -> Result<Option<Commit>>;
 
+    /// Create a branch and populate it from another, atomically.
+    ///
+    /// The remainder of A-24. Creating a branch by copy used to be
+    /// `create_branch` followed by `copy_assets_bulk` (or a loop of
+    /// `create_asset`) as independent statements, so a failure partway through
+    /// left a branch that existed and was missing an arbitrary subset of its
+    /// assets, with no rollback and no repair tool. Worse, the handler logged
+    /// the copy failure and returned `200`, so the caller was told the branch
+    /// was ready.
+    ///
+    /// `assets` selects what to copy: `None` takes everything on `src_branch`,
+    /// `Some(names)` takes only those, in `namespace.table` form. Returns the
+    /// number copied.
+    ///
+    /// Backends that cannot do this atomically must say so rather than
+    /// pretending: the default is an error, and the caller falls back to the
+    /// non-atomic path explicitly.
+    async fn create_branch_with_assets(
+        &self,
+        _tenant_id: Uuid,
+        _catalog_name: &str,
+        _branch: pangolin_core::model::Branch,
+        _src_branch: &str,
+        _assets: Option<Vec<String>>,
+    ) -> Result<usize> {
+        Err(anyhow::anyhow!("Operation not supported by this store"))
+    }
+
     /// Bulk copy assets from one branch to another
     /// Returns the number of assets copied
     async fn copy_assets_bulk(

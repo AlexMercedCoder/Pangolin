@@ -13,6 +13,35 @@ values and there was no way to tell which combination had been tested together.
 
 Bucket 2 of the production-readiness work.
 
+### Fixed — creating a branch by copy is atomic, and no longer lies (A-24)
+
+Two defects, the second worse than the first.
+
+The branch row and its copied assets were written by independent statements, so
+a failure between them left a branch that existed holding an arbitrary subset of
+its assets, with no rollback and no repair tool.
+
+And the copy error was **logged and discarded** — `Err(e) =>
+tracing::error!(...)` — after which the handler returned `200`. The caller was
+told the branch was ready when it was empty. The per-asset path did the same
+thing more quietly: `if let Ok(_)` around each create, and `continue` past any
+name it could not parse.
+
+`create_branch_with_assets` now does both in one transaction on PostgreSQL and
+SQLite. PostgreSQL copies with a single `INSERT ... SELECT`, so there is no
+window in which some rows exist and others do not and a large branch need not
+fit in memory. A malformed asset name now fails the whole operation rather than
+silently copying nothing.
+
+MongoDB has no atomic version, and says so rather than pretending: the trait
+default is an error, the API takes the sequential fallback deliberately, logs a
+warning that a partial failure will leave the branch incomplete, and — the part
+that matters — returns a `500` naming the branch instead of a `200`.
+
+The rollback test was verified to be load-bearing by committing the branch row
+before the failure point: it fails with "the branch row survived a failed
+create" and passes again when the transaction is restored.
+
 ### Added — warehouse credentials encrypted at rest (C-11)
 
 A warehouse holds the credentials Pangolin uses to reach a customer's object

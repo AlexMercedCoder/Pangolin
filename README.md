@@ -163,13 +163,15 @@ could silently fork snapshot lineage under concurrent writers. See
 Stated plainly rather than buried:
 
 - **Administrative multi-statement operations are only partly transactional.**
-  As of 0.6.0 PostgreSQL wraps a cascading catalog delete, a branch delete and a
-  branch merge in a transaction, and MongoDB wraps a cascading catalog delete
-  where the deployment supports a session — a standalone `mongod` cannot.
-  **Creating a branch by copying assets is still issued as independent
-  statements**, so a failure partway through leaves the catalog partially
-  applied, with no rollback and no repair tool. Take a backup before large
-  administrative operations.
+  PostgreSQL wraps a cascading catalog delete, a branch delete, a branch merge
+  and — from 0.8.0 — creating a branch by copying assets. SQLite wraps the same
+  branch-by-copy path. MongoDB wraps a cascading catalog delete where the
+  deployment supports a session; a standalone `mongod` cannot, and MongoDB has
+  no atomic branch-by-copy, so the API falls back to sequential statements and
+  says so in the logs. On that path a failure partway through leaves the branch
+  incomplete — but the caller now gets a `500` naming the branch, rather than
+  the `200` it used to get. Take a backup before large administrative
+  operations.
   (The Iceberg table-commit path *is* safe — it uses compare-and-swap with
   requirement enforcement.)
 - **Rate limiting is per replica.** The authentication endpoints are throttled

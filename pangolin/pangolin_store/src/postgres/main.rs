@@ -398,6 +398,18 @@ impl CatalogStore for PostgresStore {
             .await
     }
 
+    async fn create_branch_with_assets(
+        &self,
+        tenant_id: Uuid,
+        catalog_name: &str,
+        branch: pangolin_core::model::Branch,
+        src_branch: &str,
+        assets: Option<Vec<String>>,
+    ) -> Result<usize> {
+        self.create_branch_with_assets(tenant_id, catalog_name, branch, src_branch, assets)
+            .await
+    }
+
     async fn copy_assets_bulk(
         &self,
         tenant_id: Uuid,
