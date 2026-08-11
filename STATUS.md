@@ -138,7 +138,11 @@ the build's exit code: the CLI reports `pangolin-admin 0.8.0` and runs as uid
 10001, the UI serves `HTTP 200` as uid 1000 with a 2.3MB `node_modules`.
 
 Publishing them turned up four defects that every one of the 18 CI jobs had
-passed over, because CI builds images and never runs what it built:
+passed over. The reason is narrower than "CI does not test images": the
+`docker` job builds the **API** image, starts it, probes its shutdown grace and
+fails if it runs as root. It is a real test. But it is the only image CI touches
+— `Dockerfile.tools` and `pangolin_ui/Dockerfile` are never built in CI at all,
+so nothing exercised them until a human ran the release script:
 
 | Defect | Consequence |
 |---|---|
@@ -163,6 +167,18 @@ predates every security fix listed above.
 
 Still requiring a person: decide whether to publish a GHSA now that a fixed
 version exists.
+
+## Next
+
+[ROADMAP_0.9.0.md](ROADMAP_0.9.0.md) lists the outstanding work, ordered by what
+would hurt most if left undone. The top item is an unverified cross-tenant
+authorization path (`authz.rs:39`), and the second is that CI never builds two of
+the three container images — the reason all four 0.8.0 image defects survived a
+green pipeline.
+
+One known discrepancy is accepted and documented rather than fixed:
+[the `v0.8.0` tag and the `0.8.0` image differ](docs/known-issues/v0.8.0-tag-image-drift.md)
+by a single CLI help flag.
 
 ## If you are deciding whether to run this
 
