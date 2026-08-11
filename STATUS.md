@@ -13,16 +13,17 @@ Everything marked done below is verified by tests that run against live
 PostgreSQL, MongoDB and MinIO, not by inspection:
 
 - **65 test targets, 448 tests, zero failures**
-- **14 CI jobs green on every push and pull request**, including an
-  authorization matrix, a four-backend parity suite, both MongoDB topologies, an
-  MSRV check, and a build of every optional feature. Five further jobs build and
-  release the binaries, and run only on a `v*` tag.
+- **18 CI jobs green on every push and pull request** — 14 job definitions, of
+  which `test` and `features` are matrices that expand to 2 and 4 runs. They
+  include an authorization matrix, a four-backend parity suite, both MongoDB
+  topologies, an MSRV check, and a build of every optional feature. Five further
+  jobs build and release the binaries, and run only on a `v*` tag.
 - `cargo audit` clean; clippy at a ratcheted budget of 30 (from 314)
 
 That standard exists because this project has repeatedly had things that
 compiled, passed CI, and did not work. Twice in the 0.8.0 work alone: the
 cloud-credential features had never compiled at any version, and a server that
-exited 25 seconds after startup passed every CI job and the full suite.
+exited 25 seconds after startup passed all 18 CI jobs and the full suite.
 
 ## Done
 
@@ -52,7 +53,7 @@ exited 25 seconds after startup passed every CI job and the full suite.
 
 | Item | Where |
 |---|---|
-| CI that actually runs — 14 jobs per push, 5 more per release tag | 0.7.0 / 0.8.0 |
+| CI that actually runs — 18 jobs per push, 5 more per release tag | 0.7.0 / 0.8.0 |
 | A release pipeline that produces a release (it never had; `macos-13` was retired and hung every tag for 24h) | 0.7.0 |
 | A release gate that verifies the published image over HTTP | 0.7.0 |
 | Token-cleanup sweep that **runs** (it was dead code) and staggers across replicas | 0.8.0 |
