@@ -9,6 +9,46 @@ From 0.6.0 the server, both CLIs, the Python SDK, the UI and the Helm chart all
 carry the same version number. Before that they had drifted to five different
 values and there was no way to tell which combination had been tested together.
 
+## [Unreleased]
+
+Bucket 2 of the production-readiness work.
+
+### Added — rate limiting on the authentication endpoints (C-5)
+
+The login endpoint had no throttle of any kind and was brute-forceable. There
+were global concurrency and body limits and a request timeout, but nothing made
+the thousandth password guess cost more than the first. Bcrypt slowed each
+attempt, which raises the price of a broad campaign and does nothing against a
+targeted guess at one weak password - while making the endpoint an efficient way
+to burn the server's CPU.
+
+Throttled on two keys, because either alone has a blind spot:
+
+* **by source address** — bounds one attacker working through many accounts;
+* **by account** — bounds many addresses working on one account, which is the
+  shape of a credential-stuffing run and which a per-address limit cannot see.
+
+Both are checked before any password verification, so a refused attempt costs a
+cache lookup rather than a bcrypt round. A successful login clears the account's
+counter, so mistyping a password twice and then getting it right does not leave
+you near the limit. Refusals answer `429` with `Retry-After` and increment
+`pangolin_auth_throttled_total`, which is worth alerting on.
+
+`X-Forwarded-For` is honoured **only** when `PANGOLIN_TRUST_FORWARDED_FOR=true`.
+Trusting it unconditionally would let a caller set a fresh value per request and
+bypass the per-address half entirely - protection that reads as protection and
+is not.
+
+Configuration: `PANGOLIN_AUTH_RATE_LIMIT` (default 10, 0 disables),
+`PANGOLIN_AUTH_RATE_WINDOW_SECS` (default 60), `PANGOLIN_TRUST_FORWARDED_FOR`
+(default false).
+
+Known limitation, stated rather than buried: the counters are in-process, so the
+limit is **per replica**. With N replicas an attacker gets N times the budget.
+
+`main` now serves through `into_make_service_with_connect_info`, without which
+the peer address is not available and every attempt would share one bucket.
+
 ## [0.7.0] — 2026-08-10
 
 Implements `roadmap_aug10.md`, the full-repo audit of 2026-08-10. **This is a

@@ -132,6 +132,19 @@ pub struct AppConfig {
     /// CORS origins. `None` means "allow any", which is only safe behind a
     /// trusted gateway and is no longer the default in production.
     pub cors_allowed_origins: Option<Vec<String>>,
+
+    /// Failed authentication attempts allowed per window, per source address
+    /// and separately per account. 0 disables throttling. C-5: the login
+    /// endpoint had no throttle of any kind and was brute-forceable.
+    pub auth_rate_limit: u32,
+    /// The window those attempts are counted over.
+    pub auth_rate_window: Duration,
+    /// Honour `X-Forwarded-For` when deriving the client address.
+    ///
+    /// Off by default, and that default matters: trusting the header when you
+    /// are *not* behind a proxy lets a caller set it per request and bypass the
+    /// per-address limit entirely.
+    pub trust_forwarded_for: bool,
 }
 
 static CONFIG: OnceLock<AppConfig> = OnceLock::new();
@@ -272,6 +285,12 @@ impl AppConfig {
             body_limit_bytes: env_parsed("PANGOLIN_MAX_BODY_BYTES", 16 * 1024 * 1024)?,
             concurrency_limit: env_parsed("PANGOLIN_MAX_CONCURRENT_REQUESTS", 512)?,
             shutdown_grace: Duration::from_secs(env_parsed("PANGOLIN_SHUTDOWN_GRACE_SECS", 25)?),
+            auth_rate_limit: env_parsed("PANGOLIN_AUTH_RATE_LIMIT", 10u32)?,
+            auth_rate_window: Duration::from_secs(env_parsed(
+                "PANGOLIN_AUTH_RATE_WINDOW_SECS",
+                60,
+            )?),
+            trust_forwarded_for: env_bool("PANGOLIN_TRUST_FORWARDED_FOR"),
             metrics_enabled: env_opt("PANGOLIN_METRICS_ENABLED")
                 .map(|v| matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes"))
                 .unwrap_or(true),

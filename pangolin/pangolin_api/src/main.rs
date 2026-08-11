@@ -112,7 +112,14 @@ async fn main() {
     // Graceful shutdown. Without this, a Kubernetes rolling update severs every
     // in-flight request; a SIGTERM between writing a table's metadata file and
     // the compare-and-swap that publishes it leaks an orphaned metadata file.
-    let serve = axum::serve(listener, app).with_graceful_shutdown(shutdown_signal(shutdown_grace));
+    // `into_make_service_with_connect_info` rather than the plain service: the
+    // authentication throttle keys on the peer address, and without this the
+    // `ConnectInfo` extractor finds nothing and every attempt shares one bucket.
+    let serve = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal(shutdown_grace));
 
     // B16n: `shutdown_grace` used to be logged and nothing else. There was no
     // bound on the drain at all, so `with_graceful_shutdown` waited for

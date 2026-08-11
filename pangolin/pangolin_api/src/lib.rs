@@ -40,6 +40,7 @@ pub mod oauth_handlers;
 pub mod oauth_state;
 pub mod observability;
 pub mod public_paths;
+pub mod rate_limit;
 /// Shared test fixtures.
 ///
 /// Compiled only for tests: these helpers used to ship inside the release
@@ -81,6 +82,9 @@ pub fn app_with_config(
             concurrency_limit: config.concurrency_limit,
             metrics_enabled: config.metrics_enabled,
             cors_allowed_origins: config.cors_allowed_origins.clone(),
+            auth_rate_limit: config.auth_rate_limit,
+            auth_rate_window: config.auth_rate_window,
+            trust_forwarded_for: config.trust_forwarded_for,
         },
     )
 }
@@ -98,6 +102,12 @@ pub struct RouterOptions {
     pub metrics_enabled: bool,
     /// Explicit CORS origins. `None` allows any origin.
     pub cors_allowed_origins: Option<Vec<String>>,
+    /// Failed authentication attempts allowed per window. 0 disables.
+    pub auth_rate_limit: u32,
+    /// The window those attempts are counted over.
+    pub auth_rate_window: std::time::Duration,
+    /// Honour `X-Forwarded-For` when identifying the client.
+    pub trust_forwarded_for: bool,
 }
 
 impl Default for RouterOptions {
@@ -108,6 +118,15 @@ impl Default for RouterOptions {
             concurrency_limit: 512,
             metrics_enabled: true,
             cors_allowed_origins: None,
+            // Off in the library default, on in `app_with_config`.
+            //
+            // `RouterOptions::default()` is what the in-process tests build
+            // with, and they drive the login endpoint far harder than any real
+            // client. A production default belongs where production config is
+            // read - `PANGOLIN_AUTH_RATE_LIMIT`, which defaults to 10 a minute.
+            auth_rate_limit: 0,
+            auth_rate_window: std::time::Duration::from_secs(60),
+            trust_forwarded_for: false,
         }
     }
 }
@@ -117,6 +136,14 @@ pub fn app_with_options(
     options: RouterOptions,
 ) -> Router {
     let cors = build_cors(options.cors_allowed_origins.as_deref());
+
+    // Shared with the login handler, which applies the per-account half of the
+    // limit; the middleware below only sees the source address.
+    let auth_limiter = std::sync::Arc::new(rate_limit::RateLimiter::new(
+        options.auth_rate_limit,
+        options.auth_rate_window,
+    ));
+    rate_limit::set_auth_limiter(auth_limiter.clone());
 
     let metrics_route = if options.metrics_enabled {
         Router::new().route("/metrics", get(metrics::metrics_handler))
@@ -577,6 +604,17 @@ pub fn app_with_options(
                 s
             },
             auth_middleware::auth_middleware,
+        ))
+        // C-5: throttle the credential endpoints. Outside the auth middleware,
+        // so a refused attempt costs a cache lookup rather than a bcrypt round -
+        // the point is to make guessing cheap for us and expensive for the
+        // attacker, and verifying the password first would invert that.
+        .layer(axum::middleware::from_fn_with_state(
+            rate_limit::RateLimitState {
+                limiter: auth_limiter.clone(),
+                trust_forwarded: options.trust_forwarded_for,
+            },
+            rate_limit::throttle_auth,
         ))
         // Resource safety. There were previously no limits of any kind (A-20):
         // a single large POST could be buffered without bound and a slow

@@ -172,9 +172,13 @@ Stated plainly rather than buried:
   administrative operations.
   (The Iceberg table-commit path *is* safe — it uses compare-and-swap with
   requirement enforcement.)
-- **No rate limiting.** There are global concurrency and body limits and a
-  request timeout, but no per-IP or per-account throttle, so the login endpoint
-  is brute-forceable.
+- **Rate limiting is per replica.** The authentication endpoints are throttled
+  per source address *and* per account (`PANGOLIN_AUTH_RATE_LIMIT`, default 10
+  per `PANGOLIN_AUTH_RATE_WINDOW_SECS`, default 60). The counters are
+  in-process, so with N replicas the effective limit is N times the configured
+  one. Set `PANGOLIN_TRUST_FORWARDED_FOR=true` **only** behind a proxy that
+  overwrites `X-Forwarded-For`; trusting it otherwise lets a caller set the
+  header per request and bypass the per-address half entirely.
 - **OAuth is not full OIDC.** No PKCE, no `id_token` validation, no JWKS, no
   discovery. Users are matched on provider-supplied email with no
   `email_verified` check. See [docs/operations/oidc.md](docs/operations/oidc.md).

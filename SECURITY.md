@@ -236,9 +236,11 @@ Before exposing Pangolin to anything you care about:
 
 Stated plainly, because a checklist that hides its limits is worse than none:
 
-* **No rate limiting on authentication endpoints.** The login endpoint is
-  brute-forceable. There are global concurrency and body limits, and a request
-  timeout, but no per-IP or per-account throttle.
+* **Rate limiting is in-process, so it is per replica.** The authentication
+  endpoints are throttled from 0.7.0, per source address and per account, but
+  the counters are not shared between replicas: with N replicas an attacker
+  gets N times the configured budget. A shared limiter needs Redis or
+  equivalent, which this project does not otherwise require.
 * **OAuth is not full OIDC.** No PKCE, no `id_token` signature validation, no
   JWKS, no discovery document. Users are matched on the email a provider
   returns, with no `email_verified` check.
