@@ -274,6 +274,44 @@ jobs:
           tags: pangolin-api:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # The server must outlive its own shutdown grace period.
+      #
+      # `PANGOLIN_SHUTDOWN_GRACE_SECS` is meant to bound the *drain* - the
+      # window between SIGTERM and giving up on in-flight requests. It was
+      # briefly implemented as `timeout(grace, serve)`, which bounds the whole
+      # server instead: the process exited cleanly `grace` seconds after
+      # startup, with no signal, and every container would have crash-looped.
+      # Nothing caught it, because no test ran the binary for longer than the
+      # default 25s. This runs the real image with a short grace and asserts it
+      # is still serving well past it.
+      - name: The server must not exit when its grace period elapses
+        run: |
+          set -euo pipefail
+          docker run -d --name grace-probe -p 8181:8080 \
+            -e PANGOLIN_JWT_SECRET=ci-only-secret-of-adequate-length-000000 \
+            -e PANGOLIN_STORAGE_TYPE=memory \
+            -e PANGOLIN_SHUTDOWN_GRACE_SECS=5 \
+            pangolin-api:ci
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:8181/health/ready >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          curl -sf http://localhost:8181/health/ready >/dev/null
+          echo "serving; now waiting 20s, four times the grace period"
+          sleep 20
+          if ! docker ps --filter name=grace-probe --filter status=running -q | grep -q .; then
+            echo "::error::the server exited on its own $(echo 20)s after startup with a 5s grace"
+            docker logs grace-probe | tail -20
+            exit 1
+          fi
+          curl -sf http://localhost:8181/health/ready >/dev/null
+          echo "still serving after 20s"
+          # And it must still stop promptly when actually told to.
+          start=$(date +%s)
+          docker stop -t 30 grace-probe >/dev/null
+          echo "stopped in $(( $(date +%s) - start ))s"
+          docker rm grace-probe >/dev/null
+
       - name: The container must not run as root
         run: |
           user=$(docker inspect --format '{{.Config.User}}' pangolin-api:ci)

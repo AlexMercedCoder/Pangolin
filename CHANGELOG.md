@@ -328,6 +328,39 @@ arrives via the AWS SDK's `rustls` 0.21, `http-types`, and `rand`'s
 custom-logger unsoundness. The ignore list names specific advisory IDs, so a
 new advisory — including a new one against these same crates — still fails CI.
 
+### Fixed — a regression caught by the release gate
+
+Found by running the new release smoke test against the built 0.7.0 image, and
+fixed before 0.7.0 shipped.
+
+- **The server exited 25 seconds after startup, having received no signal.**
+  The B16n change meant to bound the shutdown *drain* was written as
+  `tokio::time::timeout(shutdown_grace, serve)`. `serve` is the whole server,
+  not the drain, so it bounded the lifetime of the process:
+  `PANGOLIN_SHUTDOWN_GRACE_SECS` became a countdown to a clean exit rather than
+  a limit on how long draining may take. Every container would have
+  crash-looped. The deadline is now armed inside `shutdown_signal`, only once a
+  signal has actually been seen.
+
+  All 18 CI jobs passed with this present, as did the full workspace suite:
+  nothing ran the binary for longer than the 25-second default. The `docker`
+  job now starts the built image with a 5-second grace, waits 20 seconds, and
+  fails if it is no longer serving - then checks it still stops promptly when
+  told to.
+
+- **Release verification inherited the developer's `.env`.** Compose auto-loads
+  it, so a local `PANGOLIN_ROOT_USER` / `PANGOLIN_ROOT_PASSWORD` fed the
+  harness - and where that password is a placeholder, the server's config guard
+  refuses to start, so verification failed for reasons having nothing to do
+  with the artifact. The harness now takes `RELEASE_*` names that cannot
+  collide with a real deployment's.
+
+- **The release stack shared a Compose project with the development database
+  stack**, both deriving `pangolin` from the directory name, so `up` and
+  `down -v` in one stopped containers belonging to the other. It now declares
+  `name: pangolin-release`, and its MinIO no longer publishes host ports it
+  never used.
+
 ### Added
 
 - **A permission matrix test (improvement #0).** Drives each sensitive route as

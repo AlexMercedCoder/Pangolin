@@ -17,9 +17,10 @@ thing that container can do, and is also the more useful test: it exercises the
 shipped artifact rather than a fresh build of the source.
 
 Configuration:
-    PANGOLIN_API_URL   base URL of the server (default http://localhost:8080)
-    PANGOLIN_NO_AUTH   "true" to also run the authenticated-surface round trip
-    SMOKE_TIMEOUT      seconds to wait for readiness (default 120)
+    PANGOLIN_API_URL        base URL of the server (default http://localhost:8080)
+    PANGOLIN_ROOT_USER      root basic-auth user; enables the write round trip
+    PANGOLIN_ROOT_PASSWORD  root basic-auth password
+    SMOKE_TIMEOUT           seconds to wait for readiness (default 120)
 """
 
 import json
@@ -31,8 +32,14 @@ import uuid
 import requests
 
 API_URL = os.environ.get("PANGOLIN_API_URL", "http://localhost:8080").rstrip("/")
-NO_AUTH = os.environ.get("PANGOLIN_NO_AUTH", "false").lower() == "true"
 TIMEOUT = int(os.environ.get("SMOKE_TIMEOUT", "120"))
+
+# Root basic auth rather than PANGOLIN_NO_AUTH. The server refuses to start
+# with no-auth on a non-loopback bind - which is every container - so a no-auth
+# round trip could never run here, and the check silently skipped itself.
+ROOT_USER = os.environ.get("PANGOLIN_ROOT_USER") or ""
+ROOT_PASSWORD = os.environ.get("PANGOLIN_ROOT_PASSWORD") or ""
+AUTH = (ROOT_USER, ROOT_PASSWORD) if ROOT_USER and ROOT_PASSWORD else None
 
 failures: list[str] = []
 
@@ -72,7 +79,7 @@ def wait_for_ready() -> bool:
 
 def main() -> int:
     print(f"Release smoke test against {API_URL}")
-    print(f"  no-auth mode: {NO_AUTH}")
+    print(f"  authenticated round trip: {'yes, as root' if AUTH else 'no credentials supplied'}")
     print()
 
     print("Readiness")
@@ -121,43 +128,75 @@ def main() -> int:
     except (requests.RequestException, json.JSONDecodeError) as e:
         check("/v1/config responds", False, str(e))
 
-    if NO_AUTH:
-        print("\nCatalog round trip")
+    if AUTH:
+        # Tenants, not catalogs. Root is a system administrator and is
+        # deliberately refused catalog creation ("Root user cannot create
+        # catalogs. Please login as Tenant Admin."), because a catalog belongs
+        # to a tenant. Creating a tenant is the write that a root principal is
+        # actually for.
+        print("\nAuthenticated tenant round trip (root basic auth)")
         name = f"smoke-{uuid.uuid4().hex[:8]}"
         try:
             r = requests.post(
-                f"{API_URL}/api/v1/catalogs",
-                json={"name": name, "catalog_type": "Local", "properties": {}},
+                f"{API_URL}/api/v1/tenants",
+                json={"name": name},
+                auth=AUTH,
                 timeout=15,
             )
             created = check(
-                "create a catalog", r.status_code in (200, 201), f"HTTP {r.status_code}: {r.text[:160]}"
+                "create a tenant",
+                r.status_code in (200, 201),
+                f"HTTP {r.status_code}: {r.text[:160]}",
+            )
+            tenant_id = ""
+            if created:
+                try:
+                    body = r.json()
+                    tenant_id = (body.get("data") or body).get("id", "")
+                except (json.JSONDecodeError, AttributeError):
+                    pass
+
+            # An unauthenticated write must be refused. If the release ships
+            # with authorization broken, every other check here still passes.
+            r = requests.post(
+                f"{API_URL}/api/v1/tenants",
+                json={"name": f"{name}-anon"},
+                timeout=15,
+            )
+            check(
+                "the same write without credentials is rejected",
+                r.status_code in (401, 403),
+                f"HTTP {r.status_code} - an unauthenticated caller created a tenant",
             )
 
             if created:
-                r = requests.get(f"{API_URL}/api/v1/catalogs", timeout=15)
+                r = requests.get(f"{API_URL}/api/v1/tenants", auth=AUTH, timeout=15)
                 names = []
                 if r.status_code == 200:
                     payload = r.json()
                     rows = payload if isinstance(payload, list) else payload.get("data", [])
-                    names = [c.get("name") for c in rows]
+                    names = [t.get("name") for t in rows]
                 check(
-                    "the new catalog appears in the listing",
+                    "the new tenant appears in the listing",
                     name in names,
                     f"HTTP {r.status_code}, saw {names[:5]}",
                 )
 
-                # Clean up so a re-run against the same server is not affected
-                # by the previous one.
-                r = requests.delete(f"{API_URL}/api/v1/catalogs/{name}", timeout=15)
-                check(
-                    "delete the catalog", r.status_code in (200, 204), f"HTTP {r.status_code}"
-                )
+                # Clean up so a re-run against the same server is unaffected.
+                if tenant_id:
+                    r = requests.delete(
+                        f"{API_URL}/api/v1/tenants/{tenant_id}", auth=AUTH, timeout=15
+                    )
+                    check(
+                        "delete the tenant",
+                        r.status_code in (200, 204),
+                        f"HTTP {r.status_code}",
+                    )
         except (requests.RequestException, json.JSONDecodeError) as e:
-            check("catalog round trip", False, str(e))
+            check("tenant round trip", False, str(e))
     else:
-        print("\nCatalog round trip")
-        print("  SKIP  set PANGOLIN_NO_AUTH=true to exercise the authenticated surface")
+        print("\nAuthenticated tenant round trip")
+        print("  SKIP  set PANGOLIN_ROOT_USER and PANGOLIN_ROOT_PASSWORD to enable")
 
     print()
     if failures:

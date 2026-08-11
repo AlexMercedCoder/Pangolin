@@ -119,18 +119,19 @@ async fn main() {
     // in-flight connections *indefinitely* - one hung upstream call blocked
     // SIGTERM past the k8s termination grace period and into a SIGKILL, which
     // is exactly the mid-commit kill this whole path exists to avoid.
-    // `PANGOLIN_SHUTDOWN_GRACE_SECS` now actually bounds the drain.
-    match tokio::time::timeout(shutdown_grace, serve).await {
-        Ok(Ok(())) => tracing::info!("shutdown complete"),
-        Ok(Err(e)) => {
+    //
+    // The first attempt at that bound was `tokio::time::timeout(shutdown_grace,
+    // serve)`, which is wrong in the worst possible way: `serve` is the whole
+    // server, not the drain, so it bounded the *lifetime of the process*. The
+    // server exited cleanly `shutdown_grace` seconds after startup - 25 by
+    // default - having received no signal at all. Every container would have
+    // crash-looped. The deadline has to start when the signal arrives, so it
+    // lives in `shutdown_signal` now, armed only once a signal is seen.
+    match serve.await {
+        Ok(()) => tracing::info!("shutdown complete"),
+        Err(e) => {
             tracing::error!("server error: {e}");
             std::process::exit(1);
-        }
-        Err(_) => {
-            tracing::warn!(
-                grace_secs = shutdown_grace.as_secs(),
-                "drain did not finish within the shutdown grace period; exiting anyway"
-            );
         }
     }
 }
@@ -389,4 +390,22 @@ async fn shutdown_signal(grace: std::time::Duration) {
     // Capped so it can never consume the whole grace budget.
     let deregistration_pause = std::cmp::min(grace / 4, std::time::Duration::from_secs(5));
     tokio::time::sleep(deregistration_pause).await;
+
+    // Arm the hard deadline *here*, once a signal has actually been seen,
+    // rather than around the whole server. `with_graceful_shutdown` waits for
+    // in-flight connections with no bound of its own, so a single hung request
+    // would otherwise hold the process past Kubernetes' termination grace
+    // period and earn a SIGKILL mid-commit - the exact failure this path
+    // exists to prevent.
+    //
+    // Detached so returning from here still lets axum begin its drain; the
+    // task only wins if the drain overruns.
+    tokio::spawn(async move {
+        tokio::time::sleep(grace).await;
+        tracing::warn!(
+            grace_secs = grace.as_secs(),
+            "drain did not finish within the shutdown grace period; exiting anyway"
+        );
+        std::process::exit(0);
+    });
 }
