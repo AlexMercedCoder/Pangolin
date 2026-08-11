@@ -41,9 +41,9 @@ security fixes.
 
 | Version | Supported |
 |---|---|
-| 0.7.x | Yes |
-| 0.6.x | No — upgrade to 0.7.x, see the advisory below |
-| 0.5.x and earlier | No — upgrade to 0.7.x |
+| 0.8.x | Yes |
+| 0.7.x | No — upgrade to 0.8.x |
+| 0.6.x and earlier | No — upgrade to 0.8.x, see the advisory below |
 
 ## Fixed in 0.7.0
 

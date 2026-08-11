@@ -2,8 +2,8 @@ apiVersion: v2
 name: pangolin
 description: A Helm chart for deploying the Pangolin Lakehouse Catalog
 type: application
-version: 0.7.0
-appVersion: "0.7.0"
+version: 0.8.0
+appVersion: "0.8.0"
 keywords:
   - iceberg
   - lakehouse

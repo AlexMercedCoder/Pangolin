@@ -9,9 +9,11 @@ From 0.6.0 the server, both CLIs, the Python SDK, the UI and the Helm chart all
 carry the same version number. Before that they had drifted to five different
 values and there was no way to tell which combination had been tested together.
 
-## [Unreleased]
+## [0.8.0] — 2026-08-11
 
-Bucket 2 of the production-readiness work.
+Production-readiness work: authentication hardening, credential encryption,
+transactional correctness, MongoDB index management, the missing Iceberg
+operations, operational tooling, and OpenID Connect.
 
 ### Added — operations: replicas, backup, performance
 
