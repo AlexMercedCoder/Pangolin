@@ -185,9 +185,14 @@ Stated plainly rather than buried:
   one. Set `PANGOLIN_TRUST_FORWARDED_FOR=true` **only** behind a proxy that
   overwrites `X-Forwarded-For`; trusting it otherwise lets a caller set the
   header per request and bypass the per-address half entirely.
-- **OAuth is not full OIDC.** No PKCE, no `id_token` validation, no JWKS, no
-  discovery. Users are matched on provider-supplied email with no
-  `email_verified` check. See [docs/operations/oidc.md](docs/operations/oidc.md).
+- **OIDC is implemented for providers that support it** (Google, Microsoft,
+  Okta, and any IdP via `PANGOLIN_<PROVIDER>_ISSUER`): PKCE, `id_token`
+  signature validation against the provider's JWKS, and `iss`/`aud`/`exp`/
+  `nonce` checks. **GitHub is not an OIDC provider** — it issues no `id_token`
+  — so a GitHub login still relies on the userinfo endpoint;
+  `PANGOLIN_OIDC_REQUIRE=true` refuses it. The PKCE verifier is held in process,
+  so OAuth needs session affinity across replicas. See
+  [docs/operations/oidc.md](docs/operations/oidc.md).
 - **Warehouse cloud credentials are encrypted at rest only if you configure a
   key.** Set `PANGOLIN_ENCRYPTION_KEY` (`openssl rand -base64 32`); without it
   they are stored in plaintext and the server says so at startup. See

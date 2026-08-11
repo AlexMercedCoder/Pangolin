@@ -34,6 +34,7 @@ exited 25 seconds after startup passed all 18 CI jobs and the full suite.
 | Rate limiting on the authentication endpoints, per source address **and** per account | 0.8.0 |
 | Warehouse cloud credentials encrypted at rest (AES-256-GCM) | 0.8.0 |
 | Dependency advisories: 26 → 0, with eight justified exceptions | 0.7.0 |
+| OIDC: PKCE, `id_token` signature validation via JWKS, `iss`/`aud`/`exp`/`nonce` checks, discovery, rate-limited key rotation | 0.8.0 |
 
 ### Correctness
 
@@ -62,14 +63,21 @@ exited 25 seconds after startup passed all 18 CI jobs and the full suite.
 
 Ordered by how much it would block a production deployment.
 
-### 1. OIDC is not OIDC
+### 1. GitHub logins cannot be OIDC-validated
 
-No PKCE, no JWKS, no `id_token` signature or claim validation, no discovery.
-Users are matched on the provider-supplied email with no `email_verified` check.
+OIDC is implemented and applies to Google, Microsoft, Okta and any IdP given
+`PANGOLIN_<PROVIDER>_ISSUER`. **GitHub is not an OIDC provider** — it issues no
+`id_token` and publishes no JWKS — so a GitHub login still rests on the userinfo
+endpoint and on GitHub's own token scoping.
 
-**This is the largest remaining security gap** and it is scheduled as its own
-piece of work. Until then: leave OAuth disabled and use password or API-key
-authentication, which removes the exposure entirely.
+`PANGOLIN_OIDC_REQUIRE=true` refuses any provider that cannot be
+OIDC-validated. It is off by default because turning it on would break a working
+GitHub deployment on upgrade with no warning; an operator who wants every login
+validated should set it.
+
+Also outstanding on this path: no back-channel logout, no refresh-token
+handling, no per-tenant provider configuration, and the PKCE verifier is held in
+process — so OAuth needs session affinity across replicas.
 
 ### 2. Multi-replica is constrained and unproven
 
@@ -121,15 +129,15 @@ every security fix listed above.
 
 The `SECURITY.md` advisory covers `< 0.7.0` for that reason.
 
-Also outstanding and requiring a person: **rotate the PyPI token** (it sat in
-plaintext in `.env` and was passed into containers), and decide whether to
+The PyPI token has been rotated. Still requiring a person: decide whether to
 publish a GHSA once a fixed version actually exists.
 
 ## If you are deciding whether to run this
 
 The honest summary: the security holes found in the audits are fixed and there
-is now CI that would catch them coming back. It is **not** production-ready for
-untrusted multi-tenant use — items 1 and 2 above are the gap.
+is now CI that would catch them coming back. For untrusted multi-tenant use, the
+remaining gaps are multi-replica being unproven under load, GitHub logins not
+being OIDC-validatable, and revocation failing open.
 
 The smallest credible posture today: PostgreSQL, one replica, OAuth disabled,
 network-restricted, `PANGOLIN_ENCRYPTION_KEY` set, a backup you have actually

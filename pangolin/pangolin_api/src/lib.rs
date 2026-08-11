@@ -39,6 +39,7 @@ pub mod metrics;
 pub mod oauth_handlers;
 pub mod oauth_state;
 pub mod observability;
+pub mod oidc;
 pub mod public_paths;
 pub mod rate_limit;
 /// Shared test fixtures.

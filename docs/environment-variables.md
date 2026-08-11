@@ -115,6 +115,44 @@ export JWT_SECRET=$(openssl rand -base64 32)
 
 ---
 
+### `PANGOLIN_AUTH_RATE_LIMIT`
+
+**Required:** No
+**Type:** Integer
+**Default:** `10`
+**Description:** Failed authentication attempts allowed per window, counted per
+source address **and** separately per account. `0` disables throttling. The
+counters are in-process, so with N replicas the effective limit is N times this.
+
+### `PANGOLIN_AUTH_RATE_WINDOW_SECS`
+
+**Required:** No
+**Type:** Integer (seconds)
+**Default:** `60`
+**Description:** The window those attempts are counted over.
+
+### `PANGOLIN_TRUST_FORWARDED_FOR`
+
+**Required:** No
+**Type:** Boolean
+**Default:** `false`
+**Description:** Honour `X-Forwarded-For` when identifying the client for rate
+limiting. **Only set this behind a proxy that overwrites the header.** Trusting
+it otherwise lets a caller set a fresh value per request and bypass the
+per-address limit entirely - protection that reads as protection and is not.
+
+### `PANGOLIN_ENCRYPTION_KEY`
+
+**Required:** No, but strongly recommended
+**Type:** base64, exactly 32 bytes (`openssl rand -base64 32`)
+**Description:** Encrypts warehouse cloud credentials at rest with AES-256-GCM.
+Unset, they are stored in plaintext and the server warns at startup. **Not
+included in a database dump** - back it up separately, or a restore produces a
+catalog whose every warehouse credential is unreadable. Losing it is
+unrecoverable. See [operations/encryption.md](operations/encryption.md).
+
+---
+
 ## Object Storage (S3/MinIO)
 
 These variables configure access to S3-compatible object storage for Iceberg table metadata and data files.
@@ -421,6 +459,27 @@ Anything not listed (and not `FRONTEND_URL`) is refused.
 local account. With no allowlist, identity is `(provider, subject)` only and an
 email address never links an account - which is what stops someone setting a
 matching address on any configured provider and logging in as that user.
+
+### `PANGOLIN_OIDC_REQUIRE`
+
+**Required:** No
+**Type:** Boolean
+**Default:** `false`
+**Description:** Refuse any provider that cannot be OIDC-validated. GitHub
+issues no `id_token` and publishes no JWKS, so with this set a GitHub login is
+rejected rather than falling back to the userinfo endpoint. Off by default
+because enabling it would break a working GitHub deployment on upgrade with no
+warning.
+
+### `PANGOLIN_<PROVIDER>_ISSUER`
+
+**Required:** No
+**Type:** URL
+**Description:** Override the OIDC issuer for a provider, e.g.
+`PANGOLIN_GOOGLE_ISSUER`. Needed for a self-hosted Keycloak, Auth0, a private
+Okta, or any internal IdP. Google, Microsoft and Okta issuers are derived
+automatically from the variables above. The discovery document's own `issuer`
+must match this value, or the login is refused.
 
 ---
 

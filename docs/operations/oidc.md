@@ -1,121 +1,123 @@
-# OAuth / SSO configuration
+# OpenID Connect
 
-**Read this before upgrading to 0.6.0 if you use OAuth.** The token delivery
-mechanism changed, and existing clients will break.
+Before 0.8.0 this page described a gap. Pangolin's "OAuth" login was
+*authorization*, not authentication: it exchanged a code for an access token,
+called the provider's userinfo endpoint, and believed the response. That is only
+sufficient if the access token could not have come from anywhere else — which is
+precisely what OIDC exists to establish.
 
-## What changed, and why
+From 0.8.0 the flow does real OIDC where the provider supports it.
 
-Before 0.6.0 the callback base64-decoded the `state` parameter, read
-`redirect_uri` out of it, and appended the freshly minted session JWT to that
-URL as a query parameter:
+## What is verified now
 
-```rust
-let base_url = frontend_url.unwrap_or_else(|| env::var("FRONTEND_URL")…);
-let redirect_url = format!("{}?token={}", base_url, token);
-Redirect::to(&redirect_url)
-```
+| Check | What it prevents |
+|---|---|
+| **PKCE (S256)** | An attacker who intercepts the authorization code — from a referrer header, a proxy log, shell history on a shared machine — cannot redeem it without the verifier |
+| **`id_token` signature** against the provider's JWKS | Identity comes from something the provider signed, not from an HTTP response any holder of some access token could have elicited |
+| **`aud`** must contain our `client_id` | A token minted for a *different* application at the same provider logging its holder in here — the classic confused deputy |
+| **`iss`** must match the discovery document | A token from any other issuer being accepted |
+| **`exp`** with 60s leeway | Replay of an expired assertion; the leeway is for clock skew, which otherwise produces logins that fail for one second and nobody can diagnose |
+| **`nonce`** must match this login | An `id_token` observed in one flow being replayed into another |
+| **Asymmetric `alg` only** | An attacker setting `alg: HS256` and signing with the provider's *public* key, which for HMAC is also the verification key |
 
-`state` was plain base64 JSON — unsigned, unencrypted, never stored server-side
-— and there was no allowlist on the destination. Sending someone an authorize
-link whose `state` decoded to `{"redirect_uri":"https://evil.example/"}` caused
-Pangolin to 302 their browser to the attacker's host with a valid token for
-their real identity in the URL. Full account takeover, no credential theft
-(A-8). Separately, the nonce embedded in `state` was generated and never
-verified, which is login CSRF (A-9).
-
-From 0.6.0:
-
-* `state` is HMAC-SHA256 signed with the server's secret and carries an expiry.
-* The nonce inside it is registered server-side and consumed exactly once, so a
-  captured callback cannot be replayed.
-* `state` is bound to the provider it was issued for.
-* `redirect_uri` is validated against an operator-configured allowlist by exact
-  match, and only an *index* into that allowlist travels inside `state`.
-* **The token is never in a URL.** The callback parks it and redirects with a
-  short-lived, single-use `code`, which the client exchanges over POST.
+Retained from 0.6.0/0.7.0: signed single-use `state` (CSRF), an allowlisted
+redirect resolved to an index so the URL never travels inside `state`, the
+session token never placed in a redirect URL, and `(provider, subject)` as the
+identity — email only adopts a pre-existing account when the provider says it is
+verified *and* its domain is operator-allowlisted.
 
 ## Configuration
 
+Nothing new is required. If a provider has a known issuer, OIDC applies
+automatically.
+
+| Variable | Purpose |
+|---|---|
+| `PANGOLIN_OIDC_REQUIRE` | `true` refuses any provider that is not OIDC-capable. Off by default |
+| `PANGOLIN_<PROVIDER>_ISSUER` | Override the issuer URL — needed for self-hosted Keycloak, Auth0, a private Okta, or any internal IdP |
+
+Known issuers, derived automatically:
+
+- **Google** — `https://accounts.google.com`
+- **Microsoft** — from `PANGOLIN_MICROSOFT_TENANT_ID`
+- **Okta** — from `PANGOLIN_OKTA_DOMAIN`
+
+## GitHub is not an OIDC provider
+
+GitHub's OAuth issues no `id_token` and publishes no JWKS. There is no honest
+way to validate a GitHub login the way the table above describes.
+
+So a GitHub login still uses the userinfo endpoint, and the code says so rather
+than reporting validation it did not perform. `PANGOLIN_OIDC_REQUIRE=true`
+refuses GitHub outright — which is the right behaviour for an operator who has
+decided every login must be OIDC-validated, and the reason the setting exists.
+
+GitHub also does not report `email_verified`, so its addresses are treated as
+unverified and can never adopt a pre-existing account.
+
+## Turning on strict mode
+
 ```bash
-FRONTEND_URL=https://app.example.com/oauth/callback
-
-# Every additional URL an OAuth flow may return to, comma-separated.
-# FRONTEND_URL is always allowed and does not need repeating.
-PANGOLIN_OAUTH_REDIRECT_URIS=https://app.example.com/oauth/callback,https://admin.example.com/oauth/callback
-
-PANGOLIN_GOOGLE_CLIENT_ID=…
-PANGOLIN_GOOGLE_CLIENT_SECRET=…
-PANGOLIN_GOOGLE_REDIRECT_URI=https://catalog.example.com/oauth/callback/google
+PANGOLIN_OIDC_REQUIRE=true
 ```
 
-Supported providers: `google`, `microsoft` (also needs
-`PANGOLIN_MICROSOFT_TENANT_ID`), `github`, `okta` (also needs
-`PANGOLIN_OKTA_DOMAIN`).
+With this set:
 
-A `redirect_uri` that is not in the allowlist gets `400` from
-`/oauth/authorize/{provider}` with a message naming the variable to add. Matching
-is exact — `https://app.example.com` does not match
-`https://app.example.com/`.
+- a provider with no issuer is refused at authorize **and** at callback;
+- a discovery failure fails the login rather than silently proceeding without
+  PKCE.
 
-## The flow
+It is off by default because turning it on would break a working GitHub
+deployment on upgrade with no warning. That is a deliberate choice about
+upgrades, not a judgement that GitHub logins are fine.
 
-```
- 1. Browser  → GET  /oauth/authorize/google?redirect_uri=<allowlisted>
- 2. Pangolin → 302 to the provider, carrying signed single-use state
- 3. Provider → 302 to /oauth/callback/google?code=…&state=…
- 4. Pangolin    verifies the signature, expiry, provider binding and nonce
-                exchanges the code, fetches user info, mints a session
- 5. Pangolin → 302 to <allowlisted redirect>?code=<one-time exchange code>
- 6. Client   → POST /api/v1/oauth/exchange  {"code": "<code>"}
- 7. Pangolin → 200 {"token": "<session JWT>", "token_type": "Bearer"}
-```
+## Key rotation
 
-## Client migration
+JWKS documents are cached for an hour. When a token arrives with a `kid` that is
+not in the cache — which is what key rotation looks like — the JWKS is refetched
+once, rate-limited to one forced refetch a minute per provider.
 
-The redirect now carries `code`, not `token`.
+Both halves matter. Without the refetch, a provider rotating keys breaks every
+login until the hour expires. Without the rate limit, a stream of tokens
+carrying junk `kid`s becomes a denial-of-service against the provider's JWKS
+endpoint and against our own latency, since every such request would block on an
+outbound fetch.
 
-```js
-// Before
-const token = new URLSearchParams(location.search).get('token');
+## Multi-replica
 
-// After
-const code = new URLSearchParams(location.search).get('code');
-const res = await fetch('/api/v1/oauth/exchange', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ code }),
-});
-const { token } = await res.json();
-```
+The PKCE verifier and OIDC nonce are held **in process**, keyed by the state
+nonce. If the callback lands on a different replica than the one that started
+the flow, the login fails.
 
-The code is single-use and expires in two minutes. Redeem it immediately, and
-strip it from the URL afterwards (`history.replaceState`).
+The verifier is deliberately *not* carried in `state`: `state` travels through
+the browser in the same URL as the authorization code, so anyone positioned to
+steal the code would also hold the verifier, and PKCE would protect nothing in
+the one situation it exists for.
 
-## Limitations
+So OAuth still requires session affinity. See
+[running-multiple-replicas.md](running-multiple-replicas.md). Moving this to the
+database would remove the constraint and is not done.
 
-Pangolin implements the OAuth 2.0 authorization-code grant followed by a call to
-the provider's userinfo endpoint. It is **not** a full OIDC relying party:
+## What is still not done
 
-* No PKCE.
-* No `id_token` validation: no JWKS fetch, no signature check, no `iss`/`aud`
-  verification, no `nonce` binding to the ID token.
-* No discovery document, so onboarding an arbitrary enterprise IdP needs a code
-  change — four providers are hardcoded.
-* No SAML, SCIM provisioning, or group-to-role mapping.
-* Users are found or created by the **email** the provider returns, with no
-  `email_verified` check and no domain allowlist. With a provider that permits
-  unverified emails this is an account-takeover path. Looking users up by
-  `(provider, subject)` is the correct fix and is not done yet.
+- **No `email_verified` enforcement at the point of account creation.** A
+  verified email is required to *adopt an existing* account; a new account is
+  created from the provider's subject regardless.
+- **No back-channel logout** (RP-initiated or front-channel).
+- **No refresh-token handling.** Sessions are Pangolin JWTs with their own
+  lifetime; when one expires the user logs in again.
+- **No dynamic client registration**, and no per-tenant provider configuration —
+  providers are process-wide environment variables.
+- **The nonce and verifier stores are in-process**, as above.
 
-These are tracked as C-2 and C-3 in `AUDIT_EXECUTION_PLAN.md` (Phase 3.1).
+## Testing
 
-**Until then:** only enable providers that verify email addresses, and restrict
-sign-in at the identity provider rather than relying on Pangolin to do it.
+`pangolin_api/tests/oidc_validation_tests.rs` stands up a provider with
+`wiremock`, serving a real discovery document and JWKS, and signs tokens with a
+real 2048-bit RSA key. Nothing is mocked at the crypto layer, because the
+properties under test *are* the crypto — a test that stubbed signature checking
+would pass against code that skipped it.
 
-## Multi-replica note
-
-The OAuth nonce and exchange-code stores are in-process. With more than one
-replica and no session affinity, a callback that lands on a different pod than
-the authorize request will be rejected as an unknown nonce. Enable sticky
-sessions on your ingress for `/oauth/*`, or run a single replica for the OAuth
-path, until these move to the shared store.
+Each case names the attack it prevents, and the suite was checked for being
+load-bearing: disabling audience validation makes the confused-deputy test fail,
+and weakening the nonce comparison makes the replay test fail.

@@ -119,7 +119,77 @@ pub async fn oauth_authorize(
 
     // Signed, single-use state (A-9).
     let state = crate::oauth_state::issue(&crate::config::jwt_secret(), &provider, redirect_index);
-    let auth_url = build_auth_url(&config, &state);
+    let Some(state_nonce) = crate::oauth_state::peek_nonce(&crate::config::jwt_secret(), &state)
+    else {
+        tracing::error!("could not read back the nonce from a state we just issued");
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response();
+    };
+
+    // C-2/C-3: PKCE and an OIDC nonce, for providers that are OIDC.
+    //
+    // The verifier is kept server-side, never in `state`; see `PendingLogin`.
+    // A provider with no issuer (GitHub) gets neither, because it has no
+    // id_token to bind a nonce into and its token endpoint would reject the
+    // extra parameters.
+    let issuer = crate::oidc::issuer_for(&provider);
+    let mut oidc_params: Vec<(String, String)> = Vec::new();
+
+    if let Some(issuer) = &issuer {
+        let discovery = match crate::oidc::discover(issuer).await {
+            Ok(d) => Some(d),
+            Err(e) => {
+                // Discovery is best-effort at authorize time. Failing the login
+                // because a metadata document is briefly unreachable would be a
+                // worse outcome than proceeding without PKCE - but if the
+                // operator has demanded OIDC, proceeding is not acceptable.
+                if crate::oidc::require_oidc() {
+                    tracing::error!(error = %e, provider = %provider, "OIDC discovery failed and PANGOLIN_OIDC_REQUIRE is set");
+                    return (
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "OIDC discovery failed; cannot start a login while \
+                         PANGOLIN_OIDC_REQUIRE is set",
+                    )
+                        .into_response();
+                }
+                tracing::warn!(error = %e, provider = %provider, "OIDC discovery failed; continuing without PKCE");
+                None
+            }
+        };
+
+        let (pkce, nonce) = match (crate::oidc::generate_pkce(), crate::oidc::generate_nonce()) {
+            (Ok(p), Ok(n)) => (p, n),
+            _ => {
+                tracing::error!("could not generate PKCE or nonce material");
+                return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+                    .into_response();
+            }
+        };
+
+        if discovery
+            .as_ref()
+            .map(|d| d.supports_s256_pkce())
+            .unwrap_or(false)
+        {
+            oidc_params.push(("code_challenge".to_string(), pkce.challenge.clone()));
+            oidc_params.push(("code_challenge_method".to_string(), "S256".to_string()));
+        }
+        oidc_params.push(("nonce".to_string(), nonce.clone()));
+
+        crate::oauth_state::remember_login(&state_nonce, pkce.verifier, nonce);
+    } else if crate::oidc::require_oidc() {
+        tracing::warn!(
+            provider = %provider,
+            "refused a non-OIDC provider because PANGOLIN_OIDC_REQUIRE is set"
+        );
+        return (
+            StatusCode::BAD_REQUEST,
+            "this provider does not support OpenID Connect, and \
+             PANGOLIN_OIDC_REQUIRE is set",
+        )
+            .into_response();
+    }
+
+    let auth_url = build_auth_url(&config, &state, &oidc_params);
 
     Redirect::to(&auth_url).into_response()
 }
@@ -190,9 +260,31 @@ pub async fn oauth_callback(
         }
     };
 
-    // 1. Exchange code for access token
-    let access_token = match exchange_code_for_token(&config, &callback.code).await {
-        Ok(token) => token,
+    // 0b. Recover the PKCE verifier and OIDC nonce for this login. Absent for a
+    //     non-OIDC provider, and absent if the state was issued before these
+    //     existed - both are handled below rather than assumed.
+    let pending = crate::oauth_state::take_login(&state_payload.nonce);
+    let issuer = crate::oidc::issuer_for(&provider);
+
+    if issuer.is_none() && crate::oidc::require_oidc() {
+        tracing::warn!(provider = %provider, "refused a non-OIDC callback because PANGOLIN_OIDC_REQUIRE is set");
+        return (
+            StatusCode::BAD_REQUEST,
+            "this provider does not support OpenID Connect, and \
+             PANGOLIN_OIDC_REQUIRE is set",
+        )
+            .into_response();
+    }
+
+    // 1. Exchange code for tokens, presenting the PKCE verifier.
+    let tokens = match exchange_code_for_token(
+        &config,
+        &callback.code,
+        pending.as_ref().map(|p| p.pkce_verifier.as_str()),
+    )
+    .await
+    {
+        Ok(t) => t,
         Err(e) => {
             return (
                 StatusCode::BAD_REQUEST,
@@ -201,18 +293,61 @@ pub async fn oauth_callback(
                 .into_response()
         }
     };
+    let access_token = tokens.access_token.clone();
 
-    // 2. Fetch user info from provider
-    let user_info = match fetch_user_info(&config, &access_token).await {
-        Ok(info) => info,
+    // 2. Establish who the user is.
+    //
+    // For an OIDC provider the answer comes from the *signed* id_token, not
+    // from the userinfo endpoint. That is the substantive difference between
+    // this and what came before: previously identity was whatever an HTTP
+    // response said, and any holder of any access token for this client could
+    // have elicited it. Now it is an assertion the provider signed, bound to
+    // this login by a nonce and to this application by `aud`.
+    let mut user_info = match validate_oidc_identity(
+        &provider,
+        issuer.as_deref(),
+        pending.as_ref(),
+        tokens.id_token.as_deref(),
+        &config.client_id,
+    )
+    .await
+    {
+        Ok(Some(claims)) => claims,
+        Ok(None) => {
+            // Not an OIDC provider. Fall back to userinfo, which is all such a
+            // provider offers.
+            match fetch_user_info(&config, &access_token).await {
+                Ok(info) => info,
+                Err(e) => {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        format!("Failed to fetch user info: {}", e),
+                    )
+                        .into_response()
+                }
+            }
+        }
         Err(e) => {
+            tracing::warn!(error = %e, provider = %provider, "id_token validation failed");
             return (
-                StatusCode::BAD_REQUEST,
-                format!("Failed to fetch user info: {}", e),
+                StatusCode::UNAUTHORIZED,
+                format!("OpenID Connect validation failed: {e}"),
             )
-                .into_response()
+                .into_response();
         }
     };
+
+    // An OIDC id_token need not carry `email`; the userinfo endpoint fills the
+    // gap. The *subject* still comes from the signed token - only the
+    // display-level attributes are topped up here.
+    if user_info.email.is_empty() {
+        if let Ok(extra) = fetch_user_info(&config, &access_token).await {
+            user_info.email = extra.email;
+            if user_info.name.is_none() {
+                user_info.name = extra.name;
+            }
+        }
+    }
 
     // 3. Map provider string to Enum
     let provider_enum = match provider.as_str() {
@@ -439,6 +574,62 @@ pub async fn list_oauth_providers() -> impl IntoResponse {
     (StatusCode::OK, Json(OAuthProvidersResponse { providers }))
 }
 
+/// Establish identity from a validated `id_token`, when the provider is OIDC.
+///
+/// Returns `Ok(None)` for a provider that is not an OIDC provider, which is the
+/// signal to fall back to the userinfo endpoint. Every other absence is an
+/// error: if a provider *is* OIDC and no id_token arrived, or the login has no
+/// remembered nonce, something is wrong and proceeding would mean skipping the
+/// validation while appearing to have done it.
+async fn validate_oidc_identity(
+    provider: &str,
+    issuer: Option<&str>,
+    pending: Option<&crate::oauth_state::PendingLogin>,
+    id_token: Option<&str>,
+    client_id: &str,
+) -> Result<Option<OAuthUserInfo>, String> {
+    let Some(issuer) = issuer else {
+        return Ok(None); // not an OIDC provider
+    };
+
+    let Some(id_token) = id_token else {
+        return Err(format!(
+            "{provider} is configured as an OpenID Connect provider but returned \
+             no id_token. Check that `openid` is among the requested scopes."
+        ));
+    };
+
+    let Some(pending) = pending else {
+        return Err(
+            "this login has no remembered nonce, so the id_token cannot be bound \
+             to it. Start the login again."
+                .to_string(),
+        );
+    };
+
+    let discovery = crate::oidc::discover(issuer)
+        .await
+        .map_err(|e| format!("OIDC discovery failed: {e}"))?;
+
+    let claims =
+        crate::oidc::validate_id_token(id_token, &discovery, client_id, &pending.oidc_nonce)
+            .await
+            .map_err(|e| e.to_string())?;
+
+    tracing::info!(
+        provider = %provider,
+        subject = %claims.sub,
+        "authenticated a user from a validated id_token"
+    );
+
+    Ok(Some(OAuthUserInfo {
+        sub: claims.sub,
+        email: claims.email.unwrap_or_default(),
+        name: claims.name,
+        email_verified: claims.email_verified,
+    }))
+}
+
 /// Get OAuth configuration for provider
 fn get_oauth_config(provider: &str) -> Option<OAuthConfig> {
     // TODO: Load from environment variables or config file
@@ -484,30 +675,61 @@ fn get_oauth_config(provider: &str) -> Option<OAuthConfig> {
 }
 
 /// Build the provider authorization URL around an already-signed `state`.
-fn build_auth_url(config: &OAuthConfig, state: &str) -> String {
+///
+/// `extra` carries the OIDC parameters - `code_challenge`,
+/// `code_challenge_method`, `nonce` - which are absent for a provider that is
+/// not an OIDC provider.
+fn build_auth_url(config: &OAuthConfig, state: &str, extra: &[(String, String)]) -> String {
     let scopes = config.scopes.join(" ");
 
-    format!(
+    let mut url = format!(
         "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}",
         config.get_auth_url(),
         urlencoding::encode(&config.client_id),
         urlencoding::encode(&config.redirect_uri),
         urlencoding::encode(&scopes),
         urlencoding::encode(state)
-    )
+    );
+
+    for (key, value) in extra {
+        url.push('&');
+        url.push_str(&urlencoding::encode(key));
+        url.push('=');
+        url.push_str(&urlencoding::encode(value));
+    }
+
+    url
 }
 
 /// Exchange authorization code for access token
-async fn exchange_code_for_token(config: &OAuthConfig, code: &str) -> Result<String, String> {
+/// What the provider returned from the token endpoint.
+pub struct TokenExchange {
+    pub access_token: String,
+    /// Present only for OIDC providers. GitHub returns none.
+    pub id_token: Option<String>,
+}
+
+async fn exchange_code_for_token(
+    config: &OAuthConfig,
+    code: &str,
+    pkce_verifier: Option<&str>,
+) -> Result<TokenExchange, String> {
     let client = reqwest::Client::new();
 
-    let params = [
-        ("client_id", &config.client_id),
-        ("client_secret", &config.client_secret),
-        ("code", &code.to_string()),
-        ("redirect_uri", &config.redirect_uri),
-        ("grant_type", &"authorization_code".to_string()),
+    let mut params: Vec<(&str, String)> = vec![
+        ("client_id", config.client_id.clone()),
+        ("client_secret", config.client_secret.clone()),
+        ("code", code.to_string()),
+        ("redirect_uri", config.redirect_uri.clone()),
+        ("grant_type", "authorization_code".to_string()),
     ];
+
+    // The other half of PKCE. The provider recomputes SHA-256 of this and
+    // compares it to the challenge sent at authorize time; a code stolen
+    // without the verifier cannot be redeemed.
+    if let Some(verifier) = pkce_verifier {
+        params.push(("code_verifier", verifier.to_string()));
+    }
 
     let response = client
         .post(config.get_token_url())
@@ -525,6 +747,8 @@ async fn exchange_code_for_token(config: &OAuthConfig, code: &str) -> Result<Str
     #[derive(Deserialize)]
     struct TokenResponse {
         access_token: String,
+        #[serde(default)]
+        id_token: Option<String>,
         // we might handle refresh_token later
     }
 
@@ -533,7 +757,10 @@ async fn exchange_code_for_token(config: &OAuthConfig, code: &str) -> Result<Str
         .await
         .map_err(|e| format!("Failed to parse token response: {}", e))?;
 
-    Ok(token_res.access_token)
+    Ok(TokenExchange {
+        access_token: token_res.access_token,
+        id_token: token_res.id_token,
+    })
 }
 
 /// Fetch user info from OAuth provider
@@ -580,7 +807,7 @@ mod tests {
         );
         let state =
             crate::oauth_state::issue("a-test-signing-secret-of-adequate-length-0", "google", 0);
-        let url = build_auth_url(&config, &state);
+        let url = build_auth_url(&config, &state, &[]);
 
         assert!(url.contains("client_id=client_id_val"));
         assert!(url.contains("redirect_uri=http%3A%2F%2Flocalhost%2Fcallback"));
@@ -588,6 +815,62 @@ mod tests {
         assert!(url.contains("state="));
         // The state must not carry a caller-supplied redirect target (A-8).
         assert!(!url.contains("frontend"));
+    }
+
+    #[test]
+    fn the_auth_url_carries_pkce_and_nonce_when_supplied() {
+        let config = OAuthConfig::google(
+            "cid".to_string(),
+            "secret".to_string(),
+            "http://localhost/callback".to_string(),
+        );
+        let state =
+            crate::oauth_state::issue("a-test-signing-secret-of-adequate-length-0", "google", 0);
+
+        let pkce = crate::oidc::generate_pkce().unwrap();
+        let nonce = crate::oidc::generate_nonce().unwrap();
+        let url = build_auth_url(
+            &config,
+            &state,
+            &[
+                ("code_challenge".to_string(), pkce.challenge.clone()),
+                ("code_challenge_method".to_string(), "S256".to_string()),
+                ("nonce".to_string(), nonce.clone()),
+            ],
+        );
+
+        assert!(url.contains("code_challenge_method=S256"));
+        assert!(url.contains("nonce="));
+        assert!(
+            !url.contains(&pkce.verifier),
+            "the PKCE *verifier* must never appear in the authorization URL - \
+             the whole point is that only its hash travels"
+        );
+    }
+
+    #[test]
+    fn the_pkce_verifier_is_not_recoverable_from_the_state() {
+        // `state` travels through the browser in the same URL as the
+        // authorization code. If the verifier were in it, anyone able to steal
+        // the code would also hold the verifier, and PKCE would protect nothing.
+        let secret = "a-test-signing-secret-of-adequate-length-0";
+        let state = crate::oauth_state::issue(secret, "google", 0);
+        let nonce = crate::oauth_state::peek_nonce(secret, &state).unwrap();
+
+        let pkce = crate::oidc::generate_pkce().unwrap();
+        crate::oauth_state::remember_login(&nonce, pkce.verifier.clone(), "n".to_string());
+
+        assert!(
+            !state.contains(&pkce.verifier),
+            "the verifier leaked into the state parameter"
+        );
+
+        // And it is single-use: a replayed callback finds nothing.
+        assert!(crate::oauth_state::take_login(&nonce).is_some());
+        assert!(
+            crate::oauth_state::take_login(&nonce).is_none(),
+            "a remembered login must be consumed exactly once"
+        );
     }
 
     /// Regression test for A-8: the authorize endpoint refuses a redirect

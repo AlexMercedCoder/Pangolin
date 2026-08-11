@@ -3691,6 +3691,7 @@ dependencies = [
  "pangolin_store",
  "rand 0.8.7",
  "reqwest 0.11.27",
+ "ring",
  "serde",
  "serde_json",
  "serde_yaml",

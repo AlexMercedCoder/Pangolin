@@ -194,6 +194,64 @@ database connection rather than through the store, and asserts the plaintext is
 absent. Asking the store to read back its own writes would pass just as happily
 if `seal` were never called.
 
+### Added — OpenID Connect (C-2/C-3)
+
+What the OAuth flow did before this was *authorization*, not authentication. It
+exchanged a code for an access token, called the provider's userinfo endpoint,
+and believed the response — which is sufficient only if the access token could
+not have come from anywhere else, and establishing that is exactly what OIDC is
+for.
+
+Now, for every provider that supports it:
+
+- **PKCE (S256).** An attacker who intercepts the authorization code — a
+  referrer header, a proxy log, shell history on a shared machine — cannot
+  redeem it without the verifier. The verifier is held **server-side**, never in
+  `state`: `state` travels through the browser in the same URL as the code, so
+  putting the verifier there would hand it to exactly the attacker PKCE exists
+  to stop.
+- **`id_token` signature validation** against the provider's JWKS, so identity
+  comes from something the provider signed rather than an HTTP response any
+  holder of some access token could have elicited.
+- **`aud`** must contain our `client_id` — without it, a token minted for a
+  different application at the same provider logs its holder in here, which is
+  the classic confused deputy.
+- **`iss`**, checked against a discovery document whose own `issuer` is verified
+  to match where it was fetched — otherwise `iss` validation is circular.
+- **`exp`** with 60s leeway for clock skew.
+- **`nonce`**, bound to the login, so an `id_token` seen in one flow cannot be
+  replayed into another.
+- **Asymmetric algorithms only.** `alg` is attacker-controlled; accepting HS256
+  would let anyone holding the provider's *public* key forge a token, because
+  for HMAC that is also the verification key.
+
+Discovery and JWKS are cached for an hour. An unknown `kid` — what key rotation
+looks like — triggers one refetch, rate-limited to once a minute per provider:
+without the refetch a rotation breaks every login until the cache expires;
+without the limit, a stream of junk `kid`s becomes a denial-of-service against
+the provider and against our own latency.
+
+**GitHub is not an OIDC provider** and is not treated as one. It issues no
+`id_token`, so its logins still use the userinfo endpoint, and the code says so
+rather than reporting validation it did not perform.
+`PANGOLIN_OIDC_REQUIRE=true` refuses any provider that cannot be
+OIDC-validated; it is off by default because enabling it would break a working
+GitHub deployment on upgrade.
+
+Configuration: `PANGOLIN_OIDC_REQUIRE`, and `PANGOLIN_<PROVIDER>_ISSUER` to
+point at a self-hosted Keycloak, Auth0, private Okta or internal IdP. Google,
+Microsoft and Okta issuers are derived automatically.
+
+Tested against a `wiremock` provider serving a real discovery document and JWKS,
+with tokens signed by a real 2048-bit RSA key — nothing mocked at the crypto
+layer, because the properties under test *are* the crypto. The suite was checked
+for being load-bearing: disabling audience validation makes the confused-deputy
+test fail, and weakening the nonce comparison makes the replay test fail. The
+first attempt at that check was inconclusive for the audience case, because
+`jsonwebtoken` also rejects a token carrying an `aud` when none is configured;
+the validation errors now name which check fired, which both improves the logs
+and makes the test able to tell.
+
 ### Added — rate limiting on the authentication endpoints (C-5)
 
 The login endpoint had no throttle of any kind and was brute-forceable. There

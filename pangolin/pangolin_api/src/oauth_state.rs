@@ -121,6 +121,82 @@ pub fn issue(secret: &str, provider: &str, redirect_index: usize) -> String {
     encode_signed(secret, &payload)
 }
 
+/// What an in-flight OIDC login needs to remember between authorize and
+/// callback.
+///
+/// **This is deliberately server-side and not carried in `state`.** The PKCE
+/// verifier is a secret: its entire purpose is that an attacker holding the
+/// authorization code cannot redeem it. `state` travels to the provider and back
+/// through the user's browser in the same URL as the code, so anyone positioned
+/// to steal the code - a referrer header, a proxy log, shell history on a shared
+/// machine - would also hold the verifier. Putting it there would make PKCE
+/// decorative in exactly the situation it exists for.
+///
+/// In-process, like the nonce store beside it, which is why OAuth needs session
+/// affinity across replicas. See docs/operations/running-multiple-replicas.md.
+#[derive(Debug, Clone)]
+pub struct PendingLogin {
+    pub pkce_verifier: String,
+    pub oidc_nonce: String,
+    expires_at: u64,
+}
+
+fn pending_logins() -> &'static Mutex<HashMap<String, PendingLogin>> {
+    static STORE: OnceLock<Mutex<HashMap<String, PendingLogin>>> = OnceLock::new();
+    STORE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Remember the PKCE verifier and OIDC nonce for a login, keyed by its state
+/// nonce.
+pub fn remember_login(state_nonce: &str, pkce_verifier: String, oidc_nonce: String) {
+    let expires_at = now_secs() + STATE_TTL.as_secs();
+    if let Ok(mut guard) = pending_logins().lock() {
+        // Opportunistic sweep: without it an abandoned authorize - a user who
+        // closes the tab at the provider - leaks an entry forever.
+        let now = now_secs();
+        guard.retain(|_, pending| pending.expires_at > now);
+        guard.insert(
+            state_nonce.to_string(),
+            PendingLogin {
+                pkce_verifier,
+                oidc_nonce,
+                expires_at,
+            },
+        );
+    }
+}
+
+/// Take the remembered login. Single-use, like the state it is keyed by.
+pub fn take_login(state_nonce: &str) -> Option<PendingLogin> {
+    let mut guard = pending_logins().lock().ok()?;
+    let pending = guard.remove(state_nonce)?;
+    if pending.expires_at <= now_secs() {
+        return None;
+    }
+    Some(pending)
+}
+
+/// Read the nonce out of a `state` this server just issued, without consuming
+/// it.
+///
+/// `issue` returns the encoded string, and the caller needs the nonce inside it
+/// as the key for the pending-login store. Returning it from `issue` would be
+/// tidier, but that signature is used in several places and a second return
+/// value would be silently ignored at most of them.
+///
+/// This still verifies the signature: reading an unverified payload, even one we
+/// believe we just wrote, is the habit that makes the next reader assume it is
+/// safe elsewhere.
+pub fn peek_nonce(secret: &str, state: &str) -> Option<String> {
+    let (encoded, signature) = state.rsplit_once('.')?;
+    if sign(secret, encoded.as_bytes()) != signature {
+        return None;
+    }
+    let body = B64.decode(encoded).ok()?;
+    let payload: StatePayload = serde_json::from_slice(&body).ok()?;
+    Some(payload.nonce)
+}
+
 fn encode_signed(secret: &str, payload: &StatePayload) -> String {
     let body = serde_json::to_vec(payload).expect("StatePayload is always serializable");
     let encoded = B64.encode(&body);

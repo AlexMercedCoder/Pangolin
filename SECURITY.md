@@ -245,9 +245,13 @@ Stated plainly, because a checklist that hides its limits is worse than none:
   the counters are not shared between replicas: with N replicas an attacker
   gets N times the configured budget. A shared limiter needs Redis or
   equivalent, which this project does not otherwise require.
-* **OAuth is not full OIDC.** No PKCE, no `id_token` signature validation, no
-  JWKS, no discovery document. Users are matched on the email a provider
-  returns, with no `email_verified` check.
+* **OIDC applies only to providers that support it.** Google, Microsoft, Okta
+  and any IdP configured via `PANGOLIN_<PROVIDER>_ISSUER` get PKCE, `id_token`
+  signature validation via JWKS, and `iss`/`aud`/`exp`/`nonce` checks. GitHub
+  issues no `id_token`, so its logins still rest on the userinfo endpoint; set
+  `PANGOLIN_OIDC_REQUIRE=true` to refuse any provider that cannot be
+  OIDC-validated. No back-channel logout, no refresh-token handling, and the
+  PKCE verifier is held in process so OAuth needs session affinity.
 * **Symmetric HS256 JWTs with no key rotation.** Rotating the secret invalidates
   every session at once.
 * **Warehouse credentials are encrypted at rest only when a key is set.**
