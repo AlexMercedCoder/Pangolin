@@ -1,5 +1,32 @@
 # Pangolin — Roadmap & Audit Findings (August 10, 2026)
 
+> ## Status as of 2026-08-11 — read this first
+>
+> **Every bug in this document has been fixed**, and the improvements have been
+> implemented. This file is kept as the historical record of the 2026-08-10
+> audit; it is not a to-do list any more.
+>
+> Fixed in 0.7.0: the whole Bugs section (B0a–B0o, B1–B46, the CLI and SDK
+> items), plus improvements 0 and 1.
+>
+> Fixed after 0.7.0, in work this document did not anticipate:
+>
+> - the MongoDB UUID encoding audit — the same asymmetry in four more
+>   collections, including one that made API-key authentication impossible on
+>   MongoDB;
+> - the cloud-credential features, which had **never compiled** at any version;
+> - a server that exited 25 seconds after startup, introduced by the B16n fix in
+>   this very roadmap and caught by the new release gate;
+> - a release pipeline that had never once produced a release.
+>
+> Bucket 2 production-readiness work (rate limiting, credential encryption at
+> rest, transactional branch-create, MongoDB indexes, the missing Iceberg
+> endpoints, multi-replica coordination, backup/recovery and performance
+> measurement) is in `STATUS.md`.
+>
+> Current state lives in [`STATUS.md`](STATUS.md). Where this file and that one
+> disagree, that one is correct.
+
 **Scope:** full-repo audit — Rust workspace (`pangolin/`, 6 crates, ~58.5k LOC), Python SDK (`pypangolin/`), SvelteKit UI (`pangolin_ui/`), deployment assets, docs, and repo hygiene.
 **Baseline:** the day after the 0.6.0 security/hardening release, which executed most of `AUDIT_EXECUTION_PLAN.md`. Items already fixed or explicitly documented as known limitations in the README are **not** re-reported here.
 
@@ -390,6 +417,22 @@ Because these fail through blanket exception handlers with a zero exit code, scr
 
 Ordered by leverage.
 
+> **Status, 2026-08-11.**
+>
+> | # | Item | State |
+> |---|---|---|
+> | 0 | Authz matrix + client↔server contract tests | **Done** — both in CI; `deny_unknown_fields` applied |
+> | 1 | Cross-backend parity harness as the gate | **Done** — `store_integration`, run against all four backends in CI, and it fails if a backend was silently skipped |
+> | 2 | SDK and UI jobs in CI | **Done** — `python sdk` (pytest + pinned ruff) and `management ui` (build, `npm test`, svelte-check ratchet) |
+> | 3 | Fail-fast config validation | **Done** — the `config drift` job renders every compose file and asserts every `PANGOLIN_*` name is read by the server |
+> | 4 | Unify the error envelope | **Partial** — Iceberg handlers conform; the management API still emits a flat `{"error": "..."}` |
+> | 5 | Reduce panic surface | **Partial** — clippy budget 314 → 30; the `unwrap()` counts in non-Iceberg paths are largely unchanged |
+> | 6 | Token handling (hash at rest, httpOnly cookies) | **Not done** |
+> | 7 | SDK ergonomics (retry/backoff, ConfigDict, pagination) | **Not done** |
+> | 8 | Docs generation over hand maintenance | **Partial** — `bump_version.sh` exists with a `--check` mode wired into CI; the env-var and endpoint tables are still hand-maintained |
+> | 9 | Known-limitation burndown (rate limiting, credential encryption, transactional branch-create) | **Done** — all three, in 0.8.0 |
+> | 10 | UI cleanup pass | **Not done** — the UI test suite is green and its svelte-check backlog is ratcheted, but the dead code and `console.log` sweep has not been made |
+
 0. **Add a permission-matrix (authz) test and a client↔server contract test — the two highest-leverage additions.** Every bug in the "API authorization bypasses" cluster (B0a-B0m) and the "contract drift" cluster (B_cli*/B_sdk*) is invisible to the current CI: it compiles, it's formatted, it's lint-clean, and the unit tests pass — because nothing asserts *who is allowed to call what* or *whether a client's request matches the router*. Add (a) a table-driven test that, for each mounted route, drives it as `Root`/`TenantAdmin`/`TenantUser`/wrong-tenant/service-user and asserts the expected 200/403 — this catches every missing `check_permission`; and (b) a `wiremock`/`responses` contract suite for both CLIs and the SDK that asserts each method's path + payload against the real handler. Pair with `#[serde(deny_unknown_fields)]` on every server request struct so wrong field names fail loudly instead of defaulting.
 
 1. **Build a cross-backend parity test harness and make it the gate.** Nearly half the bugs above (B1-B7, B17-B30) are one backend silently diverging from the others. A single test suite that runs every `CatalogStore` method against all four backends and asserts identical observable behavior (including sort order, pagination determinism via the "two pages = whole set" property, serde round-trips of *every* enum variant, and tenant isolation on every read) would have caught all of them and will keep them fixed. Wire it into the existing `ci.yml` services matrix. `docs/operations/backend-parity.md` can then be generated from the suite instead of maintained by hand.
@@ -406,6 +449,17 @@ Ordered by leverage.
 ---
 
 ## Recommended New Features
+
+> **Status, 2026-08-11.**
+>
+> | # | Feature | State |
+> |---|---|---|
+> | 1 | Complete the Iceberg REST surface | **Mostly done** — `loadNamespaceMetadata`, `namespaceExists`, `registerTable`, `listViews`, `viewExists` and `dropView` are implemented. `commitTransaction` is **deliberately not**: the spec promises multi-table atomicity and the store cannot commit several tables atomically, so routing it would sell a guarantee that is not there. `replaceView` and `renameView` remain |
+> | 2 | Table maintenance as a service | **Not done** |
+> | 3 | Backup/restore + tested RPO/RTO | **Done** — `scripts/backup_restore_drill.sh` dumps, destroys, restores and verifies; measured figures in `docs/operations/backup-and-recovery.md` |
+> | 4 | Shared state for multi-replica | **Partial** — the token-cleanup job now actually runs (it was dead code) and staggers across replicas; the warehouse cache and OAuth nonce store are still node-local, and the constraints are documented in `docs/operations/running-multiple-replicas.md` |
+> | 5 | Full OIDC | **Not done** — planned as its own piece of work |
+
 
 1. **Complete the Iceberg REST surface** (the README's own "not implemented" list): `loadNamespaceMetadata` (GET namespace), `namespaceExists` (HEAD), `registerTable`, `commitTransaction` (multi-table atomic commits), and the rest of the view API (list/drop/replace/exists/rename). `registerTable` + full views are the cheapest wins; `commitTransaction` builds directly on the now-solid `commit.rs` requirement machinery and would be a genuine differentiator at this maturity level.
 2. **Table maintenance as a first-class service:** scheduled snapshot expiration, orphan-file detection/cleanup, and manifest compaction driven from `pangolin_core/src/maintenance.rs`, surfaced in the UI and CLI. Pairs naturally with fixing `metadata-log` (B13) since expiration needs the metadata history.

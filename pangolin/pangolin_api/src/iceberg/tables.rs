@@ -603,6 +603,155 @@ pub async fn create_table(
 }
 
 /// Load a table
+/// The spec's `registerTable` request body.
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RegisterTableRequest {
+    pub name: String,
+    #[serde(rename = "metadata-location")]
+    pub metadata_location: String,
+    /// Spec-optional; some clients send it, and `deny_unknown_fields` would
+    /// otherwise reject an otherwise valid request.
+    #[serde(default, rename = "overwrite")]
+    pub overwrite: Option<bool>,
+}
+
+/// `POST /v1/{prefix}/namespaces/{namespace}/register` — the spec's
+/// `registerTable`.
+///
+/// A-5: this route did not exist. It is how an engine adopts a table whose
+/// metadata already sits in object storage — a migration from another catalog,
+/// a restore, or a table written directly by a job. Without it the only way to
+/// get such a table into Pangolin was to recreate it and lose its history.
+///
+/// Distinct from `create_table`: nothing is written to storage. The metadata
+/// file already exists and this points the catalog at it.
+pub async fn register_table(
+    State(store): State<AppState>,
+    Extension(tenant): Extension<TenantId>,
+    Extension(session): Extension<UserSession>,
+    Path((prefix, namespace)): Path<(String, String)>,
+    Json(payload): Json<RegisterTableRequest>,
+) -> impl IntoResponse {
+    let tenant_id = tenant.0;
+    let catalog_name = prefix;
+
+    let (tbl_name, branch_from_name) = parse_table_identifier(&payload.name);
+    let (ns_vec, branch_from_ns) = parse_namespace(&namespace);
+    let branch = branch_from_name.or(branch_from_ns);
+
+    let catalog = match store.get_catalog(tenant_id, catalog_name.clone()).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return no_such_namespace(&catalog_name),
+        Err(e) => {
+            tracing::error!(error = %e, "register_table: failed to load catalog");
+            return internal("Failed to load catalog");
+        }
+    };
+
+    // Namespace-scoped Create, the same check `create_table` makes. Registering
+    // is a create: it brings a new table into the namespace.
+    let scope = PermissionScope::Namespace {
+        catalog_id: catalog.id,
+        namespace: ns_vec.join("."),
+    };
+    match check_permission(&store, &session, &Action::Create, &scope).await {
+        Ok(true) => (),
+        Ok(false) => return forbidden("Forbidden"),
+        Err(e) => {
+            tracing::error!(error = %e, "register_table: permission check failed");
+            return internal("Permission check failed");
+        }
+    }
+
+    // Refuse to shadow an existing table. The spec has `overwrite` for this and
+    // defaults it to false; silently replacing a table's metadata pointer would
+    // orphan its history.
+    let existing = store
+        .get_asset(
+            tenant_id,
+            &catalog_name,
+            branch.clone(),
+            ns_vec.clone(),
+            tbl_name.clone(),
+        )
+        .await;
+    match existing {
+        Ok(Some(_)) if !payload.overwrite.unwrap_or(false) => {
+            return table_already_exists(&format!("{}.{}", ns_vec.join("."), tbl_name));
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::error!(error = %e, "register_table: failed to check for an existing table");
+            return internal("Failed to check for an existing table");
+        }
+    }
+
+    // The metadata file must actually be there. Registering a location that
+    // does not exist would leave a table that every subsequent `loadTable`
+    // fails on, and the failure would surface far from this request.
+    if let Err(e) = store.read_file(&payload.metadata_location).await {
+        tracing::warn!(
+            error = %e,
+            location = %payload.metadata_location,
+            "register_table: the metadata location could not be read"
+        );
+        return (
+            axum::http::StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": {
+                    "message": format!(
+                        "metadata-location {:?} could not be read: {e}",
+                        payload.metadata_location
+                    ),
+                    "type": "BadRequestException",
+                    "code": 400
+                }
+            })),
+        )
+            .into_response();
+    }
+
+    let mut properties = HashMap::new();
+    properties.insert(
+        "metadata_location".to_string(),
+        payload.metadata_location.clone(),
+    );
+
+    let asset = pangolin_core::model::Asset {
+        id: uuid::Uuid::new_v4(),
+        name: tbl_name.clone(),
+        kind: pangolin_core::model::AssetType::IcebergTable,
+        location: payload.metadata_location.clone(),
+        properties,
+    };
+
+    if let Err(e) = store
+        .create_asset(tenant_id, &catalog_name, branch, ns_vec.clone(), asset)
+        .await
+    {
+        tracing::error!(error = %e, "register_table: failed to record the asset");
+        return internal("Failed to register the table");
+    }
+
+    tracing::info!(
+        table = %tbl_name,
+        location = %payload.metadata_location,
+        "registered an existing table"
+    );
+
+    // The spec wants the loaded table back. Re-reading through `load_table`'s
+    // path would duplicate the credential-vending logic, so the caller is
+    // pointed at the metadata it just supplied.
+    (
+        axum::http::StatusCode::OK,
+        Json(serde_json::json!({
+            "metadata-location": payload.metadata_location,
+        })),
+    )
+        .into_response()
+}
+
 #[utoipa::path(
     get,
     path = "/v1/{prefix}/namespaces/{namespace}/tables/{table}",

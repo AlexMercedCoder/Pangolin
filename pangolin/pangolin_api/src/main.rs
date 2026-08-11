@@ -1,6 +1,6 @@
 use pangolin_api::auth_middleware::{create_session, generate_token};
 use pangolin_api::config::{AppConfig, LogFormat};
-use pangolin_api::{app_with_config, health};
+use pangolin_api::{app_with_config, cleanup_job, health};
 use pangolin_core::model::Tenant;
 use pangolin_core::user::{User, UserRole};
 use pangolin_store::{CatalogStore, MemoryStore, MongoStore, PostgresStore, SqliteStore};
@@ -102,12 +102,24 @@ async fn main() {
 
     let shutdown_grace = config.shutdown_grace;
     let store_for_health: Arc<dyn CatalogStore + Send + Sync> = store.clone();
+    let store_for_cleanup: Arc<dyn CatalogStore + Send + Sync> = store.clone();
     let app = app_with_config(store, config.clone());
 
     if config.install().is_err() {
         tracing::warn!("configuration was already installed; keeping the existing one");
     }
     health::set_store(store_for_health);
+
+    // Start the revocation sweep. It was dead code: `start_token_cleanup_job`
+    // existed, the module was declared, and nothing called it - so
+    // `revoked_tokens` grew for the life of the deployment, and the revocation
+    // check reads that table on every authenticated request.
+    //
+    // Every replica runs it. The sweep is a `DELETE ... WHERE expires_at < now`
+    // and therefore idempotent, so concurrent runs are correct; the job
+    // staggers its own start so replicas from one deploy do not sweep in
+    // lockstep forever.
+    tokio::spawn(cleanup_job::start_token_cleanup_job(store_for_cleanup));
 
     let listener = match tokio::net::TcpListener::bind(addr).await {
         Ok(l) => l,

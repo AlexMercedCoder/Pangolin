@@ -234,6 +234,10 @@ Before exposing Pangolin to anything you care about:
 
 ## Known gaps
 
+The full reconciled list, including non-security work, is in
+[STATUS.md](STATUS.md).
+
+
 Stated plainly, because a checklist that hides its limits is worse than none:
 
 * **Rate limiting is in-process, so it is per replica.** The authentication

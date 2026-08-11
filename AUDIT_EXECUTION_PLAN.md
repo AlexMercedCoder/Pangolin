@@ -24,7 +24,47 @@ Three findings define the current state:
 
 The good news is that the fixes are tractable and mostly independent. The critical security items are each a few dozen lines. The correctness items are contained in one file. The hygiene items are largely mechanical. **The single highest-leverage action is standing up CI**, because without it every fix below is one refactor away from silently regressing — which is precisely how the current state was reached.
 
+> ## Status as of 2026-08-11 — read this first
+>
+> This document is the **original audit of 2026-08-09**, kept as the historical
+> record of what was found. Much of it has since been fixed. Where this file and
+> the reconciled status below disagree, **the status below is correct**.
+>
+> Current state is tracked in:
+>
+> - [`STATUS.md`](STATUS.md) — the single reconciled view of done vs. outstanding
+> - [`CHANGELOG.md`](CHANGELOG.md) — what changed in each release, and why
+> - [`SECURITY.md`](SECURITY.md) — the advisory and the remaining security gaps
+> - [`docs/operations/`](docs/operations/) — backend parity, encryption, backup
+>   and recovery, performance, multiple replicas
+>
+> The scorecard immediately below has been updated in place; every other section
+> of this document is left as it was written on 2026-08-09.
+
 ### Readiness scorecard
+
+**Updated 2026-08-11.** Ratings in parentheses are the original 2026-08-09
+assessment, kept so the direction of travel is visible.
+
+| Dimension | Rating | One-line justification |
+|---|---|---|
+| Feature breadth | **Strong** (Strong) | Four backends, three clouds, branching/merge, RBAC, audit, SSO, SDK, UI |
+| Iceberg REST correctness | **Good** (Weak) | Requirements and updates enforced; `registerTable`, `listViews`, `viewExists`, `dropView` added. `commitTransaction` deliberately absent — see below |
+| Security (authn/authz) | **Adequate** (Critical) | OAuth exfiltration, default JWT secret, bypass path and the 0.7.0 authorization cluster all fixed; rate limiting and credential encryption added. OIDC is still not OIDC |
+| Error handling | **Adequate** (Weak) | Iceberg error envelope conforms; `unwrap()` counts unchanged in non-Iceberg paths |
+| Observability | **Good** (Absent) | `/metrics` with latency histograms, request tracing, `RUST_LOG` honoured, `/health/live` and `/health/ready` |
+| Reliability | **Good** (Weak) | Graceful shutdown, timeouts, body and concurrency limits, readiness that probes the store |
+| Data integrity | **Good** (Weak) | Postgres and SQLite wrap catalog delete, branch delete, merge, and branch-create-by-copy. MongoDB wraps the cascade where a session exists |
+| Test coverage | **Good** (Critical) | 63 targets / 415 tests green against live PostgreSQL, MongoDB and MinIO; 19 CI jobs including an authz matrix and a four-backend parity suite |
+| Code hygiene | **Adequate** (Weak) | `rustfmt` clean; clippy at a ratcheted budget of 30, down from 314 |
+| Enterprise readiness | **Partial** (Partial) | Credentials encrypted at rest, backup/restore drilled and measured, multi-replica constraints documented. No HA proof, no tamper-evident audit, no OIDC |
+| Deployment | **Good** (Partial) | Helm lints and templates; container runs non-root; release pipeline actually produces a release (it never had) |
+| Documentation | **Strong** (Strong user / Absent contributor) | CONTRIBUTING, SECURITY, CHANGELOG, and an operations set covering parity, encryption, backup, performance and replicas |
+
+**Still weak, stated plainly:** OIDC (no PKCE, no JWKS, no `id_token`
+validation), no tamper-evident audit trail, no point-in-time recovery,
+multi-replica operation untested under load, and `commitTransaction` absent
+because the store cannot commit several tables atomically.
 
 | Dimension | Rating | One-line justification |
 |---|---|---|

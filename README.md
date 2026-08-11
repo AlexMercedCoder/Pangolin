@@ -160,6 +160,10 @@ could silently fork snapshot lineage under concurrent writers. See
 
 ### Known limitations
 
+> For the reconciled view of what is done and what is not — across both audit
+> documents and every release — see **[STATUS.md](STATUS.md)**.
+
+
 Stated plainly rather than buried:
 
 - **Administrative multi-statement operations are only partly transactional.**
@@ -227,10 +231,20 @@ than ignored.
 `add-sort-order`, `set-default-sort-order`, `remove-snapshots`. An unrecognised
 update returns `501` rather than a false `200 OK`.
 
-**Not implemented:** `loadNamespaceMetadata` (GET on a namespace),
-`namespaceExists` (HEAD), `registerTable`, `commitTransaction` (multi-table
-atomic commits), and most of the view API — no list, drop, replace, exists or
-rename.
+**Implemented since 0.8.0:** `loadNamespaceMetadata`, `namespaceExists`,
+`registerTable` (adopting a table whose metadata already exists in storage), and
+the view API's `listViews`, `viewExists` and `dropView`.
+
+**Still not implemented:**
+
+- `commitTransaction` (multi-table atomic commits). This is **deliberate**, not
+  an oversight. The spec promises that either every table in the transaction
+  moves or none does; Pangolin's commit path does compare-and-swap per table
+  with no cross-table transaction behind it. Routing the endpoint and committing
+  tables one at a time would be worse than leaving it absent — an engine that
+  sees it will rely on atomicity that is not there. Clients currently fall back
+  to per-table commits, which is what actually happens.
+- `replaceView` and `renameView`.
 
 ---
 

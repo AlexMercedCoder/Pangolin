@@ -13,6 +13,91 @@ values and there was no way to tell which combination had been tested together.
 
 Bucket 2 of the production-readiness work.
 
+### Added — operations: replicas, backup, performance
+
+**The token-cleanup job never ran.** `start_token_cleanup_job` was defined, the
+module was declared, and nothing anywhere called it — so `revoked_tokens` grew
+for the life of every deployment, and the revocation check reads that table on
+every authenticated request. It now runs, and staggers its own start within the
+interval so replicas from one rolling deploy do not sweep in lockstep. Jitter
+rather than leader election: the sweep is a `DELETE ... WHERE expires_at < now`
+and is therefore safe to run concurrently, so a lock table and a lease would be
+complexity spent serialising something that does not need it.
+
+**Backup and recovery, drilled rather than described.**
+`scripts/backup_restore_drill.sh` dumps, **destroys the schema**, restores, and
+verifies — a canary row, matching row counts, and a populated
+`_sqlx_migrations` (without which the next startup re-runs every migration and
+fails). Measured on a laptop against PostgreSQL 15 with 1,345 rows: 7s backup,
+53s restore. Writing it surfaced two real traps: `pg_dump` refuses to dump a
+newer server *after* you think you have a backup, and `PANGOLIN_ENCRYPTION_KEY`
+is not in the dump, so a team that backs up the database religiously and never
+records the key restores a catalog full of unreadable credentials.
+
+**A load harness, and a correction.** The first version used
+`urllib.request.urlopen` per request and reported ~33ms and 504 req/s against a
+server whose own histogram said 29 **microseconds**. It was measuring Python.
+With one keep-alive connection per worker the same server reports 5086 req/s —
+a 10× difference that came entirely from the client. The harness now prints the
+server's own means alongside its own, and says that a large gap means the
+generator is the bottleneck. Publishing the first set of numbers would have
+understated the catalog by roughly 1000×.
+
+Measured: `/health/ready` 0.018ms server-side, `/v1/config` 0.023ms, an
+authenticated catalog list 0.060ms — so authorization roughly triples
+server-side cost and is still 60 microseconds.
+
+New operations documentation: `running-multiple-replicas.md` (what works, what
+needs session affinity, and what has not been tested), `backup-and-recovery.md`,
+`performance.md`.
+
+### Documentation — the audit documents are reconciled
+
+`AUDIT_EXECUTION_PLAN.md` and `roadmap_aug10.md` are historical records and were
+being read as to-do lists. Both now carry a status header, the readiness
+scorecard is updated in place with the original ratings kept alongside for
+direction of travel, and every recommended improvement and feature carries its
+real state. `STATUS.md` is the single reconciled view; README and SECURITY point
+at it.
+
+### Added — the missing Iceberg REST operations (A-5)
+
+`listViews`, `viewExists`, `dropView` and `registerTable` had no route. A client
+calling them got a routing `404`, which is indistinguishable from a catalog
+answering "no such view" — so `SHOW VIEWS` returned nothing, `DROP VIEW`
+appeared to succeed against a catalog that had never heard of the operation, and
+a view created through the Iceberg API could not be removed through it at all.
+
+- **`GET .../views`** — views are stored as assets with `kind: View`, so this is
+  a filtered `list_assets` rather than a second source of truth that can fall
+  out of step. Namespace-scoped `Read`, matching `listTables`: knowing which
+  views exist is itself information about the data.
+- **`HEAD .../views/{view}`** — authorized identically to `loadView`, because
+  answering "does this exist" to a caller who may not read it still discloses
+  that it exists.
+- **`DELETE .../views/{view}`** — refuses to delete a table addressed as a view.
+  Without that check a caller with view-drop rights could remove a table.
+- **`POST .../namespaces/{ns}/register`** — how an engine adopts a table whose
+  metadata already sits in storage: a migration from another catalog, a restore,
+  a table written directly by a job. It refuses a metadata location it cannot
+  read, because registering a location that is not there leaves a table whose
+  every subsequent `loadTable` fails, far from the request that caused it. It
+  also refuses to shadow an existing table unless `overwrite` is set.
+
+`loadNamespaceMetadata` and `namespaceExists`, also listed under A-5, were
+already wired during the 0.7.0 work.
+
+**`commitTransaction` is still absent, deliberately.** The spec's
+`POST /v1/{prefix}/transactions/commit` is a multi-table *atomic* commit; the
+commit path does compare-and-swap per table and there is no cross-table
+transaction behind it. Routing it and committing tables one at a time would be
+worse than leaving it unrouted: an engine that sees the endpoint relies on the
+atomicity the spec promises, and a partial failure would leave half a
+multi-table change applied with no way to detect it. A `404` makes clients fall
+back to per-table commits, which is what happens today, and is honest about it.
+A test pins that decision so it stays a choice rather than becoming an
+oversight.
+
 ### Added — MongoDB index management
 
 MongoDB had two indexes, `commits(parent_id)` and `active_tokens(user_id)`,

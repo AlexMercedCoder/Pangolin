@@ -191,6 +191,14 @@ pub fn app_with_options(
                 .delete(iceberg::namespaces::delete_namespace),
         )
         .route(
+            // A-5: `registerTable`. How an engine adopts a table whose metadata
+            // already exists in storage - a migration from another catalog, a
+            // restore, or a table written directly by a job. Without it the
+            // only way in was to recreate the table and lose its history.
+            "/v1/:prefix/namespaces/:namespace/register",
+            post(iceberg::tables::register_table),
+        )
+        .route(
             "/v1/:prefix/namespaces/:namespace/properties",
             post(iceberg::namespaces::update_namespace_properties),
         )
@@ -416,11 +424,19 @@ pub fn app_with_options(
         // Asset Management (Views)
         .route(
             "/v1/:prefix/namespaces/:namespace/views",
-            post(asset_handlers::create_view),
+            // A-5: `listViews` was missing, so an engine could create a view and
+            // load one it already knew the name of, but never discover what
+            // existed. `SHOW VIEWS` calls this.
+            post(asset_handlers::create_view).get(asset_handlers::list_views),
         )
         .route(
             "/v1/:prefix/namespaces/:namespace/views/:view",
-            get(asset_handlers::get_view),
+            // A-5: `dropView` and `viewExists` were missing too. Without the
+            // former a view created through the Iceberg API could never be
+            // removed through it.
+            get(asset_handlers::get_view)
+                .head(asset_handlers::view_exists)
+                .delete(asset_handlers::drop_view),
         )
         // Signing APIs
         .route(
