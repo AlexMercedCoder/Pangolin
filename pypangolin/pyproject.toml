@@ -12,7 +12,7 @@ readme = "README.md"
 # wants 3.9/3.10), so a 3.8 install resolved to broken or ancient versions
 # rather than failing cleanly.
 requires-python = ">=3.9"
-license = "MIT"
+license = "Apache-2.0"
 authors = [
     { name = "Alex Merced", email = "alex@alexmerced.com" },
 ]
@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
 ]
 dependencies = [
     "requests>=2.28.0",
